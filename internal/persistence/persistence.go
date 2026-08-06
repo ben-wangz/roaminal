@@ -25,6 +25,8 @@ const (
 
 var ErrNotFound = os.ErrNotExist
 
+var errWorldPermissions = errors.New("directory has world permissions")
+
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 var hex64Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var sequencePattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
@@ -85,18 +87,33 @@ type Store struct {
 }
 
 func New(root string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(root, "sessions"), 0o700); err != nil {
+	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create state directory: %w", err)
 	}
-	for name, path := range map[string]string{
-		"state":    root,
-		"sessions": filepath.Join(root, "sessions"),
-	} {
-		if err := ensurePrivateDirectory(path); err != nil {
-			return nil, fmt.Errorf("prepare %s directory: %w", name, err)
+	stateRoot := root
+	if err := ensurePrivateDirectory(stateRoot); err != nil {
+		if !errors.Is(err, errWorldPermissions) {
+			return nil, fmt.Errorf("prepare state directory: %w", err)
+		}
+		// A few PVC drivers expose their mount point as root-owned 0777/2777.
+		// Keep the mount itself disposable and put all sensitive state below a
+		// private child directory owned by the application user.
+		stateRoot = filepath.Join(root, "state")
+		if err := os.MkdirAll(stateRoot, 0o700); err != nil {
+			return nil, fmt.Errorf("create private state directory: %w", err)
+		}
+		if err := ensurePrivateDirectory(stateRoot); err != nil {
+			return nil, fmt.Errorf("prepare private state directory: %w", err)
 		}
 	}
-	return &Store{Root: root, SessionsDir: filepath.Join(root, "sessions")}, nil
+	sessionsDir := filepath.Join(stateRoot, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create sessions directory: %w", err)
+	}
+	if err := ensurePrivateDirectory(sessionsDir); err != nil {
+		return nil, fmt.Errorf("prepare sessions directory: %w", err)
+	}
+	return &Store{Root: stateRoot, SessionsDir: sessionsDir}, nil
 }
 
 // Some volume drivers expose the mount point as root-owned while applying
@@ -116,7 +133,7 @@ func ensurePrivateDirectory(path string) error {
 		return errors.New("path is not a directory")
 	}
 	if info.Mode().Perm()&0o007 != 0 {
-		return errors.New("directory has world permissions")
+		return errWorldPermissions
 	}
 	probe, err := os.CreateTemp(path, ".roaminal-permission-*")
 	if err != nil {
