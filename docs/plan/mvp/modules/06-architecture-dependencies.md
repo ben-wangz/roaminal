@@ -88,9 +88,7 @@ deploy/kubernetes/
 docs/
 go.mod
 go.sum
-Dockerfile
-compose.yaml
-Makefile
+Containerfile
 ```
 
 ## Go 依赖
@@ -164,6 +162,9 @@ react-dom 19.2.8
 xterm 和 addons 固定使用上述版本。若 beta 包无法通过本地构建或测试，实施
 Agent 必须停止并记录兼容问题，不能自行升级。全部 npm 依赖由 lockfile 固定并
 打包进 `web/dist`。
+
+依赖安装、项目内 binary、下载镜像和 Chrome channel 的执行规则见
+[08-test-environment.md](./08-test-environment.md)。
 
 ## Roaminal 命名空间
 

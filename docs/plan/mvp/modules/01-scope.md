@@ -11,7 +11,7 @@
 3. 开发阶段只保证 Google Chrome 兼容性；页面适配桌面、平板和手机尺寸。
 4. MVP 不包含文件工作区；该部分以后独立设计。
 5. MVP 不包含 ACP、Coding Agent、terminal-native AI 或任何模型服务。
-6. MVP 通过普通容器运行时或 Kubernetes 部署。
+6. MVP 通过 Podman 或 Kubernetes 部署；本地不使用 Docker/Compose。
 7. 只连接页面来源对应的单个 Roaminal 实例；保留同一实例内的多 Terminal
    Tab，不实现多 Host 注册、切换或聚合。
 8. 后端使用 Go 1.26.5；运行平台只承诺 Linux 容器。

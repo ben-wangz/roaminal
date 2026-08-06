@@ -3,10 +3,10 @@
 > 状态：Approved
 > 上位文档：[MVP 计划索引](../README.md)
 
-## 镜像
+## OCI 镜像
 
-- 使用 multi-stage Docker build：Node 前端构建与 worker dependency stage、
-  Go 后端构建、Linux runtime。
+- 使用 `Containerfile` 和 `podman build` 完成 multi-stage build：Node 前端
+  构建与 worker dependency stage、Go 后端构建、Linux runtime。
 - Node build/runtime 固定 `24.13.1`，frontend 和 terminal worker 各自使用
   lockfile。
 - Go builder 固定 Go `1.26.5`。
@@ -22,12 +22,16 @@
 - “无文件工作区”只排除 Web 文件 UI/API，不限制用户在 Bash 中操作
   `/workspace`。
 
-## 普通容器运行
+## Podman 运行
 
-- 提供 `compose.yaml`，固定 `restart: unless-stopped`。
-- `docker run` 文档同样使用 `--restart unless-stopped`，使 worker fail-fast 后
-  能自动拉起新实例。
+- 只提供 `podman build`、`podman run` 和 `podman push` 文档及测试；不创建
+  Dockerfile、compose 文件或 Makefile。
+- 长期运行示例使用 `podman run --restart unless-stopped`，使 worker fail-fast
+  后能自动拉起新实例；一次性 integration test 使用 `podman run --rm` 并由
+  test harness 管理生命周期。
 - 对外端口固定为 `9846`；冲突时服务报错并退出。
+- 精确命令、内部 registry 和 test volume 规则见
+  [08-test-environment.md](./08-test-environment.md)。
 
 ## Kubernetes
 
@@ -67,6 +71,12 @@ deploy/kubernetes/ingress.example.yaml
 不提供 Helm、Kustomize、Operator 或其他模板层。部署文档必须说明 TLS、
 WebSocket proxy timeout、PVC 权限、备份恢复和升级中断。
 
+Kubernetes 验收固定使用当前集群的 `develop` namespace：先做 server-side
+dry-run，再 push 唯一 Git SHA image、实际 apply、等待 rollout，并通过
+port-forward 执行 Chrome E2E。API server 和实际 rollout 取代独立 YAML schema
+工具；详细安全边界和清理规则见
+[08-test-environment.md](./08-test-environment.md)。
+
 ## 运行时故障语义
 
 Worker 在 backend 运行期间异常退出、protocol corruption 或持续超时时，整个
@@ -76,7 +86,7 @@ Go 服务 fail-fast：
 2. 停止接受新连接和 input。
 3. 尽力保留最后一个成功 checkpoint，终止 PTY 并清理 worker。
 4. Go 以非零状态退出。
-5. Docker/Kubernetes restart policy 拉起新实例，并按持久终端恢复语义创建
+5. Podman/Kubernetes restart policy 拉起新实例，并按持久终端恢复语义创建
    新 Bash。
 
 MVP 不在同一 Go 进程中热重启 worker。应用 shutdown deadline 为 10 秒，Pod

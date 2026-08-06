@@ -1,4 +1,4 @@
-# 08 - 实施、测试与验收
+# 09 - 实施、测试与验收
 
 > 状态：Approved
 > 上位文档：[MVP 计划索引](../README.md)
@@ -14,24 +14,30 @@
 4. 从参考实现提取 MVP 行为清单、API/WS fixtures、关键视口截图和 headless
    xterm input/snapshot fixtures，不复制实现代码。
 5. 创建 `THIRD_PARTY_NOTICES.md`，记录行为参考和依赖许可证。
+6. 按 [08-test-environment.md](./08-test-environment.md) 复核并记录本机版本、
+   Chrome channel、race compiler、Podman、内部 registry health 和 `develop`
+   namespace/RBAC；不重复创建 disposable registry tag。可自行补齐的项目依赖
+   或工具直接处理，不请求人工确认。
 
-Gate：行为基线、来源版本、许可证和工作树均可审计。
+Gate：行为基线、来源版本、许可证、工作树和测试环境 preflight 均可审计。
 
 ## Phase 1：工程骨架
 
 1. 创建 Go module、`cmd/roaminal` 和 `internal/*` 包。
 2. 创建 React/TypeScript/Vite 模块化前端。
 3. 创建 ESM `terminal-worker` package、framed IPC codec 和 Node test skeleton。
-4. 创建统一 `Makefile`：`build`、`test`、`lint`、`dev`、`container`。
-5. 配置 Go formatting/vet/static analysis、worker tests 和 frontend
+4. 配置 Go formatting/vet/static analysis、worker tests 和 frontend
    lint/typecheck。
-6. 建立 Go embed 流程：先生成 `web/dist`，再编译 binary。
-7. 建立 Roaminal favicon；不创建 manifest 或 PWA icons。
+5. 建立 Go embed 流程：先生成 `web/dist`，再编译 binary。
+6. 建立 Roaminal favicon；不创建 manifest 或 PWA icons。
+7. 在开发文档中列出直接使用的 go/npm/podman/kubectl 命令，不创建 Makefile、
+   Dockerfile 或 compose 文件。
 
 Gate：
 
 - `go test ./...`、`go vet ./...` 可执行。
-- frontend 与 terminal-worker 的 `npm ci`、lint/test 可执行。
+- frontend 与 terminal-worker 已生成 lockfile，项目内 binary 的 `npm ci`、
+  lint/test 可执行，不依赖全局 npm packages。
 - production build 生成 Go binary 和 worker artifact；Go 能从 embed 返回页面
   和本地资源，并完成 worker handshake。
 - 页面静态资源请求全部指向当前 Origin。
@@ -116,23 +122,27 @@ Gate：断开容器外网后页面仍完整加载；连接本容器时核心终�
 
 ## Phase 7：容器与 Kubernetes
 
-1. 编写 multi-stage Dockerfile 并固定 image digest。
+1. 编写 multi-stage `Containerfile`，使用 `podman build` 构建唯一 Git SHA tag。
 2. Runtime 仅包含 Go binary、Node runtime、terminal worker 及 production
    dependencies、Bash、tini、CA 和必要系统文件；删除 npm/npx/corepack。
 3. 以非 root 用户启动并实现 healthcheck。
-4. 编写 compose，挂 state/workspace volume 并注入配置。
-5. 编写 [07-deployment.md](./07-deployment.md) 列出的普通 Kubernetes YAML。
-6. Deployment 固定 `replicas: 1` 和 `strategy: Recreate`。
-7. 验证 worker handshake/lifecycle、SIGTERM、PTY cleanup、PVC restore 和
+4. 使用 `podman run` 挂 state/workspace volume 并注入配置；不使用任何
+   Docker/Compose 命令或文件。
+5. 把相同 SHA tag 以 `podman push` 推送到测试环境内部 registry。
+6. 编写 [07-deployment.md](./07-deployment.md) 列出的普通 Kubernetes YAML。
+7. 在 `develop` namespace 执行 server-side dry-run 和实际 rollout；Deployment
+   固定 `replicas: 1` 和 `strategy: Recreate`。
+8. 验证 worker handshake/lifecycle、SIGTERM、PTY cleanup、PVC restore 和
    重新部署行为。
 
-Gate：镜像构建、非 root 启动、登录、PTY、WebSocket、worker IPC、
-healthcheck、stop 和 restart restore 全部通过；YAML 通过 server-side dry-run
-或 schema 验证。
+Gate：Podman 镜像 build/run/push、非 root 启动、登录、PTY、WebSocket、worker
+IPC、healthcheck、stop 和 restart restore 全部通过；YAML 通过 API server
+dry-run、`develop` 实际 rollout 和 port-forward Chrome E2E。
 
 ## Phase 8：最终验证与文档
 
-1. 执行全部 Go、terminal worker、frontend、Chrome、container 测试。
+1. 执行全部 Go、terminal worker、frontend、Chrome、Podman 和 Kubernetes
+   测试。
 2. 对照范围逐项验证，并扫描所有排除功能和旧命名空间。
 3. 更新 README、API、配置、安全、部署、备份恢复和故障排查文档。
 4. 记录所有与参考行为的差异；未批准差异必须修复。
@@ -204,7 +214,8 @@ Gate：本文 Definition of Done 全部满足。
 
 ### Chrome E2E
 
-使用 Playwright Chrome channel：
+使用项目内 `@playwright/test 1.62.1` 和 Playwright Chrome channel；不得使用
+全局 Playwright 或默认 bundled Chromium 代替：
 
 | Viewport | Coverage |
 | --- | --- |
@@ -219,7 +230,7 @@ Gate：本文 Definition of Done 全部满足。
 出现文件/Agent/PWA UI 或请求、Service Worker registration 为空，且不请求
 当前 Origin 之外的资源。
 
-### Container/Kubernetes
+### Podman/Kubernetes
 
 - 镜像无 floating `latest`，build stages 和 runtime digest 固定。
 - Runtime 有固定 Node 与 worker dependencies，无 npm/npx/corepack/compiler/
@@ -231,7 +242,11 @@ Gate：本文 Definition of Done 全部满足。
 - SIGTERM 终止 Bash process group 并在 grace period 内退出。
 - Port 9846 冲突时明确失败；healthcheck 和 Secret/config injection 有效。
 - Resources、probe timings、10s shutdown 和 30s grace 与部署模块一致。
-- Deployment 是单副本 Recreate，PVC 为 RWO；普通 YAML 通过 schema 和 dry-run。
+- 测试不调用 Docker、Compose、Make、`kubeconform` 或 `kubeval`。
+- 内部 registry 使用唯一 Git SHA tag；push 后 remote digest 可复核，不要求远端
+  manifest 删除，也不创建额外 disposable tag。
+- Deployment 是单副本 Recreate，PVC 为 RWO；普通 YAML 通过 API server dry-run
+  并在 `develop` namespace 完成实际 rollout、logs/probes 和 Chrome E2E。
 
 ## Definition of Done
 
@@ -248,9 +263,11 @@ Gate：本文 Definition of Done 全部满足。
 - [ ] 只承诺 Linux container + Bash，无其他平台/shell 分支。
 - [ ] 无原生客户端和 host service scripts。
 - [ ] 所有运行时命名空间均为 Roaminal。
-- [ ] Go race/unit/integration、worker、frontend unit、Chrome、container tests
+- [ ] Go race/unit/integration、worker、frontend unit、Chrome、Podman/Kubernetes
+  tests
   通过。
-- [ ] OCI image、compose、单副本 Deployment 普通 YAML 可用。
+- [ ] `Containerfile`、OCI image、`podman run`、内部 registry 和单副本
+  Deployment 普通 YAML 可用；仓库无 Docker/Compose/Makefile。
 - [ ] API、配置、安全、部署、备份和故障排查文档完整。
 - [ ] 实施日志包含测试证据和全部批准差异。
 - [ ] Git commits 和 commit messages 符合 `DEC-018`。
