@@ -8,6 +8,11 @@ sessions/<uuid>.json
 sessions/<uuid>.snapshot
 ```
 
+If a storage driver exposes the PVC mount root as an fsGroup-owned directory
+that the non-root process cannot chmod, Roaminal places the same layout below
+`.roaminal/state/`. Back up the entire mounted directory in either case; the
+application-owned state directory remains `0700` and its files remain `0600`.
+
 Back up the state volume while the service is stopped, or use a filesystem
 snapshot that guarantees a consistent directory image. Treat the backup as
 secret material because it contains refresh-token hashes, user-agent metadata,

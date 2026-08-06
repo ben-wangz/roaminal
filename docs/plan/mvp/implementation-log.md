@@ -68,3 +68,69 @@ behavior fixtures, and direct dependency/license inventory are auditable.
   chunk handling, HMAC rotation/lockout, and PTY/session integration tests.
   Manual service smoke verified worker handshake, login, session creation,
   ordered attach, Bash input/output, title/cwd metadata, and clean shutdown.
+
+## Phase 4-6 gate evidence
+
+- HTTP routes are an explicit allowlist. Challenge/login/refresh, bearer
+  authentication, same-origin checks, heartbeat resize validation, WebSocket
+  attach ordering, boot ID detection, and terminal reconnect behavior are
+  covered by Go tests and the manual service/container flows.
+- React runtime is split into auth, heartbeat, terminal, tabs, preview, search,
+  status, touch, and UI modules. The browser request helper preserves bearer
+  headers across refresh retries; terminal addons load only after xterm opens its
+  viewport. `npm --prefix web run test` reports 3 Vitest tests, and typecheck,
+  lint, and build pass.
+- `ROAMINAL_E2E_PASSWORD=... npm --prefix web run e2e -- --workers=1` passed
+  10/10 tests across 1440x900, 1024x768, 768x1024, 390x844, and 844x390.
+  The authenticated test asserted non-empty terminal canvas pixels, no
+  horizontal overflow, no Service Worker registration, no external resources,
+  and search open/close behavior; viewport screenshots were written to the
+  Playwright test output directory.
+
+## Phase 7 gate evidence
+
+- Final image tag:
+  `container-registry.internal.pve.lab.geekcity.tech:32443/ben-wangz/roaminal:f103d73f3ccefed86ee058cd5e7fa0184acacf83`.
+  `podman build`, `podman push`, and `podman pull` passed. The pulled image
+  config ID is `83e08e9e0ab8`, registry manifest digest is
+  `sha256:e66aee9c65ef42daf6f40ef7e8cebb0292ec4efd251167d2a52deba9e9f91f3a`,
+  and the runtime user is `1000:1000`.
+- A read-only-root Podman run with `/tmp` tmpfs and state/workspace volumes
+  returned `/healthz` 200 and completed login plus ordered WebSocket attach and
+  `CONTAINER_FINAL_OK` PTY output. Runtime inspection found Node but no
+  `npm`, `npx`, `corepack`, compiler, or `cloudflared`.
+- Kubernetes manifests passed API-server server-side dry-run (the API emitted
+  non-fatal last-applied migration warnings). In `develop`, the final image
+  reached `1/1` Ready with zero restarts; Service is `ClusterIP`, PVCs are
+  bound RWO, and the required probes/resources/security context are active.
+  Port-forward API/PTY flow passed, then deleting the only Pod recreated Bash
+  while preserving session ID and `K8S_OK` scrollback; the new Bash returned
+  `RESTORED_OK`.
+- The cluster's local-path driver exposes PVC mount roots as `root:1000` mode
+  `2777` and permits UID/GID 1000 to create private children. Commits
+  `17e92a4` and `583d637` make persistence accept that fsGroup policy only by
+  placing sensitive files below a private `state/` directory; non-writable or
+  world-accessible private directories still fail fast. No Pod privilege or
+  root init container was added.
+
+## Phase 8 gate evidence
+
+- Final commands passed: `go test ./...`, `go vet ./...`,
+  `CGO_ENABLED=1 go test -race ./...`, terminal-worker lint/tests, Vitest,
+  frontend typecheck/lint/build, five-viewport Chrome E2E, Podman smoke, and
+  Kubernetes rollout/restore smoke.
+- Scope scan found no executable Host/cluster namespace, file UI/API, Agent/ACP/
+  AI/provider, PWA/Service Worker, CDN, cloudflared, Docker/Compose/Make, or
+  native-client artifacts. `README.md` mentions excluded features only to make
+  the product boundary auditable.
+- Documentation shipped: README, API, configuration, security, deployment,
+  backup/recovery, and troubleshooting guides. No secrets or temporary
+  Kubernetes manifests are tracked.
+
+### Residual toolchain notes
+
+- `typescript-eslint@8.66.0` does not support the approved TypeScript 7.0.2;
+  ESLint intentionally ignores TypeScript sources while `tsc --noEmit` gates
+  them. This is recorded as a fixed toolchain limitation.
+- Podman warns that OCI output ignores the image `HEALTHCHECK`; Kubernetes and
+  the integration harness use the documented `/healthz` probes directly.
