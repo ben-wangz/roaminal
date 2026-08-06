@@ -1,0 +1,9 @@
+.git
+.gitignore
+web/node_modules
+terminal-worker/node_modules
+web/dist
+web/test-results
+web/playwright-report
+node_modules
+*.log

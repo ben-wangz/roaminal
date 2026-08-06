@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roaminal
+  labels:
+    app.kubernetes.io/name: roaminal
+    app.kubernetes.io/managed-by: roaminal-mvp-test
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: roaminal
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: roaminal
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: roaminal
+          image: registry.example.invalid/roaminal:REPLACE_WITH_GIT_SHA
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9846
+              protocol: TCP
+          env:
+            - name: ROAMINAL_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: roaminal
+                  key: host
+            - name: ROAMINAL_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: roaminal
+                  key: port
+            - name: ROAMINAL_WEBSOCKET_PING_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: roaminal
+                  key: websocketPingInterval
+            - name: ROAMINAL_SCROLLBACK_LINES
+              valueFrom:
+                configMapKeyRef:
+                  name: roaminal
+                  key: scrollbackLines
+            - name: ROAMINAL_MAX_SESSIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: roaminal
+                  key: maxSessions
+            - name: ROAMINAL_MAX_CLIENTS_PER_SESSION
+              valueFrom:
+                configMapKeyRef:
+                  name: roaminal
+                  key: maxClientsPerSession
+            - name: ROAMINAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: roaminal
+                  key: password
+            - name: ROAMINAL_ACCEPT_TERMS
+              value: "true"
+            - name: ROAMINAL_CWD
+              value: /workspace
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: state
+              mountPath: /home/roaminal/.roaminal
+            - name: workspace
+              mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: roaminal-state
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: roaminal-workspace
+        - name: tmp
+          emptyDir: {}

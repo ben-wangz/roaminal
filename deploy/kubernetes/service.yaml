@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: roaminal
+  labels:
+    app.kubernetes.io/name: roaminal
+    app.kubernetes.io/managed-by: roaminal-mvp-test
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: roaminal
+  ports:
+    - name: http
+      port: 9846
+      targetPort: http
+      protocol: TCP

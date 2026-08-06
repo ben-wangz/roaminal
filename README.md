@@ -1,58 +1,73 @@
-# `r>` Roaminal
+# Roaminal
 
-> Roam + Terminal.
+Roaminal is a self-hosted, browser-based persistent Bash terminal. The Go
+service owns Linux PTYs and HTTP/WebSocket access; an in-process Node worker
+maintains xterm.js shadow state so scrollback can be restored after a restart.
 
-**Your terminal workspace, wherever you are.**
+The MVP supports one service instance with multiple terminal tabs. It is a
+Linux-container deployment and is tested with Google Chrome on desktop, tablet,
+and phone-sized viewports. It intentionally has no file browser, host registry,
+agent integration, native client, PWA manifest, service worker, or CDN assets.
 
-Roaminal is a browser-based persistent terminal workspace designed to move with
-you across devices and hosts. It brings terminals and files into one continuous
-environment, so work can be resumed wherever it is needed.
+## Local development
 
-## The Name
+Prerequisites are Go 1.26.5, Node.js 24.13.1, npm, and a Linux PTY environment.
+The worker and frontend each use their checked-in lockfile.
 
-**Roaminal** combines **Roam** and **Terminal**.
+```sh
+npm --prefix terminal-worker ci
+npm --prefix web ci
+npm --prefix terminal-worker test
+npm --prefix terminal-worker run lint
+npm --prefix web run typecheck
+npm --prefix web run lint
+npm --prefix web run build
+rm -rf internal/webassets/dist
+cp -a web/dist internal/webassets/dist
+go test ./...
+go vet ./...
+go build ./cmd/roaminal
+```
 
-- **Roam** represents the freedom to move between computers, tablets, phones,
-  and remote hosts without losing the thread of your work.
-- **Terminal** represents the real shell sessions and direct access at the
-  center of the experience.
+Start with an explicit password and terms acknowledgement:
 
-Together, they describe a terminal workspace that is not tied to one machine,
-one screen, or one place.
+```sh
+ROAMINAL_ACCEPT_TERMS=true ROAMINAL_PASSWORD='change-this' go run ./cmd/roaminal
+```
 
-## Product Direction
+The default bind address is `127.0.0.1:9846`; the initial working directory is
+`/workspace`. See [configuration](docs/configuration.md) for precedence and
+validation, and [API](docs/api.md) for the HTTP and WebSocket contract.
 
-Roaminal is intended to provide:
+## Containers and Kubernetes
 
-- Persistent terminal sessions that survive refreshes and reconnects.
-- A unified browser workspace for terminals and files.
-- Access to multiple hosts through a single interface.
-- A consistent web experience across desktop, tablet, and phone browsers.
-- Containerized, self-hosted deployment with Kubernetes or a container runtime.
+Build and run with Podman only:
 
-## Product Scope
+```sh
+IMAGE=registry.example.invalid/roaminal:$(git rev-parse HEAD)
+podman build --file Containerfile --tag "$IMAGE" .
+podman run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  -p 9846:9846 \
+  -e ROAMINAL_ACCEPT_TERMS=true \
+  -e ROAMINAL_PASSWORD='change-this' \
+  -v roaminal-state:/home/roaminal/.roaminal \
+  -v roaminal-workspace:/workspace \
+  "$IMAGE"
+podman push "$IMAGE"
+```
 
-- Roaminal is a web application. It does not include native desktop or mobile
-  clients.
-- Roaminal does not include coding-agent or Agent Protocol integrations.
-- During development, Google Chrome is the only supported browser. Desktop,
-  tablet, and phone layouts are all tested through Chrome.
-- The server is deployed as a container, either directly with a compatible
-  container runtime or through Kubernetes.
+The ordinary manifests in `deploy/kubernetes/` use one `Recreate` Deployment,
+RWO state/workspace PVCs, a `ClusterIP` Service, and `/healthz` probes. Replace
+the example image and Secret with deployment-specific values. The full rollout,
+TLS, proxy timeout, PVC permission, and backup procedure is in
+[deployment](docs/deployment.md).
 
-## Brand Foundation
+## Project documents
 
-- **Product name:** Roaminal
-- **Command:** `roaminal`
-- **Mark:** `r>`
-- **Tagline:** Your terminal workspace, wherever you are.
-- **Positioning:** A browser-based persistent terminal workspace across devices
-  and hosts.
-
-The `r>` mark combines the initial of Roaminal with the familiar terminal
-prompt, expressing movement and command in a compact form.
-
-## Status
-
-Roaminal is at the beginning of its development. This repository currently
-contains the project definition and brand foundation.
+- [API reference](docs/api.md)
+- [Configuration](docs/configuration.md)
+- [Security model](docs/security.md)
+- [Deployment and rollout](docs/deployment.md)
+- [Backup and recovery](docs/backup-recovery.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [MVP implementation log](docs/plan/mvp/implementation-log.md)
