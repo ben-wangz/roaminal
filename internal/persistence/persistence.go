@@ -88,13 +88,49 @@ func New(root string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(root, "sessions"), 0o700); err != nil {
 		return nil, fmt.Errorf("create state directory: %w", err)
 	}
-	if err := os.Chmod(root, 0o700); err != nil {
-		return nil, fmt.Errorf("chmod state directory: %w", err)
-	}
-	if err := os.Chmod(filepath.Join(root, "sessions"), 0o700); err != nil {
-		return nil, fmt.Errorf("chmod sessions directory: %w", err)
+	for name, path := range map[string]string{
+		"state":    root,
+		"sessions": filepath.Join(root, "sessions"),
+	} {
+		if err := ensurePrivateDirectory(path); err != nil {
+			return nil, fmt.Errorf("prepare %s directory: %w", name, err)
+		}
 	}
 	return &Store{Root: root, SessionsDir: filepath.Join(root, "sessions")}, nil
+}
+
+// Some volume drivers expose the mount point as root-owned while applying
+// fsGroup to its access mode. In that case a non-root process cannot chmod the
+// mount point, but can still safely use it when it has no world permissions.
+func ensurePrivateDirectory(path string) error {
+	if err := os.Chmod(path, 0o700); err == nil {
+		return nil
+	} else if !os.IsPermission(err) {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errors.New("path is not a directory")
+	}
+	if info.Mode().Perm()&0o007 != 0 {
+		return errors.New("directory has world permissions")
+	}
+	probe, err := os.CreateTemp(path, ".roaminal-permission-*")
+	if err != nil {
+		return fmt.Errorf("directory is not writable: %w", err)
+	}
+	probeName := probe.Name()
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(probeName)
+		return fmt.Errorf("close write probe: %w", err)
+	}
+	if err := os.Remove(probeName); err != nil {
+		return fmt.Errorf("remove write probe: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) PersistenceDegraded() bool { return s.degraded.Load() }
