@@ -1,0 +1,37 @@
+{
+  "protocol": "roaminal-terminal-worker/1",
+  "frame": {
+    "headerLength": "uint32-big-endian",
+    "payloadLength": "uint32-big-endian",
+    "headerLimit": 65536,
+    "payloadLimit": 268435456
+  },
+  "operations": [
+    "hello",
+    "create",
+    "restore",
+    "write",
+    "resize",
+    "snapshot",
+    "close",
+    "shutdown"
+  ],
+  "sequence": {
+    "createStartsAt": "1",
+    "restoreNextMutation": "throughSequence + 1",
+    "duplicateOrGap": "fatal sequence_mismatch"
+  },
+  "snapshot": {
+    "magic": "ROAMINAL-SNAPSHOT/1",
+    "encoding": "UTF-8 ANSI replay bytes",
+    "sha256": "lowercase hex",
+    "maxBytes": 268435456
+  },
+  "goldenInputs": [
+    "plain UTF-8 and ANSI output",
+    "wide and combining characters",
+    "alternate buffer",
+    "mouse modes ?1005 ?1006 ?1015",
+    "arbitrary PTY byte chunk boundaries"
+  ]
+}

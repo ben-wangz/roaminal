@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "origin": "roaminal.v1",
+  "publicRoutes": [
+    "GET /healthz",
+    "GET /api/version",
+    "POST /api/auth/challenge",
+    "POST /api/auth/login",
+    "POST /api/auth/refresh",
+    "POST /api/auth/logout"
+  ],
+  "protectedRoutes": [
+    "GET /api/auth/session",
+    "GET /api/auth/sessions",
+    "DELETE /api/auth/sessions/:id",
+    "POST /api/auth/logout-others",
+    "GET /api/heartbeat",
+    "POST /api/heartbeat",
+    "POST /api/sessions",
+    "DELETE /api/sessions/:id",
+    "WS /ws/:sessionId"
+  ],
+  "authChallenge": {
+    "algorithm": "roaminal-hmac-sha256-login-v1",
+    "messagePrefix": "roaminal-login-v1:"
+  },
+  "websocket": {
+    "selectedProtocol": "roaminal.v1",
+    "authProtocolPrefix": "roaminal.auth.",
+    "attachOrder": ["snapshot", "meta", "status", "output"],
+    "clientTypes": ["input", "resize", "claim_terminal_control", "ping"]
+  },
+  "limits": {
+    "jsonBodyBytes": 1048576,
+    "websocketMessageBytes": 1048576,
+    "executionCommandInputBytes": 65536,
+    "executionOutputBytes": 983040
+  }
+}
