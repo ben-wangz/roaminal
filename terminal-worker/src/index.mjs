@@ -1,10 +1,10 @@
-import readline from 'node:readline';
-
 const PROTOCOL = 'roaminal-terminal-worker/1';
 const HEADER_LIMIT = 64 * 1024;
 const PAYLOAD_LIMIT = 256 * 1024 * 1024;
+const WRITE_PAYLOAD_LIMIT = 256 * 1024;
 const sessions = new Map();
 let input = Buffer.alloc(0);
+let processing = Promise.resolve();
 
 async function loadHeadlessPackages() {
   const hadNavigator = Object.prototype.hasOwnProperty.call(globalThis, 'navigator');
@@ -76,7 +76,7 @@ function parseFrame() {
 }
 
 function validateProtocol(header) {
-  if (!header || typeof header !== 'object' || header.protocol && header.protocol !== PROTOCOL) {
+  if (!header || typeof header !== 'object' || header.protocol !== PROTOCOL) {
     const error = new Error('unsupported protocol');
     error.code = 'protocol_version';
     error.fatal = true;
@@ -100,7 +100,45 @@ function validateRequest(header) {
   for (const key of Object.keys(header)) if (!fields.includes(key)) { const error = new Error(`unknown header field: ${key}`); error.code = 'invalid_frame'; error.fatal = true; throw error; }
   for (const key of fields) {
     if (key === 'op' || key === 'protocol') continue;
-    if (['requestId', 'sessionId', 'sequence', 'throughSequence'].includes(key) && header.op !== 'hello' && typeof header[key] !== 'string') { const error = new Error(`missing ${key}`); error.code = 'invalid_frame'; error.fatal = true; throw error; }
+    if (!Object.prototype.hasOwnProperty.call(header, key)) {
+      const error = new Error(`missing ${key}`);
+      error.code = 'invalid_frame';
+      error.fatal = true;
+      throw error;
+    }
+    if (['requestId', 'sessionId', 'sequence', 'throughSequence'].includes(key) && (typeof header[key] !== 'string' || header[key].length === 0)) {
+      const error = new Error(`invalid ${key}`);
+      error.code = 'invalid_frame';
+      error.fatal = true;
+      throw error;
+    }
+  }
+  for (const key of ['cols', 'rows', 'scrollbackLines']) {
+    if (Object.prototype.hasOwnProperty.call(header, key) && (!Number.isInteger(header[key]) || header[key] < 0)) {
+      const error = new Error(`invalid ${key}`);
+      error.code = 'invalid_frame';
+      error.fatal = true;
+      throw error;
+    }
+  }
+  for (const key of ['sequence', 'throughSequence']) {
+    if (Object.prototype.hasOwnProperty.call(header, key) && !/^(0|[1-9][0-9]*)$/.test(header[key])) {
+      const error = new Error(`invalid ${key}`);
+      error.code = 'invalid_frame';
+      error.fatal = true;
+      throw error;
+    }
+  }
+}
+
+function decodeUTF8(payload) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(payload);
+  } catch {
+    const error = new Error('payload is not valid UTF-8');
+    error.code = 'invalid_frame';
+    error.fatal = true;
+    throw error;
   }
 }
 
@@ -108,6 +146,19 @@ async function handle({ header, payload }) {
   validateProtocol(header);
   validateRequest(header);
   const op = header.op;
+  if (['hello', 'create', 'resize', 'snapshot', 'close', 'shutdown'].includes(op) && payload.length !== 0) {
+    const error = new Error(`${op} does not accept a payload`);
+    error.code = 'invalid_frame';
+    error.fatal = true;
+    throw error;
+  }
+  if (op === 'write' && payload.length > WRITE_PAYLOAD_LIMIT) {
+    const error = new Error('write payload exceeds 256 KiB');
+    error.code = 'invalid_frame';
+    error.fatal = true;
+    throw error;
+  }
+  if (op === 'write' || op === 'restore') decodeUTF8(payload);
   if (op === 'hello') {
     if (header.protocol !== PROTOCOL) {
       const error = new Error('unsupported protocol');
@@ -131,7 +182,7 @@ async function handle({ header, payload }) {
       error.code = 'duplicate_session';
       throw error;
     }
-    if (!Number.isInteger(header.cols) || !Number.isInteger(header.rows) || !Number.isInteger(header.scrollbackLines)) {
+    if (!Number.isInteger(header.cols) || header.cols < 2 || header.cols > 1000 || !Number.isInteger(header.rows) || header.rows < 1 || header.rows > 1000 || !Number.isInteger(header.scrollbackLines) || header.scrollbackLines < 0 || header.scrollbackLines > 50000) {
       const error = new Error('invalid terminal dimensions');
       error.code = 'invalid_frame';
       throw error;
@@ -143,7 +194,7 @@ async function handle({ header, payload }) {
     const session = { terminal, serialize, sequence: op === 'restore' ? BigInt(header.throughSequence || '0') : 0n, chain: Promise.resolve() };
     sessions.set(header.sessionId, session);
     if (op === 'restore' && payload.length) {
-      session.chain = session.chain.then(() => new Promise((resolve) => terminal.write(payload.toString('utf8'), resolve)));
+      session.chain = session.chain.then(() => new Promise((resolve) => terminal.write(decodeUTF8(payload), resolve)));
       await session.chain;
     }
     send({ op: 'result', protocol: PROTOCOL, requestId: header.requestId, requestOp: op, throughSequence: String(session.sequence) });
@@ -156,7 +207,7 @@ async function handle({ header, payload }) {
     throw error;
   }
   if (op === 'write') {
-    const sequence = BigInt(header.sequence || '0');
+    const sequence = BigInt(header.sequence);
     if (sequence !== session.sequence + 1n) {
       const error = new Error('sequence mismatch');
       error.code = 'sequence_mismatch';
@@ -164,7 +215,7 @@ async function handle({ header, payload }) {
       throw error;
     }
     session.sequence = sequence;
-    session.chain = session.chain.then(() => new Promise((resolve) => session.terminal.write(payload.toString('utf8'), resolve)));
+    session.chain = session.chain.then(() => new Promise((resolve) => session.terminal.write(decodeUTF8(payload), resolve)));
     return;
   }
   if (op === 'resize') {
@@ -205,18 +256,20 @@ async function handle({ header, payload }) {
 
 process.stdin.on('data', (chunk) => {
   input = Buffer.concat([input, chunk]);
-  try {
-    while (true) {
-      const parsed = parseFrame();
-      if (!parsed) break;
-      handle(parsed).catch((error) => {
-        fail(error, parsed.header);
-        if (error.fatal) process.exitCode = 1;
-      });
+  while (true) {
+    let parsed;
+    try {
+      parsed = parseFrame();
+    } catch (error) {
+      fail(error);
+      process.exitCode = 1;
+      return;
     }
-  } catch (error) {
-    fail(error);
-    process.exitCode = 1;
+    if (!parsed) break;
+    processing = processing.then(() => handle(parsed)).catch((error) => {
+      fail(error, parsed.header);
+      if (error.fatal) process.exitCode = 1;
+    });
   }
 });
 

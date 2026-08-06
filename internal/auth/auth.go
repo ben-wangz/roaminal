@@ -321,7 +321,11 @@ func (m *Manager) Current(sessionID string) (CurrentSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	entry, ok := m.refresh[sessionID]
-	if !ok {
+	if !ok || !entry.RefreshExpiresAt.After(time.Now().UTC()) {
+		if ok {
+			delete(m.refresh, sessionID)
+			_ = m.persistLocked()
+		}
 		return CurrentSession{}, ErrUnauthorized
 	}
 	var accessExpires time.Time
@@ -337,8 +341,18 @@ func (m *Manager) List(sessionID string) []SessionSummary {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	result := make([]SessionSummary, 0, len(m.refresh))
-	for _, entry := range m.refresh {
+	now := time.Now().UTC()
+	changed := false
+	for id, entry := range m.refresh {
+		if !entry.RefreshExpiresAt.After(now) {
+			delete(m.refresh, id)
+			changed = true
+			continue
+		}
 		result = append(result, SessionSummary{ID: entry.ID, CreatedAt: entry.CreatedAt, LastSeenAt: entry.LastSeenAt, RefreshExpiresAt: entry.RefreshExpiresAt, UserAgent: entry.UserAgent, Current: entry.ID == sessionID})
+	}
+	if changed {
+		_ = m.persistLocked()
 	}
 	return result
 }

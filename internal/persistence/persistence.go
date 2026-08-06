@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -24,7 +25,9 @@ const (
 
 var ErrNotFound = os.ErrNotExist
 
-var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+var hex64Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var sequencePattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
 
 type ExecutionRecord struct {
 	Command     string    `json:"command"`
@@ -78,7 +81,7 @@ type SnapshotHeader struct {
 type Store struct {
 	Root        string
 	SessionsDir string
-	degraded    bool
+	degraded    atomic.Bool
 }
 
 func New(root string) (*Store, error) {
@@ -94,9 +97,9 @@ func New(root string) (*Store, error) {
 	return &Store{Root: root, SessionsDir: filepath.Join(root, "sessions")}, nil
 }
 
-func (s *Store) PersistenceDegraded() bool { return s.degraded }
+func (s *Store) PersistenceDegraded() bool { return s.degraded.Load() }
 
-func (s *Store) markError(err error) error { s.degraded = true; return err }
+func (s *Store) markError(err error) error { s.degraded.Store(true); return err }
 
 func (s *Store) atomicWrite(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".roaminal-*")
@@ -139,6 +142,11 @@ func encodeJSON(value any) ([]byte, error) {
 }
 
 func (s *Store) SaveAuth(file AuthFile) error {
+	for _, session := range file.Sessions {
+		if err := validateAuthSession(session); err != nil {
+			return s.markError(err)
+		}
+	}
 	file.FormatVersion = FormatVersion
 	data, err := encodeJSON(file)
 	if err != nil {
@@ -160,6 +168,69 @@ func decodeStrict(data []byte, target any) error {
 	return nil
 }
 
+func validateAuthSession(session AuthSession) error {
+	if !uuidPattern.MatchString(session.ID) || !hex64Pattern.MatchString(session.PasswordFingerprint) || !hex64Pattern.MatchString(session.RefreshTokenHash) {
+		return errors.New("invalid auth session identity or hash")
+	}
+	if session.CreatedAt.IsZero() || session.LastSeenAt.IsZero() || session.RefreshExpiresAt.IsZero() || session.RotatedAt.IsZero() {
+		return errors.New("invalid auth session timestamp")
+	}
+	if !session.RefreshExpiresAt.After(session.CreatedAt) || session.LastSeenAt.Before(session.CreatedAt) || session.RotatedAt.Before(session.CreatedAt) {
+		return errors.New("invalid auth session lifetime")
+	}
+	if !utf8.ValidString(session.UserAgent) || len([]byte(session.UserAgent)) > 500 {
+		return errors.New("invalid auth user agent")
+	}
+	return nil
+}
+
+func validateExecution(record ExecutionRecord) error {
+	if !utf8.ValidString(record.Command) || !utf8.ValidString(record.Input) || !utf8.ValidString(record.Output) {
+		return errors.New("execution contains invalid UTF-8")
+	}
+	if len([]byte(record.Command))+len([]byte(record.Input)) > 64*1024 || len([]byte(record.Output)) > 960*1024 {
+		return errors.New("execution exceeds size limit")
+	}
+	if record.ExitCode == nil || record.StartedAt.IsZero() || record.CompletedAt.IsZero() || record.CompletedAt.Before(record.StartedAt) || record.DurationMs < 0 {
+		return errors.New("execution is not completed")
+	}
+	return nil
+}
+
+func validateSessionMeta(meta SessionMeta) error {
+	if meta.FormatVersion != 0 && meta.FormatVersion != FormatVersion {
+		return errors.New("unsupported session format version")
+	}
+	if !uuidPattern.MatchString(meta.ID) {
+		return errors.New("invalid session id")
+	}
+	if !utf8.ValidString(meta.Title) || len([]byte(meta.Title)) > 512 || !utf8.ValidString(meta.InitialCwd) || !utf8.ValidString(meta.Cwd) {
+		return errors.New("invalid session text")
+	}
+	if !filepath.IsAbs(meta.InitialCwd) || !filepath.IsAbs(meta.Cwd) || len([]byte(meta.InitialCwd)) > 4096 || len([]byte(meta.Cwd)) > 4096 {
+		return errors.New("invalid session cwd")
+	}
+	if meta.Cols < 2 || meta.Cols > 1000 || meta.Rows < 1 || meta.Rows > 1000 || meta.CreatedAt.IsZero() || meta.UpdatedAt.IsZero() || meta.UpdatedAt.Before(meta.CreatedAt) {
+		return errors.New("invalid session dimensions or timestamp")
+	}
+	if len(meta.Executions) > 100 {
+		return errors.New("too many executions")
+	}
+	for _, record := range meta.Executions {
+		if err := validateExecution(record); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSnapshotHeader(header SnapshotHeader) error {
+	if header.Cols < 2 || header.Cols > 1000 || header.Rows < 1 || header.Rows > 1000 || header.ScrollbackLines < 0 || header.ScrollbackLines > 50000 || !sequencePattern.MatchString(header.ThroughSequence) {
+		return errors.New("invalid snapshot header")
+	}
+	return nil
+}
+
 func (s *Store) LoadAuth() (AuthFile, error) {
 	path := filepath.Join(s.Root, "auth-sessions.json")
 	data, err := os.ReadFile(path)
@@ -175,8 +246,9 @@ func (s *Store) LoadAuth() (AuthFile, error) {
 		return AuthFile{FormatVersion: FormatVersion, Sessions: []AuthSession{}}, nil
 	}
 	for _, session := range file.Sessions {
-		if !uuidPattern.MatchString(session.ID) {
-			return AuthFile{}, errors.New("invalid auth session id")
+		if err := validateAuthSession(session); err != nil {
+			_ = s.quarantine(path, "corrupt")
+			return AuthFile{FormatVersion: FormatVersion, Sessions: []AuthSession{}}, nil
 		}
 	}
 	return file, nil
@@ -191,6 +263,9 @@ func (s *Store) SessionPath(id string) string  { return filepath.Join(s.Sessions
 func (s *Store) SnapshotPath(id string) string { return filepath.Join(s.SessionsDir, id+".snapshot") }
 
 func (s *Store) SaveSession(meta SessionMeta) error {
+	if err := validateSessionMeta(meta); err != nil {
+		return s.markError(err)
+	}
 	meta.FormatVersion = FormatVersion
 	data, err := encodeJSON(meta)
 	if err != nil {
@@ -200,6 +275,9 @@ func (s *Store) SaveSession(meta SessionMeta) error {
 }
 
 func (s *Store) DeleteSession(id string) error {
+	if !uuidPattern.MatchString(id) {
+		return errors.New("invalid session id")
+	}
 	for _, path := range []string{s.SessionPath(id), s.SnapshotPath(id)} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return s.markError(err)
@@ -209,12 +287,15 @@ func (s *Store) DeleteSession(id string) error {
 }
 
 func (s *Store) LoadSession(id string) (SessionMeta, error) {
+	if !uuidPattern.MatchString(id) {
+		return SessionMeta{}, errors.New("invalid session id")
+	}
 	data, err := os.ReadFile(s.SessionPath(id))
 	if err != nil {
 		return SessionMeta{}, err
 	}
 	var meta SessionMeta
-	if err := decodeStrict(data, &meta); err != nil || meta.FormatVersion != FormatVersion || !uuidPattern.MatchString(meta.ID) {
+	if err := decodeStrict(data, &meta); err != nil || meta.FormatVersion != FormatVersion || meta.ID != id || validateSessionMeta(meta) != nil {
 		_ = s.quarantine(s.SessionPath(id), "corrupt")
 		_ = s.quarantine(s.SnapshotPath(id), "corrupt")
 		return SessionMeta{}, fmt.Errorf("invalid session metadata %s", id)
@@ -248,6 +329,9 @@ func (s *Store) ListSessions() ([]SessionMeta, error) {
 }
 
 func EncodeSnapshot(header SnapshotHeader, payload []byte) ([]byte, error) {
+	if err := validateSnapshotHeader(header); err != nil {
+		return nil, err
+	}
 	if len(payload) > SnapshotMaxSize {
 		return nil, errors.New("snapshot exceeds 256 MiB")
 	}
@@ -280,16 +364,19 @@ func DecodeSnapshot(data []byte) (SnapshotHeader, []byte, error) {
 		return SnapshotHeader{}, nil, errors.New("invalid snapshot payload")
 	}
 	digest := sha256.Sum256(parts[2])
-	if !strings.EqualFold(header.SHA256, hex.EncodeToString(digest[:])) {
+	if header.SHA256 != hex.EncodeToString(digest[:]) {
 		return SnapshotHeader{}, nil, errors.New("snapshot checksum mismatch")
 	}
-	if header.Cols < 1 || header.Rows < 1 || header.ScrollbackLines < 0 || header.ThroughSequence == "" {
+	if err := validateSnapshotHeader(header); err != nil || !hex64Pattern.MatchString(header.SHA256) {
 		return SnapshotHeader{}, nil, errors.New("invalid snapshot dimensions")
 	}
 	return header, parts[2], nil
 }
 
 func (s *Store) SaveSnapshot(id string, header SnapshotHeader, payload []byte) error {
+	if !uuidPattern.MatchString(id) {
+		return s.markError(errors.New("invalid session id"))
+	}
 	data, err := EncodeSnapshot(header, payload)
 	if err != nil {
 		return s.markError(err)
@@ -298,6 +385,9 @@ func (s *Store) SaveSnapshot(id string, header SnapshotHeader, payload []byte) e
 }
 
 func (s *Store) LoadSnapshot(id string) (SnapshotHeader, []byte, error) {
+	if !uuidPattern.MatchString(id) {
+		return SnapshotHeader{}, nil, errors.New("invalid session id")
+	}
 	data, err := os.ReadFile(s.SnapshotPath(id))
 	if err != nil {
 		return SnapshotHeader{}, nil, err

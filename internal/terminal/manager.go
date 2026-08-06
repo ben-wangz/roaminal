@@ -29,6 +29,8 @@ type ExitStatus struct {
 	Signal   *int `json:"signal"`
 }
 
+var ErrClientCapacity = errors.New("client capacity reached")
+
 type Summary struct {
 	ID         string      `json:"id"`
 	CreatedAt  time.Time   `json:"createdAt"`
@@ -115,6 +117,7 @@ type Session struct {
 	clients       map[*Client]struct{}
 	sequence      uint64
 	pending       []byte
+	markerPending string
 	snapshotTimer *time.Timer
 	dirtySince    time.Time
 	currentExecID string
@@ -177,6 +180,9 @@ func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) err
 func (m *Manager) startSession(ctx context.Context, meta persistence.SessionMeta, cwd string, createWorker bool) (*Session, error) {
 	rcfile := findRCFile()
 	cmd := exec.Command("/bin/bash", "--noprofile", "--rcfile", rcfile, "-i")
+	// creack/pty setsid makes Bash its own process-group leader; Pdeathsig
+	// prevents an orphan if the Go process exits unexpectedly.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "ROAMINAL_SESSION_ID="+meta.ID, "ROAMINAL_SHELL_READY=1")
 	file, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)})
@@ -308,46 +314,85 @@ func decodeUTF8(data []byte) (string, bool) {
 }
 
 func (s *Session) parseMarkersLocked(text string) string {
-	for {
-		start := strings.Index(text, "\x1b]0;")
-		if start < 0 {
+	text = s.markerPending + text
+	s.markerPending = ""
+	const titlePrefix = "\x1b]0;"
+	const markerPrefix = "\x1b]777;roaminal;"
+	var cleaned strings.Builder
+	for index := 0; index < len(text); {
+		relative := strings.IndexByte(text[index:], '\x1b')
+		if relative < 0 {
+			cleaned.WriteString(text[index:])
 			break
 		}
-		endRel := strings.IndexByte(text[start+4:], '\x07')
-		if endRel < 0 {
-			break
-		}
-		title := text[start+4 : start+4+endRel]
-		if len([]byte(title)) <= 512 {
+		escape := index + relative
+		cleaned.WriteString(text[index:escape])
+		remainder := text[escape:]
+		if strings.HasPrefix(remainder, titlePrefix) {
+			endRel := strings.IndexByte(remainder[len(titlePrefix):], '\x07')
+			if endRel < 0 {
+				s.markerPending = remainder
+				break
+			}
+			title := truncateUTF8(remainder[len(titlePrefix):len(titlePrefix)+endRel], 512)
 			s.meta.Title = title
 			s.meta.UpdatedAt = time.Now().UTC()
 			_ = s.manager.store.SaveSession(s.meta)
 			s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.Title, "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows}))
+			cleaned.WriteString(remainder[:len(titlePrefix)+endRel+1])
+			index = escape + len(titlePrefix) + endRel + 1
+			continue
 		}
-		break
-	}
-	for {
-		start := strings.Index(text, "\x1b]777;roaminal;")
-		if start < 0 {
+		if strings.HasPrefix(remainder, markerPrefix) {
+			endRel := strings.IndexByte(remainder[len(markerPrefix):], '\x07')
+			if endRel < 0 {
+				s.markerPending = remainder
+				break
+			}
+			marker := remainder[len(markerPrefix) : len(markerPrefix)+endRel]
+			s.applyMarkerLocked(marker)
+			index = escape + len(markerPrefix) + endRel + 1
+			continue
+		}
+		if isControlPrefix(remainder, titlePrefix) || isControlPrefix(remainder, markerPrefix) {
+			s.markerPending = remainder
 			break
 		}
-		endRel := strings.IndexByte(text[start+len("\x1b]777;roaminal;"):], '\x07')
-		if endRel < 0 {
-			break
-		}
-		end := start + len("\x1b]777;roaminal;") + endRel
-		marker := text[start+len("\x1b]777;roaminal;") : end]
-		s.applyMarkerLocked(marker)
-		text = text[:start] + text[end+1:]
+		cleaned.WriteByte(remainder[0])
+		index = escape + 1
 	}
-	return text
+	return cleaned.String()
+}
+
+func isControlPrefix(value, full string) bool {
+	return len(value) < len(full) && strings.HasPrefix(full, value)
+}
+
+func truncateUTF8(value string, maxBytes int) string {
+	data := []byte(value)
+	if len(data) <= maxBytes {
+		return value
+	}
+	data = data[:maxBytes]
+	for len(data) > 0 && !utf8.Valid(data) {
+		data = data[:len(data)-1]
+	}
+	return string(data)
+}
+
+func decodeMarker(value string) ([]byte, error) {
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	if err == nil {
+		return decoded, nil
+	}
+	return base64.RawStdEncoding.DecodeString(value)
 }
 
 func (s *Session) applyMarkerLocked(marker string) {
 	kind, value, _ := strings.Cut(marker, ":")
 	switch kind {
 	case "cwd":
-		if decoded, err := base64.RawStdEncoding.DecodeString(value); err == nil && len(decoded) <= 4096 {
+		if decoded, err := decodeMarker(value); err == nil && len(decoded) <= 4096 {
 			if path := string(decoded); filepath.IsAbs(path) {
 				s.meta.Cwd = path
 				s.meta.UpdatedAt = time.Now().UTC()
@@ -356,7 +401,7 @@ func (s *Session) applyMarkerLocked(marker string) {
 			}
 		}
 	case "start":
-		if decoded, err := base64.RawStdEncoding.DecodeString(value); err == nil {
+		if decoded, err := decodeMarker(value); err == nil {
 			command := string(decoded)
 			if strings.Contains(command, "_roaminal_") || strings.Contains(command, "ROAMINAL_") {
 				return
@@ -511,7 +556,7 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 	session.mu.Lock()
 	if !session.closed {
 		session.closed = true
-		_ = session.cmd.Process.Signal(syscall.SIGTERM)
+		_ = signalProcessGroup(session.cmd, syscall.SIGTERM)
 		_ = session.pty.Close()
 		_ = m.worker.CloseSession(ctx, id)
 	}
@@ -535,6 +580,9 @@ func (m *Manager) Attach(ctx context.Context, id string) (*Client, error) {
 	defer session.mu.Unlock()
 	if session.closed {
 		return nil, os.ErrProcessDone
+	}
+	if len(session.clients) >= m.cfg.MaxClientsPerSession {
+		return nil, ErrClientCapacity
 	}
 	sequence := strconv.FormatUint(session.sequence, 10)
 	snapshot, _, err := m.worker.Snapshot(ctx, id, sequence)
@@ -669,7 +717,7 @@ func (m *Manager) Shutdown(ctx context.Context) {
 		session.saveSnapshot()
 		session.mu.Lock()
 		if !session.closed {
-			_ = session.cmd.Process.Signal(syscall.SIGTERM)
+			_ = signalProcessGroup(session.cmd, syscall.SIGTERM)
 			_ = session.pty.Close()
 		}
 		session.mu.Unlock()
@@ -677,6 +725,13 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	deadline, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_ = m.worker.Shutdown(deadline)
+}
+
+func signalProcessGroup(cmd *exec.Cmd, signal syscall.Signal) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	return syscall.Kill(-cmd.Process.Pid, signal)
 }
 
 func newID() (string, error) {

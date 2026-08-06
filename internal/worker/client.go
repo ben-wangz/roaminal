@@ -12,7 +12,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -47,6 +50,7 @@ type Client struct {
 	closeOnce  sync.Once
 	callbackMu sync.Mutex
 	onFatal    func(error)
+	stopping   atomic.Bool
 }
 
 func New(path string, onFatal func(error)) *Client {
@@ -59,7 +63,7 @@ func (c *Client) Start(ctx context.Context) error {
 	} else {
 		c.cmd = exec.Command(c.path)
 	}
-	c.cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	c.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	stdin, err := c.cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -85,6 +89,8 @@ func (c *Client) Start(ctx context.Context) error {
 	requestID := newID()
 	waiter := c.register(requestID)
 	if err := c.send(map[string]any{"op": "hello", "protocol": Protocol, "requestId": requestID}, nil); err != nil {
+		c.unregister(requestID, waiter)
+		c.fail(err)
 		return err
 	}
 	select {
@@ -94,8 +100,12 @@ func (c *Client) Start(ctx context.Context) error {
 		if op := stringField(result.Header, "op"); op == "ready" && stringField(result.Header, "protocol") == Protocol {
 			return nil
 		}
-		return errors.New("terminal worker handshake failed")
+		err := errors.New("terminal worker handshake failed")
+		c.fail(err)
+		return err
 	case <-ctx.Done():
+		c.unregister(requestID, waiter)
+		c.fail(ctx.Err())
 		return ctx.Err()
 	}
 }
@@ -106,6 +116,14 @@ func (c *Client) register(requestID string) chan Result {
 	c.waiters[requestID] = ch
 	c.waitMu.Unlock()
 	return ch
+}
+
+func (c *Client) unregister(requestID string, waiter chan Result) {
+	c.waitMu.Lock()
+	if current := c.waiters[requestID]; current == waiter {
+		delete(c.waiters, requestID)
+	}
+	c.waitMu.Unlock()
 }
 
 func (c *Client) readLoop() {
@@ -143,7 +161,10 @@ func (c *Client) fail(err error) {
 			waiter <- Result{Header: map[string]json.RawMessage{"op": raw("error"), "message": raw(err.Error())}}
 		}
 		c.waitMu.Unlock()
-		if c.onFatal != nil {
+		if c.cmd != nil && c.cmd.Process != nil && c.cmd.ProcessState == nil && !c.stopping.Load() {
+			_ = syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
+		}
+		if c.onFatal != nil && !c.stopping.Load() {
 			c.onFatal(err)
 		}
 	})
@@ -158,12 +179,23 @@ func (c *Client) send(header map[string]any, payload []byte) error {
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
-	if c.stdin == nil {
+	if c.stdin == nil || !c.Available() {
 		return ErrUnavailable
 	}
-	if _, err := c.stdin.Write(data); err != nil {
-		c.fail(err)
-		return err
+	for len(data) > 0 {
+		written, err := c.stdin.Write(data)
+		if written > 0 {
+			data = data[written:]
+		}
+		if err != nil {
+			c.fail(err)
+			return err
+		}
+		if written == 0 {
+			err := io.ErrShortWrite
+			c.fail(err)
+			return err
+		}
 	}
 	return nil
 }
@@ -173,6 +205,7 @@ func (c *Client) request(ctx context.Context, header map[string]any, payload []b
 	header["requestId"] = requestID
 	waiter := c.register(requestID)
 	if err := c.send(header, payload); err != nil {
+		c.unregister(requestID, waiter)
 		return Result{}, err
 	}
 	select {
@@ -182,8 +215,10 @@ func (c *Client) request(ctx context.Context, header map[string]any, payload []b
 		}
 		return result, nil
 	case <-ctx.Done():
+		c.unregister(requestID, waiter)
 		return Result{}, ctx.Err()
 	case <-c.done:
+		c.unregister(requestID, waiter)
 		return Result{}, ErrUnavailable
 	}
 }
@@ -214,10 +249,16 @@ func (c *Client) Write(sessionID, sequence string, payload []byte) error {
 	if len(payload) > 256*1024 {
 		return errors.New("worker write frame too large")
 	}
+	if !validSequence(sequence) {
+		return errors.New("invalid worker sequence")
+	}
 	return c.send(map[string]any{"op": "write", "protocol": Protocol, "sessionId": sessionID, "sequence": sequence}, payload)
 }
 
 func (c *Client) Resize(sessionID, sequence string, cols, rows int) error {
+	if !validSequence(sequence) || cols < 2 || cols > 1000 || rows < 1 || rows > 1000 {
+		return errors.New("invalid worker resize")
+	}
 	return c.send(map[string]any{"op": "resize", "protocol": Protocol, "sessionId": sessionID, "sequence": sequence, "cols": cols, "rows": rows}, nil)
 }
 
@@ -238,8 +279,12 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	if c.stdin == nil {
 		return nil
 	}
+	c.stopping.Store(true)
 	_, err := c.request(ctx, map[string]any{"op": "shutdown", "protocol": Protocol}, nil)
 	_ = c.stdin.Close()
+	if err != nil && c.cmd != nil && c.cmd.Process != nil && c.cmd.ProcessState == nil {
+		_ = syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
+	}
 	return err
 }
 
@@ -318,6 +363,14 @@ func newID() string {
 	rawBytes[6] = rawBytes[6]&0x0f | 0x40
 	rawBytes[8] = rawBytes[8]&0x3f | 0x80
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", rawBytes[0:4], rawBytes[4:6], rawBytes[6:8], rawBytes[8:10], rawBytes[10:])
+}
+
+func validSequence(value string) bool {
+	if value == "" || (len(value) > 1 && value[0] == '0') || strings.Trim(value, "0123456789") != "" {
+		return false
+	}
+	_, err := strconv.ParseUint(value, 10, 64)
+	return err == nil
 }
 
 func (c *Client) Wait(ctx context.Context) error {

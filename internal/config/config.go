@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -388,6 +389,9 @@ func (c Config) Validate() error {
 	}
 	if len([]byte(c.Password)) < 1 || len([]byte(c.Password)) > 1024 {
 		return errors.New("password must be 1..1024 UTF-8 bytes")
+	}
+	if !utf8.ValidString(c.Password) {
+		return errors.New("password must be valid UTF-8")
 	}
 	if c.WebsocketPingInterval < time.Second || c.WebsocketPingInterval > 5*time.Minute {
 		return errors.New("websocketPingInterval must be 1s..5m")

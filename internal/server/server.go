@@ -3,10 +3,11 @@ package server
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -263,6 +264,12 @@ func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, _ string)
 			return
 		}
 		seen[update.ID] = true
+		if update.Resize != nil && (update.Resize.Cols < 2 || update.Resize.Cols > 1000 || update.Resize.Rows < 1 || update.Resize.Rows > 1000) {
+			writeError(w, 400, "invalid heartbeat update")
+			return
+		}
+	}
+	for _, update := range body.Updates.Sessions {
 		if update.Resize != nil {
 			if err := s.terms.Resize(update.ID, nil, update.Resize.Cols, update.Resize.Rows); err != nil && !errors.Is(err, os.ErrNotExist) {
 				writeError(w, 400, "invalid heartbeat update")
@@ -324,10 +331,6 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized")
 		return
 	}
-	if s.terms.ClientCount(id) >= s.cfg.MaxClientsPerSession {
-		writeError(w, 429, "client capacity reached")
-		return
-	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"roaminal.v1"}})
 	if err != nil {
 		return
@@ -337,6 +340,10 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	client, err := s.terms.Attach(ctx, id)
 	if err != nil {
+		if errors.Is(err, terminal.ErrClientCapacity) {
+			_ = conn.Close(websocket.StatusCode(1013), "client capacity reached")
+			return
+		}
 		_ = conn.Close(websocket.StatusCode(1011), "attach failed")
 		return
 	}
@@ -344,12 +351,19 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	writerDone := make(chan struct{})
 	go func() {
 		defer close(writerDone)
+		ticker := time.NewTicker(s.cfg.WebsocketPingInterval)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-client.Done():
 				return
+			case <-ticker.C:
+				if err := conn.Ping(ctx); err != nil {
+					cancel()
+					return
+				}
 			case data := <-client.Messages:
 				if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
 					cancel()
@@ -367,25 +381,25 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 		if typ != websocket.MessageText || len(data) > 1024*1024 {
 			_ = conn.Close(websocket.StatusMessageTooBig, "message too large")
-			break
+			return
 		}
 		var msg map[string]json.RawMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
-			break
+			return
 		}
 		var kind string
 		_ = json.Unmarshal(msg["type"], &kind)
 		if !validWSMessage(kind, msg) {
 			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
-			break
+			return
 		}
 		switch kind {
 		case "input":
 			var value string
 			if err := json.Unmarshal(msg["data"], &value); err != nil || s.terms.Input(id, client, value) != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
-				break
+				return
 			}
 		case "resize":
 			var value struct {
@@ -394,16 +408,18 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			}
 			if json.Unmarshal(data, &value) != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
-				break
+				return
 			}
 			if err := s.terms.Resize(id, client, value.Cols, value.Rows); err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
+				return
 			}
 		case "ping":
 			_ = client.EnqueueControl([]byte(`{"type":"pong"}`))
 		case "claim_terminal_control":
 		default:
 			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
+			return
 		}
 	}
 	<-writerDone
@@ -458,12 +474,22 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(target); err != nil {
-		writeError(w, 400, "invalid JSON body")
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else {
+			writeError(w, 400, "invalid JSON body")
+		}
 		return err
 	}
 	var extra any
 	if err := dec.Decode(&extra); err != io.EOF {
-		writeError(w, 400, "invalid JSON body")
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else {
+			writeError(w, 400, "invalid JSON body")
+		}
 		return errors.New("multiple values")
 	}
 	return nil
@@ -477,6 +503,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	if status >= 500 {
 		id := requestID()
 		w.Header().Set("X-Roaminal-Request-ID", id)
+		log.Printf("request_id=%s status=%d", id, status)
 	}
 	writeJSON(w, status, map[string]string{"error": message})
 }
@@ -488,5 +515,5 @@ func requestID() string {
 	}
 	value[6] = value[6]&0x0f | 0x40
 	value[8] = value[8]&0x3f | 0x80
-	return hex.EncodeToString(value[:])
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:])
 }

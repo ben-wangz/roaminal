@@ -83,19 +83,23 @@ func run(cfg config.Config) error {
 	go func() { serveErr <- httpServer.Serve(listener) }()
 	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	var fatalErr error
 	select {
 	case err := <-serveErr:
 		if err != nil && err != http.ErrServerClosed {
-			return err
+			fatalErr = err
 		}
 	case <-signalCtx.Done():
 	case err := <-terminals.Fatal():
-		_ = err
+		fatalErr = fmt.Errorf("terminal worker failed: %w", err)
 	}
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), config.DefaultShutdownDeadline)
 	defer shutdownCancel()
 	_ = httpServer.Shutdown(shutdownCtx)
 	terminals.Shutdown(shutdownCtx)
+	if fatalErr != nil {
+		return fatalErr
+	}
 	return nil
 }
 
