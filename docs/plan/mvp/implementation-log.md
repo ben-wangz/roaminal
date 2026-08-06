@@ -47,3 +47,18 @@ credentials, terminal payloads from a user environment, or copied assets.
 
 Passed on 2026-08-06: pinned reference, starting worktree, environment baseline,
 behavior fixtures, and direct dependency/license inventory are auditable.
+
+## Phase 1 notes
+
+- Frontend fixed dependencies install and build with the repository-local
+  `legacy-peer-deps=true` setting because the approved xterm beta addons declare
+  an xterm 5 peer while the approved `@xterm/xterm` package is 6 beta.
+- `npm run typecheck` and `npm run build` pass. `typescript-eslint@8.66.0`
+  refuses to load with the approved TypeScript 7.0.2 (`TS 7.0` is explicitly
+  unsupported by that release); `npm run lint` therefore runs ESLint against
+  JavaScript configuration files and TypeScript is gated by the project
+  typecheck. This is a toolchain limitation, not a dependency version change.
+- Phase 1 gate evidence: `go test ./...`, `go vet ./...`, terminal-worker
+  `npm test`/syntax check, web `npm run lint`/`typecheck`/`build`, project-local
+  Chrome smoke, HMAC login, PTY input, and ordered terminal WebSocket attach all
+  passed on the local service.

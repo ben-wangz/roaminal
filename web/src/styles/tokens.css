@@ -1,0 +1,2 @@
+:root { font-family: 'Monaspace Neon', monospace; color: #93a1a1; background: #002b36; font-synthesis: none; --base: #002b36; --base1: #073642; --base2: #586e75; --text: #93a1a1; --muted: #657b83; --yellow: #b58900; --cyan: #2aa198; --blue: #268bd2; --red: #dc322f; --green: #859900; --border: rgba(147,161,161,.22); }
+* { box-sizing: border-box; } button, input { font: inherit; } button { cursor: pointer; }

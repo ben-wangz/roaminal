@@ -1,0 +1,1 @@
+.terminal-viewport .xterm-viewport { scrollbar-color: var(--base2) var(--base); } .terminal-viewport .xterm-screen { padding-bottom: 8px; } .terminal-preview { min-height: 30px; color: var(--muted); font-size: .62rem; overflow: hidden; white-space: pre; } .terminal-preview.active { color: var(--text); } .preview-status[data-connected='false'] { background: var(--red); }

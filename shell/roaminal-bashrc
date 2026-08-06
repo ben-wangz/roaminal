@@ -1,0 +1,34 @@
+# Roaminal's non-interactive, container-local Bash initialization.
+export HISTFILE=/dev/null
+export TERM=${TERM:-xterm-256color}
+export ROAMINAL_SHELL_READY=1
+
+_roaminal_emit() {
+  printf '\033]777;roaminal;%s\007' "$1"
+}
+
+_roaminal_cwd() {
+  local encoded
+  encoded=$(printf '%s' "$PWD" | base64 -w0 2>/dev/null || printf '%s' "$PWD")
+  _roaminal_emit "cwd:${encoded}"
+}
+
+_roaminal_prompt() {
+  local status=$?
+  _roaminal_emit "finish:${status}"
+  _roaminal_cwd
+  PS1='\[\e]0;\u@\h: \w\a\]\[\e[36m\]\u@\h\[\e[0m\]:\[\e[33m\]\w\[\e[0m\]$ '
+}
+
+_roaminal_preexec() {
+  case "$BASH_COMMAND" in
+    _roaminal_*|_roaminal_prompt*|PROMPT_COMMAND*) return ;;
+  esac
+  local encoded
+  encoded=$(printf '%s' "$BASH_COMMAND" | base64 -w0 2>/dev/null || printf '%s' "$BASH_COMMAND")
+  _roaminal_emit "start:${encoded}"
+}
+
+trap '_roaminal_preexec' DEBUG
+PROMPT_COMMAND=_roaminal_prompt
+_roaminal_cwd

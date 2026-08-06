@@ -1,0 +1,1 @@
+export function Modal({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) { return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.(); }}><div className="modal-panel">{children}</div></div>; }

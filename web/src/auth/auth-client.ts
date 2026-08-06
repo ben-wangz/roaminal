@@ -1,0 +1,35 @@
+import { challengeProof } from './auth-crypto';
+import { clearAuth, loadAuth, saveAuth, type AuthState } from './auth-storage';
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } });
+  if (!response.ok) throw new Error((await response.json().catch(() => ({ error: response.statusText }))).error || response.statusText);
+  return response.status === 204 ? (undefined as T) : await response.json() as T;
+}
+
+export async function login(password: string): Promise<AuthState> {
+  const challenge = await request<{ challengeId: string; salt: string; expiresAt: string }>('/api/auth/challenge', { method: 'POST', body: '{}' });
+  const response = await request<AuthState>('/api/auth/login', { method: 'POST', body: JSON.stringify({ challengeId: challenge.challengeId, response: await challengeProof(password, challenge) }) });
+  saveAuth(response);
+  return response;
+}
+
+export async function refresh(): Promise<AuthState | null> {
+  const current = loadAuth();
+  if (!current) return null;
+  try { const next = await request<AuthState>('/api/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: current.refreshToken }) }); saveAuth(next); return next; }
+  catch { clearAuth(); return null; }
+}
+
+export async function api<T>(path: string, init: RequestInit = {}, auth: AuthState | null = loadAuth()): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  if (auth?.accessToken) headers.set('Authorization', `Bearer ${auth.accessToken}`);
+  try { return await request<T>(path, { ...init, headers }); }
+  catch (error) {
+    if ((error as Error).message === 'unauthorized' && await refresh()) return api(path, init, loadAuth());
+    throw error;
+  }
+}
+
+export { clearAuth, loadAuth };

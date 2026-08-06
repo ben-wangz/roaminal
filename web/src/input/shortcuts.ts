@@ -1,0 +1,1 @@
+export function isShortcut(event: KeyboardEvent, key: string, shift = false): boolean { return (event.ctrlKey || event.metaKey) && event.shiftKey === shift && event.key.toLowerCase() === key.toLowerCase(); }
