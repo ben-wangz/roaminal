@@ -22,10 +22,12 @@ export function AppShell() {
   const [toast, setToast] = useState<string | null>(null);
   const [search, setSearch] = useState(false);
   const runtimes = useRef(new Map<string, TerminalRuntime>());
+  const bootId = useRef<string | null>(null);
+  const creatingInitial = useRef(false);
 
-  const sync = async () => { try { const next = await heartbeat(); setHeartbeatState(next); setSessions(next.sessions); setActive((current) => current && next.sessions.some((session) => session.id === current) ? current : next.sessions[0]?.id || null); } catch (err) { if ((err as Error).message === 'unauthorized') { const next = await refresh(); setAuth(next); } } };
+  const sync = async () => { try { const next = await heartbeat(); if (bootId.current && bootId.current !== next.runtime.bootId) { window.location.reload(); return; } bootId.current = next.runtime.bootId; setHeartbeatState(next); setSessions(next.sessions); setActive((current) => current && next.sessions.some((session) => session.id === current) ? current : next.sessions[0]?.id || null); } catch (err) { if ((err as Error).message === 'unauthorized') { const next = await refresh(); setAuth(next); } } };
   useEffect(() => { if (!auth) return; void sync(); const timer = window.setInterval(() => void sync(), 1000); return () => window.clearInterval(timer); }, [auth]);
-  useEffect(() => { if (!auth || sessions.length) return; void api<SessionSummary>('/api/sessions', { method: 'POST', body: '{}' }).then((session) => { setSessions([session]); setActive(session.id); }); }, [auth, sessions.length]);
+  useEffect(() => { if (!auth || sessions.length || creatingInitial.current) return; creatingInitial.current = true; void api<SessionSummary>('/api/sessions', { method: 'POST', body: '{}' }).then((session) => { setSessions([session]); setActive(session.id); }).finally(() => { creatingInitial.current = false; }); }, [auth, sessions.length]);
   useEffect(() => { document.title = active ? `Roaminal · ${sessions.find((session) => session.id === active)?.cwd || 'Terminal'}` : 'Roaminal'; }, [active, sessions]);
   useEffect(() => { const handler = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 't') { event.preventDefault(); void createSession(); } if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'w' && active) { event.preventDefault(); void closeSession(active); } if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && active) { event.preventDefault(); setSearch(true); } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler); }, [active]);
 

@@ -14,7 +14,14 @@ export async function login(password: string): Promise<AuthState> {
   return response;
 }
 
+let refreshPromise: Promise<AuthState | null> | null = null;
 export async function refresh(): Promise<AuthState | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = refreshOnce();
+  try { return await refreshPromise; } finally { refreshPromise = null; }
+}
+
+async function refreshOnce(): Promise<AuthState | null> {
   const current = loadAuth();
   if (!current) return null;
   try { const next = await request<AuthState>('/api/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: current.refreshToken }) }); saveAuth(next); return next; }

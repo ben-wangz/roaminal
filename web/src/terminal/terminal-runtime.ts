@@ -14,8 +14,10 @@ export class TerminalRuntime {
   private socket: WebSocket | null = null;
   private element: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private reconnectTimer: number | null = null;
   private listeners = new Set<() => void>();
   private connected = false;
+  private disposed = false;
 
   constructor(private readonly sessionId: string, private readonly token: () => string | null) {
     this.terminal = new Terminal({ convertEol: false, cursorBlink: true, scrollback: 1000, fontFamily: 'Monaspace Neon, monospace', theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' } });
@@ -26,17 +28,33 @@ export class TerminalRuntime {
   }
 
   attach(element: HTMLElement): void {
-    this.element = element; this.terminal.open(element); this.fit.fit();
+    if (this.disposed) return;
+    if (this.element === element) return;
+    this.element = element;
+    if (this.terminal.element) element.appendChild(this.terminal.element); else this.terminal.open(element);
+    this.fit.fit();
+    this.connect();
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => { if (this.element) this.fit.fit(); });
+    this.resizeObserver.observe(element);
+  }
+  private connect(): void {
+    if (this.disposed || !this.element || this.socket || this.reconnectTimer !== null) return;
     const token = this.token(); if (!token) return;
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.socket = new WebSocket(`${scheme}//${location.host}/ws/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
-    this.socket.onopen = () => { this.connected = true; this.emit(); this.fit.fit(); };
-    this.socket.onmessage = (event) => { const message = parseServerMessage(String(event.data)); if (!message) return; if (message.type === 'snapshot') this.terminal.reset(); if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data); this.emit(); };
-    this.socket.onclose = () => { this.connected = false; this.emit(); };
-    this.resizeObserver = new ResizeObserver(() => { if (this.element) this.fit.fit(); }); this.resizeObserver.observe(element);
+    const socket = new WebSocket(`${scheme}//${location.host}/ws/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
+    this.socket = socket;
+    socket.onopen = () => { this.connected = true; this.emit(); this.fit.fit(); };
+    socket.onmessage = (event) => { const message = parseServerMessage(String(event.data)); if (!message) return; if (message.type === 'snapshot') this.terminal.reset(); if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data); this.emit(); };
+    socket.onclose = () => {
+      if (this.socket === socket) this.socket = null;
+      this.connected = false;
+      this.emit();
+      if (!this.disposed && this.element && this.reconnectTimer === null) this.reconnectTimer = window.setTimeout(() => { this.reconnectTimer = null; this.connect(); }, 5000);
+    };
   }
-  detach(): void { this.resizeObserver?.disconnect(); this.resizeObserver = null; this.terminal.element?.remove(); this.element = null; }
-  dispose(): void { this.socket?.close(); this.socket = null; this.terminal.dispose(); this.listeners.clear(); }
+  detach(): void { this.resizeObserver?.disconnect(); this.resizeObserver = null; this.element = null; }
+  dispose(): void { this.disposed = true; if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.socket?.close(); this.socket = null; this.element = null; this.terminal.dispose(); this.listeners.clear(); }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   connectedState(): boolean { return this.connected; }
   find(query: string, options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {}): boolean { return this.search.findNext(query, options); }
