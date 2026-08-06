@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -26,6 +27,9 @@ var version = "0.1.0"
 func main() {
 	cfg, err := config.Load(os.Args[1:])
 	if err != nil {
+		if errors.Is(err, config.ErrHelp) {
+			return
+		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

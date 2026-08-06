@@ -84,8 +84,29 @@ function validateProtocol(header) {
   }
 }
 
+function validateRequest(header) {
+  const allowed = {
+    hello: ['op', 'protocol', 'requestId'],
+    create: ['op', 'protocol', 'requestId', 'sessionId', 'cols', 'rows', 'scrollbackLines'],
+    restore: ['op', 'protocol', 'requestId', 'sessionId', 'cols', 'rows', 'scrollbackLines', 'throughSequence'],
+    write: ['op', 'protocol', 'sessionId', 'sequence'],
+    resize: ['op', 'protocol', 'sessionId', 'sequence', 'cols', 'rows'],
+    snapshot: ['op', 'protocol', 'requestId', 'sessionId', 'throughSequence'],
+    close: ['op', 'protocol', 'requestId', 'sessionId'],
+    shutdown: ['op', 'protocol', 'requestId']
+  };
+  const fields = allowed[header.op];
+  if (!fields) { const error = new Error(`unknown operation: ${header.op}`); error.code = 'unknown_operation'; error.fatal = true; throw error; }
+  for (const key of Object.keys(header)) if (!fields.includes(key)) { const error = new Error(`unknown header field: ${key}`); error.code = 'invalid_frame'; error.fatal = true; throw error; }
+  for (const key of fields) {
+    if (key === 'op' || key === 'protocol') continue;
+    if (['requestId', 'sessionId', 'sequence', 'throughSequence'].includes(key) && header.op !== 'hello' && typeof header[key] !== 'string') { const error = new Error(`missing ${key}`); error.code = 'invalid_frame'; error.fatal = true; throw error; }
+  }
+}
+
 async function handle({ header, payload }) {
   validateProtocol(header);
+  validateRequest(header);
   const op = header.op;
   if (op === 'hello') {
     if (header.protocol !== PROTOCOL) {

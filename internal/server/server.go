@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -176,8 +178,10 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		RefreshToken string `json:"refreshToken"`
 	}
-	if err := decodeJSON(w, r, &body); err != nil {
-		return
+	if r.ContentLength != 0 {
+		if err := decodeJSON(w, r, &body); err != nil {
+			return
+		}
 	}
 	_ = s.auth.Logout(body.RefreshToken, bearer(r))
 	w.WriteHeader(http.StatusNoContent)
@@ -372,6 +376,10 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 		var kind string
 		_ = json.Unmarshal(msg["type"], &kind)
+		if !validWSMessage(kind, msg) {
+			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
+			break
+		}
 		switch kind {
 		case "input":
 			var value string
@@ -384,8 +392,9 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 				Cols int `json:"cols"`
 				Rows int `json:"rows"`
 			}
-			if json.Unmarshal(msg["resize"], &value) != nil {
-				_ = json.Unmarshal(data, &value)
+			if json.Unmarshal(data, &value) != nil {
+				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
+				break
 			}
 			if err := s.terms.Resize(id, client, value.Cols, value.Rows); err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
@@ -398,6 +407,28 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	<-writerDone
+}
+
+func validWSMessage(kind string, msg map[string]json.RawMessage) bool {
+	allowed := map[string]map[string]bool{
+		"input":                  {"type": true, "data": true},
+		"resize":                 {"type": true, "cols": true, "rows": true},
+		"claim_terminal_control": {"type": true},
+		"ping":                   {"type": true},
+	}
+	fields, ok := allowed[kind]
+	if !ok {
+		return false
+	}
+	for key := range msg {
+		if !fields[key] {
+			return false
+		}
+	}
+	if kind == "input" || kind == "resize" {
+		return msg["data"] != nil || (msg["cols"] != nil && msg["rows"] != nil)
+	}
+	return true
 }
 
 func bearer(r *http.Request) string {
@@ -443,5 +474,19 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 func writeError(w http.ResponseWriter, status int, message string) {
+	if status >= 500 {
+		id := requestID()
+		w.Header().Set("X-Roaminal-Request-ID", id)
+	}
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func requestID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "unknown"
+	}
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	return hex.EncodeToString(value[:])
 }

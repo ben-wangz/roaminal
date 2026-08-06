@@ -73,6 +73,8 @@ var allowedFileKeys = map[string]bool{
 	"authRefreshTTL": true, "authMaxAttempts": true,
 }
 
+var ErrHelp = errors.New("help requested")
+
 func defaults() Config {
 	return Config{
 		Host: DefaultHost, Port: DefaultPort, WebsocketPingInterval: DefaultWebsocketPing,
@@ -84,6 +86,12 @@ func defaults() Config {
 }
 
 func Load(args []string) (Config, error) {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-help" {
+			fmt.Fprintln(os.Stdout, "Roaminal - persistent Bash terminal\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-sessions --max-clients-per-session --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --debug/-d --accept-terms/-y")
+			return Config{}, ErrHelp
+		}
+	}
 	c := defaults()
 	passwordProvided := false
 	home, err := os.UserHomeDir()
@@ -369,6 +377,9 @@ func parseBool(value string) (bool, error) {
 }
 
 func (c Config) Validate() error {
+	if !c.AcceptTerms {
+		return errors.New("acceptTerms must be true to start Roaminal")
+	}
 	if strings.TrimSpace(c.Host) == "" {
 		return errors.New("host must not be empty")
 	}

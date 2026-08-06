@@ -117,10 +117,11 @@ func (c *Client) readLoop() {
 			return
 		}
 		requestID := stringField(frame.Header, "requestId")
+		if stringField(frame.Header, "op") == "error" && boolField(frame.Header, "fatal") {
+			c.fail(errors.New(stringField(frame.Header, "message")))
+			return
+		}
 		if requestID == "" {
-			if stringField(frame.Header, "op") == "error" && boolField(frame.Header, "fatal") {
-				c.fail(errors.New(stringField(frame.Header, "message")))
-			}
 			continue
 		}
 		c.waitMu.Lock()

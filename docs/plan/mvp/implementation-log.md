@@ -62,3 +62,9 @@ behavior fixtures, and direct dependency/license inventory are auditable.
   `npm test`/syntax check, web `npm run lint`/`typecheck`/`build`, project-local
   Chrome smoke, HMAC login, PTY input, and ordered terminal WebSocket attach all
   passed on the local service.
+
+- Phase 2/3 gate evidence: `go test -race ./...` passes configuration, auth,
+  atomic persistence, snapshot checksum/quarantine, worker framing, UTF-8
+  chunk handling, HMAC rotation/lockout, and PTY/session integration tests.
+  Manual service smoke verified worker handshake, login, session creation,
+  ordered attach, Bash input/output, title/cwd metadata, and clean shutdown.

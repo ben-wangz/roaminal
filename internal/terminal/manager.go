@@ -1,7 +1,6 @@
 package terminal
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -117,6 +116,9 @@ type Session struct {
 	sequence      uint64
 	pending       []byte
 	snapshotTimer *time.Timer
+	dirtySince    time.Time
+	currentExecID string
+	currentExec   *persistence.ExecutionRecord
 	closed        bool
 }
 
@@ -258,18 +260,22 @@ func (s *Session) handleOutput(chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pending = append(s.pending, chunk...)
-	if !utf8.Valid(s.pending) {
-		valid := bytes.ToValidUTF8(s.pending, []byte("\xef\xbf\xbd"))
-		s.pending = valid
-	}
-	if len(s.pending) > 0 && !utf8.FullRune(s.pending[len(s.pending)-min(4, len(s.pending)):]) {
+	text, complete := decodeUTF8(s.pending)
+	if !complete {
 		return
 	}
-	text := string(s.pending)
 	s.pending = nil
 	cleaned := s.parseMarkersLocked(text)
 	if cleaned == "" {
 		return
+	}
+	if s.currentExec != nil {
+		s.currentExec.Output += cleaned
+		if len([]byte(s.currentExec.Output)) > 960*1024 {
+			data := []byte(s.currentExec.Output)
+			s.currentExec.Output = string(data[len(data)-960*1024:])
+			s.currentExec.Truncated = true
+		}
 	}
 	s.sequence++
 	if err := s.manager.worker.Write(s.meta.ID, strconv.FormatUint(s.sequence, 10), []byte(cleaned)); err != nil {
@@ -280,14 +286,46 @@ func (s *Session) handleOutput(chunk []byte) {
 	s.scheduleSnapshotLocked()
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+func decodeUTF8(data []byte) (string, bool) {
+	if len(data) == 0 {
+		return "", true
 	}
-	return b
+	var out strings.Builder
+	for len(data) > 0 {
+		runeValue, size := utf8.DecodeRune(data)
+		if runeValue == utf8.RuneError && size == 1 {
+			if !utf8.FullRune(data) {
+				return out.String(), false
+			}
+			out.WriteRune(utf8.RuneError)
+			data = data[1:]
+			continue
+		}
+		out.Write(data[:size])
+		data = data[size:]
+	}
+	return out.String(), true
 }
 
 func (s *Session) parseMarkersLocked(text string) string {
+	for {
+		start := strings.Index(text, "\x1b]0;")
+		if start < 0 {
+			break
+		}
+		endRel := strings.IndexByte(text[start+4:], '\x07')
+		if endRel < 0 {
+			break
+		}
+		title := text[start+4 : start+4+endRel]
+		if len([]byte(title)) <= 512 {
+			s.meta.Title = title
+			s.meta.UpdatedAt = time.Now().UTC()
+			_ = s.manager.store.SaveSession(s.meta)
+			s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.Title, "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows}))
+		}
+		break
+	}
 	for {
 		start := strings.Index(text, "\x1b]777;roaminal;")
 		if start < 0 {
@@ -319,20 +357,44 @@ func (s *Session) applyMarkerLocked(marker string) {
 		}
 	case "start":
 		if decoded, err := base64.RawStdEncoding.DecodeString(value); err == nil {
+			command := string(decoded)
+			if strings.Contains(command, "_roaminal_") || strings.Contains(command, "ROAMINAL_") {
+				return
+			}
 			id, _ := newID()
-			s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "started", "executionId": id, "command": string(decoded), "startedAt": time.Now().UTC()}))
+			now := time.Now().UTC()
+			s.currentExecID = id
+			s.currentExec = &persistence.ExecutionRecord{Command: command, StartedAt: now}
+			s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "started", "executionId": id, "command": command, "startedAt": now}))
 		}
 	case "finish":
+		if s.currentExec == nil {
+			return
+		}
+		code, err := strconv.Atoi(value)
+		if err != nil {
+			code = 0
+		}
+		s.currentExec.ExitCode = &code
+		s.currentExec.CompletedAt = time.Now().UTC()
+		s.currentExec.DurationMs = s.currentExec.CompletedAt.Sub(s.currentExec.StartedAt).Milliseconds()
+		record := *s.currentExec
+		s.meta.Executions = append(s.meta.Executions, record)
+		if len(s.meta.Executions) > 100 {
+			s.meta.Executions = s.meta.Executions[len(s.meta.Executions)-100:]
+		}
+		s.meta.UpdatedAt = time.Now().UTC()
+		_ = s.manager.store.SaveSession(s.meta)
+		s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "completed", "executionId": s.currentExecID, "entry": record}))
+		s.currentExec, s.currentExecID = nil, ""
 	}
 }
 
 func (s *Session) scheduleSnapshotLocked() {
 	if s.snapshotTimer == nil {
+		s.dirtySince = time.Now()
 		s.snapshotTimer = time.AfterFunc(250*time.Millisecond, func() { s.saveSnapshot() })
-		return
 	}
-	s.snapshotTimer.Stop()
-	s.snapshotTimer = time.AfterFunc(250*time.Millisecond, func() { s.saveSnapshot() })
 }
 func (s *Session) saveSnapshot() {
 	s.mu.Lock()
@@ -342,6 +404,8 @@ func (s *Session) saveSnapshot() {
 	}
 	sequence := s.sequence
 	meta := s.meta
+	s.snapshotTimer = nil
+	s.dirtySince = time.Time{}
 	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -356,6 +420,11 @@ func (s *Session) saveSnapshot() {
 		s.manager.storeDegraded(err)
 		return
 	}
+	s.mu.Lock()
+	if !s.closed && s.sequence != sequence {
+		s.scheduleSnapshotLocked()
+	}
+	s.mu.Unlock()
 }
 
 func (s *Session) broadcastLocked(data []byte) {
@@ -515,6 +584,18 @@ func (m *Manager) Input(id string, client *Client, data string) error {
 	if session.closed {
 		return os.ErrProcessDone
 	}
+	if session.currentExec != nil {
+		combined := append([]byte(session.currentExec.Command), []byte(data)...)
+		if len(combined) > 64*1024 {
+			combined = combined[:64*1024]
+			session.currentExec.Truncated = true
+		}
+		commandBytes := []byte(session.currentExec.Command)
+		if len(commandBytes) > len(combined) {
+			commandBytes = combined
+		}
+		session.currentExec.Input = string(combined[len(commandBytes):])
+	}
 	_, err := session.pty.Write([]byte(data))
 	return err
 }
@@ -584,8 +665,10 @@ func (m *Manager) Shutdown(ctx context.Context) {
 		if session.snapshotTimer != nil {
 			session.snapshotTimer.Stop()
 		}
+		session.mu.Unlock()
+		session.saveSnapshot()
+		session.mu.Lock()
 		if !session.closed {
-			session.closed = true
 			_ = session.cmd.Process.Signal(syscall.SIGTERM)
 			_ = session.pty.Close()
 		}
@@ -593,9 +676,6 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	}
 	deadline, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	for _, session := range sessions {
-		session.saveSnapshot()
-	}
 	_ = m.worker.Shutdown(deadline)
 }
 

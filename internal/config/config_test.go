@@ -35,6 +35,16 @@ func TestExplicitEmptyPasswordRejected(t *testing.T) {
 	}
 }
 
+func TestTermsRequired(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROAMINAL_CWD", t.TempDir())
+	t.Setenv("ROAMINAL_PASSWORD", "secret")
+	t.Setenv("ROAMINAL_ACCEPT_TERMS", "false")
+	if _, err := Load(nil); err == nil {
+		t.Fatal("expected terms error")
+	}
+}
+
 func TestCanonicalConfigRejectsUnknownFields(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
