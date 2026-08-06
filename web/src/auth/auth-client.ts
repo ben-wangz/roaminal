@@ -2,7 +2,9 @@ import { challengeProof } from './auth-crypto';
 import { clearAuth, loadAuth, saveAuth, type AuthState } from './auth-storage';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } });
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  const response = await fetch(path, { ...init, headers });
   if (!response.ok) throw new Error((await response.json().catch(() => ({ error: response.statusText }))).error || response.statusText);
   return response.status === 204 ? (undefined as T) : await response.json() as T;
 }
