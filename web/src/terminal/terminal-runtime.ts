@@ -18,11 +18,11 @@ export class TerminalRuntime {
   private listeners = new Set<() => void>();
   private connected = false;
   private disposed = false;
+  private addonsLoaded = false;
 
   constructor(private readonly sessionId: string, private readonly token: () => string | null) {
     this.terminal = new Terminal({ convertEol: false, cursorBlink: true, scrollback: 1000, fontFamily: 'Monaspace Neon, monospace', theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' } });
     this.fit = new FitAddon(); this.search = new SearchAddon();
-    this.terminal.loadAddon(this.fit); this.terminal.loadAddon(this.search); this.terminal.loadAddon(new WebLinksAddon()); this.terminal.loadAddon(new CanvasAddon()); this.terminal.loadAddon(new LigaturesAddon()); this.terminal.loadAddon(new ProgressAddon());
     this.terminal.onData((data) => this.send({ type: 'input', data }));
     this.terminal.onResize(({ cols, rows }) => this.send({ type: 'resize', cols, rows }));
   }
@@ -32,6 +32,10 @@ export class TerminalRuntime {
     if (this.element === element) return;
     this.element = element;
     if (this.terminal.element) element.appendChild(this.terminal.element); else this.terminal.open(element);
+    if (!this.addonsLoaded) {
+      this.terminal.loadAddon(this.fit); this.terminal.loadAddon(this.search); this.terminal.loadAddon(new WebLinksAddon()); this.terminal.loadAddon(new CanvasAddon()); this.terminal.loadAddon(new LigaturesAddon()); this.terminal.loadAddon(new ProgressAddon());
+      this.addonsLoaded = true;
+    }
     this.fit.fit();
     this.connect();
     this.resizeObserver?.disconnect();
