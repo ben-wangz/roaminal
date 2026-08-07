@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { reconcileSession, selectSession } from './session-view';
 import type { SessionSummary } from '../terminal/terminal-protocol';
 
-const session = (id: string): SessionSummary => ({ id, createdAt: id, updatedAt: id, shell: '/bin/bash', initialCwd: '/workspace', title: id, titleMode: 'automatic', cwd: '/workspace', cols: 80, rows: 24, closed: false, exitStatus: null });
+const session = (id: string): SessionSummary => ({ id, createdAt: id, updatedAt: id, shell: '/bin/bash', initialCwd: '/workspace', title: id, titleMode: 'automatic', cwd: '/workspace', cols: 80, rows: 24, closed: false, attention: false, exitStatus: null });
 
 describe('single active session reconciliation', () => {
   it('keeps the active session stable when heartbeat order changes', () => {
@@ -19,5 +19,32 @@ describe('single active session reconciliation', () => {
 
   it('selects one session without creating an open-tab collection', () => {
     expect(selectSession({ activeSessionId: 'a' }, 'b')).toEqual({ activeSessionId: 'b' });
+  });
+
+  it('migrates the legacy active tab once and removes the old storage key', async () => {
+    const values = new Map([['roaminal_terminal_tabs_v1', JSON.stringify({ activeTabId: 'legacy' })]]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key)
+    } as unknown as Storage;
+    const { loadStoredSession } = await import('./session-view');
+    expect(loadStoredSession(storage)).toEqual({ activeSessionId: 'legacy' });
+    expect(values.has('roaminal_terminal_tabs_v1')).toBe(false);
+  });
+
+  it('removes a stale legacy key even when the active state already exists', async () => {
+    const values = new Map([
+      ['roaminal_active_session_v1', JSON.stringify({ activeSessionId: 'current' })],
+      ['roaminal_terminal_tabs_v1', JSON.stringify({ activeTabId: 'legacy' })]
+    ]);
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key)
+    } as unknown as Storage;
+    const { loadStoredSession } = await import('./session-view');
+    expect(loadStoredSession(storage)).toEqual({ activeSessionId: 'current' });
+    expect(values.has('roaminal_terminal_tabs_v1')).toBe(false);
   });
 });

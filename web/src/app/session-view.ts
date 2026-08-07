@@ -37,12 +37,15 @@ export function loadStoredSession(storage: Storage | null): SessionView {
     const current = storage.getItem('roaminal_active_session_v1');
     if (current) {
       const value = JSON.parse(current) as { activeSessionId?: unknown };
-      if (typeof value.activeSessionId === 'string') return { activeSessionId: value.activeSessionId };
+      if (typeof value.activeSessionId === 'string') {
+        storage.removeItem('roaminal_terminal_tabs_v1');
+        return { activeSessionId: value.activeSessionId };
+      }
     }
 
     const legacy = JSON.parse(storage.getItem('roaminal_terminal_tabs_v1') || '{}') as { activeTabId?: unknown };
     const activeSessionId = typeof legacy.activeTabId === 'string' ? legacy.activeTabId : null;
-    if (activeSessionId) storage.removeItem('roaminal_terminal_tabs_v1');
+    storage.removeItem('roaminal_terminal_tabs_v1');
     return { activeSessionId };
   } catch {
     return { activeSessionId: null };

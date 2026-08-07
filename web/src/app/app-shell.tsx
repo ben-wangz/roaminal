@@ -40,6 +40,7 @@ export function AppShell() {
   const previewRuntimeRef = useRef<TerminalPreviewRuntime | null>(null);
   const [previewSessionId, setPreviewSessionId] = useState<string | null>(null);
   const [previewRuntime, setPreviewRuntime] = useState<TerminalPreviewRuntime | null>(null);
+  const previewGeneration = useRef(0);
   const sessionOrder = useRef<string[]>([]);
   const bootId = useRef<string | null>(null);
   const syncing = useRef(false);
@@ -99,17 +100,23 @@ export function AppShell() {
   }, [currentRuntime, view.activeSessionId]);
 
   useEffect(() => {
+    const generation = ++previewGeneration.current;
     previewRuntimeRef.current?.dispose();
     previewRuntimeRef.current = null;
     setPreviewRuntime(null);
     if (!auth || !previewSessionId || !sidebarOpen) return;
-    const next = new TerminalPreviewRuntime(previewSessionId, () => auth.accessToken);
-    previewRuntimeRef.current = next;
-    setPreviewRuntime(next);
+    const timer = window.setTimeout(() => {
+      if (generation !== previewGeneration.current) return;
+      const next = new TerminalPreviewRuntime(previewSessionId, () => auth.accessToken);
+      previewRuntimeRef.current = next;
+      setPreviewRuntime(next);
+    }, 100);
     return () => {
-      next.dispose();
-      if (previewRuntimeRef.current === next) previewRuntimeRef.current = null;
-      setPreviewRuntime((current) => current === next ? null : current);
+      window.clearTimeout(timer);
+      if (previewGeneration.current !== generation) return;
+      previewRuntimeRef.current?.dispose();
+      previewRuntimeRef.current = null;
+      setPreviewRuntime(null);
     };
   }, [auth, previewSessionId, sidebarOpen]);
 

@@ -21,6 +21,7 @@ body { background: var(--base); }
 .session-card { min-height: 126px; position: relative; overflow: hidden; isolation: isolate; border: 1px solid transparent; border-left: 2px solid transparent; background: rgba(0,43,54,.6); }
 .session-card + .session-card { margin-top: 8px; }
 .session-card.active { border-color: var(--border); border-left-color: var(--yellow); background: rgba(88,110,117,.25); }
+.session-card.attention:not(.active) { border-left-color: var(--cyan); }
 .session-card-preview { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: var(--base); }
 .terminal-preview-viewport { width: 100%; height: 100%; min-height: 126px; overflow: hidden; pointer-events: none; }
 .terminal-preview-viewport .xterm { height: 100%; padding: 4px 6px; }
@@ -34,6 +35,7 @@ body { background: var(--base); }
 .session-title-wrap b { color: #eee8d5; font-size: .84rem; }
 .session-title-wrap small { color: var(--muted); font-size: .72rem; margin-top: 3px; }
 .session-indicator, .connection-dot, .preview-status { display: inline-block; flex: 0 0 auto; width: 7px; height: 7px; background: var(--green); border-radius: 50%; }
+.session-card.attention .session-indicator { background: var(--yellow); box-shadow: 0 0 0 3px rgba(181,137,0,.15); }
 .session-metadata { display: grid; gap: 3px; min-width: 0; color: var(--muted); font-size: .67rem; line-height: 1.25; }
 .session-metadata > span, .session-metadata > time { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-path { color: var(--text); }

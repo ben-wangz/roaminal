@@ -22,12 +22,12 @@ type Props = {
   onCreate: () => void;
 };
 
-function shortId(id: string): string {
+export function shortId(id: string): string {
   const part = id.split('-').pop();
   return part && part.length >= 12 ? part.slice(-12) : id.slice(0, 12);
 }
 
-function sinceLabel(createdAt: string): string {
+export function sinceLabel(createdAt: string): string {
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return 'Unknown';
   const pad = (value: number) => String(value).padStart(2, '0');
@@ -85,7 +85,7 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
         const startPreview = () => { if (canPreview()) onPreviewStart(session.id); };
         const stopPreview = () => onPreviewEnd(session.id);
         return <article
-          className={`session-card ${session.id === active ? 'active' : ''} ${previewing ? 'previewing' : ''}`}
+          className={`session-card ${session.id === active ? 'active' : ''} ${session.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''}`}
           data-session-id={session.id}
           key={session.id}
           onMouseEnter={startPreview}
@@ -98,7 +98,7 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
           <div className="session-card-overlay">
             <button className="session-select" type="button" onClick={() => onSelect(session.id)} aria-current={session.id === active ? 'page' : undefined} title={session.id}>
               <span className="session-indicator" />
-              <span className="session-title-wrap"><b>{session.title || 'Terminal'}</b><small>{session.closed ? 'Terminated' : 'Bash session'}</small></span>
+              <span className="session-title-wrap"><b>{session.title || 'Terminal'}</b><small>{session.closed ? 'Terminated' : session.attention ? 'Activity waiting' : 'Bash session'}</small></span>
             </button>
             <div className="session-metadata">
               <span>ID: {shortId(session.id)}</span>

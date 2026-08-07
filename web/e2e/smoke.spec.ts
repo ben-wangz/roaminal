@@ -74,6 +74,18 @@ test('terminal action menu renames without a close-tab command', async ({ page }
   await page.keyboard.press('Escape');
 });
 
+test('login sessions can be reviewed and sign out revokes the browser session', async ({ page }) => {
+  await authenticate(page);
+  await page.getByRole('button', { name: 'Sessions' }).click();
+  await expect(page.getByRole('heading', { name: 'Login sessions' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Log out other sessions' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close sessions' }).click();
+  const logout = page.waitForRequest((request) => request.method() === 'POST' && request.url().endsWith('/api/auth/logout'));
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await logout;
+  await expect(page.locator('#password')).toBeVisible();
+});
+
 function testInfoProjectIsDesktop(page: import('@playwright/test').Page): boolean {
   return page.viewportSize()?.width !== undefined && (page.viewportSize()?.width || 0) > 800;
 }

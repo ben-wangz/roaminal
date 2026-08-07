@@ -43,10 +43,11 @@ React Strict Mode 下所有 socket、listener、observer、timer 和 DOM attach 
 ## Sidebar card 与 preview
 
 桌面 card 固定显示 effective title、`ID`（UUID 最后 12 字符）、完整 `PWD`（视觉
-省略但 DOM/title 保留完整路径）和 `<time>` 形式的 `SINCE`。卡片尺寸稳定，长文本
+省略但 DOM/title 保留完整路径）和 `<time>` 形式的 `SINCE`。有未查看输出的非当前
+session 显示 attention 文案和非颜色状态信号。卡片尺寸稳定，长文本
 不得撑宽或遮挡操作轨。
 
-仅在 `pointer: fine` 且宽度大于 800px 时，hover/focus intent 延迟后启动一个独立
+仅在 `pointer: fine` 且宽度大于 800px 时，hover/focus intent 延迟 100ms 后启动一个独立
 `TerminalPreviewRuntime`。它使用独立 xterm、WebSocket、FitAddon 和 DOM，
 `scrollback: 0`、`disableStdin: true`、隐藏 cursor，不加载 search、links、
 progress 或 ligatures addon；只消费 snapshot/output，永不发送 input、resize 或
