@@ -27,6 +27,23 @@ go -C backend vet ./...
 go -C backend build ./cmd/roaminal
 ```
 
+## Product versions and releases
+
+Roaminal ships as one product. ForgeKit owns the release version in
+`container/VERSION`; the private `frontend/` and `terminal-worker/` manifests
+stay at `0.0.0` and are not independently released. Bootstrap ForgeKit and
+inspect the current version with:
+
+```sh
+FORGEKIT_BIN="$(bash ./setup/forgekit.sh)"
+"$FORGEKIT_BIN" --project-root "$PWD" version get roaminal
+"$FORGEKIT_BIN" --project-root "$PWD" version get roaminal --git
+```
+
+Use `forgekit version bump` for patch, minor, or major releases. The complete
+review, tagging, and container build procedure is in
+[releasing](docs/releasing.md).
+
 Start with an explicit password and terms acknowledgement:
 
 ```sh
@@ -65,7 +82,7 @@ TLS, proxy timeout, PVC permission, and backup procedure is in
 Roaminal's original inspiration came from
 [Tabminal](https://github.com/Leask/Tabminal) by Leask Wong. We are grateful to
 the project and its author for the idea and for providing an open reference
-during MVP development. Tabminal is distributed under
+during early product development. Tabminal is distributed under
 the [MIT License](https://github.com/Leask/Tabminal/blob/main/LICENSE).
 
 ## License
@@ -86,3 +103,4 @@ requirements.
 - [Backup and recovery](docs/backup-recovery.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Licensing policy](docs/licensing.md)
+- [Release procedure](docs/releasing.md)

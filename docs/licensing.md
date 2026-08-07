@@ -9,7 +9,8 @@ configuration in this repository are licensed under the Mozilla Public License
 
 Generated artifacts remain governed by the licenses of their corresponding
 source files. Third-party components and assets retain their upstream licenses;
-see `THIRD_PARTY_NOTICES.md` and the accompanying license files.
+see [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) and the accompanying
+license texts in [`LICENSES/`](../LICENSES/).
 
 The canonical source repository is:
 
