@@ -262,6 +262,7 @@ func (s *Store) atomicWrite(path string, data []byte) error {
 	if err := dir.Sync(); err != nil {
 		return s.markError(err)
 	}
+	s.degraded.Store(false)
 	return nil
 }
 
