@@ -20,7 +20,7 @@ export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [view, setView] = useState<TabView>(() => loadStoredTabs(typeof window === 'undefined' ? null : window.localStorage));
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || !window.matchMedia('(max-width: 800px)').matches);
   const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);

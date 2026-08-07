@@ -51,7 +51,7 @@ test('terminal tabs are a stable browser view over persistent sessions', async (
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const initialSessions = await page.locator('.session-row').count();
-  await page.getByRole('button', { name: 'New terminal' }).click();
+  await page.locator('.terminal-tabs > .icon-button').click();
   await expect.poll(() => page.locator('.terminal-tab').count()).toBeGreaterThan(1);
   const second = page.locator('.terminal-tab').nth(1);
   const secondId = await second.getAttribute('data-session-id');
