@@ -359,9 +359,6 @@ func (s *Session) handleOutput(chunk []byte) {
 			s.currentExec.Truncated = true
 		}
 	}
-	if s.controlOwner == nil {
-		s.attention = true
-	}
 	s.sequence++
 	if err := s.manager.worker.Write(s.meta.ID, strconv.FormatUint(s.sequence, 10), []byte(cleaned)); err != nil {
 		s.manager.fail(err)
