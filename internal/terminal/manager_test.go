@@ -47,3 +47,29 @@ func TestPrivateMarkersAreFilteredAcrossChunks(t *testing.T) {
 	}
 	session.mu.Unlock()
 }
+
+func TestSummariesHaveDeterministicOrder(t *testing.T) {
+	store, err := persistence.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(config.Config{}, store, nil)
+	base := time.Now().UTC()
+	ids := []string{
+		"33333333-3333-4333-8333-333333333333",
+		"11111111-1111-4111-8111-111111111111",
+		"22222222-2222-4222-8222-222222222222",
+	}
+	manager.sessions[ids[0]] = &Session{manager: manager, meta: persistence.SessionMeta{ID: ids[0], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base, UpdatedAt: base}}
+	manager.sessions[ids[1]] = &Session{manager: manager, meta: persistence.SessionMeta{ID: ids[1], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base, UpdatedAt: base}}
+	manager.sessions[ids[2]] = &Session{manager: manager, meta: persistence.SessionMeta{ID: ids[2], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base.Add(time.Second), UpdatedAt: base.Add(time.Second)}}
+	want := []string{ids[1], ids[0], ids[2]}
+	for attempt := 0; attempt < 20; attempt++ {
+		got := manager.Summaries()
+		for index, summary := range got {
+			if summary.ID != want[index] {
+				t.Fatalf("attempt %d summary order %v, want %v", attempt, got, want)
+			}
+		}
+	}
+}

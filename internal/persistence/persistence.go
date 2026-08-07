@@ -14,13 +14,15 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
 const (
-	FormatVersion   = 1
-	SnapshotMagic   = "ROAMINAL-SNAPSHOT/1"
-	SnapshotMaxSize = 256 * 1024 * 1024
+	FormatVersion        = 1
+	SessionFormatVersion = 2
+	SnapshotMagic        = "ROAMINAL-SNAPSHOT/1"
+	SnapshotMaxSize      = 256 * 1024 * 1024
 )
 
 var ErrNotFound = os.ErrNotExist
@@ -43,17 +45,31 @@ type ExecutionRecord struct {
 }
 
 type SessionMeta struct {
-	FormatVersion int               `json:"formatVersion"`
-	ID            string            `json:"id"`
-	Title         string            `json:"title"`
-	InitialCwd    string            `json:"initialCwd"`
-	Cwd           string            `json:"cwd"`
-	Cols          int               `json:"cols"`
-	Rows          int               `json:"rows"`
-	CreatedAt     time.Time         `json:"createdAt"`
-	UpdatedAt     time.Time         `json:"updatedAt"`
-	Executions    []ExecutionRecord `json:"executions"`
+	FormatVersion  int               `json:"-"`
+	ID             string            `json:"id"`
+	Title          string            `json:"-"` // Effective title, kept as a runtime compatibility field.
+	AutomaticTitle string            `json:"automaticTitle"`
+	TitleOverride  *string           `json:"titleOverride"`
+	InitialCwd     string            `json:"initialCwd"`
+	Cwd            string            `json:"cwd"`
+	Cols           int               `json:"cols"`
+	Rows           int               `json:"rows"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	UpdatedAt      time.Time         `json:"updatedAt"`
+	Executions     []ExecutionRecord `json:"executions"`
 }
+
+func (meta SessionMeta) EffectiveTitle() string {
+	if meta.TitleOverride != nil {
+		return *meta.TitleOverride
+	}
+	if meta.AutomaticTitle != "" {
+		return meta.AutomaticTitle
+	}
+	return meta.Title
+}
+
+func (meta *SessionMeta) SyncEffectiveTitle() { meta.Title = meta.EffectiveTitle() }
 
 type AuthSession struct {
 	ID                  string    `json:"id"`
@@ -83,25 +99,52 @@ type SnapshotHeader struct {
 type Store struct {
 	Root        string
 	SessionsDir string
+	Layout      string
 	degraded    atomic.Bool
 }
+
+var ErrAmbiguousStateLayout = errors.New("ambiguous state layout")
 
 func New(root string) (*Store, error) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create state directory: %w", err)
 	}
+	rootPrivateErr := ensurePrivateDirectory(root)
+	if rootPrivateErr != nil && !errors.Is(rootPrivateErr, errWorldPermissions) {
+		return nil, fmt.Errorf("prepare state directory: %w", rootPrivateErr)
+	}
+	childRoot := filepath.Join(root, "state")
+	directHasData, err := stateRootHasData(root)
+	if err != nil {
+		return nil, fmt.Errorf("inspect direct state directory: %w", err)
+	}
+	childHasData, err := stateRootHasData(childRoot)
+	if err != nil {
+		return nil, fmt.Errorf("inspect private state directory: %w", err)
+	}
+
 	stateRoot := root
-	if err := ensurePrivateDirectory(stateRoot); err != nil {
-		if !errors.Is(err, errWorldPermissions) {
-			return nil, fmt.Errorf("prepare state directory: %w", err)
+	layout := "direct"
+	if rootPrivateErr != nil {
+		if directHasData {
+			return nil, ErrAmbiguousStateLayout
 		}
 		// A few PVC drivers expose their mount point as root-owned 0777/2777.
 		// Keep the mount itself disposable and put all sensitive state below a
 		// private child directory owned by the application user.
-		stateRoot = filepath.Join(root, "state")
+		stateRoot = childRoot
+		layout = "private-child"
 		if err := os.MkdirAll(stateRoot, 0o700); err != nil {
 			return nil, fmt.Errorf("create private state directory: %w", err)
 		}
+		if err := ensurePrivateDirectory(stateRoot); err != nil {
+			return nil, fmt.Errorf("prepare private state directory: %w", err)
+		}
+	} else if directHasData && childHasData {
+		return nil, ErrAmbiguousStateLayout
+	} else if !directHasData && childHasData {
+		stateRoot = childRoot
+		layout = "private-child"
 		if err := ensurePrivateDirectory(stateRoot); err != nil {
 			return nil, fmt.Errorf("prepare private state directory: %w", err)
 		}
@@ -113,7 +156,32 @@ func New(root string) (*Store, error) {
 	if err := ensurePrivateDirectory(sessionsDir); err != nil {
 		return nil, fmt.Errorf("prepare sessions directory: %w", err)
 	}
-	return &Store{Root: stateRoot, SessionsDir: sessionsDir}, nil
+	return &Store{Root: stateRoot, SessionsDir: sessionsDir, Layout: layout}, nil
+}
+
+func stateRootHasData(root string) (bool, error) {
+	if info, err := os.Stat(root); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	} else if !info.IsDir() {
+		return false, errors.New("state root is not a directory")
+	}
+	if _, err := os.Stat(filepath.Join(root, "auth-sessions.json")); err == nil {
+		return true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	sessions := filepath.Join(root, "sessions")
+	entries, err := os.ReadDir(sessions)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return len(entries) > 0, nil
 }
 
 // Some volume drivers expose the mount point as root-owned while applying
@@ -251,14 +319,19 @@ func validateExecution(record ExecutionRecord) error {
 }
 
 func validateSessionMeta(meta SessionMeta) error {
-	if meta.FormatVersion != 0 && meta.FormatVersion != FormatVersion {
+	if meta.FormatVersion != 0 && meta.FormatVersion != FormatVersion && meta.FormatVersion != SessionFormatVersion {
 		return errors.New("unsupported session format version")
 	}
 	if !uuidPattern.MatchString(meta.ID) {
 		return errors.New("invalid session id")
 	}
-	if !utf8.ValidString(meta.Title) || len([]byte(meta.Title)) > 512 || !utf8.ValidString(meta.InitialCwd) || !utf8.ValidString(meta.Cwd) {
+	if !utf8.ValidString(meta.EffectiveTitle()) || len([]byte(meta.EffectiveTitle())) > 512 || !utf8.ValidString(meta.AutomaticTitle) || len([]byte(meta.AutomaticTitle)) > 512 || !utf8.ValidString(meta.InitialCwd) || !utf8.ValidString(meta.Cwd) {
 		return errors.New("invalid session text")
+	}
+	if meta.TitleOverride != nil {
+		if err := ValidateTitleOverride(*meta.TitleOverride); err != nil {
+			return err
+		}
 	}
 	if !filepath.IsAbs(meta.InitialCwd) || !filepath.IsAbs(meta.Cwd) || len([]byte(meta.InitialCwd)) > 4096 || len([]byte(meta.Cwd)) > 4096 {
 		return errors.New("invalid session cwd")
@@ -272,6 +345,26 @@ func validateSessionMeta(meta SessionMeta) error {
 	for _, record := range meta.Executions {
 		if err := validateExecution(record); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func ValidateTitleOverride(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return errors.New("title must not be empty")
+	}
+	if !utf8.ValidString(value) || len([]byte(value)) > 512 {
+		return errors.New("title exceeds size limit or contains invalid UTF-8")
+	}
+	runes := []rune(value)
+	if len(runes) > 128 {
+		return errors.New("title exceeds 128 characters")
+	}
+	for _, r := range runes {
+		if unicode.IsControl(r) || r == 0x7f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+			return errors.New("title contains a prohibited control character")
 		}
 	}
 	return nil
@@ -316,11 +409,27 @@ func (s *Store) SessionPath(id string) string  { return filepath.Join(s.Sessions
 func (s *Store) SnapshotPath(id string) string { return filepath.Join(s.SessionsDir, id+".snapshot") }
 
 func (s *Store) SaveSession(meta SessionMeta) error {
+	if meta.AutomaticTitle == "" && meta.TitleOverride == nil && meta.Title != "" {
+		meta.AutomaticTitle = meta.Title
+	}
+	meta.SyncEffectiveTitle()
 	if err := validateSessionMeta(meta); err != nil {
 		return s.markError(err)
 	}
-	meta.FormatVersion = FormatVersion
-	data, err := encodeJSON(meta)
+	meta.FormatVersion = SessionFormatVersion
+	data, err := encodeJSON(sessionMetaV2{
+		FormatVersion:  SessionFormatVersion,
+		ID:             meta.ID,
+		AutomaticTitle: meta.AutomaticTitle,
+		TitleOverride:  meta.TitleOverride,
+		InitialCwd:     meta.InitialCwd,
+		Cwd:            meta.Cwd,
+		Cols:           meta.Cols,
+		Rows:           meta.Rows,
+		CreatedAt:      meta.CreatedAt,
+		UpdatedAt:      meta.UpdatedAt,
+		Executions:     meta.Executions,
+	})
 	if err != nil {
 		return s.markError(err)
 	}
@@ -347,13 +456,70 @@ func (s *Store) LoadSession(id string) (SessionMeta, error) {
 	if err != nil {
 		return SessionMeta{}, err
 	}
-	var meta SessionMeta
-	if err := decodeStrict(data, &meta); err != nil || meta.FormatVersion != FormatVersion || meta.ID != id || validateSessionMeta(meta) != nil {
+	meta, err := decodeSessionMeta(data)
+	if err != nil || meta.ID != id || validateSessionMeta(meta) != nil {
 		_ = s.quarantine(s.SessionPath(id), "corrupt")
 		_ = s.quarantine(s.SnapshotPath(id), "corrupt")
 		return SessionMeta{}, fmt.Errorf("invalid session metadata %s", id)
 	}
+	meta.SyncEffectiveTitle()
 	return meta, nil
+}
+
+type sessionMetaV1 struct {
+	FormatVersion int               `json:"formatVersion"`
+	ID            string            `json:"id"`
+	Title         string            `json:"title"`
+	InitialCwd    string            `json:"initialCwd"`
+	Cwd           string            `json:"cwd"`
+	Cols          int               `json:"cols"`
+	Rows          int               `json:"rows"`
+	CreatedAt     time.Time         `json:"createdAt"`
+	UpdatedAt     time.Time         `json:"updatedAt"`
+	Executions    []ExecutionRecord `json:"executions"`
+}
+
+type sessionMetaV2 struct {
+	FormatVersion  int               `json:"formatVersion"`
+	ID             string            `json:"id"`
+	AutomaticTitle string            `json:"automaticTitle"`
+	TitleOverride  *string           `json:"titleOverride"`
+	InitialCwd     string            `json:"initialCwd"`
+	Cwd            string            `json:"cwd"`
+	Cols           int               `json:"cols"`
+	Rows           int               `json:"rows"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	UpdatedAt      time.Time         `json:"updatedAt"`
+	Executions     []ExecutionRecord `json:"executions"`
+}
+
+func decodeSessionMeta(data []byte) (SessionMeta, error) {
+	var version struct {
+		FormatVersion int `json:"formatVersion"`
+	}
+	if err := json.Unmarshal(data, &version); err != nil {
+		return SessionMeta{}, err
+	}
+	switch version.FormatVersion {
+	case FormatVersion:
+		var legacy sessionMetaV1
+		if err := decodeStrict(data, &legacy); err != nil {
+			return SessionMeta{}, err
+		}
+		meta := SessionMeta{FormatVersion: SessionFormatVersion, ID: legacy.ID, AutomaticTitle: legacy.Title, InitialCwd: legacy.InitialCwd, Cwd: legacy.Cwd, Cols: legacy.Cols, Rows: legacy.Rows, CreatedAt: legacy.CreatedAt, UpdatedAt: legacy.UpdatedAt, Executions: legacy.Executions}
+		meta.SyncEffectiveTitle()
+		return meta, nil
+	case SessionFormatVersion:
+		var current sessionMetaV2
+		if err := decodeStrict(data, &current); err != nil {
+			return SessionMeta{}, err
+		}
+		meta := SessionMeta{FormatVersion: current.FormatVersion, ID: current.ID, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, Executions: current.Executions}
+		meta.SyncEffectiveTitle()
+		return meta, nil
+	default:
+		return SessionMeta{}, errors.New("unsupported session format version")
+	}
 }
 
 func (s *Store) ListSessions() ([]SessionMeta, error) {

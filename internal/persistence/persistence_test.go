@@ -1,8 +1,13 @@
 package persistence
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestSnapshotRoundTripAndCorruptionIsolation(t *testing.T) {
@@ -36,5 +41,67 @@ func TestSnapshotRoundTripAndCorruptionIsolation(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected quarantined snapshot")
+	}
+}
+
+func TestSessionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "11111111-1111-4111-8111-111111111111"
+	now := time.Now().UTC().Truncate(time.Second)
+	legacy := fmt.Sprintf(`{"formatVersion":1,"id":%q,"title":"shell","initialCwd":"/workspace","cwd":"/workspace","cols":80,"rows":24,"createdAt":%q,"updatedAt":%q,"executions":[]}`,
+		id, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+	if err := os.WriteFile(store.SessionPath(id), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	meta, err := store.LoadSession(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.FormatVersion != SessionFormatVersion || meta.AutomaticTitle != "shell" || meta.EffectiveTitle() != "shell" || meta.TitleOverride != nil {
+		t.Fatalf("unexpected migrated metadata: %+v", meta)
+	}
+	if err := store.SaveSession(meta); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(store.SessionPath(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"formatVersion": 2`) || !strings.Contains(string(data), `"automaticTitle": "shell"`) || strings.Contains(string(data), `"title":`) {
+		t.Fatalf("metadata was not written as v2: %s", data)
+	}
+}
+
+func TestAmbiguousStateLayoutFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	id := "11111111-1111-4111-8111-111111111111"
+	if err := os.MkdirAll(filepath.Join(root, "sessions"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "state", "sessions"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sessions", id+".json"), []byte("legacy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "state", "sessions", id+".json"), []byte("current"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(root); !errors.Is(err, ErrAmbiguousStateLayout) {
+		t.Fatalf("expected ambiguous layout error, got %v", err)
+	}
+}
+
+func TestValidateTitleOverride(t *testing.T) {
+	for _, value := range []string{"", "   ", "line\nfeed", "\u202ehidden"} {
+		if err := ValidateTitleOverride(value); err == nil {
+			t.Fatalf("expected invalid title %q", value)
+		}
+	}
+	if err := ValidateTitleOverride("  useful title  "); err != nil {
+		t.Fatal(err)
 	}
 }

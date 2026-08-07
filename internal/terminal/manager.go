@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,6 +39,7 @@ type Summary struct {
 	Shell      string      `json:"shell"`
 	InitialCwd string      `json:"initialCwd"`
 	Title      string      `json:"title"`
+	TitleMode  string      `json:"titleMode"`
 	Cwd        string      `json:"cwd"`
 	Cols       int         `json:"cols"`
 	Rows       int         `json:"rows"`
@@ -335,10 +337,11 @@ func (s *Session) parseMarkersLocked(text string) string {
 				break
 			}
 			title := truncateUTF8(remainder[len(titlePrefix):len(titlePrefix)+endRel], 512)
-			s.meta.Title = title
+			s.meta.AutomaticTitle = title
+			s.meta.SyncEffectiveTitle()
 			s.meta.UpdatedAt = time.Now().UTC()
 			_ = s.manager.store.SaveSession(s.meta)
-			s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.Title, "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows}))
+			s.broadcastMetaLocked()
 			cleaned.WriteString(remainder[:len(titlePrefix)+endRel+1])
 			index = escape + len(titlePrefix) + endRel + 1
 			continue
@@ -397,7 +400,7 @@ func (s *Session) applyMarkerLocked(marker string) {
 				s.meta.Cwd = path
 				s.meta.UpdatedAt = time.Now().UTC()
 				_ = s.manager.store.SaveSession(s.meta)
-				s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.Title, "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows}))
+				s.broadcastMetaLocked()
 			}
 		}
 	case "start":
@@ -529,7 +532,7 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 		return Summary{}, err
 	}
 	now := time.Now().UTC()
-	meta := persistence.SessionMeta{FormatVersion: persistence.FormatVersion, ID: id, Title: "", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, Executions: []persistence.ExecutionRecord{}}
+	meta := persistence.SessionMeta{FormatVersion: persistence.SessionFormatVersion, ID: id, AutomaticTitle: "", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, Executions: []persistence.ExecutionRecord{}}
 	session, err := m.startSession(ctx, meta, cwd, true)
 	if err != nil {
 		return Summary{}, err
@@ -594,7 +597,7 @@ func (m *Manager) Attach(ctx context.Context, id string) (*Client, error) {
 		}
 	}
 	client.enqueue(message(map[string]any{"type": "snapshot", "data": string(snapshot)}), false)
-	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.Title, "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows}), false)
+	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.EffectiveTitle(), "titleMode": titleMode(session.meta), "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows}), false)
 	client.enqueue(message(map[string]any{"type": "status", "status": "ready"}), false)
 	session.clients[client] = struct{}{}
 	return client, nil
@@ -677,11 +680,21 @@ func (m *Manager) Resize(id string, client *Client, cols, rows int) error {
 }
 func (m *Manager) Summaries() []Summary {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	result := make([]Summary, 0, len(m.sessions))
+	sessions := make([]*Session, 0, len(m.sessions))
 	for _, session := range m.sessions {
+		sessions = append(sessions, session)
+	}
+	m.mu.RUnlock()
+	result := make([]Summary, 0, len(sessions))
+	for _, session := range sessions {
 		result = append(result, m.summary(session))
 	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
+			return result[i].ID < result[j].ID
+		}
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
 	return result
 }
 
@@ -699,7 +712,55 @@ func (m *Manager) ClientCount(id string) int {
 func (m *Manager) summary(session *Session) Summary {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return Summary{ID: session.meta.ID, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.Title, Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed}
+	session.meta.SyncEffectiveTitle()
+	return Summary{ID: session.meta.ID, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed}
+}
+
+func titleMode(meta persistence.SessionMeta) string {
+	if meta.TitleOverride != nil {
+		return "custom"
+	}
+	return "automatic"
+}
+
+func (s *Session) broadcastMetaLocked() {
+	s.meta.SyncEffectiveTitle()
+	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows}))
+}
+
+func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
+		return Summary{}, os.ErrNotExist
+	}
+	var override *string
+	if title != nil {
+		value := strings.TrimSpace(*title)
+		if err := persistence.ValidateTitleOverride(value); err != nil {
+			return Summary{}, err
+		}
+		override = &value
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.closed {
+		return Summary{}, os.ErrProcessDone
+	}
+	oldOverride := session.meta.TitleOverride
+	oldUpdated := session.meta.UpdatedAt
+	session.meta.TitleOverride = override
+	session.meta.SyncEffectiveTitle()
+	session.meta.UpdatedAt = time.Now().UTC()
+	if err := m.store.SaveSession(session.meta); err != nil {
+		session.meta.TitleOverride = oldOverride
+		session.meta.UpdatedAt = oldUpdated
+		session.meta.SyncEffectiveTitle()
+		return Summary{}, err
+	}
+	session.broadcastMetaLocked()
+	return Summary{ID: session.meta.ID, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed}, nil
 }
 func (m *Manager) Shutdown(ctx context.Context) {
 	m.mu.RLock()
