@@ -1,4 +1,4 @@
-import { challengeProof } from './auth-crypto';
+import { challengeProof, ensureSecureCrypto } from './auth-crypto';
 import { clearAuth, loadAuth, saveAuth, type AuthState } from './auth-storage';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -10,6 +10,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function login(password: string): Promise<AuthState> {
+  ensureSecureCrypto();
   const challenge = await request<{ challengeId: string; salt: string; expiresAt: string }>('/api/auth/challenge', { method: 'POST', body: '{}' });
   const response = await request<AuthState>('/api/auth/login', { method: 'POST', body: JSON.stringify({ challengeId: challenge.challengeId, response: await challengeProof(password, challenge) }) });
   saveAuth(response);

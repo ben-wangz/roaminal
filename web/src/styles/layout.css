@@ -46,6 +46,7 @@ body { background: var(--base); }
 .system-status { display: flex; align-items: center; gap: 8px; color: #eee8d5; font-size: .78rem; }
 .connection-dot.offline { background: var(--red); }
 .status-host { color: var(--muted); margin-left: 8px; }
+.status-warning { color: var(--yellow); font-size: .7rem; }
 .top-actions { display: flex; gap: 5px; align-items: center; }
 .text-button { min-height: 34px; padding: 8px; font-size: .78rem; }
 .terminal-stage { min-height: 0; flex: 1; position: relative; padding: 12px 16px 0; }
@@ -60,6 +61,7 @@ body { background: var(--base); }
 .search-bar button { border: 0; background: transparent; color: var(--text); font-size: 1.1rem; }
 .touch-keyboard { display: none; gap: 6px; padding: 8px; border-top: 1px solid var(--border); }
 .touch-keyboard button { flex: 1; min-height: 34px; border: 1px solid var(--border); color: var(--text); background: var(--base1); font-size: .72rem; }
+.touch-keyboard button.active { border-color: var(--yellow); color: #eee8d5; background: rgba(181,137,0,.18); }
 .toast { position: fixed; right: 20px; bottom: 34px; z-index: 40; padding: 10px 14px; border-left: 3px solid var(--yellow); background: var(--base1); color: #eee8d5; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .auth-backdrop { width: 100%; height: 100%; display: grid; place-items: center; background: var(--base); }
 .auth-modal { width: min(360px, calc(100% - 32px)); display: grid; gap: 12px; padding: 28px; border: 1px solid var(--border); background: var(--base1); }
@@ -84,6 +86,18 @@ body { background: var(--base); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .danger-button { min-height: 38px; border: 1px solid var(--red); background: var(--red); color: #fff; padding: 0 12px; font-weight: 600; }
 .danger-button:disabled { opacity: .5; }
+.auth-sessions-dialog { width: min(620px, calc(100vw - 48px)); display: grid; gap: 16px; }
+.auth-sessions-dialog header, .auth-sessions-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.auth-sessions-dialog h2 { margin: 0; color: #eee8d5; font-size: 1.05rem; }
+.auth-sessions-dialog p { margin: 5px 0 0; color: var(--muted); font-size: .75rem; }
+.auth-session-list { display: grid; max-height: min(420px, 55vh); overflow: auto; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.auth-session-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid rgba(147,161,161,.12); }
+.auth-session-row:last-child { border-bottom: 0; }
+.auth-session-copy { min-width: 0; display: grid; gap: 4px; }
+.auth-session-copy strong { color: #eee8d5; font-size: .78rem; }
+.auth-session-copy small, .auth-session-copy code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: .68rem; }
+.auth-sessions-dialog footer { justify-content: flex-start; color: var(--cyan); }
+.destructive-text { color: #ff938f; }
 .terminal-viewport .xterm-viewport { scrollbar-color: var(--base2) var(--base); }
 .terminal-viewport .xterm-screen { padding-bottom: 8px; }
 @media (prefers-reduced-motion: reduce) { .sidebar, .session-card-overlay { transition: none; } }

@@ -11,8 +11,14 @@ const viewports = [
 export default defineConfig({
   testDir: './e2e',
   use: {
-    baseURL: 'http://127.0.0.1:9846',
+    baseURL: process.env.ROAMINAL_E2E_BASE_URL || 'http://roaminal.develop.svc.cluster.local:9846',
     channel: 'chrome',
+    launchOptions: {
+      args: (() => {
+        const baseURL = process.env.ROAMINAL_E2E_BASE_URL || 'http://roaminal.develop.svc.cluster.local:9846';
+        return baseURL.startsWith('http://') ? [`--unsafely-treat-insecure-origin-as-secure=${baseURL}`] : [];
+      })()
+    },
     trace: 'retain-on-failure'
   },
   projects: viewports.map(([name, width, height]) => ({

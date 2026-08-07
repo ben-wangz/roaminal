@@ -88,6 +88,7 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
           key={session.id}
           onMouseEnter={startPreview}
           onMouseLeave={stopPreview}
+          onClick={() => onSelect(session.id)}
           onFocus={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview(); }}
           onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) stopPreview(); }}
         >
