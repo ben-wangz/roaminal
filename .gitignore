@@ -1,8 +1,9 @@
 /roaminal
-/web/dist/
-/web/node_modules/
+/frontend/dist/
+/frontend/node_modules/
 /terminal-worker/node_modules/
-/web/test-results/
-/web/playwright-report/
+/frontend/test-results/
+/frontend/playwright-report/
+/build/
 *.tmp
 *.log

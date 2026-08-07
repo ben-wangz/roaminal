@@ -4,7 +4,7 @@ Roaminal is a self-hosted, browser-based persistent Bash terminal. The Go
 service owns Linux PTYs and HTTP/WebSocket access; an in-process Node worker
 maintains xterm.js shadow state so scrollback can be restored after a restart.
 
-The MVP supports one service instance with multiple terminal tabs. It is a
+The service supports one instance with multiple persistent terminals. It is a
 Linux-container deployment and is tested with Google Chrome on desktop, tablet,
 and phone-sized viewports. It intentionally has no file browser, host registry,
 agent integration, native client, PWA manifest, service worker, or CDN assets.
@@ -16,23 +16,21 @@ The worker and frontend each use their checked-in lockfile.
 
 ```sh
 npm --prefix terminal-worker ci
-npm --prefix web ci
+npm --prefix frontend ci
 npm --prefix terminal-worker test
 npm --prefix terminal-worker run lint
-npm --prefix web run typecheck
-npm --prefix web run lint
-npm --prefix web run build
-rm -rf internal/webassets/dist
-cp -a web/dist internal/webassets/dist
-go test ./...
-go vet ./...
-go build ./cmd/roaminal
+npm --prefix frontend run typecheck
+npm --prefix frontend run lint
+npm --prefix frontend run build
+go -C backend test ./...
+go -C backend vet ./...
+go -C backend build ./cmd/roaminal
 ```
 
 Start with an explicit password and terms acknowledgement:
 
 ```sh
-ROAMINAL_ACCEPT_TERMS=true ROAMINAL_PASSWORD='change-this' go run ./cmd/roaminal
+ROAMINAL_ACCEPT_TERMS=true ROAMINAL_PASSWORD='change-this' go run ./backend/cmd/roaminal
 ```
 
 The default bind address is `127.0.0.1:9846`; the initial working directory is
@@ -45,7 +43,7 @@ Build and run with Podman only:
 
 ```sh
 IMAGE=registry.example.invalid/roaminal:$(git rev-parse HEAD)
-podman build --file Containerfile --tag "$IMAGE" .
+podman build --file container/Containerfile --tag "$IMAGE" .
 podman run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   -p 9846:9846 \
   -e ROAMINAL_ACCEPT_TERMS=true \

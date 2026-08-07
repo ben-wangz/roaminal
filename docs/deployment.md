@@ -9,7 +9,7 @@ contain npm, compilers, or a networked worker.
 
 ```sh
 IMAGE=registry.internal.example/roaminal:$(git rev-parse HEAD)
-podman build --file Containerfile --tag "$IMAGE" .
+podman build --file container/Containerfile --tag "$IMAGE" .
 podman run --rm --name roaminal \
   --restart unless-stopped -p 9846:9846 \
   -e ROAMINAL_ACCEPT_TERMS=true -e ROAMINAL_PASSWORD='use-a-secret' \

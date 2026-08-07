@@ -16,6 +16,7 @@ Roaminal fields are accepted. Durations use Go syntax.
 | `debug` | `--debug`/`-d` | `ROAMINAL_DEBUG` | `false` |
 | `acceptTerms` | `--accept-terms`/`-y` | `ROAMINAL_ACCEPT_TERMS` | `false` |
 | `initialCwd` | `--cwd` | `ROAMINAL_CWD` | `/workspace` |
+| `frontendDir` | `--frontend-dir` | `ROAMINAL_FRONTEND_DIR` | `../frontend/dist` |
 | `authAccessTTL` | `--auth-access-ttl` | `ROAMINAL_AUTH_ACCESS_TTL` | `15m` |
 | `authRefreshTTL` | `--auth-refresh-ttl` | `ROAMINAL_AUTH_REFRESH_TTL` | `2160h` |
 | `authMaxAttempts` | `--auth-max-attempts` | `ROAMINAL_AUTH_MAX_ATTEMPTS` | `30` |
