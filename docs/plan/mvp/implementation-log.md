@@ -196,5 +196,52 @@ behavior fixtures, and direct dependency/license inventory are auditable.
   concurrent session creation and cwd inheritance are deterministic.
 - Kubernetes Chrome configuration is parameterized by `ROAMINAL_E2E_BASE_URL` and
   defaults to `http://roaminal.develop.svc.cluster.local:9846`; no port-forward is
-  part of the gate. Direct Service rollout and screenshot/console evidence will be
-  appended after the image push.
+  part of the gate. Final direct-Service evidence is recorded below.
+
+## Single-terminal sidebar final gate
+
+- Date: 2026-08-07 UTC. The final remediation code is present in `62b3c56`,
+  `0cfe82e`, `435ad67`, `16570af` and embedded asset refresh `46000fe`.
+- Persistence now tracks degraded checkpoints by session ID and only clears a
+  recovered session; worker snapshot failures mark that session before the next
+  checkpoint. Restore and create initialize the worker before publishing Bash or
+  starting PTY loops, and rollback closes an already-created worker session.
+- Session summaries expose `attention` for output waiting on a non-current session.
+  Claiming terminal control clears it; Sidebar renders a text state plus a color
+  independent indicator. Preview creation has a 100ms intent delay and generation
+  guard, and Modal dialogs trap focus and close on Escape.
+- Automated local gate passed: `go test ./...`, `go test -race ./...`, `go vet ./...`,
+  `npm --prefix terminal-worker test`, `npm --prefix terminal-worker run lint`,
+  `npm --prefix web test -- --run` (5 files, 15 tests),
+  `npm --prefix web run typecheck`, and `npm --prefix web run build`.
+- Frontend contract tests cover legacy active-session migration, fixed ID/PWD/SINCE
+  formatting, shortcut matching, secure-context fail-closed behavior, action and
+  modal paths, 100 active-session switches, one main xterm, preview before/after
+  screenshots and pointer-leave disposal. Artifacts are under
+  `web/test-results/smoke-sidebar-cards-switch-a61ca--and-expose-preview-actions-chrome-desktop/`.
+- Final image:
+  `container-registry.internal.pve.lab.geekcity.tech:32443/ben-wangz/roaminal:46000fe8441778b105238393c9f874beea0ce8df`.
+  Podman config ID is `df5287042ae40d06f9921dae1aa32f58b4fa7c90bab995e16e46691c674bfe92`,
+  local image digest is
+  `sha256:d8870b6dad5d5c482ed81b23c92463cfe4b40ba14171987010786ef993931f82`,
+  and the running Pod reports registry image ID
+  `sha256:7a2c09264ba2a5979717ba60a328b0dabe746c97f9290210ce66929f2a68d4bb`.
+- Kubernetes server-side dry-run and actual apply completed in namespace `develop`.
+  Deployment reached `1/1` Ready with zero restarts; Pod log reports
+  `Roaminal state layout=private-child`. Direct
+  `curl http://roaminal.develop.svc.cluster.local:9846/healthz` returned
+  `{"status":"ok"}`.
+- Direct-Service Playwright ran 30 cases with 21 passed and 9 expected skips from
+  desktop-only/mobile-only project filters. It covered auth session management and
+  server logout, card metadata and extensions, 100 switches, preview cleanup,
+  mobile overlay behavior, and no `onShowLinkUnderline` or other page/console error.
+  No port-forward was started or required.
+
+### Final residual notes
+
+- The nine Playwright skips are intentional matrix filters, not unrun viewport
+  coverage; each of the five configured Chrome viewports ran its applicable cases.
+- `typescript-eslint@8.66.0` still does not support the approved TypeScript 7.0.2;
+  TypeScript sources are gated by `tsc --noEmit` and JavaScript configuration files
+  are linted. Podman also warns that OCI output ignores the image `HEALTHCHECK`; the
+  Kubernetes `/healthz` probes are authoritative.

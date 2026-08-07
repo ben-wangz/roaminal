@@ -333,19 +333,19 @@ type ExtensionAvailability = {
 
 ## Definition of Done
 
-- [ ] RMT-007 至 RMT-011 全部自动化并通过。
-- [ ] 顶部 Tab 条、openTabIds、Close Tab、Tab CSS/测试/localStorage 主模型全部删除。
-- [ ] Sidebar 每个 session 显示准确 ID、PWD、SINCE，并可直接切换唯一主 terminal。
-- [ ] 桌面 hover preview 是真实只读 xterm，移动端不创建，且全局最多一个 preview。
-- [ ] Agent、Files、Terminal actions 三个入口视觉和交互一致；core 不包含 Agent/文件
+- [x] RMT-007 至 RMT-011 全部自动化并通过。
+- [x] 顶部 Tab 条、openTabIds、Close Tab、Tab CSS/测试/localStorage 主模型全部删除。
+- [x] Sidebar 每个 session 显示准确 ID、PWD、SINCE，并可直接切换唯一主 terminal。
+- [x] 桌面 hover preview 是真实只读 xterm，移动端不创建，且全局最多一个 preview。
+- [x] Agent、Files、Terminal actions 三个入口视觉和交互一致；core 不包含 Agent/文件
   功能，unavailable 状态明确。
-- [ ] `MVP-GAP-001` 至 `MVP-GAP-012` 均关闭，并有自动化证据。
-- [ ] auth logout/session management、secure-context 错误、control owner、capacity、
+- [x] `MVP-GAP-001` 至 `MVP-GAP-012` 均关闭，并有自动化证据。
+- [x] auth logout/session management、secure-context 错误、control owner、capacity、
   slow client、worker queue/version 和 restore 原子性 contract 全部通过。
-- [ ] status/attention/notification、configured scrollback、touch/viewport/shortcut 和
+- [x] status/attention/notification、configured scrollback、touch/viewport/shortcut 和
   persistence degraded 恢复完成。
-- [ ] Go race/unit/integration、worker、frontend unit/typecheck/lint/build、五 viewport
+- [x] Go race/unit/integration、worker、frontend unit/typecheck/lint/build、五 viewport
   Chrome、Podman 和 `develop` rollout/recovery 全部通过。
-- [ ] Kubernetes E2E 直接访问 Service 地址，不使用 port-forward。
-- [ ] 03 至 09 模块、API/部署/安全文档和 implementation log 已与最终行为一致，
+- [x] Kubernetes E2E 直接访问 Service 地址，不使用 port-forward。
+- [x] 03 至 09 模块、API/部署/安全文档和 implementation log 已与最终行为一致，
   不再把未覆盖项或被 skip 的 case 记为通过。
