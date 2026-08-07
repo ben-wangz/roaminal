@@ -2,6 +2,12 @@ import type { SessionSummary } from '../terminal/terminal-protocol';
 
 export type SessionView = { activeSessionId: string | null };
 
+export function formatExitStatus(status: SessionSummary['exitStatus']): string {
+  if (!status) return 'The shell ended normally.';
+  if (status.signal !== null) return `Signal ${status.signal}`;
+  return `Exit code ${status.exitCode ?? 0}`;
+}
+
 export function reconcileSession(
   sessions: SessionSummary[],
   current: SessionView,

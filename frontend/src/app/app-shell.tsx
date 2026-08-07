@@ -15,7 +15,7 @@ import { TouchKeyboard } from '../input/touch-keyboard';
 import { observeViewportHeight } from '../input/viewport';
 import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 import { RenameTitleDialog, TerminateDialog } from '../ui/terminal-dialogs';
-import { loadStoredSession, reconcileSession, saveStoredSession, selectSession as selectStoredSession, type SessionView } from './session-view';
+import { formatExitStatus, loadStoredSession, reconcileSession, saveStoredSession, selectSession as selectStoredSession, type SessionView } from './session-view';
 import type { SessionSummary } from '../terminal/terminal-protocol';
 
 type Dialog = { type: 'rename' | 'terminate'; sessionId: string } | { type: 'auth' } | null;
@@ -294,10 +294,4 @@ export function AppShell() {
     {dialog?.type === 'terminate' && dialogSession && <TerminateDialog session={dialogSession} onConfirm={() => terminateSession(dialogSession.id)} onClose={() => setDialog(null)} />}
     {dialog?.type === 'auth' && <AuthSessionsDialog sessions={authSessions} currentId={currentAuthSessionId} busy={authSessionBusy} onRevoke={(id) => void revokeAuthSession(id)} onLogoutOthers={() => void logoutOtherAuthSessions()} onClose={() => setDialog(null)} />}
   </div>;
-}
-
-function formatExitStatus(status: SessionSummary['exitStatus']): string {
-  if (!status) return 'The shell ended normally.';
-  if (status.signal !== null) return `Signal ${status.signal}`;
-  return `Exit code ${status.exitCode ?? 0}`;
 }

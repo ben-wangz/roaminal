@@ -1,0 +1,5 @@
+apps:
+  - name: roaminal
+    type: container
+    path: container
+    versionFile: VERSION

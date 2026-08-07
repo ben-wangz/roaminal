@@ -1,0 +1,78 @@
+include:
+  - "**/*.go"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.mjs"
+  - "**/*.sh"
+
+exclude:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/test-results/**"
+  - "**/playwright-report/**"
+
+max_lines_by_ext:
+  .go: 250
+  .ts: 300
+  .tsx: 300
+  .mjs: 300
+  .sh: 200
+
+commands:
+  - name: "Shell syntax"
+    cmd: "bash"
+    args:
+      - "-n"
+      - "setup/forgekit.sh"
+      - "container/test-process-groups.sh"
+
+  - name: "Go formatting"
+    cmd: "sh"
+    args:
+      - "-c"
+      - "test -z \"$(find backend -type f -name '*.go' -print0 | xargs -0 gofmt -l)\""
+
+  - name: "Backend unit tests"
+    cmd: "go"
+    args: ["-C", "backend", "test", "./..."]
+
+  - name: "Backend race tests"
+    cmd: "go"
+    args: ["-C", "backend", "test", "-race", "./..."]
+
+  - name: "Backend vet"
+    cmd: "go"
+    args: ["-C", "backend", "vet", "./..."]
+
+  - name: "Worker dependencies"
+    cmd: "npm"
+    args: ["--prefix", "terminal-worker", "ci"]
+
+  - name: "Worker lint"
+    cmd: "npm"
+    args: ["--prefix", "terminal-worker", "run", "lint"]
+
+  - name: "Worker tests"
+    cmd: "npm"
+    args: ["--prefix", "terminal-worker", "test"]
+
+  - name: "Frontend dependencies"
+    cmd: "npm"
+    args: ["--prefix", "frontend", "ci"]
+
+  - name: "Frontend lint"
+    cmd: "npm"
+    args: ["--prefix", "frontend", "run", "lint"]
+
+  - name: "Frontend typecheck"
+    cmd: "npm"
+    args: ["--prefix", "frontend", "run", "typecheck"]
+
+  - name: "Frontend unit tests"
+    cmd: "npm"
+    args: ["--prefix", "frontend", "test", "--", "--run"]
+
+  - name: "Frontend production build"
+    cmd: "npm"
+    args: ["--prefix", "frontend", "run", "build"]

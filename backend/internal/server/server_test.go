@@ -2,9 +2,28 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/ben-wangz/roaminal/backend/internal/config"
 )
+
+func TestAPIRoutesTakePrecedenceOverStatic(t *testing.T) {
+	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, nil, nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/version", nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if strings.Contains(response.Body.String(), "418") {
+		t.Fatal("API request was handled by the static adapter")
+	}
+}
 
 func TestSameOriginRequiresMatchingHostAndScheme(t *testing.T) {
 	server := &Server{}
