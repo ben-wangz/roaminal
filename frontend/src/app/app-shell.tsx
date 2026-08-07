@@ -281,7 +281,7 @@ export function AppShell() {
     <main className={`main-panel ${sidebarOpen ? '' : 'expanded'}`}>
       <header className="topbar">
         {!sidebarOpen && <button ref={sidebarOpenButton} className="icon-button sidebar-open-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" title="Open sidebar" aria-expanded={false} aria-controls="terminal-sidebar"><PanelLeftOpen aria-hidden="true" size={18} /></button>}
-        <SystemStatus connected={Boolean(heartbeatState)} hostname={heartbeatState?.system.hostname || ''} sessionCount={sessions.length} latencyMs={heartbeatLatency} persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)} />
+        <SystemStatus connected={Boolean(heartbeatState)} system={heartbeatState?.system || null} sessionCount={sessions.length} latencyMs={heartbeatLatency} persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)} />
         <div className="top-actions"><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal"><Search aria-hidden="true" size={17} /></button><button className="text-button" onClick={() => void openAuthSessions()}><ShieldCheck aria-hidden="true" size={15} /> Sessions</button><button className="text-button" onClick={signOut}>Sign out</button></div>
       </header>
       {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}
