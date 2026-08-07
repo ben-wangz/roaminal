@@ -19,4 +19,7 @@
   .auth-modal { padding: 22px; }
   .session-list { padding-inline: 8px; }
   .session-card { min-height: 120px; }
+  .terminal-exited { left: 12px; right: 12px; bottom: 12px; flex-wrap: wrap; }
+  .terminal-exited-actions { width: 100%; margin-left: 0; }
+  .terminal-exited-actions button { flex: 1; }
 }

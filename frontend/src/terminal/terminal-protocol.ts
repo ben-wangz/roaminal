@@ -2,7 +2,7 @@ export type SessionSummary = { id: string; createdAt: string; updatedAt: string;
 export type ServerMessage =
   | { type: 'snapshot'; data: string }
   | { type: 'meta'; title: string; titleMode: 'automatic' | 'custom'; cwd: string; cols: number; rows: number; attention?: boolean }
-  | { type: 'status'; status: 'ready' | 'terminated'; code?: number; signal?: number | null }
+  | { type: 'status'; status: 'ready' | 'terminated'; code?: number; signal?: number | null; exitStatus?: { exitCode: number | null; signal: number | null } | null }
   | { type: 'output'; data: string }
   | { type: 'execution'; phase: string; executionId: string; command?: string; entry?: unknown }
   | { type: 'pong' };

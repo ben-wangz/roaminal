@@ -21,6 +21,11 @@ describe('single active session reconciliation', () => {
     expect(selectSession({ activeSessionId: 'a' }, 'b')).toEqual({ activeSessionId: 'b' });
   });
 
+  it('keeps a closed session selected so its history can be read or deleted', () => {
+    const exited = { ...session('a'), closed: true, exitStatus: { exitCode: 0, signal: null } };
+    expect(reconcileSession([exited], { activeSessionId: 'a' }, ['a'])).toEqual({ activeSessionId: 'a' });
+  });
+
   it('migrates the legacy active tab once and removes the old storage key', async () => {
     const values = new Map([['roaminal_terminal_tabs_v1', JSON.stringify({ activeTabId: 'legacy' })]]);
     const storage = {

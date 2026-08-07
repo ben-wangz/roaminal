@@ -88,6 +88,10 @@ export function AppShell() {
   useEffect(() => {
     if (!currentRuntime || currentRuntime.sessionId !== view.activeSessionId) return;
     return currentRuntime.subscribeMessage((message) => {
+      if (message?.type === 'status' && message.status === 'terminated') {
+        setSessions((current) => current.map((session) => session.id === currentRuntime.sessionId ? { ...session, closed: true, exitStatus: message.exitStatus || session.exitStatus || null } : session));
+        return;
+      }
       if (!message || message.type !== 'execution') return;
       if (message.phase === 'started') {
         setExecutionStatus(message.command ? `Running: ${message.command}` : 'Running command');
@@ -281,8 +285,8 @@ export function AppShell() {
         <div className="top-actions"><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal"><Search aria-hidden="true" size={17} /></button><button className="text-button" onClick={() => void openAuthSessions()}><ShieldCheck aria-hidden="true" size={15} /> Sessions</button><button className="text-button" onClick={signOut}>Sign out</button></div>
       </header>
       {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}
-      <section className="terminal-stage">{activeRuntime ? <TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} /> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={createSession}>Create terminal</button></div>}</section>
-      {activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.send({ type: 'input', data: value })} />}
+      <section className="terminal-stage">{activeRuntime ? <><TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} />{currentSession?.closed && <div className="terminal-exited" role="status"><strong>Terminal exited</strong><span>{formatExitStatus(currentSession.exitStatus)}</span><div className="terminal-exited-actions"><button className="primary" onClick={() => void createSession()}>Create terminal</button><button className="danger-button" onClick={() => void terminateSession(currentSession.id)}>Delete history</button></div></div>}</> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={createSession}>Create terminal</button></div>}</section>
+      {activeRuntime && !currentSession?.closed && <TouchKeyboard onInput={(value) => activeRuntime.send({ type: 'input', data: value })} />}
       <footer className="statusbar"><span>{currentSession?.cwd || 'No terminal'}</span><span className="execution-status" aria-live="polite">{executionStatus || (currentSession ? `${currentSession.cols}×${currentSession.rows}` : '')}</span></footer>
     </main>
     <Toast message={toast} />
@@ -290,4 +294,10 @@ export function AppShell() {
     {dialog?.type === 'terminate' && dialogSession && <TerminateDialog session={dialogSession} onConfirm={() => terminateSession(dialogSession.id)} onClose={() => setDialog(null)} />}
     {dialog?.type === 'auth' && <AuthSessionsDialog sessions={authSessions} currentId={currentAuthSessionId} busy={authSessionBusy} onRevoke={(id) => void revokeAuthSession(id)} onLogoutOthers={() => void logoutOtherAuthSessions()} onClose={() => setDialog(null)} />}
   </div>;
+}
+
+function formatExitStatus(status: SessionSummary['exitStatus']): string {
+  if (!status) return 'The shell ended normally.';
+  if (status.signal !== null) return `Signal ${status.signal}`;
+  return `Exit code ${status.exitCode ?? 0}`;
 }

@@ -63,9 +63,9 @@ export function TerminalActions({ session, onRename, onAutomaticTitle, onTermina
       else if (event.key === 'Home') { event.preventDefault(); focusItem(0); }
       else if (event.key === 'End') { event.preventDefault(); focusItem(items.length - 1); }
     }}>
-      <button type="button" role="menuitem" onClick={() => run(onRename)}>Rename title...</button>
-      {session.titleMode === 'custom' && <button type="button" role="menuitem" onClick={() => run(onAutomaticTitle)}>Use automatic title</button>}
-      <button className="destructive" type="button" role="menuitem" onClick={() => run(onTerminate)}>Terminate terminal...</button>
+      {!session.closed && <button type="button" role="menuitem" onClick={() => run(onRename)}>Rename title...</button>}
+      {!session.closed && session.titleMode === 'custom' && <button type="button" role="menuitem" onClick={() => run(onAutomaticTitle)}>Use automatic title</button>}
+      <button className="destructive" type="button" role="menuitem" onClick={() => run(onTerminate)}>{session.closed ? 'Delete history...' : 'Terminate terminal...'}</button>
     </div>}
   </div>;
 }

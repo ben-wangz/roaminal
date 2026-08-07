@@ -16,9 +16,6 @@ func (m *Manager) ReserveAttach(id string) error {
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	if session.closed {
-		return os.ErrProcessDone
-	}
 	if len(session.clients)+session.reservations >= m.cfg.MaxClientsPerSession {
 		return ErrClientCapacity
 	}
@@ -54,9 +51,7 @@ func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client
 	client := newClient()
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	if session.closed {
-		return nil, os.ErrProcessDone
-	}
+	closed := session.closed
 	if reserved {
 		if session.reservations < 1 {
 			return nil, ErrClientCapacity
@@ -76,7 +71,11 @@ func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client
 	}
 	client.enqueue(message(map[string]any{"type": "snapshot", "data": string(snapshot)}), false)
 	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.EffectiveTitle(), "titleMode": titleMode(session.meta), "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows, "attention": session.attention}), false)
-	client.enqueue(message(map[string]any{"type": "status", "status": "ready"}), false)
+	if closed {
+		client.enqueue(message(map[string]any{"type": "status", "status": "terminated", "exitStatus": session.exitStatus}), false)
+	} else {
+		client.enqueue(message(map[string]any{"type": "status", "status": "ready"}), false)
+	}
 	session.clients[client] = struct{}{}
 	return client, nil
 }

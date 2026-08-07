@@ -29,10 +29,12 @@ func (s *Session) waitLoop() {
 			status.Signal = &sig
 		}
 	}
-	s.exitStatus = status
+	if s.exitStatus == nil {
+		s.exitStatus = status
+	}
 	s.meta.UpdatedAt = time.Now().UTC()
 	_ = s.manager.store.SaveSession(s.meta)
-	s.broadcastLocked(message(map[string]any{"type": "status", "status": "terminated", "code": statusCode(status), "signal": status.Signal, "exitStatus": status}))
+	s.broadcastLocked(message(map[string]any{"type": "status", "status": "terminated", "code": statusCode(status), "signal": status.Signal, "exitStatus": s.exitStatus}))
 	if err != nil && !errors.Is(err, os.ErrProcessDone) {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", s.meta.ID, err)
 	}
