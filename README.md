@@ -62,6 +62,23 @@ the example image and Secret with deployment-specific values. The full rollout,
 TLS, proxy timeout, PVC permission, and backup procedure is in
 [deployment](docs/deployment.md).
 
+## Acknowledgements
+
+Roaminal's original inspiration came from
+[Tabminal](https://github.com/Leask/Tabminal) by Leask Wong. We are grateful to
+the project and its author for the idea and for providing an open reference for
+persistent, browser-based terminal interactions. Tabminal is distributed under
+the [MIT License](https://github.com/Leask/Tabminal/blob/main/LICENSE).
+
+## License
+
+Roaminal's core is licensed under the [Mozilla Public License 2.0](LICENSE).
+The project follows an open-core model: future plugin SDK and plugin protocol
+code will be licensed under [Apache-2.0](LICENSES/Apache-2.0.txt), while
+separately distributed official plugins will use proprietary licenses. See the
+[licensing policy](docs/licensing.md) for the exact boundaries and distribution
+requirements.
+
 ## Project documents
 
 - [API reference](docs/api.md)
@@ -70,4 +87,5 @@ TLS, proxy timeout, PVC permission, and backup procedure is in
 - [Deployment and rollout](docs/deployment.md)
 - [Backup and recovery](docs/backup-recovery.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Licensing policy](docs/licensing.md)
 - [MVP implementation log](docs/plan/mvp/implementation-log.md)

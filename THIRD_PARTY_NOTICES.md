@@ -29,8 +29,10 @@ package metadata:
   `@vitejs/plugin-react`, and `@playwright/test`
 - xterm.js packages (`xterm`, `xterm-headless`, `xterm-addon-serialize`, and the
   `@xterm/*` frontend packages)
-- `@fontsource/monaspace-neon` - Apache-2.0
+- `@fontsource/monaspace-neon` and its bundled Monaspace Neon font files -
+  SIL Open Font License 1.1; see `LICENSES/OFL-1.1.txt`
 
-Production images include the package lockfiles and the production dependency
-trees. License text remains owned by each upstream package; this inventory is
-not a replacement for those package notices.
+The production image includes the terminal worker's production dependency tree
+and the notices copied by the `Containerfile`. License text remains owned by
+each upstream project; this inventory is not a replacement for those package
+notices.

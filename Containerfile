@@ -21,6 +21,8 @@ RUN rm -rf internal/webassets/dist && cp -a /src/web/dist internal/webassets/dis
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o /out/roaminal ./cmd/roaminal
 
 FROM docker.io/library/node:24.13.1-bookworm-slim@sha256:85a395c77b811fa7f5b5e4aa69cd6eb4c3b80c7f1a8e34704dc0ce061e5b404e
+LABEL org.opencontainers.image.source="https://github.com/ben-wangz/roaminal" \
+      org.opencontainers.image.licenses="MPL-2.0"
 RUN apt-get update \
     && apt-get install -y --no-install-recommends bash ca-certificates tini \
     && rm -rf /var/lib/apt/lists/* \
@@ -33,6 +35,8 @@ RUN apt-get update \
 COPY --from=go-builder /out/roaminal /usr/local/bin/roaminal
 COPY --from=worker-deps --chown=roaminal:roaminal /opt/roaminal/terminal-worker /opt/roaminal/terminal-worker
 COPY --chown=roaminal:roaminal shell /opt/roaminal/shell
+COPY LICENSE THIRD_PARTY_NOTICES.md docs/licensing.md /usr/share/licenses/roaminal/
+COPY LICENSES /usr/share/licenses/roaminal/LICENSES/
 RUN chmod 0755 /usr/local/bin/roaminal && chmod 0755 /opt/roaminal/shell/roaminal-bashrc
 ENV HOME=/home/roaminal \
     ROAMINAL_HOST=0.0.0.0 \
