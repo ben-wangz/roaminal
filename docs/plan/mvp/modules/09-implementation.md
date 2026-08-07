@@ -99,15 +99,19 @@ Gate：API contract、WS auth、same-origin、heartbeat 和 reconnect tests 通�
 
 1. 按 [05-frontend.md](./05-frontend.md) 建立模块，不创建等价的单文件控制器。
 2. 实现 terminal、preview、tabs、search、auth、status、toast 和 touch。
-3. 保留无 session 时自动创建和关闭最后 session 后补建。
-4. 删除所有文件/workspace/Agent UI 和快捷键。
-5. 实现桌面、平板、手机竖屏和横屏响应式行为。
-6. 对照参考截图和交互 fixtures 做功能回归。
+3. 保留服务端 session 清单为空时自动创建；关闭最后一个浏览器 Tab 不删除
+   session，也不强制补建新的 session。
+4. 实现稳定的 session 顺序、Tab 子集视图、非破坏性 Tab 关闭、Sidebar 重开、
+   标题菜单和自定义标题持久化。
+5. 删除所有文件/workspace/Agent UI 和快捷键。
+6. 实现桌面、平板、手机竖屏和横屏响应式行为。
+7. 对照参考截图和交互 fixtures 做功能回归。
 
 Gate：Chrome E2E 通过；控制台无 error、404、未处理 Promise 或空 DOM 引用；
 所有视口无重叠、横向溢出或不可点击控件。React Strict Mode 的
 mount/cleanup/remount 测试确认不会重复创建 WebSocket、xterm、listener、
-observer 或 timer。
+observer 或 timer。多 session heartbeat 顺序、Tab close/reopen、标题恢复、
+唯一可见 xterm viewport 和 xterm/addon peer dependency 也必须有回归证据。
 
 ## Phase 6：本地资源与缓存
 

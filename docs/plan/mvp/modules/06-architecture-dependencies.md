@@ -21,15 +21,17 @@ Roaminal Linux container
   |    `- terminal worker supervisor + framed stdio IPC
   |- Node terminal-worker (one headless xterm per session)
   `- /home/roaminal/.roaminal on state PVC
-       |- sessions/*.json
-       |- sessions/*.snapshot
-       `- auth-sessions.json
+       `- state/ (private state root when the PVC mount is world-accessible)
+            |- sessions/*.json
+            |- sessions/*.snapshot
+            `- auth-sessions.json
 ```
 
 数据边界：
 
 - Heartbeat 是 session inventory 的权威来源，WebSocket 不是唯一事实来源。
-- 每个 session 对应一个 Terminal Tab 和一个 Bash PTY。
+- 每个 session 对应一个服务端 Bash PTY；当前浏览器是否打开对应 Terminal Tab
+  是独立的视图状态，不要求所有 session 同时出现在 Tab 条中。
 - 浏览器拥有当前实例的 token；服务端拥有 refresh session。
 - PTY 只存在于当前 Go 进程，其他 Pod 不能接管。
 - Headless xterm state 只存在于当前 Node worker；Go backend 通过 sequence 和
@@ -144,7 +146,6 @@ typescript-eslint 8.66.0
 @xterm/xterm 6.1.0-beta.197
 @xterm/addon-fit 0.12.0-beta.197
 @xterm/addon-web-links 0.13.0-beta.197
-@xterm/addon-canvas 0.8.0-beta.48
 @xterm/addon-search 0.17.0-beta.197
 @xterm/addon-progress 0.3.0-beta.197
 @xterm/addon-ligatures 0.11.0-beta.197
@@ -159,9 +160,10 @@ react-dom 19.2.8
 使用 React state/reducer/context，外部 runtime snapshot 订阅使用
 `useSyncExternalStore`。
 
-xterm 和 addons 固定使用上述版本。若 beta 包无法通过本地构建或测试，实施
-Agent 必须停止并记录兼容问题，不能自行升级。全部 npm 依赖由 lockfile 固定并
-打包进 `web/dist`。
+xterm core 和 addons 固定使用上述兼容发布线。渲染器使用 xterm core 自带的
+DOM renderer；不得加入与 core peer dependency 不兼容的 CanvasAddon。若 beta
+包无法通过本地构建或测试，实施 Agent 必须停止并记录兼容问题，不能自行升级。
+全部 npm 依赖由 lockfile 固定并打包进 `web/dist`。
 
 依赖安装、项目内 binary、下载镜像和 Chrome channel 的执行规则见
 [08-test-environment.md](./08-test-environment.md)。

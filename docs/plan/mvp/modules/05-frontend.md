@@ -54,8 +54,9 @@ web/src/
 - xterm 实例、WebSocket、ResizeObserver、heartbeat timer 和 PTY output 都由
   React tree 之外的 `TerminalRuntime` 管理。
 - 高频 PTY output 直接调用 `terminal.write()`，不得进入 UI render state。
-- Session 在 UI 重挂载时只 detach/reattach DOM；只有显式关闭 session 才
-  dispose terminal runtime 和 WebSocket。
+- Session 在 UI 重挂载时只 detach/reattach DOM；关闭浏览器 Tab 只释放该
+  浏览器的 terminal runtime 和 WebSocket，只有显式终止 session 才删除服务端
+  terminal。
 - React state 只保存低频、可序列化 UI/session metadata，不保存 PTY bytes、
   xterm instance、WebSocket 或 mutable terminal buffer。
 - `TerminalViewport` 通过 ref attach/detach 已存在的 runtime；component
@@ -71,11 +72,16 @@ web/src/
 ## 终端体验
 
 - Solarized Dark 风格、Monaspace Neon 字体和紧凑工作界面。
-- xterm.js 及 fit、web-links、canvas、search、progress、ligatures addons。
+- xterm.js 及 fit、web-links、search、progress、ligatures addons；core 与
+  addons 必须来自兼容的发布线，不使用当前 peer 不兼容的 CanvasAddon。
 - 标签展示标题、短 session ID、cwd、创建时间、运行/完成/attention 状态和
   可用时的终端进度。
 - 桌面保留标签内的实时终端缩略预览；移动尺寸不创建预览。
-- 创建、切换和关闭终端；关闭当前项后选择相邻项。
+- 创建、切换和关闭浏览器 Tab；关闭当前项后选择相邻项，不删除服务端终端。
+- Tab 条只显示当前浏览器已打开的视图；Sidebar 显示完整 session 清单，点击
+  未打开的 session 时重新打开对应 Tab。
+- Tab 操作菜单至少包含重命名标题、关闭 Tab 和确认后终止 Terminal；自定义
+  标题持久化，并可恢复为 shell 自动标题。
 - Sidebar 展开/收起和移动端 overlay。
 - 页面标题跟随当前终端。
 - 搜索支持大小写、全词、正则、上一个和下一个结果。
@@ -88,7 +94,7 @@ web/src/
 
 ```text
 Ctrl + Shift + T        新建终端
-Ctrl + Shift + W        关闭终端
+Ctrl + Shift + W        关闭当前 Tab
 Ctrl + Shift + [ / ]    切换终端
 Ctrl/Cmd + F            终端内搜索
 Ctrl + Shift + ?        快捷键帮助
@@ -99,9 +105,11 @@ Ctrl + Shift + ?        快捷键帮助
 - 浏览器只连接提供当前页面的 Roaminal 实例；HTTP 使用当前 Origin，WebSocket
   从页面协议派生 `ws://` 或 `wss://`。
 - 不存在 Host entity、`hostId`、Host registry、Host picker 或跨 Host 聚合状态。
-- 一个 Terminal Tab 对应一个 session ID 和一个独立 Bash PTY。
-- 支持创建、切换和关闭多个 Tab；关闭当前 Tab 后选择相邻 Tab。
-- session 清单为空时前端创建一个 Tab；关闭最后一个 Tab 后再创建一个。
+- 一个打开的 Terminal Tab 对应一个 session ID 和一个独立 Bash PTY；服务端
+  session 可以存在但不在 Tab 条中展示。
+- 支持创建、切换和关闭多个 Tab；关闭当前 Tab 后选择相邻 Tab，不调用删除
+  session API。关闭最后一个 Tab 后保留空视图，只有服务端 session 清单为空时
+  前端才创建一个新 session。
 - 同一 session 允许多个浏览器客户端 attach，属于协同连接，不是多 Host。
 - 保留同源 Cloudflare Access 会话失效检测；需要重新认证时刷新或打开页面根
   URL。后端不启动 Tunnel，镜像不包含 cloudflared。

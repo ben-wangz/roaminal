@@ -1,6 +1,6 @@
 # 11 - Terminal Tab 与交互修订需求单
 
-> 状态：Approved / 待实施
+> 状态：Implemented / 已落地
 > 提出日期：2026-08-07
 > 上位文档：[MVP 计划索引](../README.md)
 > 对应方案：[12-terminal-tabs-solution.md](./12-terminal-tabs-solution.md)
