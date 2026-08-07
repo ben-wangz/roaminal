@@ -17,15 +17,22 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 )
 
 const (
-	Protocol     = "roaminal-terminal-worker/1"
-	HeaderLimit  = 64 * 1024
-	PayloadLimit = 256 * 1024 * 1024
+	Protocol              = "roaminal-terminal-worker/1"
+	HeaderLimit           = 64 * 1024
+	PayloadLimit          = 256 * 1024 * 1024
+	WriterQueueLimit      = 16 * 1024 * 1024
+	WriterStallLimit      = 10 * time.Second
+	EngineVersion         = "5.3.0"
+	SerializeAddonVersion = "0.11.0"
 )
 
 var ErrUnavailable = errors.New("terminal worker unavailable")
+var ErrWriterQueueFull = errors.New("terminal worker writer queue full")
+var ErrWriterStalled = errors.New("terminal worker writer stalled")
 
 type Frame struct {
 	Header  map[string]json.RawMessage
@@ -38,19 +45,27 @@ type Result struct {
 }
 
 type Client struct {
-	path       string
-	cmd        *exec.Cmd
-	stdin      io.WriteCloser
-	stdout     io.ReadCloser
-	writeMu    sync.Mutex
-	waitMu     sync.Mutex
-	waiters    map[string]chan Result
-	ready      chan error
-	done       chan struct{}
-	closeOnce  sync.Once
-	callbackMu sync.Mutex
-	onFatal    func(error)
-	stopping   atomic.Bool
+	path        string
+	cmd         *exec.Cmd
+	stdin       io.WriteCloser
+	stdout      io.ReadCloser
+	writeQueue  chan writeRequest
+	queueMu     sync.Mutex
+	queuedBytes int64
+	waitMu      sync.Mutex
+	waiters     map[string]chan Result
+	ready       chan error
+	done        chan struct{}
+	closeOnce   sync.Once
+	callbackMu  sync.Mutex
+	onFatal     func(error)
+	stopping    atomic.Bool
+}
+
+type writeRequest struct {
+	data      []byte
+	queueSize int
+	done      chan error
 }
 
 func New(path string, onFatal func(error)) *Client {
@@ -75,9 +90,11 @@ func (c *Client) Start(ctx context.Context) error {
 	}
 	c.cmd.Stderr = os.Stderr
 	c.stdin, c.stdout = stdin, stdout
+	c.writeQueue = make(chan writeRequest, 128)
 	if err := c.cmd.Start(); err != nil {
 		return fmt.Errorf("start terminal worker: %w", err)
 	}
+	go c.writeLoop()
 	go c.readLoop()
 	go func() {
 		err := c.cmd.Wait()
@@ -93,20 +110,22 @@ func (c *Client) Start(ctx context.Context) error {
 		c.fail(err)
 		return err
 	}
+	handshakeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	select {
 	case err := <-c.ready:
 		return err
 	case result := <-waiter:
-		if op := stringField(result.Header, "op"); op == "ready" && stringField(result.Header, "protocol") == Protocol {
+		if op := stringField(result.Header, "op"); op == "ready" && stringField(result.Header, "protocol") == Protocol && stringField(result.Header, "engine") == "xterm-headless" && stringField(result.Header, "engineVersion") == EngineVersion && stringField(result.Header, "serializeAddonVersion") == SerializeAddonVersion {
 			return nil
 		}
 		err := errors.New("terminal worker handshake failed")
 		c.fail(err)
 		return err
-	case <-ctx.Done():
+	case <-handshakeCtx.Done():
 		c.unregister(requestID, waiter)
-		c.fail(ctx.Err())
-		return ctx.Err()
+		c.fail(handshakeCtx.Err())
+		return handshakeCtx.Err()
 	}
 }
 
@@ -177,10 +196,81 @@ func (c *Client) send(header map[string]any, payload []byte) error {
 	if err != nil {
 		return err
 	}
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
 	if c.stdin == nil || !c.Available() {
 		return ErrUnavailable
+	}
+	queueSize := 0
+	if op, ok := header["op"].(string); ok && (op == "write" || op == "resize") {
+		queueSize = len(payload)
+	}
+	deadline := time.NewTimer(WriterStallLimit)
+	defer deadline.Stop()
+	for {
+		c.queueMu.Lock()
+		if c.queuedBytes+int64(queueSize) <= WriterQueueLimit {
+			c.queuedBytes += int64(queueSize)
+			c.queueMu.Unlock()
+			break
+		}
+		c.queueMu.Unlock()
+		select {
+		case <-deadline.C:
+			c.fail(ErrWriterQueueFull)
+			return ErrWriterQueueFull
+		case <-c.done:
+			return ErrUnavailable
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	req := writeRequest{data: data, queueSize: queueSize, done: make(chan error, 1)}
+	select {
+	case c.writeQueue <- req:
+	case <-deadline.C:
+		c.releaseQueued(queueSize)
+		c.fail(ErrWriterStalled)
+		return ErrWriterStalled
+	case <-c.done:
+		c.releaseQueued(queueSize)
+		return ErrUnavailable
+	}
+	select {
+	case err := <-req.done:
+		return err
+	case <-c.done:
+		return ErrUnavailable
+	}
+}
+
+func (c *Client) releaseQueued(size int) {
+	c.queueMu.Lock()
+	c.queuedBytes -= int64(size)
+	if c.queuedBytes < 0 {
+		c.queuedBytes = 0
+	}
+	c.queueMu.Unlock()
+}
+
+func (c *Client) writeLoop() {
+	for {
+		select {
+		case <-c.done:
+			return
+		case req := <-c.writeQueue:
+			err := c.writeAll(req.data)
+			c.releaseQueued(req.queueSize)
+			req.done <- err
+			if err != nil {
+				c.fail(err)
+				return
+			}
+		}
+	}
+}
+
+func (c *Client) writeAll(data []byte) error {
+	if deadlineWriter, ok := c.stdin.(interface{ SetWriteDeadline(time.Time) error }); ok {
+		_ = deadlineWriter.SetWriteDeadline(time.Now().Add(WriterStallLimit))
+		defer deadlineWriter.SetWriteDeadline(time.Time{})
 	}
 	for len(data) > 0 {
 		written, err := c.stdin.Write(data)
@@ -188,13 +278,10 @@ func (c *Client) send(header map[string]any, payload []byte) error {
 			data = data[written:]
 		}
 		if err != nil {
-			c.fail(err)
 			return err
 		}
 		if written == 0 {
-			err := io.ErrShortWrite
-			c.fail(err)
-			return err
+			return io.ErrShortWrite
 		}
 	}
 	return nil
