@@ -107,6 +107,8 @@ func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
 		s.withAuth(w, r, s.heartbeatPost)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/sessions":
 		s.withAuth(w, r, s.createSession)
+	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/sessions/") && strings.HasSuffix(r.URL.Path, "/title"):
+		s.withAuth(w, r, s.updateSessionTitle)
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/auth/sessions/"):
 		s.withAuth(w, r, s.revokeAuthSession)
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/sessions/"):
@@ -319,6 +321,46 @@ func (s *Server) deleteSession(w http.ResponseWriter, r *http.Request, _ string)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateSessionTitleRequest struct {
+	Title json.RawMessage `json:"title"`
+}
+
+func (s *Server) updateSessionTitle(w http.ResponseWriter, r *http.Request, _ string) {
+	var body updateSessionTitleRequest
+	if err := decodeJSON(w, r, &body); err != nil {
+		return
+	}
+	if len(body.Title) == 0 {
+		writeError(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	var title *string
+	if strings.TrimSpace(string(body.Title)) != "null" {
+		var value string
+		if err := json.Unmarshal(body.Title, &value); err != nil {
+			writeError(w, http.StatusBadRequest, "title must be a string or null")
+			return
+		}
+		title = &value
+	}
+	idPath := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+	id := strings.TrimSuffix(idPath, "/title")
+	result, err := s.terms.SetTitle(id, title)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "not found")
+		} else if errors.Is(err, os.ErrProcessDone) {
+			writeError(w, http.StatusConflict, "terminal is closed")
+		} else if strings.Contains(err.Error(), "title") {
+			writeError(w, http.StatusBadRequest, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {

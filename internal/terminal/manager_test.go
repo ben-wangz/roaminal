@@ -73,3 +73,33 @@ func TestSummariesHaveDeterministicOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestSetTitlePersistsOverrideAndAutomaticReset(t *testing.T) {
+	store, err := persistence.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(config.Config{}, store, nil)
+	now := time.Now().UTC()
+	id := "11111111-1111-4111-8111-111111111111"
+	manager.sessions[id] = &Session{manager: manager, meta: persistence.SessionMeta{FormatVersion: persistence.SessionFormatVersion, ID: id, AutomaticTitle: "shell", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}, clients: map[*Client]struct{}{}}
+	custom := "custom title"
+	result, err := manager.SetTitle(id, &custom)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Title != custom || result.TitleMode != "custom" {
+		t.Fatalf("unexpected custom title result: %+v", result)
+	}
+	loaded, err := store.LoadSession(id)
+	if err != nil || loaded.TitleOverride == nil || *loaded.TitleOverride != custom {
+		t.Fatalf("custom title was not persisted: %+v %v", loaded, err)
+	}
+	result, err = manager.SetTitle(id, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Title != "shell" || result.TitleMode != "automatic" {
+		t.Fatalf("unexpected automatic title result: %+v", result)
+	}
+}
