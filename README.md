@@ -66,8 +66,8 @@ TLS, proxy timeout, PVC permission, and backup procedure is in
 
 Roaminal's original inspiration came from
 [Tabminal](https://github.com/Leask/Tabminal) by Leask Wong. We are grateful to
-the project and its author for the idea and for providing an open reference for
-persistent, browser-based terminal interactions. Tabminal is distributed under
+the project and its author for the idea and for providing an open reference
+during MVP development. Tabminal is distributed under
 the [MIT License](https://github.com/Leask/Tabminal/blob/main/LICENSE).
 
 ## License
@@ -88,4 +88,3 @@ requirements.
 - [Backup and recovery](docs/backup-recovery.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Licensing policy](docs/licensing.md)
-- [MVP implementation log](docs/plan/mvp/implementation-log.md)

@@ -1,15 +1,16 @@
 # Third-Party Notices
 
-Roaminal is a clean-room implementation. The Tabminal repository is used only
-as a behavior and interaction reference; no Tabminal source or asset is bundled
-in this repository.
+Roaminal is a clean-room implementation. The Tabminal repository was used only
+as a behavior and interaction reference during MVP development; no Tabminal
+source or asset is bundled in this repository.
 
 ## Behavior reference
 
 - Tabminal `v3.0.40`, commit
   `fbd26d3aff033fd850a6696eccb107520780fd8b`
 - License: MIT, as distributed by the reference repository
-- Use: behavior, protocol, and interaction comparison only
+- Historical use: behavior, protocol, and interaction comparison during MVP
+  development only
 
 ## Direct Go dependencies
 
