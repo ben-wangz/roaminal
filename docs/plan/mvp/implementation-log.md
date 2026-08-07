@@ -134,3 +134,36 @@ behavior fixtures, and direct dependency/license inventory are auditable.
   them. This is recorded as a fixed toolchain limitation.
 - Podman warns that OCI output ignores the image `HEALTHCHECK`; Kubernetes and
   the integration harness use the documented `/healthz` probes directly.
+
+## Terminal interaction revision evidence
+
+- Date: 2026-08-07 UTC. The approved addendum requirements and solution are
+  implemented by the pushed commits `4ed4855`, `dc5b517`, `e784e9c`, `a6f15cc`,
+  `9c8db60`, `2f29c73`, `7d65581`, `7e99a3d`, `84c05d9`, `2bfac9d`, `a6e6228`,
+  `d7f103e`, `053bdd3`, and `ca47231`.
+- Backend evidence: `go test ./...`, `go vet ./...`, and
+  `CGO_ENABLED=1 go test -race ./...` passed. Session summaries sort by
+  `createdAt, id`; title PATCH, v1-to-v2 migration, strict title validation,
+  automatic-title reset, and direct/private-child/ambiguous state layout tests
+  passed. Startup logs report only `state layout=direct` or
+  `state layout=private-child`.
+- Frontend evidence: `npm --prefix web test` reports 6 Vitest tests; web
+  typecheck, lint, and production build pass. `npm ls` for xterm core and all
+  browser addons exits cleanly with no `invalid` peer dependency. The old
+  CanvasAddon is not installed or loaded.
+- Kubernetes image and rollout evidence:
+  `container-registry.internal.pve.lab.geekcity.tech:32443/ben-wangz/roaminal:053bdd38a2beecf0caad4074755c06668fa88a1a`
+  was built and pushed with Podman, then reached `1/1` Ready in `develop` with
+  zero restarts. The pod log reported `Roaminal state layout=private-child`.
+  The Service remains `ClusterIP` on port 9846 and the state PVC contains active
+  data only below `.roaminal/state/`; the root `sessions/` directory is empty.
+- Chrome evidence: `npm --prefix web run e2e -- --workers=1` ran 25 cases;
+  13 passed and 12 were intentionally skipped by project filter. The passing
+  desktop/phone cases cover 100 Tab switches with exactly one direct xterm,
+  Close tab with no DELETE request, title persistence across reload and reset
+  to automatic title, menu keyboard navigation/focus restoration, terminate
+  cancel/confirm, desktop sidebar geometry/focus, mobile overlay/backdrop and
+  Escape, five viewport rendering, no external resources and no page/console
+  errors. A Chrome link-hover smoke moved across the xterm screen after URL
+  output and observed `xterms=1`, `screens=1`, favicon `/favicon.svg`, and an
+  empty error list.
