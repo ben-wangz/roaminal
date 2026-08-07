@@ -1,5 +1,4 @@
 import { Terminal } from '@xterm/xterm';
-import { CanvasAddon } from '@xterm/addon-canvas';
 import { FitAddon } from '@xterm/addon-fit';
 import { LigaturesAddon } from '@xterm/addon-ligatures';
 import { ProgressAddon } from '@xterm/addon-progress';
@@ -20,7 +19,7 @@ export class TerminalRuntime {
   private disposed = false;
   private addonsLoaded = false;
 
-  constructor(private readonly sessionId: string, private readonly token: () => string | null) {
+  constructor(readonly sessionId: string, private readonly token: () => string | null) {
     this.terminal = new Terminal({ convertEol: false, cursorBlink: true, scrollback: 1000, fontFamily: 'Monaspace Neon, monospace', theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' } });
     this.fit = new FitAddon(); this.search = new SearchAddon();
     this.terminal.onData((data) => this.send({ type: 'input', data }));
@@ -28,12 +27,12 @@ export class TerminalRuntime {
   }
 
   attach(element: HTMLElement): void {
-    if (this.disposed) return;
+    if (this.disposed) throw new Error(`terminal runtime ${this.sessionId} is disposed`);
     if (this.element === element) return;
     this.element = element;
-    if (this.terminal.element) element.appendChild(this.terminal.element); else this.terminal.open(element);
+    if (this.terminal.element) element.replaceChildren(this.terminal.element); else this.terminal.open(element);
     if (!this.addonsLoaded) {
-      this.terminal.loadAddon(this.fit); this.terminal.loadAddon(this.search); this.terminal.loadAddon(new WebLinksAddon()); this.terminal.loadAddon(new CanvasAddon()); this.terminal.loadAddon(new LigaturesAddon()); this.terminal.loadAddon(new ProgressAddon());
+      this.terminal.loadAddon(this.fit); this.terminal.loadAddon(this.search); this.terminal.loadAddon(new WebLinksAddon()); this.terminal.loadAddon(new LigaturesAddon()); this.terminal.loadAddon(new ProgressAddon());
       this.addonsLoaded = true;
     }
     this.fit.fit();
@@ -57,7 +56,13 @@ export class TerminalRuntime {
       if (!this.disposed && this.element && this.reconnectTimer === null) this.reconnectTimer = window.setTimeout(() => { this.reconnectTimer = null; this.connect(); }, 5000);
     };
   }
-  detach(): void { this.resizeObserver?.disconnect(); this.resizeObserver = null; this.element = null; }
+  detach(element?: HTMLElement): void {
+    if (element && this.element !== element) return;
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    if (this.element && this.terminal.element?.parentElement === this.element) this.terminal.element.remove();
+    this.element = null;
+  }
   dispose(): void { this.disposed = true; if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.socket?.close(); this.socket = null; this.element = null; this.terminal.dispose(); this.listeners.clear(); }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   connectedState(): boolean { return this.connected; }
