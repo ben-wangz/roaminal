@@ -49,8 +49,10 @@ test('terminal tabs are a stable browser view over persistent sessions', async (
   test.skip(!testInfo.project.name.includes('desktop'), 'multi-session interaction runs in the desktop project');
   await authenticate(page);
   const errors: string[] = [];
+  const deletes: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('request', (request) => { if (request.method() === 'DELETE' && request.url().includes('/api/sessions/')) deletes.push(request.url()); });
   const initialSessions = await page.locator('.session-row').count();
   await page.locator('.terminal-tabs > .icon-button').click();
   await expect.poll(() => page.locator('.terminal-tab').count()).toBeGreaterThan(1);
@@ -66,11 +68,12 @@ test('terminal tabs are a stable browser view over persistent sessions', async (
   await expect(page.locator(`.terminal-tab[data-session-id="${secondId}"]`)).toHaveCount(1);
   await expect(page.locator('.terminal-viewport')).toHaveAttribute('data-session-id', secondId);
   await expect(page.locator('.terminal-viewport > .xterm')).toHaveCount(1);
-  for (let index = 0; index < 20; index++) {
+  for (let index = 0; index < 100; index++) {
     const tabs = page.locator('.terminal-tab-select');
     await tabs.nth(index % await tabs.count()).click();
     await expect(page.locator('.terminal-viewport > .xterm')).toHaveCount(1);
   }
+  expect(deletes).toEqual([]);
   expect(errors.filter((message) => !message.includes('favicon'))).toEqual([]);
 });
 
@@ -105,4 +108,36 @@ test('terminal actions rename and sidebar toggle are real controls', async ({ pa
   await page.getByRole('button', { name: 'Open sidebar' }).click();
   await expect.poll(() => sidebar.evaluate((element) => getComputedStyle(element).width)).toBe('276px');
   await expect(page.locator('.sidebar-toggle')).toBeFocused();
+
+  await page.locator('.terminal-tabs > .icon-button').click();
+  const created = page.locator('.terminal-tab').last();
+  const createdId = await created.getAttribute('data-session-id');
+  if (!createdId) throw new Error('created tab has no session id');
+  const sessionCount = await page.locator('.session-row').count();
+  await created.getByRole('button', { name: 'Terminal actions' }).click();
+  await page.getByRole('menuitem', { name: 'Terminate terminal...' }).click();
+  await expect(page.getByRole('heading', { name: 'Terminate terminal?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.session-row')).toHaveCount(sessionCount);
+  await created.getByRole('button', { name: 'Terminal actions' }).click();
+  await page.getByRole('menuitem', { name: 'Terminate terminal...' }).click();
+  await page.getByRole('button', { name: 'Terminate terminal' }).click();
+  await expect(page.locator(`.session-row[data-session-id="${createdId}"]`)).toHaveCount(0);
+});
+
+test('mobile sidebar is an accessible overlay', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.includes('phone'), 'mobile sidebar behavior runs in phone projects');
+  await authenticate(page);
+  const sidebar = page.locator('#terminal-sidebar');
+  await expect(sidebar).toHaveClass(/closed/);
+  const open = page.getByRole('button', { name: 'Open sidebar' });
+  await open.click();
+  await expect(sidebar).toHaveClass(/open/);
+  await expect(page.getByRole('button', { name: 'Close sidebar' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sidebar).toHaveClass(/closed/);
+  await expect(open).toBeFocused();
+  await open.click();
+  await page.locator('.session-select').first().click();
+  await expect(sidebar).toHaveClass(/closed/);
 });

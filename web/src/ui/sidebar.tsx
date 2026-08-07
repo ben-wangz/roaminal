@@ -11,6 +11,17 @@ export function Sidebar({ id, sessions, active, open, onToggle, onSelect, onRena
     if (mounted.current && open) toggle.current?.focus();
     mounted.current = true;
   }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && window.matchMedia('(max-width: 800px)').matches) {
+        event.preventDefault();
+        onToggle();
+      }
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [onToggle, open]);
   return <>
     {open && <button className="sidebar-backdrop" type="button" aria-label="Close sidebar" onClick={onToggle} />}
     <aside id={id} className={`sidebar ${open ? 'open' : 'closed'}`} aria-hidden={!open} inert={!open || undefined}>
