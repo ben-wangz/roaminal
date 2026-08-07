@@ -201,12 +201,14 @@ behavior fixtures, and direct dependency/license inventory are auditable.
 ## Single-terminal sidebar final gate
 
 - Date: 2026-08-07 UTC. The final remediation code is present in `62b3c56`,
-  `0cfe82e`, `435ad67`, `16570af` and embedded asset refresh `46000fe`.
+  `0cfe82e`, `435ad67`, `16570af`, `46000fe` and the attention refinement
+  `82b97ac`.
 - Persistence now tracks degraded checkpoints by session ID and only clears a
   recovered session; worker snapshot failures mark that session before the next
   checkpoint. Restore and create initialize the worker before publishing Bash or
   starting PTY loops, and rollback closes an already-created worker session.
-- Session summaries expose `attention` for output waiting on a non-current session.
+- Session summaries expose `attention` for completed executions waiting on a
+  non-current session; ordinary shell prompt output does not create false attention.
   Claiming terminal control clears it; Sidebar renders a text state plus a color
   independent indicator. Preview creation has a 100ms intent delay and generation
   guard, and Modal dialogs trap focus and close on Escape.
@@ -220,12 +222,12 @@ behavior fixtures, and direct dependency/license inventory are auditable.
   screenshots and pointer-leave disposal. Artifacts are under
   `web/test-results/smoke-sidebar-cards-switch-a61ca--and-expose-preview-actions-chrome-desktop/`.
 - Final image:
-  `container-registry.internal.pve.lab.geekcity.tech:32443/ben-wangz/roaminal:46000fe8441778b105238393c9f874beea0ce8df`.
-  Podman config ID is `df5287042ae40d06f9921dae1aa32f58b4fa7c90bab995e16e46691c674bfe92`,
+  `container-registry.internal.pve.lab.geekcity.tech:32443/ben-wangz/roaminal:82b97ac4930df069871cd97a24d11263eca7bd08`.
+  Podman config ID is `5057a45209f5e06545a69b02d42a712252ddaeaa9ab8b6f9a96a9ed839729ace`,
   local image digest is
-  `sha256:d8870b6dad5d5c482ed81b23c92463cfe4b40ba14171987010786ef993931f82`,
+  `sha256:b30738464f0df042393037be0cd5e375a8b49e095bf010bd42f28907cd73647e`,
   and the running Pod reports registry image ID
-  `sha256:7a2c09264ba2a5979717ba60a328b0dabe746c97f9290210ce66929f2a68d4bb`.
+  `sha256:b19943cf5a728b226b7bfdb1b24bfde2ba3dbdc161b3eba3524eea23ab94d110`.
 - Kubernetes server-side dry-run and actual apply completed in namespace `develop`.
   Deployment reached `1/1` Ready with zero restarts; Pod log reports
   `Roaminal state layout=private-child`. Direct
