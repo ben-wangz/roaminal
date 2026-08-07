@@ -44,6 +44,7 @@ func run(cfg config.Config) error {
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "Roaminal state layout=%s\n", store.Layout)
 	authManager, err := auth.New(cfg, store)
 	if err != nil {
 		return err
