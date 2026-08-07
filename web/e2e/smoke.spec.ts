@@ -137,6 +137,8 @@ test('mobile sidebar is an accessible overlay', async ({ page }, testInfo) => {
   await open.click();
   await expect(sidebar).toHaveClass(/open/);
   await expect(page.getByRole('button', { name: 'Close sidebar' })).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('#terminal-sidebar')))).toBe(true);
   await page.keyboard.press('Escape');
   await expect(sidebar).toHaveClass(/closed/);
   await expect(open).toBeFocused();
