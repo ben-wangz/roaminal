@@ -51,7 +51,7 @@ xterm”指 xterm.js 官方 JavaScript headless 实现，不是系统 `xterm` �
 
 ## Backend 与 Worker 职责
 
-每个 Terminal Tab 对应一个 Go session 和一个 worker 内的 headless xterm
+每个持久 session 对应一个 Go session 和一个 worker 内的 headless xterm
 实例及 `SerializeAddon`。Worker 中的实例是 PTY 的“影子终端”，不是浏览器
 renderer。一个 worker 承载当前 backend 的所有 session。
 
@@ -197,7 +197,7 @@ Worker 不承担：
 
 - 创建 PTY，启动、终止或恢复 Bash/Unix process。
 - DOM/canvas 渲染、字体、selection、search、links 或 touch input。
-- HTTP、WebSocket、认证、Terminal Tab 或浏览器 client 管理。
+- HTTP、WebSocket、认证、浏览器 client 或 active-session UI 管理。
 - Roaminal private marker 解析及 cwd、execution history、attention、toast、
   notification 管理。
 - snapshot 路径、写入策略、持久化频率或损坏恢复策略。
@@ -223,9 +223,10 @@ Roaminal 只写以下 versioned 文件，不写 output log、command audit log �
 
 ```json
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "uuid",
-  "title": "string",
+  "automaticTitle": "string",
+  "titleOverride": "string or null",
   "initialCwd": "/absolute/path",
   "cwd": "/absolute/path",
   "cols": 120,
@@ -303,5 +304,5 @@ snapshot；auth file 损坏时隔离整个 auth file 并以空 refresh session s
 
 State directory 固定 `0700`，JSON/snapshot/temp/corrupt files 固定 `0600`。
 每次写入使用同目录 temp file、file fsync、rename 和 parent directory fsync；
-不得依赖跨目录 rename。`formatVersion: 1` 只定义 Roaminal 自身未来迁移边界，
+不得依赖跨目录 rename。Session `formatVersion: 2`、auth `formatVersion: 1` 只定义 Roaminal 自身未来迁移边界，
 不兼容 Tabminal 数据。

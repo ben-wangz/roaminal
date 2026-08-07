@@ -98,19 +98,19 @@ Gate：API contract、WS auth、same-origin、heartbeat 和 reconnect tests 通�
 ## Phase 5：模块化终端 UI
 
 1. 按 [05-frontend.md](./05-frontend.md) 建立模块，不创建等价的单文件控制器。
-2. 实现 terminal、preview、tabs、search、auth、status、toast 和 touch。
-3. 保留服务端 session 清单为空时自动创建；关闭最后一个浏览器 Tab 不删除
-   session，也不强制补建新的 session。
-4. 实现稳定的 session 顺序、Tab 子集视图、非破坏性 Tab 关闭、Sidebar 重开、
-   标题菜单和自定义标题持久化。
-5. 删除所有文件/workspace/Agent UI 和快捷键。
+2. 实现 terminal、preview、search、auth、status、toast 和 touch。
+3. 浏览器只保存一个 active session；Sidebar 是唯一导航，服务端 session 清单为空
+   时才创建一个 session。
+4. 实现稳定的 session reconciliation、Sidebar 重开、卡片信息、hover preview、
+   独立扩展操作轨和自定义标题持久化。
+5. Agent/Files core 只保留不可用入口；不实现文件/workspace/Agent API 或插件代码。
 6. 实现桌面、平板、手机竖屏和横屏响应式行为。
 7. 对照参考截图和交互 fixtures 做功能回归。
 
 Gate：Chrome E2E 通过；控制台无 error、404、未处理 Promise 或空 DOM 引用；
 所有视口无重叠、横向溢出或不可点击控件。React Strict Mode 的
 mount/cleanup/remount 测试确认不会重复创建 WebSocket、xterm、listener、
-observer 或 timer。多 session heartbeat 顺序、Tab close/reopen、标题恢复、
+ observer 或 timer。多 session heartbeat 顺序、active fallback、标题恢复、
 唯一可见 xterm viewport 和 xterm/addon peer dependency 也必须有回归证据。
 
 ## Phase 6：本地资源与缓存
@@ -141,7 +141,8 @@ Gate：断开容器外网后页面仍完整加载；连接本容器时核心终�
 
 Gate：Podman 镜像 build/run/push、非 root 启动、登录、PTY、WebSocket、worker
 IPC、healthcheck、stop 和 restart restore 全部通过；YAML 通过 API server
-dry-run、`develop` 实际 rollout 和 port-forward Chrome E2E。
+dry-run、`develop` 实际 rollout 和 direct Service DNS Chrome E2E（不使用
+port-forward）。
 
 ## Phase 8：最终验证与文档
 
@@ -257,7 +258,7 @@ Gate：本文 Definition of Done 全部满足。
 - [ ] 所有决策均为 `已确认`，正文无待定实现分支。
 - [ ] Go backend 和模块化 Web frontend 架构完成。
 - [ ] 独立 Node terminal worker、framed IPC 和 xterm.js snapshot contract 完成。
-- [ ] 用户可在 Chrome 完成登录和单实例多 Terminal Tab 核心流程。
+- [ ] 用户可在 Chrome 完成登录、Sidebar 切换和单主终端核心流程。
 - [ ] 不存在 Host model、Host management UI、cluster API 或 `cluster.json`。
 - [ ] Refresh/reconnect/restart 语义符合产品范围模块。
 - [ ] 桌面、平板、手机 Chrome E2E 全部通过。

@@ -73,7 +73,8 @@ WebSocket proxy timeout、PVC 权限、备份恢复和升级中断。
 
 Kubernetes 验收固定使用当前集群的 `develop` namespace：先做 server-side
 dry-run，再 push 唯一 Git SHA image、实际 apply、等待 rollout，并通过
-port-forward 执行 Chrome E2E。API server 和实际 rollout 取代独立 YAML schema
+`http://roaminal.develop.svc.cluster.local:9846` 直接执行 Chrome E2E；禁止
+port-forward。API server 和实际 rollout 取代独立 YAML schema
 工具；详细安全边界和清理规则见
 [08-test-environment.md](./08-test-environment.md)。
 

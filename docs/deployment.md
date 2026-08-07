@@ -43,8 +43,12 @@ kubectl -n develop create secret generic roaminal \
 kubectl -n develop apply -f deploy/kubernetes/configmap.yaml -f deploy/kubernetes/pvc.yaml \
   -f deploy/kubernetes/service.yaml -f deploy/kubernetes/deployment.yaml
 kubectl -n develop rollout status deployment/roaminal --timeout=180s
-kubectl -n develop port-forward service/roaminal 9846:9846
 ```
+
+For direct in-cluster verification use
+`http://roaminal.develop.svc.cluster.local:9846`. Do not use `kubectl port-forward`;
+the Playwright Kubernetes gate sets the secure-context exception only for this exact
+HTTP origin. Production traffic must use the TLS ingress below.
 
 Use a TLS-aware ingress or reverse proxy in front of the Service. Terminate TLS
 there, preserve the original same-origin host, and configure WebSocket upgrade

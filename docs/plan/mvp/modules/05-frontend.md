@@ -2,145 +2,90 @@
 
 > 状态：Approved
 > 上位文档：[MVP 计划索引](../README.md)
+> 当前补充：[13 - 单终端视图、Sidebar 对齐与 MVP 缺口修复](./13-single-terminal-sidebar-remediation.md)
 
 ## 模块边界
 
-前端功能与参考实现对齐，但不复用其 `public/app.js` 单文件结构。前端固定使用
-React 19 + TypeScript 7 + Vite 8：
+前端固定使用 React 19 + TypeScript 7 + Vite 8。领域模块不得通过全局变量隐式
+耦合，只有 `app` 层负责跨领域编排；UI 不直接调用 `fetch` 或创建 WebSocket，网络
+模块不直接操作 DOM。
 
 ```text
 web/src/
   main.tsx
-  app/
-    app-state.ts
-    app-shell.tsx
-  auth/
-    auth-client.ts
-    auth-crypto.ts
-    auth-storage.ts
-    auth-session-ui.tsx
-  terminal/
-    terminal-protocol.ts
-    terminal-runtime.ts
-    terminal-transport.ts
-    terminal-viewport.tsx
-    terminal-tabs.tsx
-    terminal-preview.tsx
-    terminal-search.tsx
-  status/
-    heartbeat.ts
-    system-status.ts
-    notifications.ts
-  input/
-    shortcuts.ts
-    touch-keyboard.ts
-    viewport.ts
-  ui/
-    modal.tsx
-    toast.tsx
-    sidebar.tsx
-  styles/
-    tokens.css
-    layout.css
-    terminal.css
-    responsive.css
+  app/              active-session state and orchestration
+  auth/             challenge, token rotation, session management
+  terminal/         protocol, main runtime, preview runtime, viewport, search
+  status/           heartbeat, system strip, notifications
+  input/            shortcuts, touch modifiers, visualViewport
+  ui/               sidebar cards, action menus, dialogs, toast
+  styles/           tokens, layout, terminal, responsive
 ```
 
-约束：
+React state 只保存可序列化的低频 UI/session metadata，不保存 PTY bytes、xterm
+instance、WebSocket 或 mutable terminal buffer。xterm 实例、WebSocket、
+ResizeObserver、heartbeat timer 和 PTY output 由 React tree 外的 runtime 管理。
+React Strict Mode 下所有 socket、listener、observer、timer 和 DOM attach 必须
+幂等 setup/cleanup。
 
-- 领域模块不得通过任意全局变量隐式耦合；只有 `app` 层负责跨领域编排。
-- Session 数据以 `sessionId` 为一级 key。
-- UI 模块不直接调用 `fetch` 或创建 WebSocket；网络模块不直接操作 DOM。
-- xterm 实例、WebSocket、ResizeObserver、heartbeat timer 和 PTY output 都由
-  React tree 之外的 `TerminalRuntime` 管理。
-- 高频 PTY output 直接调用 `terminal.write()`，不得进入 UI render state。
-- Session 在 UI 重挂载时只 detach/reattach DOM；关闭浏览器 Tab 只释放该
-  浏览器的 terminal runtime 和 WebSocket，只有显式终止 session 才删除服务端
-  terminal。
-- React state 只保存低频、可序列化 UI/session metadata，不保存 PTY bytes、
-  xterm instance、WebSocket 或 mutable terminal buffer。
-- `TerminalViewport` 通过 ref attach/detach 已存在的 runtime；component
-  unmount 不等于关闭 session。
-- 直接使用 xterm.js API，不使用第三方 React wrapper。
-- 保持 React Strict Mode；effect 必须对 socket、listener、observer、timer
-  和 DOM attach 做幂等 setup/cleanup。
-- 不引入 Redux、Zustand、UI component library 或其他独立状态管理层；应用级
-  状态使用 React state/reducer/context，外部 runtime snapshot 订阅使用
-  `useSyncExternalStore`。
-- 不创建与当前功能无关的抽象层。
+## 单主终端视图
 
-## 终端体验
+- 浏览器状态只有 `{ activeSessionId: string | null }`；服务端可以有多个 session，
+  但页面任何时刻只显示一个 `.terminal-viewport` 和一个 main runtime。
+- Sidebar 是唯一 session navigation。点击 card 先更新 active ID，再释放旧
+  runtime 并 attach 新 runtime；切换、刷新、登出和 boot ID 变化均幂等 dispose。
+- heartbeat 清单是权威来源；清单重排不改变 active，active 消失时按稳定顺序选择
+  下一项、上一项或第一项。清单为空才创建一个 session。
+- 切换不删除服务端 session；只有 action menu 中带确认的 Terminate 才调用 DELETE。
+- 页面标题、statusbar、搜索、触控输入和主 xterm 从同一个 active ID 派生。
+- `Ctrl+Shift+W`、Close Tab 菜单和顶部 Terminal Tab 条不存在。
 
-- Solarized Dark 风格、Monaspace Neon 字体和紧凑工作界面。
-- xterm.js 及 fit、web-links、search、progress、ligatures addons；core 与
-  addons 必须来自兼容的发布线，不使用当前 peer 不兼容的 CanvasAddon。
-- 标签展示标题、短 session ID、cwd、创建时间、运行/完成/attention 状态和
-  可用时的终端进度。
-- 桌面保留标签内的实时终端缩略预览；移动尺寸不创建预览。
-- 创建、切换和关闭浏览器 Tab；关闭当前项后选择相邻项，不删除服务端终端。
-- Tab 条只显示当前浏览器已打开的视图；Sidebar 显示完整 session 清单，点击
-  未打开的 session 时重新打开对应 Tab。
-- Tab 操作菜单至少包含重命名标题、关闭 Tab 和确认后终止 Terminal；自定义
-  标题持久化，并可恢复为 shell 自动标题。
-- Sidebar 展开/收起和移动端 overlay。
-- 页面标题跟随当前终端。
-- 搜索支持大小写、全词、正则、上一个和下一个结果。
-- 浏览器复制粘贴和 xterm 原生选择。
-- 触控设备保留 ESC、TAB、CTRL、ALT、SHIFT、SYM、方向键和软键盘。
-- 正确处理 `visualViewport`、safe area 和软键盘高度变化。
-- 不出现文件、workspace 或 Agent 入口和占位。
+## Sidebar card 与 preview
 
-快捷键：
+桌面 card 固定显示 effective title、`ID`（UUID 最后 12 字符）、完整 `PWD`（视觉
+省略但 DOM/title 保留完整路径）和 `<time>` 形式的 `SINCE`。卡片尺寸稳定，长文本
+不得撑宽或遮挡操作轨。
+
+仅在 `pointer: fine` 且宽度大于 800px 时，hover/focus intent 延迟后启动一个独立
+`TerminalPreviewRuntime`。它使用独立 xterm、WebSocket、FitAddon 和 DOM，
+`scrollback: 0`、`disableStdin: true`、隐藏 cursor，不加载 search、links、
+progress 或 ligatures addon；只消费 snapshot/output，永不发送 input、resize 或
+`claim_terminal_control`。全页面最多一个 preview runtime/socket，leave、关闭
+Sidebar、切换或删除 session 立即 dispose。移动布局不创建 preview。
+
+## 操作轨与快捷键
+
+每个 card 有独立的 Lucide `Bot`、`FolderOpen`、`EllipsisVertical` 按钮。Agent/Files
+在没有插件时保留为 `aria-disabled="true"` 的不可用入口，激活只显示 unavailable
+toast，不发起 API 请求。Terminal actions 仅包含 Rename title、custom 模式下的
+Use automatic title 和确认后的 Terminate terminal。
 
 ```text
-Ctrl + Shift + T        新建终端
-Ctrl + Shift + W        关闭当前 Tab
-Ctrl + Shift + [ / ]    切换终端
-Ctrl/Cmd + F            终端内搜索
-Ctrl + Shift + ?        快捷键帮助
+Ctrl/Cmd + Shift + T  新建终端
+Ctrl/Cmd + Shift + S  切换 Sidebar
+Ctrl/Cmd + F          终端内搜索
 ```
 
-## 单实例多 Terminal Tab
+触控设备保留 ESC、TAB、CTRL、ALT、SHIFT、SYM 和方向键；modifier 是状态机，按下
+普通键后消费并清除。`visualViewport` resize 更新 CSS viewport 高度，不触发 layout
+振荡。
 
-- 浏览器只连接提供当前页面的 Roaminal 实例；HTTP 使用当前 Origin，WebSocket
-  从页面协议派生 `ws://` 或 `wss://`。
-- 不存在 Host entity、`hostId`、Host registry、Host picker 或跨 Host 聚合状态。
-- 一个打开的 Terminal Tab 对应一个 session ID 和一个独立 Bash PTY；服务端
-  session 可以存在但不在 Tab 条中展示。
-- 支持创建、切换和关闭多个 Tab；关闭当前 Tab 后选择相邻 Tab，不调用删除
-  session API。关闭最后一个 Tab 后保留空视图，只有服务端 session 清单为空时
-  前端才创建一个新 session。
-- 同一 session 允许多个浏览器客户端 attach，属于协同连接，不是多 Host。
-- 保留同源 Cloudflare Access 会话失效检测；需要重新认证时刷新或打开页面根
-  URL。后端不启动 Tunnel，镜像不包含 cloudflared。
-- `/api/cluster`、`cluster.json`、Host URL normalize/dedupe 和 Host-scoped
-  localStorage 全部排除。
+## 状态、提示与认证
 
-## 状态、提示与通知
+heartbeat 提供连接状态、hostname、session 数、延迟、scrollback 配置和 persistence
+degraded warning。执行 started/completed 通过 WebSocket 进入运行状态、attention、
+toast 和（用户已授权时）浏览器通知；非当前 session 的完成事件保留为 Sidebar
+attention，内部 bootstrap marker 不通知。
 
-- 保留当前服务 heartbeat 延迟图和连接状态。
-- 保留 hostname、kernel、IP、CPU、内存、host uptime、Roaminal process
-  uptime、FPS、延迟和 session 数。
-- Linux system monitor 使用 `/proc`、cgroup v2 和 Go runtime 获取容器有效
-  资源数据，不引入通用跨平台监控库。
-- 保留连接丢失、恢复和终端退出 toast。
-- Snapshot checkpoint 失败时 heartbeat `runtime.persistenceDegraded` 为 `true`
-  并显示 warning toast；所有 dirty snapshots 成功写入后清除。
-- 非当前终端的命令完成后显示 attention 状态。
-- 用户允许时发送 Chrome 系统通知，否则降级为 toast。
-- 内部 shell ready/bootstrap 命令不得产生用户通知。
+登录前必须确认 `window.isSecureContext` 和 `crypto.subtle`；不安全的 HTTP origin
+显示 `Secure HTTPS context required`，不提供纯 JavaScript crypto fallback。开发
+环境的 direct Service E2E 只在 Chrome 启动参数中对精确 Service origin 设置例外。
+Sign out 先调用幂等 `/api/auth/logout`，再清理本地 token；网络失败时明确提示当前
+refresh session 可能仍在服务端。登录会话 dialog 支持查看、撤销单个和 logout-others。
 
 ## 静态资源与缓存
 
-MVP 不提供 PWA 安装，不生成 Web App manifest，不设置 standalone display，也
-不注册 Service Worker。核心工作流必须在线连接 Go 服务，本地镜像已包含全部
-资源；Service Worker 只会增加旧资源缓存、更新竞态和移动端调试成本。
-
-缓存规则：
-
-- `index.html`：`Cache-Control: no-cache, max-age=0`。
-- `/api/version` 和所有 `/api/*`：`Cache-Control: no-store`。
-- Vite 内容哈希资源：`Cache-Control: public, max-age=31536000, immutable`。
-- favicon 等非哈希资源：短期缓存并支持 ETag。
-- Go binary 使用 `embed` 打包完整 `web/dist`，运行时不读取公网资源。
-- HTML 不包含 CDN URL、`preconnect`、manifest link 或 Service Worker 注册。
+不提供 PWA manifest 或 Service Worker。所有资源由 Go `embed` 从当前镜像返回；HTML
+和 API 使用 no-cache/no-store，Vite 内容哈希资源使用 immutable cache，页面不包含
+CDN URL 或外部请求。终端主 runtime 不加载 web-links addon，以避免当前 xterm beta
+初始化路径的 `onShowLinkUnderline` 空引用；preview 同样不加载任何交互 addon。

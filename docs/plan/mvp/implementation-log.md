@@ -167,3 +167,34 @@ behavior fixtures, and direct dependency/license inventory are auditable.
   errors. A Chrome link-hover smoke moved across the xterm screen after URL
   output and observed `xterms=1`, `screens=1`, favicon `/favicon.svg`, and an
   empty error list.
+
+## Single-terminal sidebar remediation
+
+- Date: 2026-08-07 UTC. The approved module 13 implementation is split across
+  `24b5b6a`, `74ae8b7`, `4cfd8f1`, `ac42655` and `895a136`.
+- Frontend now stores only `activeSessionId`; the top Terminal Tab bar, open-tab set,
+  Close Tab command and related CSS/localStorage model were removed. Sidebar cards
+  show stable short ID, full PWD tooltip and browser-local SINCE, with a single main
+  xterm/runtime. Desktop hover uses one disposable read-only preview runtime; mobile
+  layouts do not create previews. Agent and Files are visible Lucide unavailable
+  affordances; Terminal actions contain rename, automatic-title reset and terminate.
+- Auth now rejects insecure origins with `Secure HTTPS context required`, performs
+  server logout before local cleanup, and exposes login-session revoke/logout-others
+  controls. Heartbeat supplies latency, configured scrollback and persistence warning;
+  execution completion has lifecycle-bounded toast/notification handling. Touch
+  modifiers, visualViewport observation and the shortcut registry are connected.
+- Go evidence after the remediation changes: `go test -race ./...`, `go vet ./...`;
+  frontend evidence: `npm --prefix web run typecheck`, `npm --prefix web test`,
+  `npm --prefix web run build`; worker evidence: `npm --prefix terminal-worker test`
+  and syntax check. Added tests cover attach reservation atomicity, control-owner
+  rejection and `1013 slow_client` reason propagation.
+- WebSocket attach now reserves capacity before upgrade and returns HTTP `429`; main
+  clients explicitly claim control while preview clients remain read-only. The worker
+  uses a 16 MiB mutation writer budget, a 10 second stall deadline and exact
+  `xterm-headless 5.3.0`/`xterm-addon-serialize 0.11.0` handshake validation. Restore
+  initializes worker state before publishing the Bash session or starting PTY loops;
+  concurrent session creation and cwd inheritance are deterministic.
+- Kubernetes Chrome configuration is parameterized by `ROAMINAL_E2E_BASE_URL` and
+  defaults to `http://roaminal.develop.svc.cluster.local:9846`; no port-forward is
+  part of the gate. Direct Service rollout and screenshot/console evidence will be
+  appended after the image push.

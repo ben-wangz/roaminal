@@ -38,6 +38,7 @@ POST   /api/auth/logout-others
 GET    /api/heartbeat
 POST   /api/heartbeat
 POST   /api/sessions
+PATCH  /api/sessions/:id/title
 DELETE /api/sessions/:id
 WS     /ws/:sessionId
 ```
@@ -112,6 +113,7 @@ SessionSummary = {
   shell: "/bin/bash",
   initialCwd: string,
   title: string,
+  titleMode: "automatic" | "custom",
   cwd: string,
   cols: integer,
   rows: integer,
@@ -144,7 +146,7 @@ SystemStats = {
 HeartbeatResponse = {
   sessions: SessionSummary[],
   system: SystemStats,
-  runtime: { bootId: string, persistenceDegraded: boolean }
+  runtime: { bootId: string, persistenceDegraded: boolean, scrollbackLines: integer }
 }
 ```
 

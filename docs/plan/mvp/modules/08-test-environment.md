@@ -30,7 +30,7 @@ Google Chrome stable（Playwright channel: "chrome"）
 | Node | Node.js 24.13.1、npm 11.8.0 |
 | Chrome | Google Chrome stable 151.0.7922.75；项目目标 `@playwright/test 1.62.1` 使用 `channel: "chrome"` 启动、移动视口和 canvas pixel smoke 通过 |
 | Podman | Podman 4.9.3、rootful overlay/crun；实际 container create/run/remove 通过 |
-| Kubernetes | kubectl 1.35.4、server 1.34.6+k3s1；context 和 namespace 均为 `develop`，所需 namespaced RBAC 和 port-forward 已确认 |
+| Kubernetes | kubectl 1.35.4、server 1.34.6+k3s1；context 和 namespace 均为 `develop`，所需 namespaced RBAC 和 Service DNS 访问已确认 |
 | Registry | `container-registry.internal.pve.lab.geekcity.tech:32443` 的 HTTPS、`/v2/`、`ben-wangz/roaminal` push/pull 和 digest 一致性已确认 |
 | 固定依赖 | [06-architecture-dependencies.md](./06-architecture-dependencies.md) 列出的 Go/npm 精确版本均可从当前配置的官方源取得 |
 
@@ -182,8 +182,9 @@ kubectl create secret generic roaminal \
 3. 在 `develop` 实际 apply 同一组已验证文件。
 4. `kubectl rollout status -n develop deployment/roaminal --timeout=180s`。
 5. 检查 Pod events/logs、probe、PVC、Secret/config injection 和 restart restore。
-6. 通过 `kubectl port-forward -n develop service/roaminal 9846:9846` 运行 Chrome
-   E2E；没有测试域名时不部署 `ingress.example.yaml`。
+6. 通过 `http://roaminal.develop.svc.cluster.local:9846` 直接运行 Chrome
+   E2E；HTTP develop 测试只对该精确 origin 添加 Chrome secure-context 例外，
+   不使用 port-forward；没有测试域名时不部署 `ingress.example.yaml`。
 7. 删除 `/tmp/roaminal-deployment.yaml` 和 `/tmp/roaminal-secret.yaml`。
 
 所有测试资源使用 `app.kubernetes.io/name=roaminal` 和
