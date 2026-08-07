@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"errors"
-	"syscall"
 )
 
 func (c *Client) request(ctx context.Context, header map[string]any, payload []byte) (Result, error) {
@@ -81,9 +80,7 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	c.stopping.Store(true)
 	_, err := c.request(ctx, map[string]any{"op": "shutdown", "protocol": Protocol}, nil)
 	_ = c.stdin.Close()
-	if err != nil && c.cmd != nil && c.cmd.Process != nil && c.cmd.ProcessState == nil {
-		_ = syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
-	}
+	_ = terminateProcessGroup(ctx, c.cmd)
 	return err
 }
 func (c *Client) Available() bool {

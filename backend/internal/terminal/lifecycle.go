@@ -120,9 +120,10 @@ func (m *Manager) startLoops(session *Session) { go session.readLoop(); go sessi
 func (m *Manager) abortSession(ctx context.Context, session *Session, workerReady bool) {
 	session.mu.Lock()
 	session.closed = true
-	_ = signalProcessGroup(session.cmd, syscall.SIGTERM)
+	cmd := session.cmd
 	_ = session.pty.Close()
 	session.mu.Unlock()
+	_ = terminateSessionProcessGroup(ctx, cmd)
 	if workerReady {
 		_ = m.worker.CloseSession(ctx, session.meta.ID)
 	}

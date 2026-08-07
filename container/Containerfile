@@ -54,5 +54,6 @@ VOLUME ["/home/roaminal/.roaminal", "/workspace"]
 EXPOSE 9846
 USER 1000:1000
 WORKDIR /home/roaminal
+STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=10s --timeout=2s --start-period=10s --retries=3 CMD ["node", "-e", "fetch('http://127.0.0.1:9846/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/roaminal"]

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"syscall"
 	"time"
 )
 
@@ -106,17 +105,16 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 		return os.ErrNotExist
 	}
 	session.mu.Lock()
-	if !session.closed {
-		session.closed = true
-		_ = signalProcessGroup(session.cmd, syscall.SIGTERM)
-		_ = session.pty.Close()
-		_ = m.worker.CloseSession(ctx, id)
-	}
+	cmd := session.cmd
+	session.closed = true
+	_ = session.pty.Close()
 	for client := range session.clients {
 		client.close()
 	}
 	session.clients = make(map[*Client]struct{})
 	session.controlOwner = nil
 	session.mu.Unlock()
+	_ = terminateSessionProcessGroup(ctx, cmd)
+	_ = m.worker.CloseSession(ctx, id)
 	return m.store.DeleteSession(id)
 }

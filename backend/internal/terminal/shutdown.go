@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const sessionProcessGroupGrace = 2 * time.Second
+
 func (m *Manager) Shutdown(ctx context.Context) {
 	m.mu.RLock()
 	sessions := make([]*Session, 0, len(m.sessions))
@@ -21,20 +23,60 @@ func (m *Manager) Shutdown(ctx context.Context) {
 		}
 		session.mu.Unlock()
 		session.saveSnapshot()
-		session.mu.Lock()
-		if !session.closed {
-			_ = signalProcessGroup(session.cmd, syscall.SIGTERM)
+	}
+	stopDone := make(chan struct{}, len(sessions))
+	for _, session := range sessions {
+		go func(session *Session) {
+			session.mu.Lock()
+			cmd := session.cmd
+			session.closed = true
 			_ = session.pty.Close()
-		}
-		session.mu.Unlock()
+			session.mu.Unlock()
+			_ = terminateSessionProcessGroup(ctx, cmd)
+			stopDone <- struct{}{}
+		}(session)
+	}
+	for range sessions {
+		<-stopDone
 	}
 	deadline, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_ = m.worker.Shutdown(deadline)
 }
+
 func signalProcessGroup(cmd *exec.Cmd, signal syscall.Signal) error {
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
 	return syscall.Kill(-cmd.Process.Pid, signal)
+}
+func terminateSessionProcessGroup(ctx context.Context, cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	if err := signalProcessGroup(cmd, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
+		return err
+	}
+	grace, cancel := context.WithTimeout(ctx, sessionProcessGroupGrace)
+	defer cancel()
+	for processGroupAlive(cmd) {
+		select {
+		case <-grace.Done():
+			goto force
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	return nil
+force:
+	if err := signalProcessGroup(cmd, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
+		return err
+	}
+	return nil
+}
+func processGroupAlive(cmd *exec.Cmd) bool {
+	if cmd == nil || cmd.Process == nil {
+		return false
+	}
+	err := syscall.Kill(-cmd.Process.Pid, syscall.Signal(0))
+	return err == nil || err == syscall.EPERM
 }
