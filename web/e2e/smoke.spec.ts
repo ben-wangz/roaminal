@@ -109,10 +109,13 @@ test('terminal actions rename and sidebar toggle are real controls', async ({ pa
   await expect.poll(() => sidebar.evaluate((element) => getComputedStyle(element).width)).toBe('276px');
   await expect(page.locator('.sidebar-toggle')).toBeFocused();
 
+  const tabCountBeforeCreate = await page.locator('.terminal-tab').count();
   await page.locator('.terminal-tabs > .icon-button').click();
+  await expect(page.locator('.terminal-tab')).toHaveCount(tabCountBeforeCreate + 1);
   const created = page.locator('.terminal-tab').last();
   const createdId = await created.getAttribute('data-session-id');
   if (!createdId) throw new Error('created tab has no session id');
+  await expect(page.locator(`.session-row[data-session-id="${createdId}"]`)).toHaveCount(1);
   const sessionCount = await page.locator('.session-row').count();
   await created.getByRole('button', { name: 'Terminal actions' }).click();
   await page.getByRole('menuitem', { name: 'Terminate terminal...' }).click();
@@ -126,7 +129,7 @@ test('terminal actions rename and sidebar toggle are real controls', async ({ pa
 });
 
 test('mobile sidebar is an accessible overlay', async ({ page }, testInfo) => {
-  test.skip(!testInfo.project.name.includes('phone'), 'mobile sidebar behavior runs in phone projects');
+  test.skip(!testInfo.project.name.includes('phone') || testInfo.project.name.includes('landscape'), 'mobile sidebar behavior runs in phone portrait projects');
   await authenticate(page);
   const sidebar = page.locator('#terminal-sidebar');
   await expect(sidebar).toHaveClass(/closed/);
