@@ -118,6 +118,7 @@ SessionSummary = {
   cols: integer,
   rows: integer,
   closed: boolean,
+  attention: boolean,
   exitStatus: ExitStatus | null
 }
 

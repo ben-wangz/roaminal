@@ -45,6 +45,7 @@ type Summary struct {
 	Cols       int         `json:"cols"`
 	Rows       int         `json:"rows"`
 	Closed     bool        `json:"closed"`
+	Attention  bool        `json:"attention"`
 	ExitStatus *ExitStatus `json:"exitStatus"`
 }
 
@@ -144,6 +145,7 @@ type Session struct {
 	dirtySince    time.Time
 	currentExecID string
 	currentExec   *persistence.ExecutionRecord
+	attention     bool
 	closed        bool
 }
 
@@ -177,18 +179,28 @@ func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) err
 	if snapshotErr != nil && !errors.Is(snapshotErr, os.ErrNotExist) {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s snapshot warning: %v\n", meta.ID, snapshotErr)
 	}
-	session, err := m.startShell(meta, cwd)
-	if err != nil {
-		return err
-	}
 	workerReady := false
 	if snapshotErr == nil {
-		session.sequence, _ = strconv.ParseUint(header.ThroughSequence, 10, 64)
 		workerReady = true
 		if err := m.worker.Restore(ctx, meta.ID, header.Cols, header.Rows, header.ScrollbackLines, header.ThroughSequence, payload); err != nil {
-			m.abortSession(ctx, session, workerReady)
+			_ = m.worker.CloseSession(ctx, meta.ID)
 			return err
 		}
+	} else {
+		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
+			return err
+		}
+		workerReady = true
+	}
+	session, err := m.startShell(meta, cwd)
+	if err != nil {
+		if workerReady {
+			_ = m.worker.CloseSession(ctx, meta.ID)
+		}
+		return err
+	}
+	if snapshotErr == nil {
+		session.sequence, _ = strconv.ParseUint(header.ThroughSequence, 10, 64)
 		if header.Cols != meta.Cols || header.Rows != meta.Rows {
 			if err := pty.Setsize(session.pty, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)}); err != nil {
 				m.abortSession(ctx, session, workerReady)
@@ -200,12 +212,6 @@ func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) err
 				return err
 			}
 		}
-	} else {
-		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
-			m.abortSession(ctx, session, workerReady)
-			return err
-		}
-		workerReady = true
 	}
 	m.startLoops(session)
 	m.mu.Lock()
@@ -222,15 +228,19 @@ func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) err
 }
 
 func (m *Manager) startSession(ctx context.Context, meta persistence.SessionMeta, cwd string, createWorker bool) (*Session, error) {
-	session, err := m.startShell(meta, cwd)
-	if err != nil {
-		return nil, err
-	}
+	workerReady := false
 	if createWorker {
 		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
-			m.abortSession(ctx, session, true)
 			return nil, err
 		}
+		workerReady = true
+	}
+	session, err := m.startShell(meta, cwd)
+	if err != nil {
+		if workerReady {
+			_ = m.worker.CloseSession(ctx, meta.ID)
+		}
+		return nil, err
 	}
 	m.startLoops(session)
 	return session, nil
@@ -348,6 +358,9 @@ func (s *Session) handleOutput(chunk []byte) {
 			s.currentExec.Output = string(data[len(data)-960*1024:])
 			s.currentExec.Truncated = true
 		}
+	}
+	if s.controlOwner == nil {
+		s.attention = true
 	}
 	s.sequence++
 	if err := s.manager.worker.Write(s.meta.ID, strconv.FormatUint(s.sequence, 10), []byte(cleaned)); err != nil {
@@ -496,6 +509,9 @@ func (s *Session) applyMarkerLocked(marker string) {
 			s.meta.Executions = s.meta.Executions[len(s.meta.Executions)-100:]
 		}
 		s.meta.UpdatedAt = time.Now().UTC()
+		if s.controlOwner == nil {
+			s.attention = true
+		}
 		_ = s.manager.store.SaveSession(s.meta)
 		s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "completed", "executionId": s.currentExecID, "entry": record}))
 		s.currentExec, s.currentExecID = nil, ""
@@ -523,13 +539,13 @@ func (s *Session) saveSnapshot() {
 	defer cancel()
 	payload, through, err := s.manager.worker.Snapshot(ctx, meta.ID, strconv.FormatUint(sequence, 10))
 	if err != nil {
-		s.manager.storeDegraded(err)
+		s.manager.storeDegraded(s.meta.ID, err)
 		return
 	}
 	headerSeq, _ := strconv.ParseUint(through, 10, 64)
 	_ = headerSeq
 	if err := s.manager.store.SaveSnapshot(meta.ID, persistence.SnapshotHeader{Cols: meta.Cols, Rows: meta.Rows, ScrollbackLines: s.manager.cfg.ScrollbackLines, ThroughSequence: through}, payload); err != nil {
-		s.manager.storeDegraded(err)
+		s.manager.storeDegraded(meta.ID, err)
 		return
 	}
 	s.mu.Lock()
@@ -548,7 +564,8 @@ func (s *Session) broadcastLocked(data []byte) {
 }
 func message(value any) []byte { data, _ := json.Marshal(value); return data }
 
-func (m *Manager) storeDegraded(err error) {
+func (m *Manager) storeDegraded(id string, err error) {
+	m.store.MarkSessionDegraded(id)
 	fmt.Fprintf(os.Stderr, "Roaminal persistence degraded: %v\n", err)
 }
 func (m *Manager) fail(err error) {
@@ -740,7 +757,7 @@ func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client
 		}
 	}
 	client.enqueue(message(map[string]any{"type": "snapshot", "data": string(snapshot)}), false)
-	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.EffectiveTitle(), "titleMode": titleMode(session.meta), "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows}), false)
+	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.EffectiveTitle(), "titleMode": titleMode(session.meta), "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows, "attention": session.attention}), false)
 	client.enqueue(message(map[string]any{"type": "status", "status": "ready"}), false)
 	session.clients[client] = struct{}{}
 	return client, nil
@@ -777,6 +794,7 @@ func (m *Manager) ClaimControl(id string, client *Client) error {
 		return errors.New("client is not attached")
 	}
 	session.controlOwner = client
+	session.attention = false
 	return nil
 }
 func (m *Manager) Input(id string, client *Client, data string) error {
@@ -883,7 +901,7 @@ func (m *Manager) summary(session *Session) Summary {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.meta.SyncEffectiveTitle()
-	return Summary{ID: session.meta.ID, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed}
+	return Summary{ID: session.meta.ID, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention}
 }
 
 func titleMode(meta persistence.SessionMeta) string {

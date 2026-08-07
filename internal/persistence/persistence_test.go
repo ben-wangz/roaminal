@@ -105,3 +105,28 @@ func TestValidateTitleOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPersistenceDegradedTracksSessionsIndependently(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := "11111111-1111-4111-8111-111111111111"
+	second := "22222222-2222-4222-8222-222222222222"
+	store.MarkSessionDegraded(first)
+	store.MarkSessionDegraded(second)
+	if !store.PersistenceDegraded() {
+		t.Fatal("expected degraded state")
+	}
+	now := time.Now().UTC()
+	if err := store.SaveSession(SessionMeta{ID: first, InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now, Executions: []ExecutionRecord{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !store.PersistenceDegraded() {
+		t.Fatal("a second failed session must keep persistence degraded")
+	}
+	store.clearSessionError(second)
+	if store.PersistenceDegraded() {
+		t.Fatal("expected healthy state after all session checkpoints recover")
+	}
+}

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -100,7 +100,9 @@ type Store struct {
 	Root        string
 	SessionsDir string
 	Layout      Layout
-	degraded    atomic.Bool
+	degradedMu  sync.RWMutex
+	degradedIDs map[string]struct{}
+	globalError bool
 }
 
 var ErrAmbiguousStateLayout = errors.New("ambiguous state layout")
@@ -163,7 +165,7 @@ func New(root string) (*Store, error) {
 	if err := ensurePrivateDirectory(sessionsDir); err != nil {
 		return nil, fmt.Errorf("prepare sessions directory: %w", err)
 	}
-	return &Store{Root: stateRoot, SessionsDir: sessionsDir, Layout: layout}, nil
+	return &Store{Root: stateRoot, SessionsDir: sessionsDir, Layout: layout, degradedIDs: make(map[string]struct{})}, nil
 }
 
 func stateRootHasData(root string) (bool, error) {
@@ -225,44 +227,70 @@ func ensurePrivateDirectory(path string) error {
 	return nil
 }
 
-func (s *Store) PersistenceDegraded() bool { return s.degraded.Load() }
+func (s *Store) PersistenceDegraded() bool {
+	s.degradedMu.RLock()
+	degraded := s.globalError || len(s.degradedIDs) > 0
+	s.degradedMu.RUnlock()
+	return degraded
+}
 
-func (s *Store) markError(err error) error { s.degraded.Store(true); return err }
+func (s *Store) markError(err error) error {
+	s.degradedMu.Lock()
+	s.globalError = true
+	s.degradedMu.Unlock()
+	return err
+}
+
+func (s *Store) markSessionError(id string, err error) error {
+	s.degradedMu.Lock()
+	s.degradedIDs[id] = struct{}{}
+	s.degradedMu.Unlock()
+	return err
+}
+
+func (s *Store) clearSessionError(id string) {
+	s.degradedMu.Lock()
+	delete(s.degradedIDs, id)
+	s.degradedMu.Unlock()
+}
+
+// MarkSessionDegraded records failures that happen before a session checkpoint
+// can be attempted, such as a worker snapshot timeout.
+func (s *Store) MarkSessionDegraded(id string) { s.markSessionError(id, nil) }
 
 func (s *Store) atomicWrite(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".roaminal-*")
 	if err != nil {
-		return s.markError(err)
+		return err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
 	if err := tmp.Chmod(0o600); err != nil {
 		tmp.Close()
-		return s.markError(err)
+		return err
 	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
-		return s.markError(err)
+		return err
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
-		return s.markError(err)
+		return err
 	}
 	if err := tmp.Close(); err != nil {
-		return s.markError(err)
+		return err
 	}
 	if err := os.Rename(tmpName, path); err != nil {
-		return s.markError(err)
+		return err
 	}
 	dir, err := os.Open(filepath.Dir(path))
 	if err != nil {
-		return s.markError(err)
+		return err
 	}
 	defer dir.Close()
 	if err := dir.Sync(); err != nil {
-		return s.markError(err)
+		return err
 	}
-	s.degraded.Store(false)
 	return nil
 }
 
@@ -281,7 +309,13 @@ func (s *Store) SaveAuth(file AuthFile) error {
 	if err != nil {
 		return s.markError(err)
 	}
-	return s.atomicWrite(filepath.Join(s.Root, "auth-sessions.json"), append(data, '\n'))
+	if err := s.atomicWrite(filepath.Join(s.Root, "auth-sessions.json"), append(data, '\n')); err != nil {
+		return s.markError(err)
+	}
+	s.degradedMu.Lock()
+	s.globalError = false
+	s.degradedMu.Unlock()
+	return nil
 }
 
 func decodeStrict(data []byte, target any) error {
@@ -422,7 +456,7 @@ func (s *Store) SaveSession(meta SessionMeta) error {
 	}
 	meta.SyncEffectiveTitle()
 	if err := validateSessionMeta(meta); err != nil {
-		return s.markError(err)
+		return s.markSessionError(meta.ID, err)
 	}
 	meta.FormatVersion = SessionFormatVersion
 	data, err := encodeJSON(sessionMetaV2{
@@ -439,9 +473,13 @@ func (s *Store) SaveSession(meta SessionMeta) error {
 		Executions:     meta.Executions,
 	})
 	if err != nil {
-		return s.markError(err)
+		return s.markSessionError(meta.ID, err)
 	}
-	return s.atomicWrite(s.SessionPath(meta.ID), append(data, '\n'))
+	if err := s.atomicWrite(s.SessionPath(meta.ID), append(data, '\n')); err != nil {
+		return s.markSessionError(meta.ID, err)
+	}
+	s.clearSessionError(meta.ID)
+	return nil
 }
 
 func (s *Store) DeleteSession(id string) error {
@@ -450,9 +488,10 @@ func (s *Store) DeleteSession(id string) error {
 	}
 	for _, path := range []string{s.SessionPath(id), s.SnapshotPath(id)} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return s.markError(err)
+			return s.markSessionError(id, err)
 		}
 	}
+	s.clearSessionError(id)
 	return nil
 }
 
@@ -602,13 +641,17 @@ func DecodeSnapshot(data []byte) (SnapshotHeader, []byte, error) {
 
 func (s *Store) SaveSnapshot(id string, header SnapshotHeader, payload []byte) error {
 	if !uuidPattern.MatchString(id) {
-		return s.markError(errors.New("invalid session id"))
+		return s.markSessionError(id, errors.New("invalid session id"))
 	}
 	data, err := EncodeSnapshot(header, payload)
 	if err != nil {
-		return s.markError(err)
+		return s.markSessionError(id, err)
 	}
-	return s.atomicWrite(s.SnapshotPath(id), data)
+	if err := s.atomicWrite(s.SnapshotPath(id), data); err != nil {
+		return s.markSessionError(id, err)
+	}
+	s.clearSessionError(id)
+	return nil
 }
 
 func (s *Store) LoadSnapshot(id string) (SnapshotHeader, []byte, error) {
