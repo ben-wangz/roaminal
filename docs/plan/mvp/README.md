@@ -1,7 +1,7 @@
 # Roaminal MVP 实施计划
 
-> 文档版本：1.3
-> 更新日期：2026-08-06
+> 文档版本：1.4
+> 更新日期：2026-08-07
 > 文档状态：**Approved / 可直接实施**
 > 批准日期：2026-08-06
 > 目标读者：后续负责完整实现的 Coding Agent
@@ -34,10 +34,14 @@ README 是决策索引和执行入口；详细 contract 按以下顺序读取：
 | 8 | [08-test-environment.md](./modules/08-test-environment.md) | 项目依赖、Chrome、Podman、registry 和 develop namespace 测试规则 |
 | 9 | [09-implementation.md](./modules/09-implementation.md) | Phase 顺序、gate、测试矩阵和 Definition of Done |
 | 参考 | [10-rationale.md](./modules/10-rationale.md) | React、独立 worker 和 fail-fast 的已确认决策依据 |
+| 增补需求 | [11-terminal-tabs-requirements.md](./modules/11-terminal-tabs-requirements.md) | 多终端 Tab、重命名、侧栏、xterm 和持久化目录问题单 |
+| 增补方案 | [12-terminal-tabs-solution.md](./modules/12-terminal-tabs-solution.md) | 状态模型、协议、迁移、生命周期和回归测试方案 |
 
 实施时，README 决策列表与各模块共同构成规范，不可只执行单个文件。若出现
-文字冲突，优先级为：本 README 的决策项 > 对应职责模块的精确 contract >
-决策依据。发现真实冲突必须按停止条件报告，不能自行选择。
+文字冲突，优先级为：本 README 中编号较大的明确取代决策 > 其他 README 决策项
+> 对应职责模块的精确 contract > 决策依据。`DEC-034` 至 `DEC-039` 是 MVP
+验收后依据真实使用反馈增加的修订项；其明确取代的旧 contract 不再实施。
+发现除此以外的真实冲突必须按停止条件报告，不能自行选择。
 
 ## 决策项列表
 
@@ -76,6 +80,12 @@ README 是决策索引和执行入口；详细 contract 按以下顺序读取：
 | `DEC-031` | 项目不使用 Makefile；Agent 直接执行并记录 `go`、`npm`/`npx`、`podman` 和 `kubectl` 命令。缺少 `make` 不得中断实施或测试。 | 已确认 |
 | `DEC-032` | Kubernetes 验证使用当前集群的 `develop` namespace，执行 server-side dry-run、实际 rollout 和 E2E；不要求 `kubeconform`/`kubeval`，缺少静态 schema 工具不得中断。 | 已确认 |
 | `DEC-033` | React、Vite、Vitest、xterm、ESLint、Playwright runner 和 worker packages 都是仓库锁定的项目依赖，由实施 Agent 创建 lockfile、安装并使用项目内 binary。全局 npm packages 缺失或版本不同不得中断；允许使用可信镜像加速但不得改变版本或 integrity。 | 已确认 |
+| `DEC-034` | Heartbeat 返回的 session 顺序必须稳定；前端选中 Tab、状态栏和唯一可见 xterm viewport 必须始终指向同一 session。该项修订现有未排序 map 输出和 DOM reattach 行为。 | 已确认 |
+| `DEC-035` | Terminal session 是服务端运行实体，Tab 只是当前浏览器打开的视图。Tab 条不必展示所有 session；关闭 Tab 只隐藏视图并释放该浏览器 runtime，不调用删除 session API。Sidebar 展示全部 session，点击未打开 session 时重新打开 Tab。该项取代 `05-frontend.md` 中 Tab 与 session 一一覆盖及关闭 Tab 即关闭 terminal 的旧 contract。 | 已确认 |
+| `DEC-036` | Tab 原 `x` 操作改为菜单触发器；菜单至少包含重命名、关闭 Tab 和终止 Terminal。关闭 Tab 非破坏性；终止 Terminal 是明确区分且需确认的破坏性操作。自定义标题持久化，并可恢复为 shell 自动标题。 | 已确认 |
+| `DEC-037` | 前端 xterm core 与 addons 的 peer dependency 必须全部兼容；禁止安装 `npm ls` 判定为 invalid 的组合。当前只支持 xterm 5 的 CanvasAddon 不再与 xterm 6.1 beta 混用；使用 core renderer 或同发布线的受支持 renderer。该项取代 `06-architecture-dependencies.md` 中固定 `@xterm/addon-canvas 0.8.0-beta.48` 的要求。 | 已确认 |
+| `DEC-038` | 一个进程只允许一个有效持久化 root。PVC mount root 权限不安全时有效 root 为 `.roaminal/state/`；`.roaminal/sessions/` 是旧启动遗留且为空时可清理，不得双写。两个候选目录均含数据时必须停止并报告，不得自动合并或删除。 | 已确认 |
+| `DEC-039` | Sidebar toggle 在桌面必须真实收起并保留可发现的恢复入口，在移动端必须控制 overlay；按钮的 aria label、展开状态和焦点行为必须与视觉状态一致。 | 已确认 |
 
 ## Git 提交规则
 
