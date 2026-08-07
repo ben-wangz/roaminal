@@ -1,21 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { closeTab, openTab, reconcileTabs } from './session-view';
+import { reconcileSession, selectSession } from './session-view';
 import type { SessionSummary } from '../terminal/terminal-protocol';
 
 const session = (id: string): SessionSummary => ({ id, createdAt: id, updatedAt: id, shell: '/bin/bash', initialCwd: '/workspace', title: id, titleMode: 'automatic', cwd: '/workspace', cols: 80, rows: 24, closed: false, exitStatus: null });
 
-describe('terminal view reconciliation', () => {
-  it('keeps the browser tab order independent from heartbeat ordering', () => {
-    expect(reconcileTabs([session('b'), session('a')], { openTabIds: ['a', 'b'], activeTabId: 'a' })).toEqual({ openTabIds: ['a', 'b'], activeTabId: 'a' });
+describe('single active session reconciliation', () => {
+  it('keeps the active session stable when heartbeat order changes', () => {
+    expect(reconcileSession([session('b'), session('a')], { activeSessionId: 'a' }, ['a', 'b'])).toEqual({ activeSessionId: 'a' });
   });
 
-  it('opens a session once and activates it', () => {
-    expect(openTab({ openTabIds: ['a'], activeTabId: 'a' }, 'a')).toEqual({ openTabIds: ['a'], activeTabId: 'a' });
-    expect(openTab({ openTabIds: ['a'], activeTabId: 'a' }, 'b')).toEqual({ openTabIds: ['a', 'b'], activeTabId: 'b' });
+  it('selects the next surviving session when the active session disappears', () => {
+    expect(reconcileSession([session('a'), session('c')], { activeSessionId: 'b' }, ['a', 'b', 'c'])).toEqual({ activeSessionId: 'c' });
   });
 
-  it('selects the adjacent tab when the active tab closes', () => {
-    expect(closeTab({ openTabIds: ['a', 'b', 'c'], activeTabId: 'b' }, 'b')).toEqual({ openTabIds: ['a', 'c'], activeTabId: 'c' });
-    expect(closeTab({ openTabIds: ['a', 'b', 'c'], activeTabId: 'c' }, 'c')).toEqual({ openTabIds: ['a', 'b'], activeTabId: 'b' });
+  it('falls back to the first session when there is no previous order', () => {
+    expect(reconcileSession([session('b'), session('a')], { activeSessionId: null })).toEqual({ activeSessionId: 'b' });
+  });
+
+  it('selects one session without creating an open-tab collection', () => {
+    expect(selectSession({ activeSessionId: 'a' }, 'b')).toEqual({ activeSessionId: 'b' });
   });
 });

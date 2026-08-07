@@ -20,6 +20,7 @@
     "@xterm/addon-search": "0.17.0-beta.197",
     "@xterm/addon-web-links": "0.13.0-beta.197",
     "@xterm/xterm": "6.1.0-beta.197",
+    "lucide-react": "1.29.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
