@@ -99,11 +99,18 @@ type SnapshotHeader struct {
 type Store struct {
 	Root        string
 	SessionsDir string
-	Layout      string
+	Layout      Layout
 	degraded    atomic.Bool
 }
 
 var ErrAmbiguousStateLayout = errors.New("ambiguous state layout")
+
+type Layout string
+
+const (
+	LayoutDirect       Layout = "direct"
+	LayoutPrivateChild Layout = "private-child"
+)
 
 func New(root string) (*Store, error) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
@@ -124,7 +131,7 @@ func New(root string) (*Store, error) {
 	}
 
 	stateRoot := root
-	layout := "direct"
+	layout := LayoutDirect
 	if rootPrivateErr != nil {
 		if directHasData {
 			return nil, ErrAmbiguousStateLayout
@@ -133,7 +140,7 @@ func New(root string) (*Store, error) {
 		// Keep the mount itself disposable and put all sensitive state below a
 		// private child directory owned by the application user.
 		stateRoot = childRoot
-		layout = "private-child"
+		layout = LayoutPrivateChild
 		if err := os.MkdirAll(stateRoot, 0o700); err != nil {
 			return nil, fmt.Errorf("create private state directory: %w", err)
 		}
@@ -144,7 +151,7 @@ func New(root string) (*Store, error) {
 		return nil, ErrAmbiguousStateLayout
 	} else if !directHasData && childHasData {
 		stateRoot = childRoot
-		layout = "private-child"
+		layout = LayoutPrivateChild
 		if err := ensurePrivateDirectory(stateRoot); err != nil {
 			return nil, fmt.Errorf("prepare private state directory: %w", err)
 		}
