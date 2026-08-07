@@ -30,7 +30,9 @@ function shortId(id: string): string {
 function sinceLabel(createdAt: string): string {
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return 'Unknown';
-  return new Intl.DateTimeFormat(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true }).format(date);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const hour = date.getHours();
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(hour % 12 || 12)}:${pad(date.getMinutes())} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
 function canPreview(): boolean {

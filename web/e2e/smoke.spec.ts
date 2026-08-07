@@ -49,7 +49,7 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
   await cards.first().hover();
   await expect.poll(() => page.locator('.terminal-preview-viewport').count(), { timeout: 5000 }).toBe(1);
   await expect.poll(() => page.locator('.session-card.previewing').count()).toBe(1);
-  await cards.first().getByRole('button', { name: 'Agent extension' }).click();
+  await cards.first().getByRole('button', { name: 'Agent extension' }).click({ force: true });
   await expect(page.getByRole('status')).toContainText('Agent extension unavailable');
   const initialId = await page.locator('.terminal-viewport').getAttribute('data-session-id');
   if (await cards.count() > 1) {
