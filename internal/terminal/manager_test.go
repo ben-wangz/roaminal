@@ -10,6 +10,57 @@ import (
 	"github.com/ben-wangz/roaminal/internal/persistence"
 )
 
+func TestAttachReservationIsAtomic(t *testing.T) {
+	store, err := persistence.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "11111111-1111-4111-8111-111111111111"
+	manager := NewManager(config.Config{MaxClientsPerSession: 1}, store, nil)
+	manager.sessions[id] = &Session{manager: manager, meta: persistence.SessionMeta{ID: id}, clients: map[*Client]struct{}{}}
+	if err := manager.ReserveAttach(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.ReserveAttach(id); err != ErrClientCapacity {
+		t.Fatalf("second reservation error = %v", err)
+	}
+	manager.ReleaseAttach(id)
+	if err := manager.ReserveAttach(id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestControlOwnerRejectsNonOwnerInput(t *testing.T) {
+	store, err := persistence.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "11111111-1111-4111-8111-111111111111"
+	owner, other := newClient(), newClient()
+	manager := NewManager(config.Config{}, store, nil)
+	manager.sessions[id] = &Session{manager: manager, meta: persistence.SessionMeta{ID: id}, clients: map[*Client]struct{}{owner: {}, other: {}}}
+	if err := manager.ClaimControl(id, owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Input(id, other, "echo ignored\n"); err != ErrControlNotOwner {
+		t.Fatalf("non-owner input error = %v", err)
+	}
+}
+
+func TestSlowClientCarriesCloseReason(t *testing.T) {
+	client := newClient()
+	data := make([]byte, 16*1024)
+	for index := 0; index < 300; index++ {
+		if client.enqueue(data, true) == false {
+			break
+		}
+	}
+	code, reason := client.CloseReason()
+	if code != 1013 || reason != "slow_client" {
+		t.Fatalf("close reason = %d %q", code, reason)
+	}
+}
+
 func TestDecodeUTF8PreservesPartialRune(t *testing.T) {
 	text, complete := decodeUTF8([]byte{0xe2, 0x82})
 	if complete || text != "" {

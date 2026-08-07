@@ -31,6 +31,7 @@ type ExitStatus struct {
 }
 
 var ErrClientCapacity = errors.New("client capacity reached")
+var ErrControlNotOwner = errors.New("terminal control is owned by another client")
 
 type Summary struct {
 	ID         string      `json:"id"`
@@ -48,11 +49,13 @@ type Summary struct {
 }
 
 type Client struct {
-	Messages chan []byte
-	done     chan struct{}
-	mu       sync.Mutex
-	queued   int64
-	closed   bool
+	Messages    chan []byte
+	done        chan struct{}
+	mu          sync.Mutex
+	queued      int64
+	closed      bool
+	closeCode   int
+	closeReason string
 }
 
 func newClient() *Client                          { return &Client{Messages: make(chan []byte, 256), done: make(chan struct{})} }
@@ -67,12 +70,22 @@ func (c *Client) Consumed(size int) {
 	c.mu.Unlock()
 }
 func (c *Client) close() {
+	c.closeWith(1000, "")
+}
+func (c *Client) closeWith(code int, reason string) {
 	c.mu.Lock()
 	if !c.closed {
 		c.closed = true
+		c.closeCode = code
+		c.closeReason = reason
 		close(c.done)
 	}
 	c.mu.Unlock()
+}
+func (c *Client) CloseReason() (int, string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closeCode, c.closeReason
 }
 func (c *Client) enqueue(data []byte, count bool) bool {
 	c.mu.Lock()
@@ -82,6 +95,8 @@ func (c *Client) enqueue(data []byte, count bool) bool {
 	}
 	if count && c.queued+int64(len(data)) > 4*1024*1024 {
 		c.closed = true
+		c.closeCode = 1013
+		c.closeReason = "slow_client"
 		close(c.done)
 		return false
 	}
@@ -96,18 +111,21 @@ func (c *Client) enqueue(data []byte, count bool) bool {
 			c.queued -= int64(len(data))
 		}
 		c.closed = true
+		c.closeCode = 1013
+		c.closeReason = "slow_client"
 		close(c.done)
 		return false
 	}
 }
 
 type Manager struct {
-	cfg      config.Config
-	store    *persistence.Store
-	worker   *worker.Client
-	mu       sync.RWMutex
-	sessions map[string]*Session
-	fatal    chan error
+	cfg                config.Config
+	store              *persistence.Store
+	worker             *worker.Client
+	mu                 sync.RWMutex
+	sessions           map[string]*Session
+	createReservations int
+	fatal              chan error
 }
 
 type Session struct {
@@ -117,6 +135,8 @@ type Session struct {
 	cmd           *exec.Cmd
 	pty           *os.File
 	clients       map[*Client]struct{}
+	reservations  int
+	controlOwner  *Client
 	sequence      uint64
 	pending       []byte
 	markerPending string
@@ -153,33 +173,70 @@ func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) err
 		cwd = m.cfg.InitialCwd
 		meta.Cwd = cwd
 	}
-	session, err := m.startSession(ctx, meta, cwd, false)
+	header, payload, snapshotErr := m.store.LoadSnapshot(meta.ID)
+	if snapshotErr != nil && !errors.Is(snapshotErr, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "Roaminal session %s snapshot warning: %v\n", meta.ID, snapshotErr)
+	}
+	session, err := m.startShell(meta, cwd)
 	if err != nil {
 		return err
 	}
+	workerReady := false
+	if snapshotErr == nil {
+		session.sequence, _ = strconv.ParseUint(header.ThroughSequence, 10, 64)
+		workerReady = true
+		if err := m.worker.Restore(ctx, meta.ID, header.Cols, header.Rows, header.ScrollbackLines, header.ThroughSequence, payload); err != nil {
+			m.abortSession(ctx, session, workerReady)
+			return err
+		}
+		if header.Cols != meta.Cols || header.Rows != meta.Rows {
+			if err := pty.Setsize(session.pty, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)}); err != nil {
+				m.abortSession(ctx, session, workerReady)
+				return err
+			}
+			session.sequence++
+			if err := m.worker.Resize(meta.ID, strconv.FormatUint(session.sequence, 10), meta.Cols, meta.Rows); err != nil {
+				m.abortSession(ctx, session, workerReady)
+				return err
+			}
+		}
+	} else {
+		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
+			m.abortSession(ctx, session, workerReady)
+			return err
+		}
+		workerReady = true
+	}
+	m.startLoops(session)
 	m.mu.Lock()
 	m.sessions[meta.ID] = session
 	m.mu.Unlock()
-	if header, payload, err := m.store.LoadSnapshot(meta.ID); err == nil {
-		session.sequence, _ = strconv.ParseUint(header.ThroughSequence, 10, 64)
-		if err := m.worker.Restore(ctx, meta.ID, header.Cols, header.Rows, header.ScrollbackLines, header.ThroughSequence, payload); err != nil {
-			return err
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
-			return err
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "Roaminal session %s snapshot warning: %v\n", meta.ID, err)
-		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
-			return err
-		}
+	if err := m.store.SaveSession(meta); err != nil {
+		m.mu.Lock()
+		delete(m.sessions, meta.ID)
+		m.mu.Unlock()
+		m.abortSession(ctx, session, true)
+		return err
 	}
-	_ = m.store.SaveSession(meta)
 	return nil
 }
 
 func (m *Manager) startSession(ctx context.Context, meta persistence.SessionMeta, cwd string, createWorker bool) (*Session, error) {
+	session, err := m.startShell(meta, cwd)
+	if err != nil {
+		return nil, err
+	}
+	if createWorker {
+		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
+			m.abortSession(ctx, session, true)
+			return nil, err
+		}
+	}
+	m.startLoops(session)
+	return session, nil
+}
+
+func (m *Manager) startShell(meta persistence.SessionMeta, cwd string) (*Session, error) {
 	rcfile := findRCFile()
 	cmd := exec.Command("/bin/bash", "--noprofile", "--rcfile", rcfile, "-i")
 	// creack/pty setsid makes Bash its own process-group leader; Pdeathsig
@@ -192,16 +249,23 @@ func (m *Manager) startSession(ctx context.Context, meta persistence.SessionMeta
 		return nil, fmt.Errorf("start bash: %w", err)
 	}
 	session := &Session{manager: m, meta: meta, cmd: cmd, pty: file, clients: make(map[*Client]struct{})}
-	if createWorker {
-		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
-			_ = file.Close()
-			_ = cmd.Process.Kill()
-			return nil, err
-		}
-	}
+	return session, nil
+}
+
+func (m *Manager) startLoops(session *Session) {
 	go session.readLoop()
 	go session.waitLoop()
-	return session, nil
+}
+
+func (m *Manager) abortSession(ctx context.Context, session *Session, workerReady bool) {
+	session.mu.Lock()
+	session.closed = true
+	_ = signalProcessGroup(session.cmd, syscall.SIGTERM)
+	_ = session.pty.Close()
+	session.mu.Unlock()
+	if workerReady {
+		_ = m.worker.CloseSession(ctx, session.meta.ID)
+	}
 }
 
 func findRCFile() string {
@@ -504,16 +568,45 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 	if cols < 2 || cols > 1000 || rows < 1 || rows > 1000 {
 		return Summary{}, errors.New("invalid terminal dimensions")
 	}
-	m.mu.RLock()
-	if len(m.sessions) >= m.cfg.MaxSessions {
-		m.mu.RUnlock()
+	m.mu.Lock()
+	if len(m.sessions)+m.createReservations >= m.cfg.MaxSessions {
+		m.mu.Unlock()
 		return Summary{}, errors.New("session capacity reached")
 	}
-	var inherited string
-	for _, session := range m.sessions {
-		inherited = session.meta.Cwd
+	m.createReservations++
+	type activity struct {
+		cwd                  string
+		updatedAt, createdAt time.Time
+		id                   string
 	}
-	m.mu.RUnlock()
+	activities := make([]activity, 0, len(m.sessions))
+	for _, session := range m.sessions {
+		session.mu.Lock()
+		activities = append(activities, activity{cwd: session.meta.Cwd, updatedAt: session.meta.UpdatedAt, createdAt: session.meta.CreatedAt, id: session.meta.ID})
+		session.mu.Unlock()
+	}
+	m.mu.Unlock()
+	reserved := true
+	defer func() {
+		if reserved {
+			m.mu.Lock()
+			m.createReservations--
+			m.mu.Unlock()
+		}
+	}()
+	sort.Slice(activities, func(i, j int) bool {
+		if activities[i].updatedAt.Equal(activities[j].updatedAt) {
+			if activities[i].createdAt.Equal(activities[j].createdAt) {
+				return activities[i].id > activities[j].id
+			}
+			return activities[i].createdAt.After(activities[j].createdAt)
+		}
+		return activities[i].updatedAt.After(activities[j].updatedAt)
+	})
+	inherited := ""
+	if len(activities) > 0 {
+		inherited = activities[0].cwd
+	}
 	if cwd == "" {
 		cwd = inherited
 	}
@@ -537,12 +630,15 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 	if err != nil {
 		return Summary{}, err
 	}
-	m.mu.Lock()
-	m.sessions[id] = session
-	m.mu.Unlock()
 	if err := m.store.SaveSession(meta); err != nil {
+		m.abortSession(ctx, session, true)
 		return Summary{}, err
 	}
+	m.mu.Lock()
+	m.createReservations--
+	reserved = false
+	m.sessions[id] = session
+	m.mu.Unlock()
 	return m.summary(session), nil
 }
 
@@ -567,11 +663,53 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 		client.close()
 	}
 	session.clients = make(map[*Client]struct{})
+	session.controlOwner = nil
 	session.mu.Unlock()
 	return m.store.DeleteSession(id)
 }
 
+func (m *Manager) ReserveAttach(id string) error {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
+		return os.ErrNotExist
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.closed {
+		return os.ErrProcessDone
+	}
+	if len(session.clients)+session.reservations >= m.cfg.MaxClientsPerSession {
+		return ErrClientCapacity
+	}
+	session.reservations++
+	return nil
+}
+
+func (m *Manager) ReleaseAttach(id string) {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
+		return
+	}
+	session.mu.Lock()
+	if session.reservations > 0 {
+		session.reservations--
+	}
+	session.mu.Unlock()
+}
+
 func (m *Manager) Attach(ctx context.Context, id string) (*Client, error) {
+	return m.attach(ctx, id, false)
+}
+
+func (m *Manager) AttachReserved(ctx context.Context, id string) (*Client, error) {
+	return m.attach(ctx, id, true)
+}
+
+func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client, error) {
 	m.mu.RLock()
 	session, ok := m.sessions[id]
 	m.mu.RUnlock()
@@ -584,7 +722,12 @@ func (m *Manager) Attach(ctx context.Context, id string) (*Client, error) {
 	if session.closed {
 		return nil, os.ErrProcessDone
 	}
-	if len(session.clients) >= m.cfg.MaxClientsPerSession {
+	if reserved {
+		if session.reservations < 1 {
+			return nil, ErrClientCapacity
+		}
+		session.reservations--
+	} else if len(session.clients)+session.reservations >= m.cfg.MaxClientsPerSession {
 		return nil, ErrClientCapacity
 	}
 	sequence := strconv.FormatUint(session.sequence, 10)
@@ -612,8 +755,29 @@ func (m *Manager) Detach(id string, client *Client) {
 	}
 	session.mu.Lock()
 	delete(session.clients, client)
+	if session.controlOwner == client {
+		session.controlOwner = nil
+	}
 	client.close()
 	session.mu.Unlock()
+}
+func (m *Manager) ClaimControl(id string, client *Client) error {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
+		return os.ErrNotExist
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.closed {
+		return os.ErrProcessDone
+	}
+	if _, ok := session.clients[client]; !ok {
+		return errors.New("client is not attached")
+	}
+	session.controlOwner = client
+	return nil
 }
 func (m *Manager) Input(id string, client *Client, data string) error {
 	if len([]byte(data)) > 1024*1024 {
@@ -634,6 +798,9 @@ func (m *Manager) Input(id string, client *Client, data string) error {
 	defer session.mu.Unlock()
 	if session.closed {
 		return os.ErrProcessDone
+	}
+	if session.controlOwner != client {
+		return ErrControlNotOwner
 	}
 	if session.currentExec != nil {
 		combined := append([]byte(session.currentExec.Command), []byte(data)...)
@@ -664,6 +831,9 @@ func (m *Manager) Resize(id string, client *Client, cols, rows int) error {
 	defer session.mu.Unlock()
 	if session.closed {
 		return os.ErrProcessDone
+	}
+	if session.controlOwner != client {
+		return ErrControlNotOwner
 	}
 	if err := pty.Setsize(session.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}); err != nil {
 		return err

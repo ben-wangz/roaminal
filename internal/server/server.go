@@ -248,6 +248,7 @@ type heartbeatResponse struct {
 	Runtime  struct {
 		BootID              string `json:"bootId"`
 		PersistenceDegraded bool   `json:"persistenceDegraded"`
+		ScrollbackLines     int    `json:"scrollbackLines"`
 	} `json:"runtime"`
 }
 
@@ -285,6 +286,7 @@ func (s *Server) heartbeat() heartbeatResponse {
 	result := heartbeatResponse{Sessions: s.terms.Summaries(), System: s.monitor.Stats()}
 	result.Runtime.BootID = s.bootID
 	result.Runtime.PersistenceDegraded = s.terms.PersistenceDegraded()
+	result.Runtime.ScrollbackLines = s.cfg.ScrollbackLines
 	return result
 }
 
@@ -373,6 +375,22 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized")
 		return
 	}
+	if err := s.terms.ReserveAttach(id); err != nil {
+		if errors.Is(err, terminal.ErrClientCapacity) {
+			writeError(w, http.StatusTooManyRequests, "client capacity reached")
+		} else if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "not found")
+		} else {
+			writeError(w, http.StatusConflict, "terminal unavailable")
+		}
+		return
+	}
+	reserved := true
+	defer func() {
+		if reserved {
+			s.terms.ReleaseAttach(id)
+		}
+	}()
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"roaminal.v1"}})
 	if err != nil {
 		return
@@ -380,15 +398,12 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close(websocket.StatusNormalClosure, "")
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	client, err := s.terms.Attach(ctx, id)
+	client, err := s.terms.AttachReserved(ctx, id)
 	if err != nil {
-		if errors.Is(err, terminal.ErrClientCapacity) {
-			_ = conn.Close(websocket.StatusCode(1013), "client capacity reached")
-			return
-		}
 		_ = conn.Close(websocket.StatusCode(1011), "attach failed")
 		return
 	}
+	reserved = false
 	defer s.terms.Detach(id, client)
 	writerDone := make(chan struct{})
 	go func() {
@@ -400,6 +415,11 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			case <-ctx.Done():
 				return
 			case <-client.Done():
+				code, reason := client.CloseReason()
+				if code != 0 && code != 1000 {
+					_ = conn.Close(websocket.StatusCode(code), reason)
+				}
+				cancel()
 				return
 			case <-ticker.C:
 				if err := conn.Ping(ctx); err != nil {
@@ -439,7 +459,14 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		switch kind {
 		case "input":
 			var value string
-			if err := json.Unmarshal(msg["data"], &value); err != nil || s.terms.Input(id, client, value) != nil {
+			inputErr := json.Unmarshal(msg["data"], &value)
+			if inputErr == nil {
+				inputErr = s.terms.Input(id, client, value)
+			}
+			if errors.Is(inputErr, terminal.ErrControlNotOwner) {
+				continue
+			}
+			if inputErr != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
 				return
 			}
@@ -452,13 +479,19 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
 				return
 			}
-			if err := s.terms.Resize(id, client, value.Cols, value.Rows); err != nil {
+			if err := s.terms.Resize(id, client, value.Cols, value.Rows); errors.Is(err, terminal.ErrControlNotOwner) {
+				continue
+			} else if err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
 				return
 			}
 		case "ping":
 			_ = client.EnqueueControl([]byte(`{"type":"pong"}`))
 		case "claim_terminal_control":
+			if err := s.terms.ClaimControl(id, client); err != nil {
+				_ = conn.Close(websocket.StatusPolicyViolation, "claim_failed")
+				return
+			}
 		default:
 			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
 			return
