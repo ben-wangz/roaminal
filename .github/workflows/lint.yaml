@@ -1,0 +1,42 @@
+name: lint
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup-go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            terminal-worker/package-lock.json
+
+      - name: setup-forgekit
+        id: forgekit
+        run: |
+          FORGEKIT_BIN="$(bash "$GITHUB_WORKSPACE/setup/forgekit.sh")"
+          echo "bin=${FORGEKIT_BIN}" >> "$GITHUB_OUTPUT"
+          "${FORGEKIT_BIN}" --version
+
+      - name: run-forgekit-lint
+        env:
+          FORGEKIT_BIN: ${{ steps.forgekit.outputs.bin }}
+        run: |
+          "$FORGEKIT_BIN" --project-root "$GITHUB_WORKSPACE" lint \
+            --config "$GITHUB_WORKSPACE/lint.yaml"
