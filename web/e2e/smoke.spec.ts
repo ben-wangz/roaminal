@@ -44,22 +44,33 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
   await expect(cards.first().getByText(/ID:/)).toBeVisible();
   await expect(cards.first().getByText(/PWD:/)).toBeVisible();
   await expect(cards.first().getByText(/SINCE:/)).toBeVisible();
+  await expect(cards.first().locator('time')).toHaveAttribute('datetime', /T/);
+  await expect(cards.first().locator('time')).toHaveText(/SINCE: \d{2}-\d{2} \d{2}:\d{2} (AM|PM)/);
   await expect(cards.first().getByRole('button', { name: 'Agent extension' })).toHaveAttribute('aria-disabled', 'true');
   await expect(cards.first().getByRole('button', { name: 'Files extension' })).toHaveAttribute('aria-disabled', 'true');
+  await page.screenshot({ path: testInfo.outputPath('sidebar-before-hover.png') });
   await cards.first().hover();
   await expect.poll(() => page.locator('.terminal-preview-viewport').count(), { timeout: 5000 }).toBe(1);
   await expect.poll(() => page.locator('.session-card.previewing').count()).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath('sidebar-after-hover.png') });
   await cards.first().getByRole('button', { name: 'Agent extension' }).click({ force: true });
   await expect(page.getByRole('status')).toContainText('Agent extension unavailable');
   const initialId = await page.locator('.terminal-viewport').getAttribute('data-session-id');
   if (await cards.count() > 1) {
     const second = cards.nth(1);
     const secondId = await second.getAttribute('data-session-id');
-    await second.click();
-    await expect(page.locator('.terminal-viewport')).toHaveAttribute('data-session-id', secondId || '');
+    for (let index = 0; index < 100; index += 1) {
+      const target = cards.nth(index % await cards.count());
+      const targetId = await target.getAttribute('data-session-id');
+      await target.click();
+      await expect(page.locator('.terminal-viewport')).toHaveAttribute('data-session-id', targetId || '');
+      await expect(page.locator('.terminal-viewport > .xterm')).toHaveCount(1);
+    }
     expect(secondId).not.toBe(initialId);
   }
   await expect(page.locator('.terminal-viewport > .xterm')).toHaveCount(1);
+  await page.mouse.move(500, 700);
+  await expect.poll(() => page.locator('.terminal-preview-viewport').count()).toBe(0);
   await page.screenshot({ path: testInfo.outputPath('sidebar-preview.png') });
   expect(errors.filter((message) => !message.includes('favicon'))).not.toContain(expect.stringContaining('onShowLinkUnderline'));
 });
