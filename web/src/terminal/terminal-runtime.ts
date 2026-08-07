@@ -29,6 +29,7 @@ export class TerminalRuntime {
   attach(element: HTMLElement): void {
     if (this.disposed) throw new Error(`terminal runtime ${this.sessionId} is disposed`);
     if (this.element === element) return;
+    if (this.element && this.terminal.element?.parentElement === this.element) this.terminal.element.remove();
     this.element = element;
     if (this.terminal.element) element.replaceChildren(this.terminal.element); else this.terminal.open(element);
     if (!this.addonsLoaded) {
@@ -63,7 +64,7 @@ export class TerminalRuntime {
     if (this.element && this.terminal.element?.parentElement === this.element) this.terminal.element.remove();
     this.element = null;
   }
-  dispose(): void { this.disposed = true; if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.socket?.close(); this.socket = null; this.element = null; this.terminal.dispose(); this.listeners.clear(); }
+  dispose(): void { this.disposed = true; if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.resizeObserver?.disconnect(); this.resizeObserver = null; this.socket?.close(); this.socket = null; this.element = null; this.terminal.dispose(); this.listeners.clear(); }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   connectedState(): boolean { return this.connected; }
   find(query: string, options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {}): boolean { return this.search.findNext(query, options); }

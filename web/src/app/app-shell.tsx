@@ -30,8 +30,10 @@ export function AppShell() {
   const bootId = useRef<string | null>(null);
   const syncing = useRef(false);
   const creatingInitial = useRef(false);
+  const sidebarOpenButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { saveStoredTabs(window.localStorage, view); }, [view]);
+  useEffect(() => { if (!sidebarOpen) sidebarOpenButton.current?.focus(); }, [sidebarOpen]);
   useEffect(() => () => { for (const runtime of runtimes.current.values()) runtime.dispose(); runtimes.current.clear(); }, []);
 
   async function createSession() {
@@ -73,7 +75,8 @@ export function AppShell() {
   }, [auth]);
 
   useEffect(() => {
-    document.title = view.activeTabId ? `Roaminal · ${sessions.find((session) => session.id === view.activeTabId)?.cwd || 'Terminal'}` : 'Roaminal';
+    const activeSession = sessions.find((session) => session.id === view.activeTabId);
+    document.title = activeSession ? `Roaminal · ${activeSession.title || activeSession.cwd || 'Terminal'}` : 'Roaminal';
   }, [view.activeTabId, sessions]);
 
   useEffect(() => {
@@ -112,6 +115,10 @@ export function AppShell() {
     setDialog(null);
   }
 
+  async function resetTitle(id: string) {
+    try { await updateTitle(id, null); } catch (err) { setToast((err as Error).message); }
+  }
+
   async function terminateSession(id: string) {
     try {
       await api(`/api/sessions/${id}`, { method: 'DELETE' });
@@ -143,14 +150,14 @@ export function AppShell() {
   const dialogSession = dialog ? sessions.find((session) => session.id === dialog.sessionId) : undefined;
 
   return <div className="app-shell">
-    <Sidebar id="terminal-sidebar" sessions={sessions} active={view.activeTabId} open={sidebarOpen} onToggle={() => setSidebarOpen((value) => !value)} onSelect={selectSession} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={(id) => void updateTitle(id, null)} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={createSession} />
+    <Sidebar id="terminal-sidebar" sessions={sessions} active={view.activeTabId} open={sidebarOpen} onToggle={() => setSidebarOpen((value) => !value)} onSelect={selectSession} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={resetTitle} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={createSession} />
     <main className={`main-panel ${sidebarOpen ? '' : 'expanded'}`}>
       <header className="topbar">
-        {!sidebarOpen && <button className="icon-button sidebar-open-button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" title="Open sidebar" aria-expanded={false} aria-controls="terminal-sidebar">›</button>}
+        {!sidebarOpen && <button ref={sidebarOpenButton} className="icon-button sidebar-open-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" title="Open sidebar" aria-expanded={false} aria-controls="terminal-sidebar">›</button>}
         <SystemStatus connected={Boolean(heartbeatState)} hostname={heartbeatState?.system.hostname || ''} sessionCount={sessions.length} />
         <div className="top-actions"><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal">⌕</button><button className="text-button" onClick={signOut}>Sign out</button></div>
       </header>
-      <TerminalTabs sessions={openSessions} active={view.activeTabId} onSelect={selectSession} onCloseTab={closeViewTab} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={(id) => void updateTitle(id, null)} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={createSession} />
+      <TerminalTabs sessions={openSessions} active={view.activeTabId} onSelect={selectSession} onCloseTab={closeViewTab} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={resetTitle} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={createSession} />
       {search && currentRuntime && <TerminalSearch runtime={currentRuntime} onClose={() => setSearch(false)} />}
       <section className="terminal-stage">{currentRuntime ? <TerminalViewport key={currentRuntime.sessionId} runtime={currentRuntime} /> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={createSession}>Create terminal</button></div>}</section>
       {currentRuntime && <TouchKeyboard onInput={(value) => currentRuntime.send({ type: 'input', data: value })} />}
