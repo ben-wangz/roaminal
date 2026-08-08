@@ -64,6 +64,12 @@ worker, PVCs, or a runtime socket.
 
 PVCs must be writable by UID/GID 1000 (or use an equivalent storage policy that
 sets the ownership). Keep `fsGroup: 1000` when the storage driver supports it.
+The mounted `.ssh` directory must be a direct directory owned by `root:1000` or
+`1000:1000`, with no world-write bit (for example mode `2770` or `0700` when
+the runtime user owns it). Roaminal intentionally does not repair ownership or
+permissions. Some local-path provisioners create a new mount root as `0777`;
+configure the provisioner or initialize that empty PVC before the application
+rollout. Do not apply this step to a read-only Secret mount.
 Keep the SSH PVC separate from state backups and treat it as high-sensitivity
 credential material. Back up the state and SSH volumes before upgrades.
 `Recreate` intentionally interrupts the
