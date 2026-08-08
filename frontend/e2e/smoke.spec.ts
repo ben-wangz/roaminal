@@ -92,6 +92,25 @@ test('terminal action menu renames without a close-tab command', async ({ page }
   await page.keyboard.press('Escape');
 });
 
+test('key generator keeps algorithm focus while changing fields', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.includes('desktop'), 'key generator focus runs in desktop projects');
+  await authenticate(page);
+  const manager = page.locator('.connection-manager');
+  if (!(await manager.isVisible())) await page.locator('main').getByRole('button', { name: 'Connections' }).click();
+  await expect(manager).toBeVisible();
+  await manager.getByRole('button', { name: /^Keys/ }).click();
+  await manager.getByRole('button', { name: 'Generate key' }).click();
+  const algorithm = page.getByLabel('Algorithm');
+  await expect(algorithm).toBeVisible();
+  await algorithm.focus();
+  await algorithm.selectOption('rsa');
+  await expect(algorithm).toHaveValue('rsa');
+  await expect(page.getByLabel('RSA bits')).toBeVisible();
+  await expect(algorithm).toBeFocused();
+  await expect(page.getByLabel('Filename')).toHaveValue('id_rsa');
+  await page.getByRole('button', { name: 'Close key generator' }).click();
+});
+
 test('login sessions can be reviewed and sign out revokes the browser session', async ({ page }) => {
   await authenticate(page);
   await page.getByRole('button', { name: 'Sessions' }).click();
