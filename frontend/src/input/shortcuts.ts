@@ -1,7 +1,7 @@
 export type ShortcutDefinition = { key: string; shift?: boolean; label: string };
 
 export const SHORTCUTS: ShortcutDefinition[] = [
-  { key: 't', shift: true, label: 'Create terminal' },
+  { key: 't', shift: true, label: 'Open connection manager' },
   { key: 'f', label: 'Search terminal' },
   { key: 's', shift: true, label: 'Toggle sidebar' }
 ];

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { SessionSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { Modal } from './modal';
 
 function titleError(value: string): string {
@@ -13,7 +13,7 @@ function titleError(value: string): string {
   return '';
 }
 
-export function RenameTitleDialog({ session, onSave, onClose }: { session: SessionSummary; onSave: (title: string | null) => Promise<void>; onClose: () => void }) {
+export function RenameTitleDialog({ session, onSave, onClose }: { session: ConnectionInstanceSummary; onSave: (title: string | null) => Promise<void>; onClose: () => void }) {
   const [value, setValue] = useState(session.titleMode === 'custom' ? session.title : '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -27,7 +27,7 @@ export function RenameTitleDialog({ session, onSave, onClose }: { session: Sessi
     try { await onSave(value.trim()); } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }
   return <Modal onClose={onClose}><form className="dialog-form" onSubmit={save}>
-    <h2>Rename terminal</h2>
+    <h2>Rename connection</h2>
     <label htmlFor="terminal-title">Title</label>
     <input id="terminal-title" ref={input} value={value} onChange={(event) => { setValue(event.target.value); setError(''); }} maxLength={128} />
     {error && <div className="error-text" role="alert">{error}</div>}
@@ -35,14 +35,14 @@ export function RenameTitleDialog({ session, onSave, onClose }: { session: Sessi
   </form></Modal>;
 }
 
-export function AutomaticTitleDialog({ session, onReset, onClose }: { session: SessionSummary; onReset: () => Promise<void>; onClose: () => void }) {
+export function AutomaticTitleDialog({ session, onReset, onClose }: { session: ConnectionInstanceSummary; onReset: () => Promise<void>; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   async function reset() { setBusy(true); try { await onReset(); } finally { setBusy(false); } }
   return <Modal onClose={onClose}><div className="dialog-form"><h2>Use automatic title</h2><p className="dialog-copy">The shell will control the title for {session.id.slice(0, 6)}.</p><div className="dialog-actions"><button type="button" className="text-button" onClick={onClose}>Cancel</button><button type="button" className="primary" disabled={busy} onClick={() => void reset()}>{busy ? 'Updating...' : 'Use automatic title'}</button></div></div></Modal>;
 }
 
-export function TerminateDialog({ session, onConfirm, onClose }: { session: SessionSummary; onConfirm: () => Promise<void>; onClose: () => void }) {
+export function TerminateDialog({ session, onConfirm, onClose }: { session: ConnectionInstanceSummary; onConfirm: () => Promise<void>; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   async function confirm() { setBusy(true); try { await onConfirm(); } finally { setBusy(false); } }
-  return <Modal onClose={onClose}><div className="dialog-form"><h2>Terminate terminal?</h2><p className="dialog-copy">This stops the Bash process for “{session.title || 'Terminal'}” ({session.id.slice(0, 6)}). Scrollback and metadata will be deleted.</p><div className="dialog-actions"><button type="button" className="text-button" onClick={onClose}>Cancel</button><button type="button" className="danger-button" disabled={busy} onClick={() => void confirm()}>{busy ? 'Terminating...' : 'Terminate terminal'}</button></div></div></Modal>;
+  return <Modal onClose={onClose}><div className="dialog-form"><h2>{session.closed ? 'Delete connection history?' : 'Close connection?'}</h2><p className="dialog-copy">{session.closed ? 'This removes scrollback and metadata for' : 'This stops the managed process for'} {session.title || 'Connection'} ({session.id.slice(0, 6)}).</p><div className="dialog-actions"><button type="button" className="text-button" onClick={onClose}>Cancel</button><button type="button" className="danger-button" disabled={busy} onClick={() => void confirm()}>{busy ? 'Working...' : session.closed ? 'Delete history' : 'Close connection'}</button></div></div></Modal>;
 }

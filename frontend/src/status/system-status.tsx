@@ -15,7 +15,7 @@ export function SystemStatus({ connected, system, sessionCount, latencyMs, persi
     <Metric label="CPU" value={formatPercent(cpu)} progress={cpu} detail={cpuCapacity === null || cpuCapacity === undefined ? 'capacity N/A' : `${cpuCapacity.toFixed(2)} cores`} />
     <Metric label="MEM" value={formatPercent(memory)} progress={memory} detail={formatMemory(memoryWorkingSet, memoryLimit)} />
     <span className="status-detail uptime">UP {formatDuration(system?.processUptimeSeconds ?? 0)}</span>
-    <span className="status-detail terminals">TERM {sessionCount}</span>
+    <span className="status-detail terminals">CONN {sessionCount}</span>
     <span className="status-detail rtt">RTT {latencyMs === null ? 'N/A' : `${latencyMs}ms`}</span>
     {persistenceDegraded && <span className="status-warning" role="status">Persistence degraded</span>}
   </div>;

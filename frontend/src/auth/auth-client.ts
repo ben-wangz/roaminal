@@ -42,4 +42,19 @@ export async function api<T>(path: string, init: RequestInit = {}, auth: AuthSta
   }
 }
 
+export async function apiWithMeta<T>(path: string, init: RequestInit = {}, auth: AuthState | null = loadAuth()): Promise<{ data: T; etag: string | null }> {
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  if (auth?.accessToken) headers.set('Authorization', `Bearer ${auth.accessToken}`);
+  try {
+    const response = await fetch(path, { ...init, headers });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({ error: response.statusText }))).error || response.statusText);
+    const data = response.status === 204 ? undefined as T : await response.json() as T;
+    return { data, etag: response.headers.get('ETag') };
+  } catch (error) {
+    if ((error as Error).message === 'unauthorized' && await refresh()) return apiWithMeta(path, init, loadAuth());
+    throw error;
+  }
+}
+
 export { clearAuth, loadAuth };

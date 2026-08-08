@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { EllipsisVertical } from 'lucide-react';
-import type { SessionSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 type Props = {
-  session: SessionSummary;
+  session: ConnectionInstanceSummary;
   onRename: () => void;
   onAutomaticTitle: () => void;
   onTerminate: () => void;
@@ -65,7 +65,7 @@ export function TerminalActions({ session, onRename, onAutomaticTitle, onTermina
     }}>
       {!session.closed && <button type="button" role="menuitem" onClick={() => run(onRename)}>Rename title...</button>}
       {!session.closed && session.titleMode === 'custom' && <button type="button" role="menuitem" onClick={() => run(onAutomaticTitle)}>Use automatic title</button>}
-      <button className="destructive" type="button" role="menuitem" onClick={() => run(onTerminate)}>{session.closed ? 'Delete history...' : 'Terminate terminal...'}</button>
+      <button className="destructive" type="button" role="menuitem" onClick={() => run(onTerminate)}>{session.closed ? 'Delete history...' : 'Close connection...'}</button>
     </div>}
   </div>;
 }

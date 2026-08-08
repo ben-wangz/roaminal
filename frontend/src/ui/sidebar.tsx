@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { Bot, FolderOpen, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
-import type { SessionSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { TerminalActions } from './terminal-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 
 type Props = {
   id: string;
-  sessions: SessionSummary[];
+  sessions: ConnectionInstanceSummary[];
   active: string | null;
   open: boolean;
   previewSessionId: string | null;
@@ -79,7 +79,7 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
     {open && <button className="sidebar-backdrop" type="button" aria-label="Close sidebar" onClick={onToggle} />}
     <aside ref={aside} id={id} className={`sidebar ${open ? 'open' : 'closed'}`} aria-hidden={!open} inert={!open || undefined}>
       <div className="sidebar-header"><div className="brand-mark small">r<span>&gt;</span></div><strong>Roaminal</strong><button ref={toggle} className="icon-button sidebar-toggle" type="button" onClick={onToggle} aria-label="Toggle sidebar" title="Toggle sidebar" aria-expanded={open} aria-controls={id}>{open ? <PanelLeftClose aria-hidden="true" size={18} /> : <PanelLeftOpen aria-hidden="true" size={18} />}</button></div>
-      <div className="sidebar-actions"><button className="primary full" onClick={onCreate}><Plus aria-hidden="true" size={16} /> New terminal</button></div>
+      <div className="sidebar-actions"><button className="primary full" onClick={onCreate}><Plus aria-hidden="true" size={16} /> Connections</button></div>
       <div className="session-list">{sessions.map((session) => {
         const previewing = previewSessionId === session.id && previewRuntime;
         const startPreview = () => { if (canPreview()) onPreviewStart(session.id); };
@@ -98,11 +98,11 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
           <div className="session-card-overlay">
             <button className="session-select" type="button" onClick={() => onSelect(session.id)} aria-current={session.id === active ? 'page' : undefined} title={session.id}>
               <span className="session-indicator" />
-              <span className="session-title-wrap"><b>{session.title || 'Terminal'}</b><small>{session.closed ? 'Terminated' : session.attention ? 'Activity waiting' : 'Bash session'}</small></span>
+              <span className="session-title-wrap"><b>{session.title || 'Connection'}</b><small>{session.closed ? 'Exited' : session.attention ? 'Activity waiting' : session.type === 'ssh' ? `SSH | ${session.sourceHostAlias || 'remote'}` : session.purpose === 'ssh_key_generation' ? 'SSH key generation' : 'Local connection'}</small></span>
             </button>
             <div className="session-metadata">
               <span>ID: {shortId(session.id)}</span>
-              <span className="session-path" title={session.cwd}>PWD: {session.cwd}</span>
+              <span className="session-path" title={session.type === 'ssh' ? session.sourceHostAlias : session.cwd}>{session.purpose === 'ssh_key_generation' ? `TARGET: ${session.title || 'key'}` : session.type === 'ssh' ? `TARGET: ${session.sourceHostAlias || 'remote'}` : `PWD: ${session.cwd || 'unknown'}`}</span>
               <time dateTime={session.createdAt} title={session.createdAt}>SINCE: {sinceLabel(session.createdAt)}</time>
             </div>
           </div>
@@ -113,7 +113,7 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
           </div>
         </article>;
       })}</div>
-      <div className="sidebar-footer">Single instance · Bash</div>
+      <div className="sidebar-footer">Connection workspace</div>
     </aside>
   </>;
 }

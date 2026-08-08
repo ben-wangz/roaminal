@@ -15,15 +15,17 @@ import { TouchKeyboard } from '../input/touch-keyboard';
 import { observeViewportHeight } from '../input/viewport';
 import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 import { RenameTitleDialog, TerminateDialog } from '../ui/terminal-dialogs';
+import { ConnectionManager } from '../connections/connection-manager';
 import { formatExitStatus, loadStoredSession, reconcileSession, saveStoredSession, selectSession as selectStoredSession, type SessionView } from './session-view';
-import type { SessionSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 type Dialog = { type: 'rename' | 'terminate'; sessionId: string } | { type: 'auth' } | null;
 
 export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessions, setSessions] = useState<ConnectionInstanceSummary[]>([]);
   const [view, setView] = useState<SessionView>(() => loadStoredSession(typeof window === 'undefined' ? null : window.localStorage));
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || !window.matchMedia('(max-width: 800px)').matches);
   const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
   const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
@@ -42,21 +44,21 @@ export function AppShell() {
   const [previewRuntime, setPreviewRuntime] = useState<TerminalPreviewRuntime | null>(null);
   const previewGeneration = useRef(0);
   const sessionOrder = useRef<string[]>([]);
+  const viewRef = useRef(view);
+  const hydrated = useRef(false);
   const bootId = useRef<string | null>(null);
   const syncing = useRef(false);
-  const creatingInitial = useRef(false);
   const sidebarOpenButton = useRef<HTMLButtonElement>(null);
   const toastTimer = useRef<number | null>(null);
 
   useEffect(() => observeViewportHeight(), []);
-
   function showToast(message: string) {
     setToast(message);
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => { setToast(null); toastTimer.current = null; }, 4500);
   }
-
   useEffect(() => { saveStoredSession(window.localStorage, view); }, [view]);
+  useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { if (!sidebarOpen) sidebarOpenButton.current?.focus(); }, [sidebarOpen]);
   useEffect(() => () => {
     mainRuntime.current?.dispose();
@@ -64,9 +66,8 @@ export function AppShell() {
     previewRuntimeRef.current?.dispose();
     previewRuntimeRef.current = null;
   }, []);
-
   useEffect(() => {
-    if (!auth || !view.activeSessionId) {
+    if (!auth || !workspaceOpen || !view.activeSessionId) {
       mainRuntime.current?.dispose();
       mainRuntime.current = null;
       setCurrentRuntime(null);
@@ -83,13 +84,16 @@ export function AppShell() {
       if (mainRuntime.current === next) mainRuntime.current = null;
       setCurrentRuntime((current) => current === next ? null : current);
     };
-  }, [auth, view.activeSessionId, heartbeatState?.runtime.scrollbackLines]);
-
+  }, [auth, workspaceOpen, view.activeSessionId, heartbeatState?.runtime.scrollbackLines]);
   useEffect(() => {
     if (!currentRuntime || currentRuntime.sessionId !== view.activeSessionId) return;
     return currentRuntime.subscribeMessage((message) => {
       if (message?.type === 'status' && message.status === 'terminated') {
         setSessions((current) => current.map((session) => session.id === currentRuntime.sessionId ? { ...session, closed: true, exitStatus: message.exitStatus || session.exitStatus || null } : session));
+        return;
+      }
+      if (message?.type === 'meta') {
+        setSessions((current) => current.map((session) => session.id === currentRuntime.sessionId ? { ...session, title: message.title, titleMode: message.titleMode, cwd: message.cwd, cols: message.cols, rows: message.rows, sourceState: message.sourceState as ConnectionInstanceSummary['sourceState'], generationStatus: message.generationStatus, generationError: message.generationError, generationStaging: message.generationStaging } : session));
         return;
       }
       if (!message || message.type !== 'execution') return;
@@ -102,7 +106,6 @@ export function AppShell() {
       }
     });
   }, [currentRuntime, view.activeSessionId]);
-
   useEffect(() => {
     const generation = ++previewGeneration.current;
     previewRuntimeRef.current?.dispose();
@@ -123,15 +126,19 @@ export function AppShell() {
       setPreviewRuntime(null);
     };
   }, [auth, previewSessionId, sidebarOpen]);
-
-  async function createSession() {
+  async function createConnection(connectionDefinitionId: string, reuseFrom?: string) {
     try {
-      const session = await api<SessionSummary>('/api/connection-instances', { method: 'POST', body: JSON.stringify({ connectionDefinitionId: 'local' }) });
+      const session = await api<ConnectionInstanceSummary>('/api/connection-instances', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFrom || null }) });
       setSessions((current) => [...current.filter((item) => item.id !== session.id), session]);
       setView((current) => selectStoredSession(current, session.id));
+      setWorkspaceOpen(true);
     } catch (err) { showToast((err as Error).message); }
   }
-
+  async function acceptGenerated(instance: ConnectionInstanceSummary) {
+    setSessions((current) => [...current.filter((item) => item.id !== instance.id), instance]);
+    setView((current) => selectStoredSession(current, instance.id));
+    setWorkspaceOpen(true);
+  }
   async function sync() {
     if (syncing.current) return;
     syncing.current = true;
@@ -142,14 +149,16 @@ export function AppShell() {
       if (bootId.current && bootId.current !== next.runtime.bootId) { window.location.reload(); return; }
       bootId.current = next.runtime.bootId;
       setHeartbeatState(next);
-      setView((current) => reconcileSession(next.connectionInstances, current, sessionOrder.current));
+      const nextView = reconcileSession(next.connectionInstances, viewRef.current, sessionOrder.current);
+      setView(nextView);
+      if (!hydrated.current) {
+        hydrated.current = true;
+        setWorkspaceOpen(Boolean(nextView.activeSessionId));
+      } else if (!nextView.activeSessionId) {
+        setWorkspaceOpen(false);
+      }
       sessionOrder.current = next.connectionInstances.map((session) => session.id);
       setSessions(next.connectionInstances);
-      if (!next.connectionInstances.length && !creatingInitial.current) {
-        creatingInitial.current = true;
-        await createSession();
-        creatingInitial.current = false;
-      }
     } catch (err) {
       if ((err as Error).message === 'unauthorized') {
         const next = await refresh();
@@ -157,53 +166,46 @@ export function AppShell() {
       }
     } finally { syncing.current = false; }
   }
-
   useEffect(() => {
     if (!auth) return;
     void sync();
     const timer = window.setInterval(() => void sync(), 1000);
     return () => window.clearInterval(timer);
   }, [auth]);
-
   useEffect(() => {
     const activeSession = sessions.find((session) => session.id === view.activeSessionId);
-    document.title = activeSession ? `Roaminal · ${activeSession.title || activeSession.cwd || 'Terminal'}` : 'Roaminal';
+    document.title = activeSession ? `Roaminal - ${activeSession.title || activeSession.cwd || 'Connection'}` : 'Roaminal';
   }, [view.activeSessionId, sessions]);
-
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (matchesShortcut(event, SHORTCUTS[0])) { event.preventDefault(); void createSession(); }
+      if (matchesShortcut(event, SHORTCUTS[0])) { event.preventDefault(); setWorkspaceOpen(false); }
       if (matchesShortcut(event, SHORTCUTS[1]) && view.activeSessionId) { event.preventDefault(); setSearch(true); }
       if (matchesShortcut(event, SHORTCUTS[2])) { event.preventDefault(); toggleSidebar(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [view.activeSessionId]);
-
   function selectSession(id: string) {
     setView((current) => selectStoredSession(current, id));
+    setWorkspaceOpen(true);
     setSearch(false);
     setPreviewSessionId(null);
     if (window.matchMedia('(max-width: 800px)').matches) setSidebarOpen(false);
   }
-
   function toggleSidebar() {
     setSidebarOpen((value) => {
       if (value) setPreviewSessionId(null);
       return !value;
     });
   }
-
   async function updateTitle(id: string, title: string | null) {
-    const updated = await api<SessionSummary>(`/api/connection-instances/${id}/title`, { method: 'PATCH', body: JSON.stringify({ title }) });
+    const updated = await api<ConnectionInstanceSummary>(`/api/connection-instances/${id}/title`, { method: 'PATCH', body: JSON.stringify({ title }) });
     setSessions((current) => current.map((session) => session.id === id ? updated : session));
     setDialog(null);
   }
-
   async function resetTitle(id: string) {
     try { await updateTitle(id, null); } catch (err) { showToast((err as Error).message); }
   }
-
   async function terminateSession(id: string) {
     try {
       await api(`/api/connection-instances/${id}`, { method: 'DELETE' });
@@ -217,12 +219,10 @@ export function AppShell() {
       setPreviewSessionId(null);
     } catch (err) { showToast((err as Error).message); }
   }
-
   async function onLogin(password: string) {
     try { const next = await login(password); setAuth(next); setError(''); }
     catch (err) { setError((err as Error).message); }
   }
-
   function signOut() {
     const current = auth;
     if (!current) return;
@@ -239,7 +239,6 @@ export function AppShell() {
         setAuth(null);
       });
   }
-
   async function openAuthSessions() {
     try {
       const [listed, current] = await Promise.all([
@@ -251,7 +250,6 @@ export function AppShell() {
       setDialog({ type: 'auth' });
     } catch (err) { showToast((err as Error).message); }
   }
-
   async function revokeAuthSession(id: string) {
     setAuthSessionBusy(id);
     try {
@@ -261,7 +259,6 @@ export function AppShell() {
     } catch (err) { showToast((err as Error).message); }
     finally { setAuthSessionBusy(null); }
   }
-
   async function logoutOtherAuthSessions() {
     setAuthSessionBusy('others');
     try {
@@ -277,17 +274,14 @@ export function AppShell() {
   const dialogSession = dialog && 'sessionId' in dialog ? sessions.find((session) => session.id === dialog.sessionId) : undefined;
 
   return <div className="app-shell">
-    <Sidebar id="terminal-sidebar" sessions={sessions} active={view.activeSessionId} open={sidebarOpen} previewSessionId={previewSessionId} previewRuntime={previewRuntime?.sessionId === previewSessionId ? previewRuntime : null} onToggle={toggleSidebar} onSelect={selectSession} onPreviewStart={(id) => setPreviewSessionId(id)} onPreviewEnd={(id) => setPreviewSessionId((current) => current === id ? null : current)} onUnavailableExtension={(name) => showToast(`${name} extension unavailable`)} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={resetTitle} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={createSession} />
-    <main className={`main-panel ${sidebarOpen ? '' : 'expanded'}`}>
+    {workspaceOpen && <Sidebar id="connection-sidebar" sessions={sessions} active={view.activeSessionId} open={sidebarOpen} previewSessionId={previewSessionId} previewRuntime={previewRuntime?.sessionId === previewSessionId ? previewRuntime : null} onToggle={toggleSidebar} onSelect={selectSession} onPreviewStart={(id) => setPreviewSessionId(id)} onPreviewEnd={(id) => setPreviewSessionId((current) => current === id ? null : current)} onUnavailableExtension={(name) => showToast(`${name} extension unavailable`)} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={resetTitle} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={() => setWorkspaceOpen(false)} />}
+    <main className={`main-panel ${workspaceOpen && !sidebarOpen ? 'expanded' : ''}`}>
       <header className="topbar">
-        {!sidebarOpen && <button ref={sidebarOpenButton} className="icon-button sidebar-open-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" title="Open sidebar" aria-expanded={false} aria-controls="terminal-sidebar"><PanelLeftOpen aria-hidden="true" size={18} /></button>}
+        {workspaceOpen && !sidebarOpen && <button ref={sidebarOpenButton} className="icon-button sidebar-open-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" title="Open sidebar" aria-expanded={false} aria-controls="connection-sidebar"><PanelLeftOpen aria-hidden="true" size={18} /></button>}
         <SystemStatus connected={Boolean(heartbeatState)} system={heartbeatState?.system || null} sessionCount={sessions.length} latencyMs={heartbeatLatency} persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)} />
-        <div className="top-actions"><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal"><Search aria-hidden="true" size={17} /></button><button className="text-button" onClick={() => void openAuthSessions()}><ShieldCheck aria-hidden="true" size={15} /> Sessions</button><button className="text-button" onClick={signOut}>Sign out</button></div>
+        <div className="top-actions">{workspaceOpen && <><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal"><Search aria-hidden="true" size={17} /></button><button className="text-button" onClick={() => setWorkspaceOpen(false)}>Connections</button></>}<button className="text-button" onClick={() => void openAuthSessions()}><ShieldCheck aria-hidden="true" size={15} /> Sessions</button><button className="text-button" onClick={signOut}>Sign out</button></div>
       </header>
-      {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}
-      <section className="terminal-stage">{activeRuntime ? <><TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} />{currentSession?.closed && <div className="terminal-exited" role="status"><strong>Terminal exited</strong><span>{formatExitStatus(currentSession.exitStatus)}</span><div className="terminal-exited-actions"><button className="primary" onClick={() => void createSession()}>Create terminal</button><button className="danger-button" onClick={() => void terminateSession(currentSession.id)}>Delete history</button></div></div>}</> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={createSession}>Create terminal</button></div>}</section>
-      {activeRuntime && !currentSession?.closed && <TouchKeyboard onInput={(value) => activeRuntime.send({ type: 'input', data: value })} />}
-      <footer className="statusbar"><span>{currentSession?.cwd || 'No terminal'}</span><span className="execution-status" aria-live="polite">{executionStatus || (currentSession ? `${currentSession.cols}×${currentSession.rows}` : '')}</span></footer>
+      {workspaceOpen ? <><>{search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}</><section className="terminal-stage">{activeRuntime ? <><TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} />{currentSession?.closed && <div className="terminal-exited" role="status"><strong>Connection exited</strong><span>{formatExitStatus(currentSession.exitStatus)}</span><div className="terminal-exited-actions"><button className="primary" onClick={() => setWorkspaceOpen(false)}>Open manager</button><button className="danger-button" onClick={() => void terminateSession(currentSession.id)}>Delete history</button></div></div>}</> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={() => setWorkspaceOpen(false)}>Open connection manager</button></div>}</section>{activeRuntime && !currentSession?.closed && <TouchKeyboard onInput={(value) => activeRuntime.send({ type: 'input', data: value })} />}<footer className="statusbar"><span>{currentSession?.cwd || 'No connection'}</span><span className="execution-status" aria-live="polite">{executionStatus || (currentSession ? `${currentSession.cols}x${currentSession.rows}` : '')}</span></footer></> : <ConnectionManager instances={sessions} onConnect={createConnection} onGenerated={acceptGenerated} onOpenWorkspace={() => { if (view.activeSessionId) setWorkspaceOpen(true); }} onToast={showToast} />}
     </main>
     <Toast message={toast} />
     {dialog?.type === 'rename' && dialogSession && <RenameTitleDialog session={dialogSession} onSave={(title) => updateTitle(dialogSession.id, title)} onClose={() => setDialog(null)} />}

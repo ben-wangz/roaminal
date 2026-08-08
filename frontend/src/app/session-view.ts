@@ -1,15 +1,15 @@
-import type { SessionSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 export type SessionView = { activeSessionId: string | null };
 
-export function formatExitStatus(status: SessionSummary['exitStatus']): string {
+export function formatExitStatus(status: ConnectionInstanceSummary['exitStatus']): string {
   if (!status) return 'The shell ended normally.';
   if (status.signal !== null) return `Signal ${status.signal}`;
   return `Exit code ${status.exitCode ?? 0}`;
 }
 
 export function reconcileSession(
-  sessions: SessionSummary[],
+  sessions: ConnectionInstanceSummary[],
   current: SessionView,
   previousIds: string[] = []
 ): SessionView {
@@ -40,19 +40,17 @@ export function selectSession(_current: SessionView, id: string): SessionView {
 export function loadStoredSession(storage: Storage | null): SessionView {
   if (!storage) return { activeSessionId: null };
   try {
-    const current = storage.getItem('roaminal_active_session_v1');
+    storage.removeItem('roaminal_active_session_v1');
+    storage.removeItem('roaminal_terminal_tabs_v1');
+    const current = storage.getItem('roaminal_active_connection_instance_v1');
     if (current) {
       const value = JSON.parse(current) as { activeSessionId?: unknown };
       if (typeof value.activeSessionId === 'string') {
-        storage.removeItem('roaminal_terminal_tabs_v1');
         return { activeSessionId: value.activeSessionId };
       }
     }
 
-    const legacy = JSON.parse(storage.getItem('roaminal_terminal_tabs_v1') || '{}') as { activeTabId?: unknown };
-    const activeSessionId = typeof legacy.activeTabId === 'string' ? legacy.activeTabId : null;
-    storage.removeItem('roaminal_terminal_tabs_v1');
-    return { activeSessionId };
+    return { activeSessionId: null };
   } catch {
     return { activeSessionId: null };
   }
@@ -60,5 +58,5 @@ export function loadStoredSession(storage: Storage | null): SessionView {
 
 export function saveStoredSession(storage: Storage | null, view: SessionView): void {
   if (!storage) return;
-  storage.setItem('roaminal_active_session_v1', JSON.stringify(view));
+  storage.setItem('roaminal_active_connection_instance_v1', JSON.stringify(view));
 }

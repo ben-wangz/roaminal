@@ -1,8 +1,8 @@
 import { api } from '../auth/auth-client';
-import type { SessionSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 export type Heartbeat = {
-  connectionInstances: SessionSummary[];
+  connectionInstances: ConnectionInstanceSummary[];
   system: {
     hostname: string;
     kernel: string;
