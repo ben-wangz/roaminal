@@ -12,7 +12,7 @@ async function authenticate(page: import('@playwright/test').Page): Promise<void
   if (await page.locator('.connection-manager').isVisible()) {
     await page.getByRole('button', { name: 'Start local connection' }).click();
   } else if (await page.locator('.session-card.active').getByText('Exited').count()) {
-    await page.getByRole('button', { name: 'Connections' }).click();
+    await page.locator('main').getByRole('button', { name: 'Connections' }).click();
     await page.getByRole('button', { name: 'Start local connection' }).click();
   }
   await expect(page.locator('.session-card.active')).toBeVisible({ timeout: 15000 });
@@ -61,7 +61,7 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
   await page.screenshot({ path: testInfo.outputPath('sidebar-after-hover.png') });
   await cards.first().getByRole('button', { name: 'Agent extension' }).click({ force: true });
   await expect(page.getByRole('status')).toContainText('Agent extension unavailable');
-  const initialId = await page.locator('.terminal-viewport').getAttribute('data-session-id');
+  const initialId = await page.locator('.terminal-viewport').getAttribute('data-connection-instance-id');
   if (await cards.count() > 1) {
     const second = cards.nth(1);
     const secondId = await second.getAttribute('data-session-id');
@@ -69,7 +69,7 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
       const target = cards.nth(index % await cards.count());
       const targetId = await target.getAttribute('data-session-id');
       await target.click();
-      await expect(page.locator('.terminal-viewport')).toHaveAttribute('data-session-id', targetId || '');
+      await expect(page.locator('.terminal-viewport')).toHaveAttribute('data-connection-instance-id', targetId || '');
       await expect(page.locator('.terminal-viewport > .xterm')).toHaveCount(1);
     }
     expect(secondId).not.toBe(initialId);
@@ -84,7 +84,7 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
 test('terminal action menu renames without a close-tab command', async ({ page }) => {
   test.skip((page.viewportSize()?.width || 0) < 1000, 'desktop action menu runs in desktop projects');
   await authenticate(page);
-  const card = page.locator('.session-card').first();
+  const card = page.locator('.session-card.active');
   await card.getByRole('button', { name: 'Terminal actions' }).click();
   await expect(page.getByRole('menuitem', { name: 'Rename title...' })).toBeFocused();
   await expect(page.getByRole('menuitem', { name: /Close connection/i })).toHaveCount(1);
