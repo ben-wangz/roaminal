@@ -1,4 +1,5 @@
-export type SessionSummary = { id: string; createdAt: string; updatedAt: string; shell: string; initialCwd: string; title: string; titleMode: 'automatic' | 'custom'; cwd: string; cols: number; rows: number; closed: boolean; attention: boolean; exitStatus: { exitCode: number | null; signal: number | null } | null };
+export type ConnectionInstanceSummary = { id: string; connectionInstanceId?: string; connectionDefinitionId?: string; type?: 'local' | 'ssh'; purpose?: string; lifecycle?: 'live' | 'exited' | 'interrupted'; sourceState?: 'current' | 'changed' | 'deleted'; sourceHostAlias?: string; createdAt: string; updatedAt: string; shell: string; initialCwd: string; title: string; titleMode: 'automatic' | 'custom'; cwd: string; cols: number; rows: number; closed: boolean; attention: boolean; exitStatus: { exitCode: number | null; signal: number | null } | null };
+export type SessionSummary = ConnectionInstanceSummary;
 export type ServerMessage =
   | { type: 'snapshot'; data: string }
   | { type: 'meta'; title: string; titleMode: 'automatic' | 'custom'; cwd: string; cols: number; rows: number; attention?: boolean }

@@ -15,8 +15,9 @@ var ErrHelp = errors.New("help requested")
 func defaults() Config {
 	return Config{
 		Host: DefaultHost, Port: DefaultPort, WebsocketPingInterval: DefaultWebsocketPing,
-		ScrollbackLines: DefaultScrollback, MaxSessions: DefaultMaxSessions,
-		MaxClientsPerSession: DefaultMaxClients, InitialCwd: DefaultInitialCwd,
+		ScrollbackLines: DefaultScrollback, MaxConnectionInstances: DefaultMaxConnectionInstances,
+		MaxClientsPerConnectionInstance: DefaultMaxClientsPerConnectionInstance,
+		MaxSessions:                     DefaultMaxConnectionInstances, MaxClientsPerSession: DefaultMaxClientsPerConnectionInstance,
 		AuthAccessTTL: DefaultAuthAccessTTL, AuthRefreshTTL: DefaultAuthRefreshTTL,
 		AuthMaxAttempts: DefaultAuthMaxAttempts,
 	}
@@ -25,7 +26,7 @@ func defaults() Config {
 func Load(args []string) (Config, error) {
 	for _, arg := range args {
 		if arg == "--help" || arg == "-help" {
-			fmt.Fprintln(os.Stdout, "Roaminal - persistent Bash terminal\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-sessions --max-clients-per-session --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --debug/-d --accept-terms/-y")
+			fmt.Fprintln(os.Stdout, "Roaminal - connection platform\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-connection-instances --max-clients-per-connection-instance --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --debug/-d --accept-terms/-y")
 			return Config{}, ErrHelp
 		}
 	}

@@ -50,7 +50,7 @@ export class TerminalRuntime {
     if (this.disposed || this.closed || !this.element || this.socket || this.reconnectTimer !== null) return;
     const token = this.token(); if (!token) return;
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${scheme}//${location.host}/ws/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
+    const socket = new WebSocket(`${scheme}//${location.host}/ws/connection-instances/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
     this.socket = socket;
     socket.onopen = () => { this.connected = true; this.emit(); this.claim(); this.fit.fit(); };
     socket.onmessage = (event) => { const message = parseServerMessage(String(event.data)); if (!message) return; if (message.type === 'status' && message.status === 'terminated') { this.closed = true; this.connected = false; this.terminal.options.disableStdin = true; } if (message.type === 'snapshot') this.terminal.reset(); if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data); for (const listener of this.messageListeners) listener(message); this.emit(); };

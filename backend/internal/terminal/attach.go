@@ -16,7 +16,7 @@ func (m *Manager) ReserveAttach(id string) error {
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	if len(session.clients)+session.reservations >= m.cfg.MaxClientsPerSession {
+	if len(session.clients)+session.reservations >= m.clientLimit() {
 		return ErrClientCapacity
 	}
 	session.reservations++
@@ -57,7 +57,7 @@ func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client
 			return nil, ErrClientCapacity
 		}
 		session.reservations--
-	} else if len(session.clients)+session.reservations >= m.cfg.MaxClientsPerSession {
+	} else if len(session.clients)+session.reservations >= m.clientLimit() {
 		return nil, ErrClientCapacity
 	}
 	sequence := strconv.FormatUint(session.sequence, 10)
@@ -78,6 +78,13 @@ func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client
 	}
 	session.clients[client] = struct{}{}
 	return client, nil
+}
+
+func (m *Manager) clientLimit() int {
+	if m.cfg.MaxClientsPerConnectionInstance > 0 {
+		return m.cfg.MaxClientsPerConnectionInstance
+	}
+	return m.cfg.MaxClientsPerSession
 }
 func (m *Manager) Detach(id string, client *Client) {
 	m.mu.RLock()

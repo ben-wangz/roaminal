@@ -42,7 +42,16 @@ func (m *Manager) summary(session *Session) Summary {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.meta.SyncEffectiveTitle()
-	return Summary{ID: session.meta.ID, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention, ExitStatus: session.exitStatus}
+	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, HostVerificationAssessment: session.meta.HostVerificationAssessment, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention, ExitStatus: session.exitStatus}
+}
+func lifecycle(session *Session) string {
+	if session.closed {
+		if session.meta.Lifecycle == "interrupted" {
+			return "interrupted"
+		}
+		return "exited"
+	}
+	return "live"
 }
 func titleMode(meta persistence.SessionMeta) string {
 	if meta.TitleOverride != nil {
@@ -70,19 +79,19 @@ func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
 		override = &value
 	}
 	session.mu.Lock()
-	defer session.mu.Unlock()
-	if session.closed {
-		return Summary{}, os.ErrProcessDone
-	}
 	oldOverride, oldUpdated := session.meta.TitleOverride, session.meta.UpdatedAt
 	session.meta.TitleOverride = override
 	session.meta.SyncEffectiveTitle()
 	session.meta.UpdatedAt = time.Now().UTC()
-	if err := m.store.SaveSession(session.meta); err != nil {
-		session.meta.TitleOverride, session.meta.UpdatedAt = oldOverride, oldUpdated
-		session.meta.SyncEffectiveTitle()
-		return Summary{}, err
+	if m.store != nil {
+		if err := m.store.SaveSession(session.meta); err != nil {
+			session.meta.TitleOverride, session.meta.UpdatedAt = oldOverride, oldUpdated
+			session.meta.SyncEffectiveTitle()
+			session.mu.Unlock()
+			return Summary{}, err
+		}
 	}
 	session.broadcastMetaLocked()
-	return Summary{ID: session.meta.ID, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, ExitStatus: session.exitStatus}, nil
+	session.mu.Unlock()
+	return m.summary(session), nil
 }

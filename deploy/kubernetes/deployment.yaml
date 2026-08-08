@@ -54,16 +54,16 @@ spec:
                 configMapKeyRef:
                   name: roaminal
                   key: scrollbackLines
-            - name: ROAMINAL_MAX_SESSIONS
+            - name: ROAMINAL_MAX_CONNECTION_INSTANCES
               valueFrom:
                 configMapKeyRef:
                   name: roaminal
-                  key: maxSessions
-            - name: ROAMINAL_MAX_CLIENTS_PER_SESSION
+                  key: maxConnectionInstances
+            - name: ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE
               valueFrom:
                 configMapKeyRef:
                   name: roaminal
-                  key: maxClientsPerSession
+                  key: maxClientsPerConnectionInstance
             - name: ROAMINAL_PASSWORD
               valueFrom:
                 secretKeyRef:

@@ -126,7 +126,7 @@ export function AppShell() {
 
   async function createSession() {
     try {
-      const session = await api<SessionSummary>('/api/sessions', { method: 'POST', body: '{}' });
+      const session = await api<SessionSummary>('/api/connection-instances', { method: 'POST', body: JSON.stringify({ connectionDefinitionId: 'local' }) });
       setSessions((current) => [...current.filter((item) => item.id !== session.id), session]);
       setView((current) => selectStoredSession(current, session.id));
     } catch (err) { showToast((err as Error).message); }
@@ -142,10 +142,10 @@ export function AppShell() {
       if (bootId.current && bootId.current !== next.runtime.bootId) { window.location.reload(); return; }
       bootId.current = next.runtime.bootId;
       setHeartbeatState(next);
-      setView((current) => reconcileSession(next.sessions, current, sessionOrder.current));
-      sessionOrder.current = next.sessions.map((session) => session.id);
-      setSessions(next.sessions);
-      if (!next.sessions.length && !creatingInitial.current) {
+      setView((current) => reconcileSession(next.connectionInstances, current, sessionOrder.current));
+      sessionOrder.current = next.connectionInstances.map((session) => session.id);
+      setSessions(next.connectionInstances);
+      if (!next.connectionInstances.length && !creatingInitial.current) {
         creatingInitial.current = true;
         await createSession();
         creatingInitial.current = false;
@@ -195,7 +195,7 @@ export function AppShell() {
   }
 
   async function updateTitle(id: string, title: string | null) {
-    const updated = await api<SessionSummary>(`/api/sessions/${id}/title`, { method: 'PATCH', body: JSON.stringify({ title }) });
+    const updated = await api<SessionSummary>(`/api/connection-instances/${id}/title`, { method: 'PATCH', body: JSON.stringify({ title }) });
     setSessions((current) => current.map((session) => session.id === id ? updated : session));
     setDialog(null);
   }
@@ -206,7 +206,7 @@ export function AppShell() {
 
   async function terminateSession(id: string) {
     try {
-      await api(`/api/sessions/${id}`, { method: 'DELETE' });
+      await api(`/api/connection-instances/${id}`, { method: 'DELETE' });
       setSessions((current) => {
         const next = current.filter((session) => session.id !== id);
         setView((viewState) => reconcileSession(next, viewState, current.map((session) => session.id)));

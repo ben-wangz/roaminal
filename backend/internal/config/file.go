@@ -52,11 +52,13 @@ func applyFile(c *Config, v fileConfig) error {
 	if v.ScrollbackLines != nil {
 		c.ScrollbackLines = *v.ScrollbackLines
 	}
-	if v.MaxSessions != nil {
-		c.MaxSessions = *v.MaxSessions
+	if v.MaxConnectionInstances != nil {
+		c.MaxConnectionInstances = *v.MaxConnectionInstances
+		c.MaxSessions = *v.MaxConnectionInstances
 	}
-	if v.MaxClients != nil {
-		c.MaxClientsPerSession = *v.MaxClients
+	if v.MaxClientsPerConnectionInstance != nil {
+		c.MaxClientsPerConnectionInstance = *v.MaxClientsPerConnectionInstance
+		c.MaxClientsPerSession = *v.MaxClientsPerConnectionInstance
 	}
 	if v.Debug != nil {
 		c.Debug = *v.Debug

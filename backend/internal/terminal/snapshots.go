@@ -31,6 +31,9 @@ func (s *Session) saveSnapshot() {
 		s.manager.storeDegraded(meta.ID, err)
 		return
 	}
+	if s.manager.store == nil {
+		return
+	}
 	if err := s.manager.store.SaveSnapshot(meta.ID, persistence.SnapshotHeader{Cols: meta.Cols, Rows: meta.Rows, ScrollbackLines: s.manager.cfg.ScrollbackLines, ThroughSequence: through}, payload); err != nil {
 		s.manager.storeDegraded(meta.ID, err)
 		return
@@ -50,7 +53,9 @@ func (s *Session) broadcastLocked(data []byte) {
 }
 func message(value any) []byte { data, _ := json.Marshal(value); return data }
 func (m *Manager) storeDegraded(id string, err error) {
-	m.store.MarkSessionDegraded(id)
+	if m.store != nil {
+		m.store.MarkSessionDegraded(id)
+	}
 	fmt.Printf("Roaminal persistence degraded: %v\n", err)
 }
 func (m *Manager) fail(err error) {

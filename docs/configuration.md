@@ -11,8 +11,8 @@ Roaminal fields are accepted. Durations use Go syntax.
 | `password` | `--password`/`-a` | `ROAMINAL_PASSWORD` | random 32 chars |
 | `websocketPingInterval` | `--websocket-ping` | `ROAMINAL_WEBSOCKET_PING_INTERVAL` | `10s` |
 | `scrollbackLines` | `--scrollback-lines` | `ROAMINAL_SCROLLBACK_LINES` | `1000` |
-| `maxSessions` | `--max-sessions` | `ROAMINAL_MAX_SESSIONS` | `32` |
-| `maxClientsPerSession` | `--max-clients-per-session` | `ROAMINAL_MAX_CLIENTS_PER_SESSION` | `8` |
+| `maxConnectionInstances` | `--max-connection-instances` | `ROAMINAL_MAX_CONNECTION_INSTANCES` | `32` |
+| `maxClientsPerConnectionInstance` | `--max-clients-per-connection-instance` | `ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE` | `8` |
 | `debug` | `--debug`/`-d` | `ROAMINAL_DEBUG` | `false` |
 | `acceptTerms` | `--accept-terms`/`-y` | `ROAMINAL_ACCEPT_TERMS` | `false` |
 | `initialCwd` | `--cwd` | `ROAMINAL_CWD` | `/workspace` |

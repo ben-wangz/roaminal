@@ -19,17 +19,22 @@ endpoints below. Other HTTP endpoints require `Authorization: Bearer <access>`.
 | GET | `/api/auth/sessions` | all refresh sessions |
 | DELETE | `/api/auth/sessions/:id` | revoke one refresh session |
 | POST | `/api/auth/logout-others` | revoke every other refresh session |
-| GET/POST | `/api/heartbeat` | authoritative session list; POST accepts resize updates |
-| POST | `/api/sessions` | create a Bash PTY session (`201`) |
-| DELETE | `/api/sessions/:id` | terminate and delete a session (`204`) |
+| GET/POST | `/api/heartbeat` | authoritative connection-instance list; POST accepts resize updates |
+| GET | `/api/connection-instances` | list connection instances |
+| GET | `/api/connection-instances/:id` | inspect one connection instance |
+| POST | `/api/connection-instances` | create a local connection instance (`201`) |
+| PATCH | `/api/connection-instances/:id/title` | update a connection title |
+| POST | `/api/connection-instances/:id/close` | close while retaining readonly history |
+| DELETE | `/api/connection-instances/:id` | delete a connection instance and history (`204`) |
 
-`POST /api/sessions` accepts optional `cwd`, `cols`, and `rows`. `cwd` must be
+`POST /api/connection-instances` accepts `connectionDefinitionId: "local"` and optional `initialCwd`, `cols`, and `rows`. `initialCwd` must be
 an existing absolute directory. Dimensions are `cols: 2..1000` and
-`rows: 1..1000`. Capacity returns `409`.
+`rows: 1..1000`. Capacity returns `409`. Remote definitions are introduced by
+the SSH connection manager in a later API section.
 
 ## WebSocket
 
-Connect only to `/ws/:sessionId` from the current Origin. Send the access token
+Connect only to `/ws/connection-instances/:connectionInstanceId` from the current Origin. Send the access token
 as the `roaminal.auth.<token>` subprotocol alongside `roaminal.v1`; the server
 selects only `roaminal.v1` and never echoes the token. Attach messages are always
 ordered `snapshot`, `meta`, `status`, then live `output`.

@@ -20,6 +20,7 @@ func (s *Session) waitLoop() {
 		return
 	}
 	s.closed = true
+	s.meta.Lifecycle = "exited"
 	status := &ExitStatus{}
 	if exit, ok := s.cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
 		if code := exit.ExitStatus(); code >= 0 {
@@ -32,8 +33,17 @@ func (s *Session) waitLoop() {
 	if s.exitStatus == nil {
 		s.exitStatus = status
 	}
+	if status.ExitCode != nil {
+		s.meta.ExitCode = status.ExitCode
+	}
+	if status.Signal != nil {
+		value := fmt.Sprintf("%d", *status.Signal)
+		s.meta.ExitSignal = &value
+	}
 	s.meta.UpdatedAt = time.Now().UTC()
-	_ = s.manager.store.SaveSession(s.meta)
+	if s.manager.store != nil {
+		_ = s.manager.store.SaveSession(s.meta)
+	}
 	s.broadcastLocked(message(map[string]any{"type": "status", "status": "terminated", "code": statusCode(status), "signal": status.Signal, "exitStatus": s.exitStatus}))
 	if err != nil && !errors.Is(err, os.ErrProcessDone) {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", s.meta.ID, err)

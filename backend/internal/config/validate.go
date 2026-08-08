@@ -32,11 +32,11 @@ func (c Config) Validate() error {
 	if c.ScrollbackLines < 0 || c.ScrollbackLines > 50000 {
 		return errors.New("scrollbackLines must be 0..50000")
 	}
-	if c.MaxSessions < 1 || c.MaxSessions > 256 {
-		return errors.New("maxSessions must be 1..256")
+	if c.MaxConnectionInstances < 1 || c.MaxConnectionInstances > 256 {
+		return errors.New("maxConnectionInstances must be 1..256")
 	}
-	if c.MaxClientsPerSession < 1 || c.MaxClientsPerSession > 64 {
-		return errors.New("maxClientsPerSession must be 1..64")
+	if c.MaxClientsPerConnectionInstance < 1 || c.MaxClientsPerConnectionInstance > 64 {
+		return errors.New("maxClientsPerConnectionInstance must be 1..64")
 	}
 	if c.AuthAccessTTL < time.Minute || c.AuthAccessTTL > 24*time.Hour {
 		return errors.New("authAccessTTL must be 1m..24h")

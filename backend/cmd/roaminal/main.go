@@ -16,11 +16,11 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/buildinfo"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
+	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/frontend"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"github.com/ben-wangz/roaminal/backend/internal/server"
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 	"github.com/ben-wangz/roaminal/backend/internal/worker"
 )
 
@@ -46,7 +46,7 @@ func main() {
 }
 
 func run(cfg config.Config) error {
-	store, err := persistence.New(cfg.StateDir)
+	store, err := persistence.NewConnection(cfg.StateDir)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,11 @@ func run(cfg config.Config) error {
 	if workerPath == "" {
 		return fmt.Errorf("terminal worker not found")
 	}
-	var terminals *terminal.Manager
+	bootID, err := randomID()
+	if err != nil {
+		return err
+	}
+	var terminals *connection.Manager
 	terminalWorker := worker.New(workerPath, func(err error) {
 		if terminals != nil {
 			terminals.WorkerFatal(err)
@@ -70,13 +74,10 @@ func run(cfg config.Config) error {
 	if err := terminalWorker.Start(ctx); err != nil {
 		return err
 	}
-	terminals = terminal.NewManager(cfg, store, terminalWorker)
+	terminals = connection.NewManager(cfg, store, terminalWorker)
+	terminals.SetRuntimeID(bootID)
 	if err := terminals.Start(context.Background()); err != nil {
 		_ = terminalWorker.Shutdown(context.Background())
-		return err
-	}
-	bootID, err := randomID()
-	if err != nil {
 		return err
 	}
 	static, err := frontend.Handler(cfg.FrontendDir)

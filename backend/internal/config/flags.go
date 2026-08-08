@@ -22,7 +22,7 @@ func applyArgs(c *Config, args []string) error {
 		key, value, hasValue := strings.Cut(arg, "=")
 		if !hasValue {
 			switch key {
-			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-sessions", "--max-clients-per-session", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts":
+			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts":
 				if i+1 >= len(args) {
 					return fmt.Errorf("missing value for %s", key)
 				}
@@ -55,18 +55,18 @@ func applyArgs(c *Config, args []string) error {
 				return err
 			}
 			c.ScrollbackLines = n
-		case "--max-sessions":
+		case "--max-connection-instances":
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return err
 			}
-			c.MaxSessions = n
-		case "--max-clients-per-session":
+			c.MaxConnectionInstances, c.MaxSessions = n, n
+		case "--max-clients-per-connection-instance":
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return err
 			}
-			c.MaxClientsPerSession = n
+			c.MaxClientsPerConnectionInstance, c.MaxClientsPerSession = n, n
 		case "--cwd":
 			c.InitialCwd = value
 		case "--frontend-dir":
@@ -118,10 +118,18 @@ func applyEnv(c *Config) error {
 	if err := set("ROAMINAL_SCROLLBACK_LINES", func(v string) error { n, err := strconv.Atoi(v); c.ScrollbackLines = n; return err }); err != nil {
 		return err
 	}
-	if err := set("ROAMINAL_MAX_SESSIONS", func(v string) error { n, err := strconv.Atoi(v); c.MaxSessions = n; return err }); err != nil {
+	if err := set("ROAMINAL_MAX_CONNECTION_INSTANCES", func(v string) error {
+		n, err := strconv.Atoi(v)
+		c.MaxConnectionInstances, c.MaxSessions = n, n
+		return err
+	}); err != nil {
 		return err
 	}
-	if err := set("ROAMINAL_MAX_CLIENTS_PER_SESSION", func(v string) error { n, err := strconv.Atoi(v); c.MaxClientsPerSession = n; return err }); err != nil {
+	if err := set("ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE", func(v string) error {
+		n, err := strconv.Atoi(v)
+		c.MaxClientsPerConnectionInstance, c.MaxClientsPerSession = n, n
+		return err
+	}); err != nil {
 		return err
 	}
 	if err := set("ROAMINAL_DEBUG", func(v string) error { b, err := parseBool(v); c.Debug = b; return err }); err != nil {

@@ -45,13 +45,25 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
-func writeError(w http.ResponseWriter, status int, message string) {
+func writeError(w http.ResponseWriter, status int, message string, fields ...string) {
 	if status >= 500 {
 		id := requestID()
 		w.Header().Set("X-Roaminal-Request-ID", id)
 		log.Printf("request_id=%s status=%d", id, status)
 	}
-	writeJSON(w, status, map[string]string{"error": message})
+	body := map[string]string{"error": message, "code": errorCode(message)}
+	if len(fields) > 0 && fields[0] != "" {
+		body["field"] = fields[0]
+	}
+	writeJSON(w, status, body)
+}
+func errorCode(message string) string {
+	value := strings.ToLower(strings.TrimSpace(message))
+	value = strings.NewReplacer(" ", "_", "-", "_", "/", "_").Replace(value)
+	if value == "" {
+		return "error"
+	}
+	return value
 }
 func requestID() string {
 	var value [16]byte

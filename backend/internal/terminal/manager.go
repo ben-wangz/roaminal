@@ -21,19 +21,27 @@ var ErrClientCapacity = errors.New("client capacity reached")
 var ErrControlNotOwner = errors.New("terminal control is owned by another client")
 
 type Summary struct {
-	ID         string      `json:"id"`
-	CreatedAt  time.Time   `json:"createdAt"`
-	UpdatedAt  time.Time   `json:"updatedAt"`
-	Shell      string      `json:"shell"`
-	InitialCwd string      `json:"initialCwd"`
-	Title      string      `json:"title"`
-	TitleMode  string      `json:"titleMode"`
-	Cwd        string      `json:"cwd"`
-	Cols       int         `json:"cols"`
-	Rows       int         `json:"rows"`
-	Closed     bool        `json:"closed"`
-	Attention  bool        `json:"attention"`
-	ExitStatus *ExitStatus `json:"exitStatus"`
+	ID                         string      `json:"id"`
+	ConnectionInstanceID       string      `json:"connectionInstanceId"`
+	ConnectionDefinitionID     string      `json:"connectionDefinitionId"`
+	Type                       string      `json:"type"`
+	Purpose                    string      `json:"purpose"`
+	Lifecycle                  string      `json:"lifecycle"`
+	SourceState                string      `json:"sourceState"`
+	SourceHostAlias            *string     `json:"sourceHostAlias,omitempty"`
+	HostVerificationAssessment string      `json:"hostVerificationAssessment,omitempty"`
+	CreatedAt                  time.Time   `json:"createdAt"`
+	UpdatedAt                  time.Time   `json:"updatedAt"`
+	Shell                      string      `json:"shell"`
+	InitialCwd                 string      `json:"initialCwd"`
+	Title                      string      `json:"title"`
+	TitleMode                  string      `json:"titleMode"`
+	Cwd                        string      `json:"cwd"`
+	Cols                       int         `json:"cols"`
+	Rows                       int         `json:"rows"`
+	Closed                     bool        `json:"closed"`
+	Attention                  bool        `json:"attention"`
+	ExitStatus                 *ExitStatus `json:"exitStatus"`
 }
 
 type Client struct {
@@ -106,6 +114,7 @@ type Manager struct {
 	sessions           map[string]*Session
 	createReservations int
 	fatal              chan error
+	runtimeID          string
 }
 type Session struct {
 	manager       *Manager
@@ -133,4 +142,5 @@ func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *wor
 }
 func (m *Manager) Fatal() <-chan error       { return m.fatal }
 func (m *Manager) WorkerFatal(err error)     { m.fail(err) }
-func (m *Manager) PersistenceDegraded() bool { return m.store.PersistenceDegraded() }
+func (m *Manager) SetRuntimeID(id string)    { m.runtimeID = id }
+func (m *Manager) PersistenceDegraded() bool { return m.store != nil && m.store.PersistenceDegraded() }

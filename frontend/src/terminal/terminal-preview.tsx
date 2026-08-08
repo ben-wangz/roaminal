@@ -45,7 +45,7 @@ export class TerminalPreviewRuntime {
     const token = this.token();
     if (!token) return;
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${scheme}//${location.host}/ws/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
+    const socket = new WebSocket(`${scheme}//${location.host}/ws/connection-instances/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
     this.socket = socket;
     socket.onopen = () => { this.connected = true; this.fit.fit(); };
     socket.onmessage = (event) => {

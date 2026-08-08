@@ -19,12 +19,41 @@ func (m *Manager) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if m.store.ConnectionLayout() {
+		for _, meta := range metas {
+			if err := m.restoreHistory(ctx, meta); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	for _, meta := range metas {
 		if err := m.restore(ctx, meta); err != nil {
 			fmt.Fprintf(os.Stderr, "Roaminal session %s restore warning: %v\n", meta.ID, err)
 		}
 	}
 	return nil
+}
+
+func (m *Manager) restoreHistory(ctx context.Context, meta persistence.SessionMeta) error {
+	if meta.Lifecycle == "live" || meta.Lifecycle == "" {
+		meta.Lifecycle = "interrupted"
+		meta.BackendRuntimeID = m.runtimeID
+	}
+	header, payload, err := m.store.LoadSnapshot(meta.ID)
+	if err == nil {
+		if err := m.worker.Restore(ctx, meta.ID, header.Cols, header.Rows, header.ScrollbackLines, header.ThroughSequence, payload); err != nil {
+			return err
+		}
+	}
+	session := &Session{manager: m, meta: meta, clients: make(map[*Client]struct{}), closed: true}
+	if err == nil {
+		session.sequence, _ = strconv.ParseUint(header.ThroughSequence, 10, 64)
+	}
+	m.mu.Lock()
+	m.sessions[meta.ID] = session
+	m.mu.Unlock()
+	return m.store.SaveSession(meta)
 }
 
 func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) error {
@@ -75,12 +104,14 @@ func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) err
 	m.mu.Lock()
 	m.sessions[meta.ID] = session
 	m.mu.Unlock()
-	if err := m.store.SaveSession(meta); err != nil {
-		m.mu.Lock()
-		delete(m.sessions, meta.ID)
-		m.mu.Unlock()
-		m.abortSession(ctx, session, true)
-		return err
+	if m.store != nil {
+		if err := m.store.SaveSession(meta); err != nil {
+			m.mu.Lock()
+			delete(m.sessions, meta.ID)
+			m.mu.Unlock()
+			m.abortSession(ctx, session, true)
+			return err
+		}
 	}
 	return nil
 }

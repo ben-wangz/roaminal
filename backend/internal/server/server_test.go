@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/ben-wangz/roaminal/backend/internal/config"
+	"github.com/ben-wangz/roaminal/backend/internal/connection"
 )
 
 func TestAPIRoutesTakePrecedenceOverStatic(t *testing.T) {
-	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, nil, nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, (*connection.Manager)(nil), nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	}))
 	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/version", nil)

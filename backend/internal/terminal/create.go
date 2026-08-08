@@ -21,7 +21,7 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 		return Summary{}, errors.New("invalid terminal dimensions")
 	}
 	m.mu.Lock()
-	if len(m.sessions)+m.createReservations >= m.cfg.MaxSessions {
+	if len(m.sessions)+m.createReservations >= m.connectionLimit() {
 		m.mu.Unlock()
 		return Summary{}, errors.New("session capacity reached")
 	}
@@ -77,14 +77,16 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 		return Summary{}, err
 	}
 	now := time.Now().UTC()
-	meta := persistence.SessionMeta{FormatVersion: persistence.SessionFormatVersion, ID: id, InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, Executions: []persistence.ExecutionRecord{}}
+	meta := persistence.SessionMeta{FormatVersion: persistence.SessionFormatVersion, ID: id, BackendRuntimeID: m.runtimeID, ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, Executions: []persistence.ExecutionRecord{}}
 	session, err := m.startSession(ctx, meta, cwd, true)
 	if err != nil {
 		return Summary{}, err
 	}
-	if err := m.store.SaveSession(meta); err != nil {
-		m.abortSession(ctx, session, true)
-		return Summary{}, err
+	if m.store != nil {
+		if err := m.store.SaveSession(meta); err != nil {
+			m.abortSession(ctx, session, true)
+			return Summary{}, err
+		}
 	}
 	m.mu.Lock()
 	m.createReservations--
@@ -116,5 +118,51 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 	session.mu.Unlock()
 	_ = terminateSessionProcessGroup(ctx, cmd)
 	_ = m.worker.CloseSession(ctx, id)
-	return m.store.DeleteSession(id)
+	if m.store != nil {
+		return m.store.DeleteSession(id)
+	}
+	return nil
+}
+
+func (m *Manager) connectionLimit() int {
+	if m.cfg.MaxConnectionInstances > 0 {
+		return m.cfg.MaxConnectionInstances
+	}
+	return m.cfg.MaxSessions
+}
+
+// Close ends a live terminal while retaining its in-memory worker history and
+// metadata. Delete removes that history separately.
+func (m *Manager) Close(ctx context.Context, id string) error {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
+		return os.ErrNotExist
+	}
+	session.mu.Lock()
+	if session.closed {
+		session.mu.Unlock()
+		return nil
+	}
+	cmd := session.cmd
+	session.closed = true
+	session.meta.Lifecycle = "exited"
+	_ = session.pty.Close()
+	for client := range session.clients {
+		client.close()
+	}
+	session.clients = make(map[*Client]struct{})
+	session.controlOwner = nil
+	session.mu.Unlock()
+	_ = terminateSessionProcessGroup(ctx, cmd)
+	if m.store != nil {
+		m.mu.RLock()
+		current := m.sessions[id]
+		m.mu.RUnlock()
+		current.mu.Lock()
+		_ = m.store.SaveSession(current.meta)
+		current.mu.Unlock()
+	}
+	return nil
 }

@@ -5,25 +5,25 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 )
 
 type heartbeatUpdate struct {
 	Updates struct {
-		Sessions []struct {
+		ConnectionInstances []struct {
 			ID     string `json:"id"`
 			Resize *struct {
 				Cols int `json:"cols"`
 				Rows int `json:"rows"`
 			} `json:"resize,omitempty"`
-		} `json:"sessions"`
+		} `json:"connectionInstances"`
 	} `json:"updates"`
 }
 type heartbeatResponse struct {
-	Sessions []terminal.Summary  `json:"sessions"`
-	System   monitor.SystemStats `json:"system"`
-	Runtime  struct {
+	ConnectionInstances []connection.Summary `json:"connectionInstances"`
+	System              monitor.SystemStats  `json:"system"`
+	Runtime             struct {
 		BootID              string `json:"bootId"`
 		PersistenceDegraded bool   `json:"persistenceDegraded"`
 		ScrollbackLines     int    `json:"scrollbackLines"`
@@ -39,9 +39,9 @@ func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, _ string)
 		return
 	}
 	seen := map[string]bool{}
-	for _, update := range body.Updates.Sessions {
+	for _, update := range body.Updates.ConnectionInstances {
 		if seen[update.ID] {
-			writeError(w, 400, "duplicate session id")
+			writeError(w, 400, "duplicate connection instance id")
 			return
 		}
 		seen[update.ID] = true
@@ -50,7 +50,7 @@ func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, _ string)
 			return
 		}
 	}
-	for _, update := range body.Updates.Sessions {
+	for _, update := range body.Updates.ConnectionInstances {
 		if update.Resize != nil {
 			if err := s.terms.Resize(update.ID, nil, update.Resize.Cols, update.Resize.Rows); err != nil && !errors.Is(err, os.ErrNotExist) {
 				writeError(w, 400, "invalid heartbeat update")
@@ -61,7 +61,7 @@ func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, _ string)
 	writeJSON(w, 200, s.heartbeat())
 }
 func (s *Server) heartbeat() heartbeatResponse {
-	result := heartbeatResponse{Sessions: s.terms.Summaries(), System: s.monitor.Stats()}
+	result := heartbeatResponse{ConnectionInstances: s.terms.Summaries(), System: s.monitor.Stats()}
 	result.Runtime.BootID = s.bootID
 	result.Runtime.PersistenceDegraded = s.terms.PersistenceDegraded()
 	result.Runtime.ScrollbackLines = s.cfg.ScrollbackLines

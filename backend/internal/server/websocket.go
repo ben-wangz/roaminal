@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
+	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/coder/websocket"
 )
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/ws/")
+	id := strings.TrimPrefix(r.URL.Path, "/ws/connection-instances/")
 	if id == "" || strings.Contains(id, "/") {
 		writeError(w, 404, "not found")
 		return
@@ -24,7 +24,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.terms.ReserveAttach(id); err != nil {
-		if errors.Is(err, terminal.ErrClientCapacity) {
+		if errors.Is(err, connection.ErrClientCapacity) {
 			writeError(w, http.StatusTooManyRequests, "client capacity reached")
 		} else if errors.Is(err, os.ErrNotExist) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -111,7 +111,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			if inputErr == nil {
 				inputErr = s.terms.Input(id, client, value)
 			}
-			if errors.Is(inputErr, terminal.ErrControlNotOwner) {
+			if errors.Is(inputErr, connection.ErrControlNotOwner) {
 				continue
 			}
 			if inputErr != nil {
@@ -127,7 +127,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
 				return
 			}
-			if err := s.terms.Resize(id, client, value.Cols, value.Rows); errors.Is(err, terminal.ErrControlNotOwner) {
+			if err := s.terms.Resize(id, client, value.Cols, value.Rows); errors.Is(err, connection.ErrControlNotOwner) {
 				continue
 			} else if err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")

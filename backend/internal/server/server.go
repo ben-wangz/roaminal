@@ -8,15 +8,15 @@ import (
 
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
+	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 	"github.com/ben-wangz/roaminal/backend/internal/worker"
 )
 
 type Server struct {
 	cfg     config.Config
 	auth    *auth.Manager
-	terms   *terminal.Manager
+	terms   *connection.Manager
 	monitor *monitor.Monitor
 	worker  *worker.Client
 	bootID  string
@@ -26,11 +26,11 @@ type Server struct {
 	static  http.Handler
 }
 
-func New(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *terminal.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client) *Server {
+func New(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client) *Server {
 	return NewWithStatic(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, http.NotFoundHandler())
 }
 
-func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *terminal.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler) *Server {
+func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler) *Server {
 	s := &Server{cfg: cfg, version: version, bootID: bootID, auth: authManager, terms: terms, monitor: monitorService, worker: terminalWorker, started: time.Now(), static: static}
 	s.handler = http.HandlerFunc(s.serve)
 	return s
@@ -100,14 +100,20 @@ func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
 		s.withAuth(w, r, s.heartbeatGet)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/heartbeat":
 		s.withAuth(w, r, s.heartbeatPost)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/sessions":
-		s.withAuth(w, r, s.createSession)
-	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/sessions/") && strings.HasSuffix(r.URL.Path, "/title"):
+	case r.Method == http.MethodGet && r.URL.Path == "/api/connection-instances":
+		s.withAuth(w, r, s.listConnectionInstances)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && !strings.HasSuffix(r.URL.Path, "/title"):
+		s.withAuth(w, r, s.getConnectionInstance)
+	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-instances":
+		s.withAuth(w, r, s.createConnectionInstance)
+	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/title"):
 		s.withAuth(w, r, s.updateSessionTitle)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/close"):
+		s.withAuth(w, r, s.closeConnectionInstance)
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/auth/sessions/"):
 		s.withAuth(w, r, s.revokeAuthSession)
-	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/sessions/"):
-		s.withAuth(w, r, s.deleteSession)
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-instances/"):
+		s.withAuth(w, r, s.deleteConnectionInstance)
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 	}

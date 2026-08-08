@@ -10,5 +10,5 @@ data:
   port: "9846"
   websocketPingInterval: 10s
   scrollbackLines: "1000"
-  maxSessions: "32"
-  maxClientsPerSession: "8"
+  maxConnectionInstances: "32"
+  maxClientsPerConnectionInstance: "8"
