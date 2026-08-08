@@ -171,7 +171,7 @@ func (d Document) Definitions(knownKeys map[string]bool) []Definition {
 }
 
 func definitionFromBlock(block Block, knownKeys map[string]bool, warnings []Warning) Definition {
-	result := Definition{ConnectionDefinitionID: DefinitionID(block.Alias), Type: "ssh", HostAlias: block.Alias, IdentityFileNames: []string{}, Warnings: append([]Warning(nil), warnings...), Capabilities: map[string]bool{"edit": true, "delete": true}}
+	result := Definition{ConnectionDefinitionID: DefinitionID(block.Alias), Type: "ssh", HostAlias: block.Alias, IdentityFileNames: []string{}, Warnings: append([]Warning{}, warnings...), Capabilities: map[string]bool{"edit": true, "delete": true}}
 	trustUnknown := false
 	for _, directive := range block.Directives {
 		key := strings.ToLower(directive.Keyword)

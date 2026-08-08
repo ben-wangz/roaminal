@@ -107,7 +107,9 @@ export function ConnectionManager({ instances, onConnect, onGenerated, onOpenWor
 }
 
 function SourceBand({ source }: { source: ConfigSource }) {
-  return <div className={`source-band ${source.writable ? 'writable' : 'readonly'}`}><div><strong>SSH config</strong><span>{source.status}</span></div><div className="source-capabilities"><span>{source.readable ? 'read' : 'unreadable'}</span><span>{source.writable ? 'write' : 'read-only'}</span>{source.warnings.length > 0 && <span>{source.warnings.length} warnings</span>}</div>{(source.blockers.length > 0 || source.reason) && <small>{source.reason || source.blockers.join(', ')}</small>}</div>;
+  const warnings = source.warnings || [];
+  const blockers = source.blockers || [];
+  return <div className={`source-band ${source.writable ? 'writable' : 'readonly'}`}><div><strong>SSH config</strong><span>{source.status}</span></div><div className="source-capabilities"><span>{source.readable ? 'read' : 'unreadable'}</span><span>{source.writable ? 'write' : 'read-only'}</span>{warnings.length > 0 && <span>{warnings.length} warnings</span>}</div>{(blockers.length > 0 || source.reason) && <small>{source.reason || blockers.join(', ')}</small>}</div>;
 }
 function LocalRow({ onConnect }: { onConnect: () => void }) { return <article className="connection-row local-row"><div className="connection-row-main"><span className="row-icon local-icon"><Home size={17} aria-hidden="true" /></span><div><strong>Local</strong><small>/workspace</small></div></div><button className="icon-button play-button" type="button" onClick={onConnect} aria-label="Start local connection" title="Start local connection"><Play size={16} fill="currentColor" aria-hidden="true" /></button></article>; }
 

@@ -77,7 +77,8 @@ func (r *Repository) Read(knownKeys map[string]bool) (Document, string, ConfigSo
 	}
 	doc := Parse(data, capability)
 	etag := r.etag(append(data, byte(0)), capabilityFingerprint(info, capability))
-	source := ConfigSource{Status: capability.Status, Readable: capability.Readable, Writable: capability.Writable, Warnings: doc.Warnings}
+	warnings := append([]Warning{}, doc.Warnings...)
+	source := ConfigSource{Status: capability.Status, Readable: capability.Readable, Writable: capability.Writable, Warnings: warnings, Blockers: []string{}}
 	if !capability.Writable && capability.Reason != "" {
 		source.Blockers = []string{capability.Reason}
 		source.Reason = capability.Reason

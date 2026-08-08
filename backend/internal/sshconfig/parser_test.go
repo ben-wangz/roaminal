@@ -45,6 +45,9 @@ func TestRepositoryUpdateIsLosslessAndUsesETag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if collection.ConfigSource.Warnings == nil || collection.ConfigSource.Blockers == nil {
+		t.Fatalf("source arrays must be non-nil: %+v", collection.ConfigSource)
+	}
 	if collection.ETag == etag {
 		t.Fatal("etag did not change")
 	}

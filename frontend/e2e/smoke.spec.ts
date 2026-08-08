@@ -9,6 +9,9 @@ async function authenticate(page: import('@playwright/test').Page): Promise<void
     await page.getByRole('button', { name: 'Connect' }).click();
   }
   await expect(page.locator('.app-shell')).toBeVisible({ timeout: 15000 });
+  if (await page.locator('.connection-manager').isVisible()) {
+    await page.getByRole('button', { name: 'Start local connection' }).click();
+  }
   await expect(page.locator('.session-card').first()).toBeVisible({ timeout: 15000 });
 }
 
@@ -81,6 +84,7 @@ test('terminal action menu renames without a close-tab command', async ({ page }
   const card = page.locator('.session-card').first();
   await card.getByRole('button', { name: 'Terminal actions' }).click();
   await expect(page.getByRole('menuitem', { name: 'Rename title...' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: /Close connection/i })).toHaveCount(1);
   await expect(page.getByRole('menuitem', { name: /Close tab/i })).toHaveCount(0);
   await page.keyboard.press('Escape');
 });
@@ -104,7 +108,7 @@ function testInfoProjectIsDesktop(page: import('@playwright/test').Page): boolea
 test('mobile sidebar is an accessible overlay without preview runtimes', async ({ page }) => {
   test.skip((page.viewportSize()?.width || 0) > 800, 'mobile overlay runs in phone projects');
   await authenticate(page);
-  const sidebar = page.locator('#terminal-sidebar');
+  const sidebar = page.locator('#connection-sidebar');
   await expect(sidebar).toHaveClass(/closed/);
   await page.getByRole('button', { name: 'Open sidebar' }).click();
   await expect(sidebar).toHaveClass(/open/);
