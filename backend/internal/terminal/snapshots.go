@@ -16,41 +16,47 @@ func (s *Session) scheduleSnapshotLocked() {
 	}
 }
 func (s *Session) saveSnapshot() {
-	s.saveSnapshotWithClosed(false)
+	_ = s.saveSnapshotWithClosed(false)
 }
 
-func (s *Session) saveSnapshotFinal() {
-	s.saveSnapshotWithClosed(true)
+func (s *Session) saveSnapshotFinal() error {
+	return s.saveSnapshotWithClosed(true)
 }
 
-func (s *Session) saveSnapshotWithClosed(force bool) {
+func (s *Session) saveSnapshotWithClosed(force bool) error {
 	s.mu.Lock()
 	if s.closed && !force {
 		s.mu.Unlock()
-		return
+		return nil
 	}
 	sequence, meta := s.sequence, s.meta
 	s.snapshotTimer, s.dirtySince = nil, time.Time{}
 	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if s.manager.worker == nil {
+		err := fmt.Errorf("terminal worker unavailable")
+		s.manager.storeDegraded(meta.ID, err)
+		return err
+	}
 	payload, through, err := s.manager.worker.Snapshot(ctx, meta.ID, strconv.FormatUint(sequence, 10))
 	if err != nil {
 		s.manager.storeDegraded(meta.ID, err)
-		return
+		return err
 	}
 	if s.manager.store == nil {
-		return
+		return nil
 	}
 	if err := s.manager.store.SaveSnapshot(meta.ID, persistence.SnapshotHeader{Cols: meta.Cols, Rows: meta.Rows, ScrollbackLines: s.manager.cfg.ScrollbackLines, ThroughSequence: through}, payload); err != nil {
 		s.manager.storeDegraded(meta.ID, err)
-		return
+		return err
 	}
 	s.mu.Lock()
 	if !s.closed && s.sequence != sequence {
 		s.scheduleSnapshotLocked()
 	}
 	s.mu.Unlock()
+	return nil
 }
 func (s *Session) broadcastLocked(data []byte) {
 	for client := range s.clients {

@@ -49,3 +49,6 @@ export async function publicKey(id: string): Promise<string> {
   const result = await api<{ publicKey: string }>(`/api/ssh-keys/${encodeURIComponent(id)}/public-key`);
   return result.publicKey;
 }
+export async function deleteKey(id: string): Promise<void> {
+  await api<void>(`/api/ssh-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}

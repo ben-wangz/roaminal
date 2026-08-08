@@ -39,9 +39,11 @@
 .keys-panel { margin-top: 18px; }
 .keys-panel .manager-toolbar { margin-top: 0; }
 .keys-panel h2 { font-size: 1rem; }
+.key-generate-actions, .key-actions { display: flex; align-items: center; gap: 4px; }
+.key-generate-actions { flex-wrap: wrap; justify-content: flex-end; }
 .panel-muted { margin: 5px 0 0; color: var(--muted); font-size: .7rem; }
 .key-table { margin-top: 12px; border-top: 1px solid var(--border); }
-.key-table-head, .key-table-row { display: grid; grid-template-columns: minmax(150px, 1.4fr) minmax(90px, .7fr) minmax(140px, 1.4fr) minmax(70px, .5fr) 36px; align-items: center; gap: 10px; padding: 11px 8px; border-bottom: 1px solid rgba(147,161,161,.14); font-size: .7rem; }
+.key-table-head, .key-table-row { display: grid; grid-template-columns: minmax(150px, 1.4fr) minmax(90px, .7fr) minmax(140px, 1.4fr) minmax(70px, .5fr) 72px; align-items: center; gap: 10px; padding: 11px 8px; border-bottom: 1px solid rgba(147,161,161,.14); font-size: .7rem; }
 .key-table-head { color: var(--muted); font-size: .64rem; text-transform: uppercase; }
 .key-table-row code { overflow: hidden; color: var(--cyan); font-size: .65rem; text-overflow: ellipsis; white-space: nowrap; }
 .connection-editor { display: grid; width: min(560px, calc(100vw - 40px)); gap: 12px; }

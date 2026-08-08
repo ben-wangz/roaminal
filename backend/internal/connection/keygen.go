@@ -26,6 +26,7 @@ func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequ
 		m.finishKeyGeneration(id, paths, status)
 	})
 	if err != nil {
+		_ = m.keys.DiscardGeneration(paths)
 		return Summary{}, err
 	}
 	return result, nil
@@ -33,10 +34,12 @@ func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequ
 
 func (m *Manager) finishKeyGeneration(id string, paths sshkey.GenerationPaths, status terminal.ExitStatus) {
 	if status.ExitCode == nil || *status.ExitCode != 0 {
+		_ = m.keys.DiscardGeneration(paths)
 		_ = m.Manager.MarkGenerationResult(id, "failed", "ssh-keygen exited unsuccessfully")
 		return
 	}
 	if err := m.keys.Promote(paths); err != nil {
+		_ = m.keys.DiscardGeneration(paths)
 		_ = m.Manager.MarkGenerationResult(id, "promotion_failed", safeGenerationError(err))
 		return
 	}

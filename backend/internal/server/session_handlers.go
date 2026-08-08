@@ -92,13 +92,9 @@ func (s *Server) closeConnectionInstance(w http.ResponseWriter, r *http.Request,
 		}
 		return
 	}
-	for _, item := range s.terms.Summaries() {
-		if item.ID == id {
-			writeJSON(w, http.StatusOK, item)
-			return
-		}
-	}
-	writeError(w, http.StatusNotFound, "not found")
+	// Close retires the active session after archiving it, so there is no
+	// attachable history to return.
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) deleteConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {

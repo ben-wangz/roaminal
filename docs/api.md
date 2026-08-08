@@ -24,8 +24,12 @@ endpoints below. Other HTTP endpoints require `Authorization: Bearer <access>`.
 | GET | `/api/connection-instances/:id` | inspect one connection instance |
 | POST | `/api/connection-instances` | create a local connection instance (`201`) |
 | PATCH | `/api/connection-instances/:id/title` | update a connection title |
-| POST | `/api/connection-instances/:id/close` | close while retaining readonly history |
-| DELETE | `/api/connection-instances/:id` | delete a connection instance and history (`204`) |
+| POST | `/api/connection-instances/:id/close` | stop, archive, and retire a connection instance (`204`) |
+| DELETE | `/api/connection-instances/:id` | stop, archive, and retire a connection instance (`204`) |
+| GET | `/api/ssh-keys` | list detected Ed25519/RSA key metadata |
+| DELETE | `/api/ssh-keys/:keyId` | delete a writable managed key pair (`204`) |
+| GET | `/api/ssh-keys/:keyId/public-key` | read a detected public key |
+| POST | `/api/ssh-key-generations` | start generation for an algorithm without an existing key |
 
 `POST /api/connection-instances` accepts `connectionDefinitionId: "local"` and optional `initialCwd`, `cols`, and `rows`. `initialCwd` must be
 an existing absolute directory. Dimensions are `cols: 2..1000` and

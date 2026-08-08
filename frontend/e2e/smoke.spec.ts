@@ -99,7 +99,7 @@ test('key generator keeps algorithm focus while changing fields', async ({ page 
   if (!(await manager.isVisible())) await page.locator('main').getByRole('button', { name: 'Connections' }).click();
   await expect(manager).toBeVisible();
   await manager.getByRole('button', { name: /^Keys/ }).click();
-  await manager.getByRole('button', { name: 'Generate key' }).click();
+  await manager.getByRole('button', { name: /RSA/ }).click();
   const algorithm = page.getByLabel('Algorithm');
   await expect(algorithm).toBeVisible();
   await algorithm.focus();

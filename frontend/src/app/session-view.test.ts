@@ -21,9 +21,9 @@ describe('single active session reconciliation', () => {
     expect(selectSession({ activeSessionId: 'a' }, 'b')).toEqual({ activeSessionId: 'b' });
   });
 
-  it('keeps a closed session selected so its history can be read or deleted', () => {
+  it('clears the active session when no connection survives its exit', () => {
     const exited = { ...session('a'), closed: true, exitStatus: { exitCode: 0, signal: null } };
-    expect(reconcileSession([exited], { activeSessionId: 'a' }, ['a'])).toEqual({ activeSessionId: 'a' });
+    expect(reconcileSession([], { activeSessionId: 'a' }, ['a'])).toEqual({ activeSessionId: null });
   });
 
   it('does not restore the removed terminal tab state', async () => {

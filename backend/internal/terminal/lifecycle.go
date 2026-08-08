@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"github.com/creack/pty"
@@ -21,8 +22,8 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 	if m.store.ConnectionLayout() {
 		for _, meta := range metas {
-			if err := m.restoreHistory(ctx, meta); err != nil {
-				return err
+			if err := m.retirePersisted(ctx, meta); err != nil {
+				fmt.Fprintf(os.Stderr, "Roaminal session %s startup cleanup warning: %v\n", meta.ID, err)
 			}
 		}
 		return nil
@@ -33,6 +34,21 @@ func (m *Manager) Start(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (m *Manager) retirePersisted(_ context.Context, meta persistence.SessionMeta) error {
+	if meta.Lifecycle == "live" || meta.Lifecycle == "" {
+		meta.Lifecycle = "interrupted"
+		meta.BackendRuntimeID = m.runtimeID
+		meta.UpdatedAt = time.Now().UTC()
+		if err := m.store.SaveSession(meta); err != nil {
+			return err
+		}
+	}
+	if err := m.store.ArchiveSession(meta.ID); err != nil {
+		return err
+	}
+	return m.store.DeleteSession(meta.ID)
 }
 
 func (m *Manager) restoreHistory(ctx context.Context, meta persistence.SessionMeta) error {
@@ -139,7 +155,6 @@ func (m *Manager) startSession(ctx context.Context, meta persistence.SessionMeta
 		}
 		return nil, err
 	}
-	m.startLoops(session)
 	return session, nil
 }
 
@@ -160,7 +175,7 @@ func (m *Manager) startCommand(meta persistence.SessionMeta, cwd string, argv []
 	if err != nil {
 		return nil, fmt.Errorf("start bash: %w", err)
 	}
-	return &Session{manager: m, meta: meta, cmd: cmd, pty: file, clients: make(map[*Client]struct{}), command: argv[0]}, nil
+	return &Session{manager: m, meta: meta, cmd: cmd, pty: file, clients: make(map[*Client]struct{}), command: argv[0], readDone: make(chan struct{})}, nil
 }
 func (m *Manager) startLoops(session *Session) { go session.readLoop(); go session.waitLoop() }
 func (m *Manager) abortSession(ctx context.Context, session *Session, workerReady bool) {

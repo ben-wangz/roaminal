@@ -70,6 +70,9 @@ func (m *Manager) SetSources(repo *sshconfig.Repository, keys *sshkey.Inventory)
 }
 
 func (m *Manager) Start(ctx context.Context) error {
+	if m.keys != nil {
+		m.keys.CleanupStaging()
+	}
 	if err := m.Manager.Start(ctx); err != nil {
 		return err
 	}

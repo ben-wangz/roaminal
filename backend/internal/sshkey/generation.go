@@ -42,6 +42,28 @@ func (i *Inventory) PrepareGeneration(instanceID string, request GenerationReque
 	if algorithm != "ed25519" && algorithm != "rsa" {
 		return GenerationPaths{}, errors.New("unsupported key algorithm")
 	}
+	i.generationMu.Lock()
+	if i.generating == nil {
+		i.generating = make(map[string]struct{})
+	}
+	for _, key := range i.List() {
+		if key.Algorithm == algorithm {
+			i.generationMu.Unlock()
+			return GenerationPaths{}, fmt.Errorf("%s key already exists", algorithm)
+		}
+	}
+	if _, ok := i.generating[algorithm]; ok {
+		i.generationMu.Unlock()
+		return GenerationPaths{}, fmt.Errorf("%s key generation is already in progress", algorithm)
+	}
+	i.generating[algorithm] = struct{}{}
+	i.generationMu.Unlock()
+	reserved := true
+	defer func() {
+		if reserved {
+			i.releaseGeneration(algorithm)
+		}
+	}()
 	if request.FileName == "" || strings.ContainsAny(request.FileName, `/\\`) || strings.HasSuffix(request.FileName, ".pub") {
 		return GenerationPaths{}, errors.New("invalid key filename")
 	}
@@ -95,6 +117,7 @@ func (i *Inventory) PrepareGeneration(instanceID string, request GenerationReque
 	if err := i.Root.Chmod(staging, 0o700); err != nil {
 		return GenerationPaths{}, err
 	}
+	reserved = false
 	return GenerationPaths{Algorithm: algorithm, StagingDirectory: staging, PrivateStaging: staging + "/private", PublicStaging: staging + "/private.pub", PrivateName: request.FileName, PublicName: publicName}, nil
 }
 
@@ -118,6 +141,7 @@ func (i *Inventory) GenerationCommand(paths GenerationPaths, request GenerationR
 }
 
 func (i *Inventory) Promote(paths GenerationPaths) error {
+	defer i.releaseGeneration(paths.Algorithm)
 	if i == nil || i.Root == nil || !i.Root.Available() {
 		return sshfs.ErrUnavailable
 	}
@@ -144,6 +168,29 @@ func (i *Inventory) Promote(paths GenerationPaths) error {
 	}
 	_ = i.Root.RemoveAll(paths.StagingDirectory)
 	return nil
+}
+
+func (i *Inventory) DiscardGeneration(paths GenerationPaths) error {
+	defer i.releaseGeneration(paths.Algorithm)
+	if i == nil || i.Root == nil || paths.StagingDirectory == "" {
+		return nil
+	}
+	return i.Root.RemoveAll(paths.StagingDirectory)
+}
+
+func (i *Inventory) CleanupStaging() {
+	if i == nil || i.Root == nil || !i.Root.Available() {
+		return
+	}
+	entries, err := i.Root.ReadDir()
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".roaminal-keygen-") {
+			_ = i.Root.RemoveAll(entry.Name())
+		}
+	}
 }
 
 func validPublicAlgorithm(data []byte, algorithm string) bool {

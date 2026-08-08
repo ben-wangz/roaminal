@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
@@ -26,12 +27,23 @@ type Key struct {
 }
 
 type Inventory struct {
-	Root       *sshfs.Root
-	KeygenPath string
+	Root         *sshfs.Root
+	KeygenPath   string
+	generationMu sync.Mutex
+	generating   map[string]struct{}
 }
 
 func New(root *sshfs.Root) *Inventory {
-	return &Inventory{Root: root, KeygenPath: discover("ssh-keygen")}
+	return &Inventory{Root: root, KeygenPath: discover("ssh-keygen"), generating: make(map[string]struct{})}
+}
+
+func (i *Inventory) releaseGeneration(algorithm string) {
+	if i == nil {
+		return
+	}
+	i.generationMu.Lock()
+	delete(i.generating, algorithm)
+	i.generationMu.Unlock()
 }
 
 func (i *Inventory) List() []Key {

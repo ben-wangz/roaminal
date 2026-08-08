@@ -102,6 +102,7 @@ type Store struct {
 	Root             string
 	SessionsDir      string
 	ConnectionsDir   string
+	AuditDir         string
 	Layout           Layout
 	connectionLayout bool
 	degradedMu       sync.RWMutex

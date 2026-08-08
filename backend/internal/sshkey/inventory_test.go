@@ -58,3 +58,48 @@ func TestInventoryRejectsEscapingKeySymlink(t *testing.T) {
 		t.Fatalf("escaping key should be rejected: %+v", keys)
 	}
 }
+
+func TestDeleteRemovesPrivateAndPublicPair(t *testing.T) {
+	keygen, err := exec.LookPath("ssh-keygen")
+	if err != nil {
+		t.Skip("ssh-keygen is unavailable")
+	}
+	rootPath := t.TempDir()
+	path := filepath.Join(rootPath, "id_remove_ed25519")
+	if output, err := exec.Command(keygen, "-q", "-t", "ed25519", "-N", "", "-f", path).CombinedOutput(); err != nil {
+		t.Fatalf("ssh-keygen: %v (%s)", err, output)
+	}
+	root, err := sshfs.OpenAt(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	inventory := New(root)
+	if err := inventory.Delete(KeyID("id_remove_ed25519")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("private key still exists: %v", err)
+	}
+	if _, err := os.Stat(path + ".pub"); !os.IsNotExist(err) {
+		t.Fatalf("public key still exists: %v", err)
+	}
+}
+
+func TestDeleteRejectsProjectedKeySymlink(t *testing.T) {
+	rootPath := t.TempDir()
+	if err := os.WriteFile(filepath.Join(rootPath, "id_project_ed25519"), []byte("key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("id_project_ed25519", filepath.Join(rootPath, "id_link_ed25519")); err != nil {
+		t.Fatal(err)
+	}
+	root, err := sshfs.OpenAt(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := New(root).Delete(KeyID("id_link_ed25519")); err == nil {
+		t.Fatal("expected symlink deletion to be rejected")
+	}
+}

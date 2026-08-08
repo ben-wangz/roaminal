@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -16,14 +18,6 @@ func (m *Manager) Shutdown(ctx context.Context) {
 		sessions = append(sessions, session)
 	}
 	m.mu.RUnlock()
-	for _, session := range sessions {
-		session.mu.Lock()
-		if session.snapshotTimer != nil {
-			session.snapshotTimer.Stop()
-		}
-		session.mu.Unlock()
-		session.saveSnapshot()
-	}
 	stopDone := make(chan struct{}, len(sessions))
 	for _, session := range sessions {
 		go func(session *Session) {
@@ -33,14 +27,18 @@ func (m *Manager) Shutdown(ctx context.Context) {
 			session.meta.Lifecycle = "interrupted"
 			session.meta.BackendRuntimeID = session.manager.runtimeID
 			session.meta.UpdatedAt = time.Now().UTC()
-			meta := session.meta
-			_ = session.pty.Close()
-			session.mu.Unlock()
-			if session.manager.store != nil {
-				_ = session.manager.store.SaveSession(meta)
+			if session.snapshotTimer != nil {
+				session.snapshotTimer.Stop()
+				session.snapshotTimer = nil
 			}
+			if session.pty != nil {
+				_ = session.pty.Close()
+			}
+			session.mu.Unlock()
 			_ = terminateSessionProcessGroup(ctx, cmd)
-			session.saveSnapshotFinal()
+			if err := m.retireSession(ctx, session); err != nil {
+				fmt.Fprintf(os.Stderr, "Roaminal session %s shutdown cleanup warning: %v\n", session.meta.ID, err)
+			}
 			stopDone <- struct{}{}
 		}(session)
 	}
@@ -49,7 +47,9 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	}
 	deadline, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_ = m.worker.Shutdown(deadline)
+	if m.worker != nil {
+		_ = m.worker.Shutdown(deadline)
+	}
 }
 
 func signalProcessGroup(cmd *exec.Cmd, signal syscall.Signal) error {

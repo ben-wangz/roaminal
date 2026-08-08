@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
+	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 )
 
@@ -217,4 +218,28 @@ func (s *Server) publicSSHKey(w http.ResponseWriter, r *http.Request, _ string) 
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]string{"publicKey": value})
+}
+
+func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request, _ string) {
+	if s.sshKeys == nil {
+		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable", "ssh_keys")
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/ssh-keys/")
+	if id == "" || strings.Contains(id, "/") {
+		writeError(w, http.StatusBadRequest, "invalid key id")
+		return
+	}
+	if err := s.sshKeys.Delete(id); err != nil {
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			writeError(w, http.StatusNotFound, "key not found")
+		case errors.Is(err, sshfs.ErrNotWritable), errors.Is(err, sshfs.ErrUnavailable):
+			writeError(w, http.StatusConflict, err.Error(), "ssh_keys")
+		default:
+			writeError(w, http.StatusBadRequest, err.Error(), "ssh_keys")
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

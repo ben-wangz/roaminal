@@ -140,6 +140,9 @@ type Session struct {
 	exitStatus    *ExitStatus
 	command       string
 	onExit        func(ExitStatus)
+	readDone      chan struct{}
+	retiring      bool
+	retired       bool
 }
 
 func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *worker.Client) *Manager {

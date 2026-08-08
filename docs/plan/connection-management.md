@@ -1,5 +1,10 @@
 # Roaminal Connection 管理实施设计
 
+> 策略更新：connection 退出后不再保留可挂载的 history。系统会先将最新
+> metadata 和 terminal snapshot 复制到 audit 目录，再删除活动 instance 目录。
+> audit 副本目前仅作为审计材料保留，不提供 UI 或查询 API；前端自动选择下一个
+> live connection，没有可选项时返回 connection manager。
+
 状态：设计已确认，已于 2026-08-08 授权实施。执行 agent 按本文阶段连续实施，除本文定义
 的停止条件外不得等待人工确认。
 

@@ -7,7 +7,14 @@ The complete persistent state is the `.roaminal` directory plus the separate
 auth-sessions.json
 connection-instances/<uuid>/metadata.json
 connection-instances/<uuid>/terminal.snapshot
+audit/connection-instances/<uuid>/metadata.json
+audit/connection-instances/<uuid>/terminal.snapshot
 ```
+
+活动 connection 退出后，Roaminal 先将最新 metadata 和 terminal snapshot 复制到
+`audit/connection-instances/<uuid>/`，再删除 `connection-instances/<uuid>/`。
+审计材料目前只作为保留副本，不提供 UI 或查询 API；没有 snapshot 时只保留 metadata。
+因此活动目录不会积累可重新连接的历史记录。
 
 The `.ssh` directory contains user-managed SSH config, keys, and known-hosts
 data. Back it up separately as high-sensitivity user data; never include it in

@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -49,13 +50,13 @@ func (s *Session) waitLoop() {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", s.meta.ID, err)
 	}
 	onExit := s.onExit
-	if onExit != nil {
-		exitStatus := *status
-		s.mu.Unlock()
-		onExit(exitStatus)
-		return
-	}
 	s.mu.Unlock()
+	if onExit != nil {
+		onExit(*status)
+	}
+	if err := s.manager.retireSession(context.Background(), s); err != nil {
+		fmt.Fprintf(os.Stderr, "Roaminal session %s cleanup warning: %v\n", s.meta.ID, err)
+	}
 }
 
 func statusCode(status *ExitStatus) int {
@@ -65,6 +66,9 @@ func statusCode(status *ExitStatus) int {
 	return *status.ExitCode
 }
 func (s *Session) readLoop() {
+	if s.readDone != nil {
+		defer close(s.readDone)
+	}
 	buffer := make([]byte, 64*1024)
 	for {
 		n, err := s.pty.Read(buffer)

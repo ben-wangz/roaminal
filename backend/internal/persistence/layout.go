@@ -65,6 +65,7 @@ func newStore(root string, connectionLayout bool) (*Store, error) {
 		return nil, fmt.Errorf("prepare sessions directory: %w", err)
 	}
 	connectionsDir := filepath.Join(stateRoot, "connection-instances")
+	auditDir := filepath.Join(stateRoot, "audit")
 	if connectionLayout {
 		if err := os.MkdirAll(connectionsDir, 0o700); err != nil {
 			return nil, fmt.Errorf("create connection instances directory: %w", err)
@@ -72,8 +73,17 @@ func newStore(root string, connectionLayout bool) (*Store, error) {
 		if err := ensurePrivateDirectory(connectionsDir); err != nil {
 			return nil, fmt.Errorf("prepare connection instances directory: %w", err)
 		}
+		if err := os.MkdirAll(filepath.Join(auditDir, "connection-instances"), 0o700); err != nil {
+			return nil, fmt.Errorf("create audit directory: %w", err)
+		}
+		if err := ensurePrivateDirectory(auditDir); err != nil {
+			return nil, fmt.Errorf("prepare audit directory: %w", err)
+		}
+		if err := ensurePrivateDirectory(filepath.Join(auditDir, "connection-instances")); err != nil {
+			return nil, fmt.Errorf("prepare audit connection directory: %w", err)
+		}
 	}
-	return &Store{Root: stateRoot, SessionsDir: sessionsDir, ConnectionsDir: connectionsDir, Layout: layout, connectionLayout: connectionLayout, degradedIDs: make(map[string]struct{})}, nil
+	return &Store{Root: stateRoot, SessionsDir: sessionsDir, ConnectionsDir: connectionsDir, AuditDir: auditDir, Layout: layout, connectionLayout: connectionLayout, degradedIDs: make(map[string]struct{})}, nil
 }
 
 func stateRootHasData(root string) (bool, error) {
@@ -93,6 +103,13 @@ func stateRootHasData(root string) (bool, error) {
 		return false, err
 	}
 	entries, err := os.ReadDir(filepath.Join(root, "sessions"))
+	if err == nil && len(entries) > 0 {
+		return true, nil
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	entries, err = os.ReadDir(filepath.Join(root, "connection-instances"))
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}

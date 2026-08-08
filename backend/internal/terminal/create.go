@@ -93,36 +93,18 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 	reserved = false
 	m.sessions[id] = session
 	m.mu.Unlock()
+	m.startLoops(session)
 	return m.summary(session), nil
 }
 
 func (m *Manager) Delete(ctx context.Context, id string) error {
-	m.mu.Lock()
-	session, ok := m.sessions[id]
-	if ok {
-		delete(m.sessions, id)
-	}
-	m.mu.Unlock()
-	if !ok {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
 		return os.ErrNotExist
 	}
-	session.mu.Lock()
-	cmd := session.cmd
-	session.closed = true
-	_ = session.pty.Close()
-	for client := range session.clients {
-		client.close()
-	}
-	session.clients = make(map[*Client]struct{})
-	session.controlOwner = nil
-	session.mu.Unlock()
-	_ = terminateSessionProcessGroup(ctx, cmd)
-	session.saveSnapshotFinal()
-	_ = m.worker.CloseSession(ctx, id)
-	if m.store != nil {
-		return m.store.DeleteSession(id)
-	}
-	return nil
+	return m.terminateSession(ctx, session, "exited")
 }
 
 func (m *Manager) connectionLimit() int {
@@ -132,8 +114,8 @@ func (m *Manager) connectionLimit() int {
 	return m.cfg.MaxSessions
 }
 
-// Close ends a live terminal while retaining its in-memory worker history and
-// metadata. Delete removes that history separately.
+// Close ends a live connection and retires its active session. The audit copy
+// is retained, but no closed history remains attachable in the workspace.
 func (m *Manager) Close(ctx context.Context, id string) error {
 	m.mu.RLock()
 	session := m.sessions[id]
@@ -144,27 +126,8 @@ func (m *Manager) Close(ctx context.Context, id string) error {
 	session.mu.Lock()
 	if session.closed {
 		session.mu.Unlock()
-		return nil
+		return m.retireSession(ctx, session)
 	}
-	cmd := session.cmd
-	session.closed = true
-	session.meta.Lifecycle = "exited"
-	_ = session.pty.Close()
-	for client := range session.clients {
-		client.close()
-	}
-	session.clients = make(map[*Client]struct{})
-	session.controlOwner = nil
 	session.mu.Unlock()
-	_ = terminateSessionProcessGroup(ctx, cmd)
-	session.saveSnapshotFinal()
-	if m.store != nil {
-		m.mu.RLock()
-		current := m.sessions[id]
-		m.mu.RUnlock()
-		current.mu.Lock()
-		_ = m.store.SaveSession(current.meta)
-		current.mu.Unlock()
-	}
-	return nil
+	return m.terminateSession(ctx, session, "exited")
 }
