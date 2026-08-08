@@ -37,3 +37,9 @@ The production image includes the terminal worker's production dependency tree
 and the notices copied by the `Containerfile`. License text remains owned by
 each upstream project; this inventory is not a replacement for those package
 notices.
+
+## Base image system tools
+
+The production image also installs the distribution `openssh-client` package.
+OpenSSH is invoked as the system SSH runtime; Roaminal does not embed or
+redistribute an SSH implementation.

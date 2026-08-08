@@ -4,8 +4,8 @@
 
 Build an immutable Git-SHA image, then run it with persistent state and
 workspace volumes. The runtime image contains the Go service, Node runtime,
-official xterm headless worker, Bash, CA certificates, and `tini`; it does not
-contain npm, compilers, or a networked worker.
+official xterm headless worker, Bash, CA certificates, OpenSSH client, and
+`tini`; it does not contain npm, compilers, or an SSH server.
 
 ```sh
 IMAGE=registry.internal.example/roaminal:$(git rev-parse HEAD)
@@ -14,6 +14,7 @@ podman run --rm --name roaminal \
   --restart unless-stopped -p 9846:9846 \
   -e ROAMINAL_ACCEPT_TERMS=true -e ROAMINAL_PASSWORD='use-a-secret' \
   -v roaminal-state:/home/roaminal/.roaminal \
+  -v roaminal-ssh:/home/roaminal/.ssh \
   -v roaminal-workspace:/workspace "$IMAGE"
 podman push "$IMAGE"
 ```
@@ -27,10 +28,16 @@ different port. Verify `GET /healthz` before exercising login or WebSocket flow.
 The manifests in `deploy/kubernetes/` are intentionally ordinary YAML. Replace
 the image in `deployment.yaml` with the pushed Git-SHA tag and create the Secret
 from a secret manager rather than applying `secret.example.yaml` unchanged.
-The Deployment has one replica and `Recreate`, RWO state/workspace PVCs, a
+The Deployment has one replica and `Recreate`, separate RWO state/workspace/SSH PVCs, a
 ClusterIP Service, restrictive security contexts, and the required startup,
 readiness, and liveness probes. State is mounted at
-`/home/roaminal/.roaminal`; the terminal's initial cwd is `/workspace`.
+`/home/roaminal/.roaminal`, SSH facts at `/home/roaminal/.ssh`, and the local
+connection's initial cwd is `/workspace`.
+
+The SSH volume can instead be a read-only whole-directory Secret, or a direct
+Secret mount at `config` or an allowlisted key filename. Read-only mounts remain
+usable for local and remote connections; only structured config edits, key
+generation, and OpenSSH known-host updates lose their write capability.
 
 ```sh
 kubectl apply --server-side --dry-run=server -n develop \
@@ -57,7 +64,9 @@ worker, PVCs, or a runtime socket.
 
 PVCs must be writable by UID/GID 1000 (or use an equivalent storage policy that
 sets the ownership). Keep `fsGroup: 1000` when the storage driver supports it.
-Back up the state PVC before upgrades. `Recreate` intentionally interrupts the
+Keep the SSH PVC separate from state backups and treat it as high-sensitivity
+credential material. Back up the state and SSH volumes before upgrades.
+`Recreate` intentionally interrupts the
 single service during an upgrade; the new pod starts new Bash processes and
 restores metadata and scrollback from the state PVC. See
 [backup/recovery](backup-recovery.md).

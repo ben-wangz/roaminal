@@ -23,6 +23,7 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -83,6 +84,8 @@ spec:
               mountPath: /home/roaminal/.roaminal
             - name: workspace
               mountPath: /workspace
+            - name: ssh
+              mountPath: /home/roaminal/.ssh
             - name: tmp
               mountPath: /tmp
           resources:
@@ -120,5 +123,8 @@ spec:
         - name: workspace
           persistentVolumeClaim:
             claimName: roaminal-workspace
+        - name: ssh
+          persistentVolumeClaim:
+            claimName: roaminal-ssh
         - name: tmp
           emptyDir: {}

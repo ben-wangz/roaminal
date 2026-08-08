@@ -1,12 +1,17 @@
 # Backup and Recovery
 
-The complete persistent state is the `.roaminal` directory:
+The complete persistent state is the `.roaminal` directory plus the separate
+`.ssh` directory:
 
 ```text
 auth-sessions.json
-sessions/<uuid>.json
-sessions/<uuid>.snapshot
+connection-instances/<uuid>/metadata.json
+connection-instances/<uuid>/terminal.snapshot
 ```
+
+The `.ssh` directory contains user-managed SSH config, keys, and known-hosts
+data. Back it up separately as high-sensitivity user data; never include it in
+support bundles or ordinary diagnostics.
 
 If a storage driver exposes the PVC mount root as an fsGroup-owned directory
 that the non-root process cannot chmod, Roaminal places the same layout below

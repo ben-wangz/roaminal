@@ -27,13 +27,14 @@ LABEL org.opencontainers.image.source="https://github.com/ben-wangz/roaminal" \
       org.opencontainers.image.licenses="MPL-2.0" \
       org.opencontainers.image.version="${ROAMINAL_VERSION}"
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash ca-certificates tini \
+    && apt-get install -y --no-install-recommends bash ca-certificates openssh-client tini \
     && rm -rf /var/lib/apt/lists/* \
     && groupmod --new-name roaminal node \
     && usermod --login roaminal --home /home/roaminal --move-home node \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/yarn \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
-    && mkdir -p /opt/roaminal/terminal-worker /home/roaminal/.roaminal /workspace \
+    && mkdir -p /opt/roaminal/terminal-worker /home/roaminal/.roaminal /home/roaminal/.ssh /workspace \
+    && chmod 0700 /home/roaminal/.ssh \
     && chown -R roaminal:roaminal /opt/roaminal /home/roaminal /workspace
 COPY --from=backend-builder /out/roaminal /usr/local/bin/roaminal
 COPY --from=frontend-builder /src/frontend/dist /opt/roaminal/frontend
