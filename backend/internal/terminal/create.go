@@ -117,6 +117,7 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 	session.controlOwner = nil
 	session.mu.Unlock()
 	_ = terminateSessionProcessGroup(ctx, cmd)
+	session.saveSnapshotFinal()
 	_ = m.worker.CloseSession(ctx, id)
 	if m.store != nil {
 		return m.store.DeleteSession(id)
@@ -156,6 +157,7 @@ func (m *Manager) Close(ctx context.Context, id string) error {
 	session.controlOwner = nil
 	session.mu.Unlock()
 	_ = terminateSessionProcessGroup(ctx, cmd)
+	session.saveSnapshotFinal()
 	if m.store != nil {
 		m.mu.RLock()
 		current := m.sessions[id]

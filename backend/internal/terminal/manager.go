@@ -143,4 +143,6 @@ func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *wor
 func (m *Manager) Fatal() <-chan error       { return m.fatal }
 func (m *Manager) WorkerFatal(err error)     { m.fail(err) }
 func (m *Manager) SetRuntimeID(id string)    { m.runtimeID = id }
+func (m *Manager) RuntimeID() string         { return m.runtimeID }
+func (m *Manager) InitialCwd() string        { return m.cfg.InitialCwd }
 func (m *Manager) PersistenceDegraded() bool { return m.store != nil && m.store.PersistenceDegraded() }

@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 )
 
 type createConnectionRequest struct {
@@ -42,17 +45,23 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	if body.ConnectionDefinitionID != "local" && body.ConnectionDefinitionID != "" {
-		writeError(w, http.StatusUnprocessableEntity, "remote connection definitions are not available", "connection_definition_id")
-		return
-	}
 	cwd := ""
 	if body.InitialCwd != nil {
 		cwd = *body.InitialCwd
 	}
-	result, err := s.terms.Create(r.Context(), cwd, body.Cols, body.Rows)
+	var result terminal.Summary
+	var err error
+	if body.ConnectionDefinitionID != "" && body.ConnectionDefinitionID != "local" {
+		result, err = s.terms.CreateRemote(r.Context(), body.ConnectionDefinitionID, body.Cols, body.Rows, stringValue(body.ReuseFromConnectionInstanceID))
+	} else {
+		result, err = s.terms.Create(r.Context(), cwd, body.Cols, body.Rows)
+	}
 	if err != nil {
-		if strings.Contains(err.Error(), "capacity") {
+		if errors.Is(err, connection.ErrTransportDraining) {
+			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")
+		} else if errors.Is(err, connection.ErrTransportUnavailable) {
+			writeError(w, http.StatusConflict, "ssh transport unavailable", "transport")
+		} else if strings.Contains(err.Error(), "capacity") {
 			writeError(w, http.StatusConflict, "connection capacity reached", "capacity")
 		} else {
 			writeError(w, http.StatusBadRequest, err.Error(), "connection")
@@ -60,6 +69,13 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusCreated, result)
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (s *Server) closeConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {

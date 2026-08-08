@@ -61,7 +61,28 @@ func titleMode(meta persistence.SessionMeta) string {
 }
 func (s *Session) broadcastMetaLocked() {
 	s.meta.SyncEffectiveTitle()
-	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows}))
+	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows, "sourceState": s.meta.SourceState}))
+}
+
+func (m *Manager) MarkSourceState(id, state string) error {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
+		return os.ErrNotExist
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if state == "deleted" || (state == "changed" && session.meta.SourceState == "current") {
+		session.meta.SourceState = state
+	}
+	if m.store != nil {
+		if err := m.store.SaveSession(session.meta); err != nil {
+			return err
+		}
+	}
+	session.broadcastMetaLocked()
+	return nil
 }
 func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
 	m.mu.RLock()

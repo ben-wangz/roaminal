@@ -79,6 +79,13 @@ func run(cfg config.Config) error {
 	}
 	terminals = connection.NewManager(cfg, store, terminalWorker)
 	terminals.SetRuntimeID(bootID)
+	sshRoot, sshErr := sshfs.Open()
+	if sshErr != nil {
+		fmt.Fprintf(os.Stderr, "Roaminal SSH source unavailable: %v\n", sshErr)
+	}
+	configRepo := sshconfig.New(sshRoot)
+	keyInventory := sshkey.New(sshRoot)
+	terminals.SetSources(configRepo, keyInventory)
 	if err := terminals.Start(context.Background()); err != nil {
 		_ = terminalWorker.Shutdown(context.Background())
 		return err
@@ -88,12 +95,6 @@ func run(cfg config.Config) error {
 		terminals.Shutdown(context.Background())
 		return err
 	}
-	sshRoot, sshErr := sshfs.Open()
-	if sshErr != nil {
-		fmt.Fprintf(os.Stderr, "Roaminal SSH source unavailable: %v\n", sshErr)
-	}
-	configRepo := sshconfig.New(sshRoot)
-	keyInventory := sshkey.New(sshRoot)
 	service := server.NewWithSources(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory)
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {

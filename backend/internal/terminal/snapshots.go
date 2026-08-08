@@ -16,8 +16,16 @@ func (s *Session) scheduleSnapshotLocked() {
 	}
 }
 func (s *Session) saveSnapshot() {
+	s.saveSnapshotWithClosed(false)
+}
+
+func (s *Session) saveSnapshotFinal() {
+	s.saveSnapshotWithClosed(true)
+}
+
+func (s *Session) saveSnapshotWithClosed(force bool) {
 	s.mu.Lock()
-	if s.closed {
+	if s.closed && !force {
 		s.mu.Unlock()
 		return
 	}

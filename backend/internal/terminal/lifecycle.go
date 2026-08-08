@@ -45,6 +45,14 @@ func (m *Manager) restoreHistory(ctx context.Context, meta persistence.SessionMe
 		if err := m.worker.Restore(ctx, meta.ID, header.Cols, header.Rows, header.ScrollbackLines, header.ThroughSequence, payload); err != nil {
 			return err
 		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		// Metadata can be committed before the first debounced snapshot. Keep
+		// that historical instance attachable with an empty worker terminal.
+		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
+			return err
+		}
+	} else {
+		return err
 	}
 	session := &Session{manager: m, meta: meta, clients: make(map[*Client]struct{}), closed: true}
 	if err == nil {
@@ -137,10 +145,17 @@ func (m *Manager) startSession(ctx context.Context, meta persistence.SessionMeta
 
 func (m *Manager) startShell(meta persistence.SessionMeta, cwd string) (*Session, error) {
 	rcfile := findRCFile()
-	cmd := exec.Command("/bin/bash", "--noprofile", "--rcfile", rcfile, "-i")
+	return m.startCommand(meta, cwd, []string{"/bin/bash", "--noprofile", "--rcfile", rcfile, "-i"}, []string{"ROAMINAL_SHELL_READY=1"})
+}
+
+func (m *Manager) startCommand(meta persistence.SessionMeta, cwd string, argv []string, extraEnv []string) (*Session, error) {
+	if len(argv) == 0 {
+		return nil, errors.New("empty process argv")
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "ROAMINAL_SESSION_ID="+meta.ID, "ROAMINAL_SHELL_READY=1")
+	cmd.Env = append(os.Environ(), append([]string{"TERM=xterm-256color", "ROAMINAL_TERMINAL_ID=" + meta.ID}, extraEnv...)...)
 	file, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)})
 	if err != nil {
 		return nil, fmt.Errorf("start bash: %w", err)

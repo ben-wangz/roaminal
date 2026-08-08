@@ -30,9 +30,17 @@ func (m *Manager) Shutdown(ctx context.Context) {
 			session.mu.Lock()
 			cmd := session.cmd
 			session.closed = true
+			session.meta.Lifecycle = "interrupted"
+			session.meta.BackendRuntimeID = session.manager.runtimeID
+			session.meta.UpdatedAt = time.Now().UTC()
+			meta := session.meta
 			_ = session.pty.Close()
 			session.mu.Unlock()
+			if session.manager.store != nil {
+				_ = session.manager.store.SaveSession(meta)
+			}
 			_ = terminateSessionProcessGroup(ctx, cmd)
+			session.saveSnapshotFinal()
 			stopDone <- struct{}{}
 		}(session)
 	}
