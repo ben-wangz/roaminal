@@ -49,17 +49,30 @@ func (i *Inventory) List() []Key {
 		if !ok || entry.IsDir() {
 			continue
 		}
-		info, err := i.Root.Lstat(name)
-		if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		linkInfo, err := i.Root.Lstat(name)
+		if err != nil || linkInfo.IsDir() {
 			continue
 		}
-		key := Key{KeyID: KeyID(name), FileName: name, Algorithm: algorithm, ReadOnly: !writableByRuntime(info), Status: "available"}
+		info := linkInfo
+		readOnly := linkInfo.Mode()&os.ModeSymlink != 0
+		if readOnly {
+			info, err = i.Root.Stat(name)
+		}
+		if err != nil || !info.Mode().IsRegular() || info.Size() > sshfs.PrivateKeyMaxBytes {
+			continue
+		}
+		key := Key{KeyID: KeyID(name), FileName: name, Algorithm: algorithm, ReadOnly: readOnly || !writableByRuntime(info), Status: "available"}
 		key.Bits, key.Fingerprint, err = i.fingerprint(name)
 		if err != nil {
 			key.Status = "invalid"
 		}
-		if pub, pubErr := i.Root.Lstat(name + ".pub"); pubErr == nil && pub.Mode().IsRegular() && pub.Mode()&os.ModeSymlink == 0 {
-			key.PublicKeyAvailable = i.validPublic(name + ".pub")
+		if pub, pubErr := i.Root.Lstat(name + ".pub"); pubErr == nil && !pub.IsDir() {
+			if pub.Mode()&os.ModeSymlink != 0 {
+				pub, pubErr = i.Root.Stat(name + ".pub")
+			}
+			if pubErr == nil && pub.Mode().IsRegular() && pub.Size() <= sshfs.PublicKeyMaxBytes {
+				key.PublicKeyAvailable = i.validPublic(name + ".pub")
+			}
 		}
 		result = append(result, key)
 	}
@@ -91,6 +104,15 @@ func (i *Inventory) fingerprint(name string) (int, string, error) {
 	file, err := i.Root.Open(name)
 	if err != nil {
 		return 0, "", err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return 0, "", err
+	}
+	if !info.Mode().IsRegular() || info.Size() > sshfs.PrivateKeyMaxBytes {
+		_ = file.Close()
+		return 0, "", errors.New("private key is not a regular file")
 	}
 	cmd := exec.Command(i.KeygenPath, "-lf", "/dev/stdin", "-E", "sha256")
 	cmd.Stdin = file

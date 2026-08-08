@@ -41,6 +41,7 @@ type Transport struct {
 	Channels        int
 	OwnerClosed     bool
 	Draining        bool
+	stopRequested   bool
 }
 
 var ErrClientCapacity = terminal.ErrClientCapacity
@@ -134,16 +135,21 @@ func (m *Manager) CreateRemote(ctx context.Context, definitionID string, cols, r
 	aliasPtr := alias
 	meta := persistence.SessionMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "live", SourceState: "current", HostVerificationAssessment: definition.HostVerificationAssessment, Cols: cols, Rows: rows, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), AutomaticTitle: alias}
 	argv := []string{m.sshPath, "-o", "ControlMaster=yes", "-o", "ControlPersist=yes", "-o", "ControlPath=" + controlPath, "--", alias}
-	result, err := m.CreateProcess(ctx, meta, argv, nil)
+	m.transportMu.Lock()
+	m.transports[id] = transport
+	m.instances[id] = transport
+	m.transportMu.Unlock()
+	result, err := m.CreateProcessWithExit(ctx, meta, argv, nil, func(_ terminal.ExitStatus) {
+		m.finishInstance(context.Background(), id, true)
+	})
 	if err != nil {
+		m.transportMu.Lock()
+		delete(m.instances, id)
+		delete(m.transports, id)
+		m.transportMu.Unlock()
 		_ = os.RemoveAll(transportDir)
 		return Summary{}, err
 	}
-	transport.OwnerID = result.ID
-	m.transportMu.Lock()
-	m.transports[result.ID] = transport
-	m.instances[result.ID] = transport
-	m.transportMu.Unlock()
 	if !m.transportReady(transport) {
 		transport.Draining = false
 	}

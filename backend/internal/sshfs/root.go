@@ -104,6 +104,19 @@ func (r *Root) Lstat(name string) (os.FileInfo, error) {
 	return r.root.Lstat(name)
 }
 
+// Stat follows only links that remain inside the fixed root and returns the
+// final object metadata. It is used for read-only projected volume entries;
+// write paths continue to use Lstat and reject symlinks.
+func (r *Root) Stat(name string) (os.FileInfo, error) {
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	if !r.Available() {
+		return nil, ErrUnavailable
+	}
+	return r.root.Stat(name)
+}
+
 func (r *Root) Open(name string) (*os.File, error) {
 	if err := validateName(name); err != nil {
 		return nil, err

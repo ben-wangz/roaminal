@@ -43,24 +43,34 @@ func (m *Manager) refreshSources() {
 			current[definition.HostAlias] = true
 		}
 	}
+	configUnavailable := !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing"
 	m.transportMu.Lock()
 	transports := make([]*Transport, 0, len(m.transports))
 	for _, transport := range m.transports {
 		transports = append(transports, transport)
+		shouldDrain := false
 		if transport.ContextRevision != collection.ETag {
-			transport.Draining = true
+			if !transport.Draining {
+				transport.Draining = true
+				shouldDrain = true
+			}
 		}
+		transport.stopRequested = transport.stopRequested || shouldDrain
 	}
 	m.transportMu.Unlock()
 	for _, transport := range transports {
 		m.transportMu.Lock()
 		draining := transport.Draining
+		stopRequested := transport.stopRequested
 		m.transportMu.Unlock()
-		if draining {
+		if draining && stopRequested {
 			m.drainTransport(transport)
+			m.transportMu.Lock()
+			transport.stopRequested = false
+			m.transportMu.Unlock()
 		}
 		state := "changed"
-		if !current[transport.Alias] {
+		if !configUnavailable && !current[transport.Alias] {
 			state = "deleted"
 		}
 		for _, summary := range m.Summaries() {

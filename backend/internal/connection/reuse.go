@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 )
 
 func (m *Manager) createReuse(ctx context.Context, definitionID string, cols, rows int, sourceID string) (Summary, error) {
@@ -61,17 +62,18 @@ func (m *Manager) createReuse(ctx context.Context, definitionID string, cols, ro
 		return Summary{}, ErrTransportDraining
 	}
 	transport.Channels++
+	m.instances[id] = transport
 	m.transportMu.Unlock()
-	result, err := m.CreateProcess(ctx, meta, argv, nil)
+	result, err := m.CreateProcessWithExit(ctx, meta, argv, nil, func(_ terminal.ExitStatus) {
+		m.finishInstance(context.Background(), id, true)
+	})
 	if err != nil {
 		m.transportMu.Lock()
 		transport.Channels--
+		delete(m.instances, id)
 		m.transportMu.Unlock()
 		return Summary{}, err
 	}
-	m.transportMu.Lock()
-	m.instances[result.ID] = transport
-	m.transportMu.Unlock()
 	return result, nil
 }
 
