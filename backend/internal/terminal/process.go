@@ -45,6 +45,12 @@ func (m *Manager) createProcess(ctx context.Context, meta persistence.SessionMet
 	if info, err := os.Stat(cwd); err != nil || !info.IsDir() {
 		return Summary{}, errors.New("cwd is not accessible")
 	}
+	if meta.InitialCwd == "" {
+		meta.InitialCwd = cwd
+	}
+	if meta.Cwd == "" {
+		meta.Cwd = cwd
+	}
 	if meta.ID == "" {
 		id, err := newID()
 		if err != nil {
