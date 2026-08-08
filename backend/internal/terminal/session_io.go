@@ -50,6 +50,7 @@ func (s *Session) waitLoop() {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", s.meta.ID, err)
 	}
 	onExit := s.onExit
+	s.onExit = nil
 	s.mu.Unlock()
 	if onExit != nil {
 		onExit(*status)
@@ -57,6 +58,17 @@ func (s *Session) waitLoop() {
 	if err := s.manager.retireSession(context.Background(), s); err != nil {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s cleanup warning: %v\n", s.meta.ID, err)
 	}
+}
+
+// takeExitHook claims the process-exit callback for explicit termination
+// paths. Those paths mark the session closed before cmd.Wait returns, so the
+// normal wait loop cannot invoke the callback itself.
+func (s *Session) takeExitHook() func(ExitStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hook := s.onExit
+	s.onExit = nil
+	return hook
 }
 
 func statusCode(status *ExitStatus) int {

@@ -36,6 +36,9 @@ func (m *Manager) Shutdown(ctx context.Context) {
 			}
 			session.mu.Unlock()
 			_ = terminateSessionProcessGroup(ctx, cmd)
+			if onExit := session.takeExitHook(); onExit != nil {
+				onExit(ExitStatus{})
+			}
 			if err := m.retireSession(ctx, session); err != nil {
 				fmt.Fprintf(os.Stderr, "Roaminal session %s shutdown cleanup warning: %v\n", session.meta.ID, err)
 			}

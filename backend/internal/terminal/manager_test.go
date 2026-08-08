@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"context"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -9,6 +10,34 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 )
+
+func TestTerminateSessionRunsExitHook(t *testing.T) {
+	cwd := t.TempDir()
+	manager := NewManager(config.Config{InitialCwd: cwd}, nil, nil)
+	id := "11111111-1111-4111-8111-111111111111"
+	session, err := manager.startCommand(persistence.SessionMeta{ID: id, Cwd: cwd, Cols: 80, Rows: 24}, cwd, []string{"/bin/sh", "-c", "sleep 30"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hookCalled := make(chan ExitStatus, 1)
+	session.onExit = func(status ExitStatus) { hookCalled <- status }
+	manager.sessions[id] = session
+	manager.startLoops(session)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := manager.terminateSession(ctx, session, "exited"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-hookCalled:
+	case <-time.After(3 * time.Second):
+		t.Fatal("explicit termination did not run exit hook")
+	}
+	if _, ok := manager.sessions[id]; ok {
+		t.Fatal("terminated session remained registered")
+	}
+}
 
 func TestAttachReservationIsAtomic(t *testing.T) {
 	store, err := persistence.New(t.TempDir())

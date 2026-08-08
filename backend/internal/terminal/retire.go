@@ -115,6 +115,11 @@ func (m *Manager) terminateSession(ctx context.Context, session *Session, lifecy
 	session.controlOwner = nil
 	session.mu.Unlock()
 	terminateErr := terminateSessionProcessGroup(ctx, cmd)
+	if onExit := session.takeExitHook(); onExit != nil {
+		// Explicit termination is not a successful process exit. The hook still
+		// must run so resources owned by the process can be released.
+		onExit(ExitStatus{})
+	}
 	retireErr := m.retireSession(ctx, session)
 	if terminateErr != nil {
 		return terminateErr

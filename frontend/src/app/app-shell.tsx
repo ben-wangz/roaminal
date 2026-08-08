@@ -46,7 +46,7 @@ export function AppShell() {
   const hydrated = useRef(false);
   const bootId = useRef<string | null>(null);
   const syncing = useRef(false);
-  const sidebarOpenButton = useRef<HTMLButtonElement>(null);
+  const stateRevision = useRef(0); const sidebarOpenButton = useRef<HTMLButtonElement>(null);
   const toastTimer = useRef<number | null>(null);
   useEffect(() => observeViewportHeight(), []);
   function showToast(message: string) {
@@ -54,6 +54,8 @@ export function AppShell() {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => { setToast(null); toastTimer.current = null; }, 4500);
   }
+  function setActiveView(next: SessionView) { viewRef.current = next; setView(next); }
+  function activateSession(id: string) { setActiveView(selectStoredSession(viewRef.current, id)); }
   useEffect(() => { saveStoredSession(window.localStorage, view); }, [view]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { if (!sidebarOpen) sidebarOpenButton.current?.focus(); }, [sidebarOpen]);
@@ -136,28 +138,29 @@ export function AppShell() {
   async function createConnection(connectionDefinitionId: string, reuseFrom?: string) {
     try {
       const session = await api<ConnectionInstanceSummary>('/api/connection-instances', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFrom || null }) });
-      setSessions((current) => [...current.filter((item) => item.id !== session.id), session]);
-      setView((current) => selectStoredSession(current, session.id));
+      stateRevision.current += 1; setSessions((current) => [...current.filter((item) => item.id !== session.id), session]);
+      activateSession(session.id);
       setWorkspaceOpen(true);
     } catch (err) { showToast((err as Error).message); }
   }
   async function acceptGenerated(instance: ConnectionInstanceSummary) {
-    setSessions((current) => [...current.filter((item) => item.id !== instance.id), instance]);
-    setView((current) => selectStoredSession(current, instance.id));
+    stateRevision.current += 1; setSessions((current) => [...current.filter((item) => item.id !== instance.id), instance]);
+    activateSession(instance.id);
     setWorkspaceOpen(true);
   }
   async function sync() {
     if (syncing.current) return;
     syncing.current = true;
     try {
+      const revision = stateRevision.current;
       const startedAt = performance.now();
       const next = await heartbeat();
+      if (revision !== stateRevision.current) return;
       setHeartbeatLatency(Math.round(performance.now() - startedAt));
       if (bootId.current && bootId.current !== next.runtime.bootId) { window.location.reload(); return; }
       bootId.current = next.runtime.bootId;
       setHeartbeatState(next);
-      const nextView = reconcileSession(next.connectionInstances, viewRef.current, sessionOrder.current);
-      setView(nextView);
+      const nextView = reconcileSession(next.connectionInstances, viewRef.current, sessionOrder.current); setActiveView(nextView);
       if (!hydrated.current) {
         hydrated.current = true;
         setWorkspaceOpen(Boolean(nextView.activeSessionId));
@@ -193,7 +196,7 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', handler);
   }, [view.activeSessionId]);
   function selectSession(id: string) {
-    setView((current) => selectStoredSession(current, id));
+    activateSession(id);
     setWorkspaceOpen(true);
     setSearch(false);
     setPreviewSessionId(null);
@@ -215,10 +218,11 @@ export function AppShell() {
   }
   async function terminateSession(id: string) {
     try {
+      stateRevision.current += 1;
       await api(`/api/connection-instances/${id}`, { method: 'DELETE' });
       setSessions((current) => {
         const next = current.filter((session) => session.id !== id);
-        setView((viewState) => reconcileSession(next, viewState, current.map((session) => session.id)));
+        const nextView = reconcileSession(next, viewRef.current, current.map((session) => session.id)); setActiveView(nextView);
         return next;
       });
       setDialog(null);
