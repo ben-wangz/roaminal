@@ -70,7 +70,7 @@ func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client
 		}
 	}
 	client.enqueue(message(map[string]any{"type": "snapshot", "data": string(snapshot)}), false)
-	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.EffectiveTitle(), "titleMode": titleMode(session.meta), "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows, "attention": session.attention}), false)
+	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.EffectiveTitle(), "titleMode": titleMode(session.meta), "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows, "attention": session.attention, "sourceState": session.meta.SourceState, "generationStatus": session.meta.GenerationStatus, "generationError": session.meta.GenerationError, "generationStaging": session.meta.GenerationStaging}), false)
 	if closed {
 		client.enqueue(message(map[string]any{"type": "status", "status": "terminated", "exitStatus": session.exitStatus}), false)
 	} else {

@@ -13,6 +13,16 @@ import (
 // CreateProcess starts a managed PTY for a fixed argv. It is used by the SSH
 // connection manager; arbitrary command templates are never exposed to HTTP.
 func (m *Manager) CreateProcess(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string) (Summary, error) {
+	return m.createProcess(ctx, meta, argv, extraEnv, nil)
+}
+
+// CreateProcessWithExit starts a fixed process and invokes onExit after its
+// PTY exits, outside the session lock. The callback receives no input/output.
+func (m *Manager) CreateProcessWithExit(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string, onExit func(ExitStatus)) (Summary, error) {
+	return m.createProcess(ctx, meta, argv, extraEnv, onExit)
+}
+
+func (m *Manager) createProcess(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string, onExit func(ExitStatus)) (Summary, error) {
 	if len(argv) == 0 {
 		return Summary{}, errors.New("empty process argv")
 	}
@@ -79,7 +89,7 @@ func (m *Manager) CreateProcess(ctx context.Context, meta persistence.SessionMet
 		_ = m.worker.CloseSession(ctx, meta.ID)
 		return Summary{}, err
 	}
-	m.startLoops(session)
+	session.onExit = onExit
 	if m.store != nil {
 		if err := m.store.SaveSession(meta); err != nil {
 			m.abortSession(ctx, session, true)
@@ -91,5 +101,6 @@ func (m *Manager) CreateProcess(ctx context.Context, meta persistence.SessionMet
 	reserved = false
 	m.sessions[meta.ID] = session
 	m.mu.Unlock()
+	m.startLoops(session)
 	return m.summary(session), nil
 }

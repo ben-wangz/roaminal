@@ -128,6 +128,8 @@ func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
 		s.withAuth(w, r, s.deleteConnectionDefinition)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/ssh-keys":
 		s.withAuth(w, r, s.listSSHKeys)
+	case r.Method == http.MethodPost && r.URL.Path == "/api/ssh-key-generations":
+		s.withAuth(w, r, s.generateSSHKey)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/ssh-keys/") && strings.HasSuffix(r.URL.Path, "/public-key"):
 		s.withAuth(w, r, s.publicSSHKey)
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/title"):

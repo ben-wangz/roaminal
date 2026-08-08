@@ -15,8 +15,8 @@ import (
 func (s *Session) waitLoop() {
 	err := s.cmd.Wait()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return
 	}
 	s.closed = true
@@ -48,6 +48,14 @@ func (s *Session) waitLoop() {
 	if err != nil && !errors.Is(err, os.ErrProcessDone) {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", s.meta.ID, err)
 	}
+	onExit := s.onExit
+	if onExit != nil {
+		exitStatus := *status
+		s.mu.Unlock()
+		onExit(exitStatus)
+		return
+	}
+	s.mu.Unlock()
 }
 
 func statusCode(status *ExitStatus) int {

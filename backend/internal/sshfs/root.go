@@ -114,6 +114,46 @@ func (r *Root) Open(name string) (*os.File, error) {
 	return r.root.Open(name)
 }
 
+func (r *Root) Chmod(name string, mode os.FileMode) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if !r.Available() {
+		return ErrUnavailable
+	}
+	return r.root.Chmod(name, mode)
+}
+
+func (r *Root) MkdirAll(name string, mode os.FileMode) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if !r.Available() {
+		return ErrUnavailable
+	}
+	return r.root.MkdirAll(name, mode)
+}
+
+func (r *Root) Remove(name string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if !r.Available() {
+		return ErrUnavailable
+	}
+	return r.root.Remove(name)
+}
+
+func (r *Root) RemoveAll(name string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if !r.Available() {
+		return ErrUnavailable
+	}
+	return r.root.RemoveAll(name)
+}
+
 func (r *Root) ReadDir() ([]os.DirEntry, error) {
 	if !r.Available() {
 		return nil, ErrUnavailable

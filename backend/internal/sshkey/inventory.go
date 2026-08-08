@@ -136,6 +136,7 @@ func allowedName(name string) (string, bool) {
 	}
 	return "", false
 }
+func AlgorithmForName(name string) (string, bool) { return allowedName(name) }
 func writableByRuntime(info os.FileInfo) bool {
 	if info == nil {
 		return false

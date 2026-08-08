@@ -42,7 +42,11 @@ func (m *Manager) summary(session *Session) Summary {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.meta.SyncEffectiveTitle()
-	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, HostVerificationAssessment: session.meta.HostVerificationAssessment, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: "/bin/bash", InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention, ExitStatus: session.exitStatus}
+	command := session.command
+	if command == "" {
+		command = "/bin/bash"
+	}
+	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, HostVerificationAssessment: session.meta.HostVerificationAssessment, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: command, InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention, ExitStatus: session.exitStatus, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError, GenerationStaging: session.meta.GenerationStaging}
 }
 func lifecycle(session *Session) string {
 	if session.closed {
@@ -61,7 +65,7 @@ func titleMode(meta persistence.SessionMeta) string {
 }
 func (s *Session) broadcastMetaLocked() {
 	s.meta.SyncEffectiveTitle()
-	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows, "sourceState": s.meta.SourceState}))
+	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows, "sourceState": s.meta.SourceState, "generationStatus": s.meta.GenerationStatus, "generationError": s.meta.GenerationError, "generationStaging": s.meta.GenerationStaging}))
 }
 
 func (m *Manager) MarkSourceState(id, state string) error {
@@ -82,6 +86,31 @@ func (m *Manager) MarkSourceState(id, state string) error {
 		}
 	}
 	session.broadcastMetaLocked()
+	return nil
+}
+
+func (m *Manager) MarkGenerationResult(id, state, detail string) error {
+	m.mu.RLock()
+	session := m.sessions[id]
+	m.mu.RUnlock()
+	if session == nil {
+		return os.ErrNotExist
+	}
+	session.mu.Lock()
+	session.meta.GenerationStatus = state
+	session.meta.GenerationError = detail
+	if state == "succeeded" {
+		session.meta.GenerationStaging = ""
+	}
+	session.meta.UpdatedAt = time.Now().UTC()
+	if m.store != nil {
+		if err := m.store.SaveSession(session.meta); err != nil {
+			session.mu.Unlock()
+			return err
+		}
+	}
+	session.broadcastMetaLocked()
+	session.mu.Unlock()
 	return nil
 }
 func (m *Manager) SetTitle(id string, title *string) (Summary, error) {

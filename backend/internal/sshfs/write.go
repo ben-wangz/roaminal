@@ -98,3 +98,46 @@ func (r *Root) EnsureDirectory() error {
 	r.root = root
 	return nil
 }
+
+// PromoteNoReplace atomically publishes a staged regular file without ever
+// replacing an existing destination. The source and destination stay inside
+// the same fixed root, so a hard link gives renameat2(RENAME_NOREPLACE)
+// semantics even on filesystems where that syscall is unavailable.
+func (r *Root) PromoteNoReplace(source, destination string) error {
+	if err := validateName(source); err != nil {
+		return err
+	}
+	if err := validateName(destination); err != nil {
+		return err
+	}
+	if !r.Available() {
+		return ErrUnavailable
+	}
+	info, err := r.root.Lstat(source)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return ErrUnsafePath
+	}
+	if _, err := r.root.Lstat(destination); err == nil {
+		return os.ErrExist
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if ok, reason := r.CanWrite(destination); !ok {
+		return fmt.Errorf("%w: %s", ErrNotWritable, reason)
+	}
+	if err := r.root.Link(source, destination); err != nil {
+		return err
+	}
+	if err := syncDirectory(r.name); err != nil {
+		_ = r.root.Remove(destination)
+		return err
+	}
+	if err := r.root.Remove(source); err != nil {
+		_ = r.root.Remove(destination)
+		return err
+	}
+	return syncDirectory(r.name)
+}

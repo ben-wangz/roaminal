@@ -35,7 +35,7 @@ func (s *Store) SaveSession(meta SessionMeta) error {
 	var value any = sessionMetaV2{FormatVersion: SessionFormatVersion, ID: meta.ID, AutomaticTitle: meta.AutomaticTitle, TitleOverride: meta.TitleOverride, InitialCwd: meta.InitialCwd, Cwd: meta.Cwd, Cols: meta.Cols, Rows: meta.Rows, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt, Executions: meta.Executions}
 	if s.connectionLayout {
 		meta.FormatVersion = ConnectionFormatVersion
-		value = connectionMetaV1{FormatVersion: ConnectionFormatVersion, ID: meta.ID, BackendRuntimeID: meta.BackendRuntimeID, ConnectionDefinitionID: meta.ConnectionDefinitionID, Type: meta.Type, Purpose: meta.Purpose, SourceHostAlias: meta.SourceHostAlias, Lifecycle: meta.Lifecycle, SourceState: meta.SourceState, AutomaticTitle: meta.AutomaticTitle, TitleOverride: meta.TitleOverride, InitialCwd: meta.InitialCwd, Cwd: meta.Cwd, Cols: meta.Cols, Rows: meta.Rows, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt, ExitCode: meta.ExitCode, ExitSignal: meta.ExitSignal, HostVerificationAssessment: meta.HostVerificationAssessment, ReuseFromConnectionInstanceID: meta.ReuseFromConnectionInstanceID, ReconnectFromConnectionInstanceID: meta.ReconnectFromConnectionInstanceID, RelaunchFromConnectionInstanceID: meta.RelaunchFromConnectionInstanceID}
+		value = connectionMetaV1{FormatVersion: ConnectionFormatVersion, ID: meta.ID, BackendRuntimeID: meta.BackendRuntimeID, ConnectionDefinitionID: meta.ConnectionDefinitionID, Type: meta.Type, Purpose: meta.Purpose, SourceHostAlias: meta.SourceHostAlias, Lifecycle: meta.Lifecycle, SourceState: meta.SourceState, AutomaticTitle: meta.AutomaticTitle, TitleOverride: meta.TitleOverride, InitialCwd: meta.InitialCwd, Cwd: meta.Cwd, Cols: meta.Cols, Rows: meta.Rows, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt, ExitCode: meta.ExitCode, ExitSignal: meta.ExitSignal, HostVerificationAssessment: meta.HostVerificationAssessment, ReuseFromConnectionInstanceID: meta.ReuseFromConnectionInstanceID, ReconnectFromConnectionInstanceID: meta.ReconnectFromConnectionInstanceID, RelaunchFromConnectionInstanceID: meta.RelaunchFromConnectionInstanceID, GenerationStatus: meta.GenerationStatus, GenerationError: meta.GenerationError, GenerationStaging: meta.GenerationStaging}
 		if err := os.MkdirAll(filepath.Dir(s.SessionPath(meta.ID)), 0o700); err != nil {
 			return s.markSessionError(meta.ID, err)
 		}
@@ -138,6 +138,9 @@ type connectionMetaV1 struct {
 	ReuseFromConnectionInstanceID     *string   `json:"reuseFromConnectionInstanceId"`
 	ReconnectFromConnectionInstanceID *string   `json:"reconnectFromConnectionInstanceId"`
 	RelaunchFromConnectionInstanceID  *string   `json:"relaunchFromConnectionInstanceId"`
+	GenerationStatus                  string    `json:"generationStatus"`
+	GenerationError                   string    `json:"generationError"`
+	GenerationStaging                 string    `json:"generationStaging"`
 }
 
 func decodeSessionMeta(data []byte, connectionLayout bool) (SessionMeta, error) {
@@ -152,7 +155,7 @@ func decodeSessionMeta(data []byte, connectionLayout bool) (SessionMeta, error) 
 		if err := decodeStrict(data, &current); err != nil {
 			return SessionMeta{}, err
 		}
-		meta := SessionMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, HostVerificationAssessment: current.HostVerificationAssessment, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, ReconnectFromConnectionInstanceID: current.ReconnectFromConnectionInstanceID, RelaunchFromConnectionInstanceID: current.RelaunchFromConnectionInstanceID}
+		meta := SessionMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, HostVerificationAssessment: current.HostVerificationAssessment, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, ReconnectFromConnectionInstanceID: current.ReconnectFromConnectionInstanceID, RelaunchFromConnectionInstanceID: current.RelaunchFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, GenerationStaging: current.GenerationStaging}
 		meta.SyncEffectiveTitle()
 		return meta, nil
 	}

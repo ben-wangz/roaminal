@@ -59,6 +59,9 @@ type SessionMeta struct {
 	ReuseFromConnectionInstanceID     *string           `json:"reuseFromConnectionInstanceId,omitempty"`
 	ReconnectFromConnectionInstanceID *string           `json:"reconnectFromConnectionInstanceId,omitempty"`
 	RelaunchFromConnectionInstanceID  *string           `json:"relaunchFromConnectionInstanceId,omitempty"`
+	GenerationStatus                  string            `json:"generationStatus,omitempty"`
+	GenerationError                   string            `json:"generationError,omitempty"`
+	GenerationStaging                 string            `json:"generationStaging,omitempty"`
 }
 
 func (meta SessionMeta) EffectiveTitle() string {

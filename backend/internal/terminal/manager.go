@@ -42,6 +42,9 @@ type Summary struct {
 	Closed                     bool        `json:"closed"`
 	Attention                  bool        `json:"attention"`
 	ExitStatus                 *ExitStatus `json:"exitStatus"`
+	GenerationStatus           string      `json:"generationStatus,omitempty"`
+	GenerationError            string      `json:"generationError,omitempty"`
+	GenerationStaging          string      `json:"generationStaging,omitempty"`
 }
 
 type Client struct {
@@ -135,6 +138,8 @@ type Session struct {
 	attention     bool
 	closed        bool
 	exitStatus    *ExitStatus
+	command       string
+	onExit        func(ExitStatus)
 }
 
 func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *worker.Client) *Manager {

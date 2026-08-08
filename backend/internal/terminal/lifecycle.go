@@ -160,7 +160,7 @@ func (m *Manager) startCommand(meta persistence.SessionMeta, cwd string, argv []
 	if err != nil {
 		return nil, fmt.Errorf("start bash: %w", err)
 	}
-	return &Session{manager: m, meta: meta, cmd: cmd, pty: file, clients: make(map[*Client]struct{})}, nil
+	return &Session{manager: m, meta: meta, cmd: cmd, pty: file, clients: make(map[*Client]struct{}), command: argv[0]}, nil
 }
 func (m *Manager) startLoops(session *Session) { go session.readLoop(); go session.waitLoop() }
 func (m *Manager) abortSession(ctx context.Context, session *Session, workerReady bool) {
