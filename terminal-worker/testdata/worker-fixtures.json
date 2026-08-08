@@ -1,5 +1,5 @@
 {
-  "protocol": "roaminal-terminal-worker/1",
+  "protocol": "roaminal-terminal-worker/2",
   "frame": {
     "headerLength": "uint32-big-endian",
     "payloadLength": "uint32-big-endian",

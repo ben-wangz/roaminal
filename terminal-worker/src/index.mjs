@@ -1,4 +1,4 @@
-const PROTOCOL = 'roaminal-terminal-worker/1';
+const PROTOCOL = 'roaminal-terminal-worker/2';
 const HEADER_LIMIT = 64 * 1024;
 const PAYLOAD_LIMIT = 256 * 1024 * 1024;
 const WRITE_PAYLOAD_LIMIT = 256 * 1024;
@@ -41,7 +41,7 @@ function fail(error, request = {}) {
     op: 'error',
     protocol: PROTOCOL,
     ...(request.requestId ? { requestId: request.requestId } : {}),
-    ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+    ...(request.terminalId ? { terminalId: request.terminalId } : {}),
     code: error.code || 'engine_failure',
     message: String(error.message || error),
     fatal: Boolean(error.fatal)
@@ -87,12 +87,12 @@ function validateProtocol(header) {
 function validateRequest(header) {
   const allowed = {
     hello: ['op', 'protocol', 'requestId'],
-    create: ['op', 'protocol', 'requestId', 'sessionId', 'cols', 'rows', 'scrollbackLines'],
-    restore: ['op', 'protocol', 'requestId', 'sessionId', 'cols', 'rows', 'scrollbackLines', 'throughSequence'],
-    write: ['op', 'protocol', 'sessionId', 'sequence'],
-    resize: ['op', 'protocol', 'sessionId', 'sequence', 'cols', 'rows'],
-    snapshot: ['op', 'protocol', 'requestId', 'sessionId', 'throughSequence'],
-    close: ['op', 'protocol', 'requestId', 'sessionId'],
+    create: ['op', 'protocol', 'requestId', 'terminalId', 'cols', 'rows', 'scrollbackLines'],
+    restore: ['op', 'protocol', 'requestId', 'terminalId', 'cols', 'rows', 'scrollbackLines', 'throughSequence'],
+    write: ['op', 'protocol', 'terminalId', 'sequence'],
+    resize: ['op', 'protocol', 'terminalId', 'sequence', 'cols', 'rows'],
+    snapshot: ['op', 'protocol', 'requestId', 'terminalId', 'throughSequence'],
+    close: ['op', 'protocol', 'requestId', 'terminalId'],
     shutdown: ['op', 'protocol', 'requestId']
   };
   const fields = allowed[header.op];
@@ -106,7 +106,7 @@ function validateRequest(header) {
       error.fatal = true;
       throw error;
     }
-    if (['requestId', 'sessionId', 'sequence', 'throughSequence'].includes(key) && (typeof header[key] !== 'string' || header[key].length === 0)) {
+    if (['requestId', 'terminalId', 'sequence', 'throughSequence'].includes(key) && (typeof header[key] !== 'string' || header[key].length === 0)) {
       const error = new Error(`invalid ${key}`);
       error.code = 'invalid_frame';
       error.fatal = true;
@@ -177,7 +177,7 @@ async function handle({ header, payload }) {
     return;
   }
   if (op === 'create' || op === 'restore') {
-    if (sessions.has(header.sessionId)) {
+    if (sessions.has(header.terminalId)) {
       const error = new Error('duplicate session');
       error.code = 'duplicate_session';
       throw error;
@@ -192,7 +192,7 @@ async function handle({ header, payload }) {
     const serialize = new SerializeAddon();
     terminal.loadAddon(serialize);
     const session = { terminal, serialize, sequence: op === 'restore' ? BigInt(header.throughSequence || '0') : 0n, chain: Promise.resolve() };
-    sessions.set(header.sessionId, session);
+    sessions.set(header.terminalId, session);
     if (op === 'restore' && payload.length) {
       session.chain = session.chain.then(() => new Promise((resolve) => terminal.write(decodeUTF8(payload), resolve)));
       await session.chain;
@@ -200,7 +200,7 @@ async function handle({ header, payload }) {
     send({ op: 'result', protocol: PROTOCOL, requestId: header.requestId, requestOp: op, throughSequence: String(session.sequence) });
     return;
   }
-  const session = sessions.get(header.sessionId);
+  const session = sessions.get(header.terminalId);
   if (!session && op !== 'shutdown') {
     const error = new Error('unknown session');
     error.code = 'unknown_session';
@@ -238,7 +238,7 @@ async function handle({ header, payload }) {
   }
   if (op === 'close') {
     session.terminal.dispose();
-    sessions.delete(header.sessionId);
+    sessions.delete(header.terminalId);
     send({ op: 'result', protocol: PROTOCOL, requestId: header.requestId, requestOp: op });
     return;
   }

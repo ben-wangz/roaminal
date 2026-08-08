@@ -27,8 +27,8 @@ func (c *Client) request(ctx context.Context, header map[string]any, payload []b
 		return Result{}, ErrUnavailable
 	}
 }
-func (c *Client) Create(ctx context.Context, sessionID string, cols, rows, scrollback int) error {
-	result, err := c.request(ctx, map[string]any{"op": "create", "protocol": Protocol, "sessionId": sessionID, "cols": cols, "rows": rows, "scrollbackLines": scrollback}, nil)
+func (c *Client) Create(ctx context.Context, terminalID string, cols, rows, scrollback int) error {
+	result, err := c.request(ctx, map[string]any{"op": "create", "protocol": Protocol, "terminalId": terminalID, "cols": cols, "rows": rows, "scrollbackLines": scrollback}, nil)
 	if err != nil {
 		return err
 	}
@@ -37,8 +37,8 @@ func (c *Client) Create(ctx context.Context, sessionID string, cols, rows, scrol
 	}
 	return nil
 }
-func (c *Client) Restore(ctx context.Context, sessionID string, cols, rows, scrollback int, sequence string, payload []byte) error {
-	result, err := c.request(ctx, map[string]any{"op": "restore", "protocol": Protocol, "sessionId": sessionID, "cols": cols, "rows": rows, "scrollbackLines": scrollback, "throughSequence": sequence}, payload)
+func (c *Client) Restore(ctx context.Context, terminalID string, cols, rows, scrollback int, sequence string, payload []byte) error {
+	result, err := c.request(ctx, map[string]any{"op": "restore", "protocol": Protocol, "terminalId": terminalID, "cols": cols, "rows": rows, "scrollbackLines": scrollback, "throughSequence": sequence}, payload)
 	if err != nil {
 		return err
 	}
@@ -47,30 +47,30 @@ func (c *Client) Restore(ctx context.Context, sessionID string, cols, rows, scro
 	}
 	return nil
 }
-func (c *Client) Write(sessionID, sequence string, payload []byte) error {
+func (c *Client) Write(terminalID, sequence string, payload []byte) error {
 	if len(payload) > 256*1024 {
 		return errors.New("worker write frame too large")
 	}
 	if !validSequence(sequence) {
 		return errors.New("invalid worker sequence")
 	}
-	return c.send(map[string]any{"op": "write", "protocol": Protocol, "sessionId": sessionID, "sequence": sequence}, payload)
+	return c.send(map[string]any{"op": "write", "protocol": Protocol, "terminalId": terminalID, "sequence": sequence}, payload)
 }
-func (c *Client) Resize(sessionID, sequence string, cols, rows int) error {
+func (c *Client) Resize(terminalID, sequence string, cols, rows int) error {
 	if !validSequence(sequence) || cols < 2 || cols > 1000 || rows < 1 || rows > 1000 {
 		return errors.New("invalid worker resize")
 	}
-	return c.send(map[string]any{"op": "resize", "protocol": Protocol, "sessionId": sessionID, "sequence": sequence, "cols": cols, "rows": rows}, nil)
+	return c.send(map[string]any{"op": "resize", "protocol": Protocol, "terminalId": terminalID, "sequence": sequence, "cols": cols, "rows": rows}, nil)
 }
-func (c *Client) Snapshot(ctx context.Context, sessionID, sequence string) ([]byte, string, error) {
-	result, err := c.request(ctx, map[string]any{"op": "snapshot", "protocol": Protocol, "sessionId": sessionID, "throughSequence": sequence}, nil)
+func (c *Client) Snapshot(ctx context.Context, terminalID, sequence string) ([]byte, string, error) {
+	result, err := c.request(ctx, map[string]any{"op": "snapshot", "protocol": Protocol, "terminalId": terminalID, "throughSequence": sequence}, nil)
 	if err != nil {
 		return nil, "", err
 	}
 	return result.Payload, stringField(result.Header, "throughSequence"), nil
 }
-func (c *Client) CloseSession(ctx context.Context, sessionID string) error {
-	_, err := c.request(ctx, map[string]any{"op": "close", "protocol": Protocol, "sessionId": sessionID}, nil)
+func (c *Client) CloseSession(ctx context.Context, terminalID string) error {
+	_, err := c.request(ctx, map[string]any{"op": "close", "protocol": Protocol, "terminalId": terminalID}, nil)
 	return err
 }
 func (c *Client) Shutdown(ctx context.Context) error {
