@@ -21,6 +21,9 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"github.com/ben-wangz/roaminal/backend/internal/server"
+	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
+	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
+	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 	"github.com/ben-wangz/roaminal/backend/internal/worker"
 )
 
@@ -85,7 +88,13 @@ func run(cfg config.Config) error {
 		terminals.Shutdown(context.Background())
 		return err
 	}
-	service := server.NewWithStatic(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static)
+	sshRoot, sshErr := sshfs.Open()
+	if sshErr != nil {
+		fmt.Fprintf(os.Stderr, "Roaminal SSH source unavailable: %v\n", sshErr)
+	}
+	configRepo := sshconfig.New(sshRoot)
+	keyInventory := sshkey.New(sshRoot)
+	service := server.NewWithSources(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory)
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {
 		_ = terminalWorker.Shutdown(context.Background())

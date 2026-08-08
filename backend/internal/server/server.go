@@ -10,20 +10,24 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
+	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
+	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 	"github.com/ben-wangz/roaminal/backend/internal/worker"
 )
 
 type Server struct {
-	cfg     config.Config
-	auth    *auth.Manager
-	terms   *connection.Manager
-	monitor *monitor.Monitor
-	worker  *worker.Client
-	bootID  string
-	version string
-	handler http.Handler
-	started time.Time
-	static  http.Handler
+	cfg       config.Config
+	auth      *auth.Manager
+	terms     *connection.Manager
+	monitor   *monitor.Monitor
+	worker    *worker.Client
+	bootID    string
+	version   string
+	handler   http.Handler
+	started   time.Time
+	static    http.Handler
+	sshConfig *sshconfig.Repository
+	sshKeys   *sshkey.Inventory
 }
 
 func New(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client) *Server {
@@ -33,6 +37,12 @@ func New(cfg config.Config, version, bootID string, authManager *auth.Manager, t
 func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler) *Server {
 	s := &Server{cfg: cfg, version: version, bootID: bootID, auth: authManager, terms: terms, monitor: monitorService, worker: terminalWorker, started: time.Now(), static: static}
 	s.handler = http.HandlerFunc(s.serve)
+	return s
+}
+
+func NewWithSources(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory) *Server {
+	s := NewWithStatic(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, static)
+	s.sshConfig, s.sshKeys = configRepo, keys
 	return s
 }
 
@@ -106,6 +116,20 @@ func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
 		s.withAuth(w, r, s.getConnectionInstance)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-instances":
 		s.withAuth(w, r, s.createConnectionInstance)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/connection-definitions":
+		s.withAuth(w, r, s.listConnectionDefinitions)
+	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-definitions":
+		s.withAuth(w, r, s.createConnectionDefinition)
+	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/connection-definitions/"):
+		s.withAuth(w, r, s.updateConnectionDefinition)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/connection-definitions/") && strings.HasSuffix(r.URL.Path, "/duplicate"):
+		s.withAuth(w, r, s.duplicateConnectionDefinition)
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-definitions/"):
+		s.withAuth(w, r, s.deleteConnectionDefinition)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/ssh-keys":
+		s.withAuth(w, r, s.listSSHKeys)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/ssh-keys/") && strings.HasSuffix(r.URL.Path, "/public-key"):
+		s.withAuth(w, r, s.publicSSHKey)
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/title"):
 		s.withAuth(w, r, s.updateSessionTitle)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/close"):
