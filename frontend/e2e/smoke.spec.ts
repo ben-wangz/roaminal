@@ -11,8 +11,11 @@ async function authenticate(page: import('@playwright/test').Page): Promise<void
   await expect(page.locator('.app-shell')).toBeVisible({ timeout: 15000 });
   if (await page.locator('.connection-manager').isVisible()) {
     await page.getByRole('button', { name: 'Start local connection' }).click();
+  } else if (await page.locator('.session-card.active').getByText('Exited').count()) {
+    await page.getByRole('button', { name: 'Connections' }).click();
+    await page.getByRole('button', { name: 'Start local connection' }).click();
   }
-  await expect(page.locator('.session-card').first()).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('.session-card.active')).toBeVisible({ timeout: 15000 });
 }
 
 test('Roaminal shell renders the authentication surface', async ({ page }) => {
@@ -79,7 +82,7 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
 });
 
 test('terminal action menu renames without a close-tab command', async ({ page }) => {
-  test.skip(!testInfoProjectIsDesktop(page), 'desktop action menu runs in desktop projects');
+  test.skip((page.viewportSize()?.width || 0) < 1000, 'desktop action menu runs in desktop projects');
   await authenticate(page);
   const card = page.locator('.session-card').first();
   await card.getByRole('button', { name: 'Terminal actions' }).click();
