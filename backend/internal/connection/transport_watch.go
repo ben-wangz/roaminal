@@ -137,7 +137,7 @@ func prepareRuntimeDir(id string) (string, error) {
 	if err := os.Chmod(root, 0o700); err != nil {
 		return "", err
 	}
-	name := "rm-" + strings.ReplaceAll(id, "-", "")
+	name := "rm-" + shortPathToken(id)
 	current := filepath.Join(root, name)
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -159,6 +159,19 @@ func prepareRuntimeDir(id string) (string, error) {
 		return "", errors.New("unsafe ssh runtime directory")
 	}
 	return current, nil
+}
+
+// shortPathToken keeps temporary mux paths well below the Unix socket path
+// limit while retaining enough entropy to avoid collisions between sessions.
+func shortPathToken(id string) string {
+	token := strings.NewReplacer("-", "", "/", "", "\\", "").Replace(id)
+	if token == "" {
+		token = randomToken()
+	}
+	if len(token) > 12 {
+		token = token[:12]
+	}
+	return token
 }
 
 func ownedPrivateDir(path string) bool {

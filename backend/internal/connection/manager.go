@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -129,7 +128,9 @@ func (m *Manager) CreateRemote(ctx context.Context, definitionID string, cols, r
 		return Summary{}, errors.New("connection definition not found")
 	}
 	id := terminalID()
-	transportDir := filepath.Join(m.runtimeDir, "t-"+strings.TrimSuffix(id, "-"))
+	// Unix domain sockets have a small path limit. Keep the persisted session
+	// ID intact, but use a short unique transport directory name for the mux.
+	transportDir := filepath.Join(m.runtimeDir, "t-"+shortPathToken(id))
 	if err := os.MkdirAll(transportDir, 0o700); err != nil {
 		return Summary{}, err
 	}
