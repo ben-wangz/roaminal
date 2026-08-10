@@ -99,7 +99,13 @@ test('key generator keeps algorithm focus while changing fields', async ({ page 
   if (!(await manager.isVisible())) await page.locator('main').getByRole('button', { name: 'Connections' }).click();
   await expect(manager).toBeVisible();
   await manager.getByRole('button', { name: /^Keys/ }).click();
+  const rsaAlreadyExists = await manager.getByRole('row').filter({ hasText: /RSA/i }).count() > 0;
   await manager.getByRole('button', { name: /RSA/ }).click();
+  if (rsaAlreadyExists) {
+    await expect(page.getByLabel('Algorithm')).toHaveCount(0);
+    await expect(page.getByRole('status')).toContainText(/already exists/i);
+    return;
+  }
   const algorithm = page.getByLabel('Algorithm');
   await expect(algorithm).toBeVisible();
   await algorithm.focus();

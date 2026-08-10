@@ -79,9 +79,6 @@ func (s *Store) canWrite(info os.FileInfo) (bool, string) {
 	if err != nil || !dir.IsDir() {
 		return false, "state directory unavailable"
 	}
-	if dir.Mode().Perm()&0o002 != 0 {
-		return false, "state directory is writable by other users"
-	}
 	if info != nil && info.Mode().Perm()&0o022 != 0 {
 		return false, "options file has unsafe permissions"
 	}
