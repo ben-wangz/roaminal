@@ -62,6 +62,8 @@ type SessionMeta struct {
 	GenerationStatus                  string            `json:"generationStatus,omitempty"`
 	GenerationError                   string            `json:"generationError,omitempty"`
 	GenerationStaging                 string            `json:"generationStaging,omitempty"`
+	TmuxEnabled                       bool              `json:"tmuxEnabled,omitempty"`
+	TmuxSessionName                   string            `json:"tmuxSessionName,omitempty"`
 }
 
 func (meta SessionMeta) EffectiveTitle() string {

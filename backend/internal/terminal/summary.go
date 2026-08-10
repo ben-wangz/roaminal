@@ -41,14 +41,20 @@ func (m *Manager) ClientCount(id string) int {
 func (m *Manager) summary(session *Session) Summary {
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	return m.summaryLocked(session)
+}
+func (m *Manager) summaryLocked(session *Session) Summary {
 	session.meta.SyncEffectiveTitle()
 	command := session.command
 	if command == "" {
 		command = "/bin/bash"
 	}
-	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, HostVerificationAssessment: session.meta.HostVerificationAssessment, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: command, InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention, ExitStatus: session.exitStatus, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError, GenerationStaging: session.meta.GenerationStaging}
+	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, HostVerificationAssessment: session.meta.HostVerificationAssessment, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: command, InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention, ExitStatus: session.exitStatus, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError, GenerationStaging: session.meta.GenerationStaging, TmuxEnabled: session.meta.TmuxEnabled, TmuxSessionName: session.meta.TmuxSessionName}
 }
 func lifecycle(session *Session) string {
+	if session.ephemeral {
+		return "pending"
+	}
 	if session.closed {
 		if session.meta.Lifecycle == "interrupted" {
 			return "interrupted"

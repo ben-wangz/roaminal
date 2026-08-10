@@ -36,7 +36,11 @@ func (s *Session) parseMarkersLocked(text string) string {
 			s.meta.AutomaticTitle = title
 			s.meta.SyncEffectiveTitle()
 			s.meta.UpdatedAt = time.Now().UTC()
-			_ = s.manager.store.SaveSession(s.meta)
+			if s.manager.store != nil && !s.ephemeral {
+				if s.manager.store != nil && !s.ephemeral {
+					_ = s.manager.store.SaveSession(s.meta)
+				}
+			}
 			s.broadcastMetaLocked()
 			cleaned.WriteString(remainder[:len(titlePrefix)+endRel+1])
 			index = escape + len(titlePrefix) + endRel + 1
@@ -128,8 +132,16 @@ func (s *Session) applyMarkerLocked(marker string) {
 		if s.controlOwner == nil {
 			s.attention = true
 		}
-		_ = s.manager.store.SaveSession(s.meta)
+		if s.manager.store != nil && !s.ephemeral {
+			_ = s.manager.store.SaveSession(s.meta)
+		}
 		s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "completed", "executionId": s.currentExecID, "entry": record}))
 		s.currentExec, s.currentExecID = nil, ""
+	case "tmux-ready":
+		if s.onMarker != nil {
+			callback := s.onMarker
+			s.onMarker = nil
+			go callback(value)
+		}
 	}
 }

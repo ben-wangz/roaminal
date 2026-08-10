@@ -10,6 +10,10 @@ import (
 )
 
 func (m *Manager) createReuse(ctx context.Context, definitionID string, cols, rows int, sourceID string) (Summary, error) {
+	return m.createReuseOwned(ctx, definitionID, cols, rows, sourceID, "")
+}
+
+func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, cols, rows int, sourceID, ownerID string) (Summary, error) {
 	if m.sshPath == "" || m.configRepo == nil {
 		return Summary{}, ErrTransportUnavailable
 	}
@@ -37,7 +41,11 @@ func (m *Manager) createReuse(ctx context.Context, definitionID string, cols, ro
 		return Summary{}, err
 	}
 	m.transportMu.Lock()
-	draining, revision, alias := transport.Draining, transport.ContextRevision, transport.Alias
+	revision := transport.SourceRevision
+	if revision == "" {
+		revision = transport.ContextRevision
+	}
+	draining, alias := transport.Draining, transport.Alias
 	m.transportMu.Unlock()
 	if draining || revision != collection.ETag {
 		m.transportMu.Lock()
@@ -51,6 +59,9 @@ func (m *Manager) createReuse(ctx context.Context, definitionID string, cols, ro
 	definitionAlias, err := aliasFromDefinitionID(definitionID)
 	if err != nil || definitionAlias != alias || source.SourceHostAlias == nil || *source.SourceHostAlias != definitionAlias {
 		return Summary{}, errors.New("reuse definition does not match transport")
+	}
+	if option, ok := m.tmuxOptionForAlias(definitionAlias); ok {
+		return m.createReuseTmux(ctx, definitionID, definitionAlias, option, transport, cols, rows, sourceID, ownerID)
 	}
 	id := terminalID()
 	aliasPtr := definitionAlias

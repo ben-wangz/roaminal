@@ -49,7 +49,11 @@ func (m *Manager) refreshSources() {
 	for _, transport := range m.transports {
 		transports = append(transports, transport)
 		shouldDrain := false
-		if transport.ContextRevision != collection.ETag {
+		revision := transport.SourceRevision
+		if revision == "" {
+			revision = transport.ContextRevision
+		}
+		if revision != collection.ETag {
 			if !transport.Draining {
 				transport.Draining = true
 				shouldDrain = true
@@ -85,7 +89,11 @@ func transportSourceState(transport *Transport, revision string, configUnavailab
 	if !configUnavailable && !current[transport.Alias] {
 		return "deleted"
 	}
-	if transport.ContextRevision != revision {
+	transportRevision := transport.SourceRevision
+	if transportRevision == "" {
+		transportRevision = transport.ContextRevision
+	}
+	if transportRevision != revision {
 		return "changed"
 	}
 	return ""

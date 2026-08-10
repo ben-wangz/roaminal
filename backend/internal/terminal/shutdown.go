@@ -13,8 +13,11 @@ const sessionProcessGroupGrace = 2 * time.Second
 
 func (m *Manager) Shutdown(ctx context.Context) {
 	m.mu.RLock()
-	sessions := make([]*Session, 0, len(m.sessions))
+	sessions := make([]*Session, 0, len(m.sessions)+len(m.pending))
 	for _, session := range m.sessions {
+		sessions = append(sessions, session)
+	}
+	for _, session := range m.pending {
 		sessions = append(sessions, session)
 	}
 	m.mu.RUnlock()
@@ -39,7 +42,13 @@ func (m *Manager) Shutdown(ctx context.Context) {
 			if onExit := session.takeExitHook(); onExit != nil {
 				onExit(ExitStatus{})
 			}
-			if err := m.retireSession(ctx, session); err != nil {
+			var err error
+			if session.ephemeral {
+				m.finishEphemeral(ctx, session)
+			} else {
+				err = m.retireSession(ctx, session)
+			}
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Roaminal session %s shutdown cleanup warning: %v\n", session.meta.ID, err)
 			}
 			stopDone <- struct{}{}

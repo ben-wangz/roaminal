@@ -71,6 +71,54 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusCreated, result)
 }
 
+func (s *Server) createConnectionLaunch(w http.ResponseWriter, r *http.Request, sessionID string) {
+	var body createConnectionRequest
+	if err := decodeJSON(w, r, &body); err != nil {
+		return
+	}
+	if body.ConnectionDefinitionID == "" || body.ConnectionDefinitionID == "local" {
+		writeError(w, http.StatusBadRequest, "tmux launches require an SSH definition")
+		return
+	}
+	result, err := s.terms.CreateRemoteLaunchOwned(r.Context(), body.ConnectionDefinitionID, body.Cols, body.Rows, stringValue(body.ReuseFromConnectionInstanceID), sessionID)
+	if err != nil {
+		if errors.Is(err, connection.ErrTmuxNotEnabled) {
+			writeError(w, http.StatusConflict, "tmux is not enabled for this connection", "tmux")
+		} else if errors.Is(err, connection.ErrTransportDraining) {
+			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")
+		} else if errors.Is(err, connection.ErrTransportUnavailable) {
+			writeError(w, http.StatusConflict, "ssh transport unavailable", "transport")
+		} else if strings.Contains(err.Error(), "capacity") {
+			writeError(w, http.StatusConflict, "connection capacity reached", "capacity")
+		} else {
+			writeError(w, http.StatusBadRequest, err.Error(), "connection")
+		}
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"launchId": result.ID, "connectionDefinitionId": result.ConnectionDefinitionID, "lifecycle": result.Lifecycle, "tmuxSessionName": result.TmuxSessionName})
+}
+
+func (s *Server) deleteConnectionLaunch(w http.ResponseWriter, r *http.Request, sessionID string) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/connection-launches/")
+	if id == "" || strings.Contains(id, "/") {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if owner := s.terms.PendingOwner(id); owner != "" && owner != sessionID {
+		writeError(w, http.StatusForbidden, "launch belongs to another auth session")
+		return
+	}
+	if err := s.terms.AbortRemoteLaunch(r.Context(), id); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func stringValue(value *string) string {
 	if value == nil {
 		return ""

@@ -9,6 +9,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
@@ -16,18 +17,19 @@ import (
 )
 
 type Server struct {
-	cfg       config.Config
-	auth      *auth.Manager
-	terms     *connection.Manager
-	monitor   *monitor.Monitor
-	worker    *worker.Client
-	bootID    string
-	version   string
-	handler   http.Handler
-	started   time.Time
-	static    http.Handler
-	sshConfig *sshconfig.Repository
-	sshKeys   *sshkey.Inventory
+	cfg               config.Config
+	auth              *auth.Manager
+	terms             *connection.Manager
+	monitor           *monitor.Monitor
+	worker            *worker.Client
+	bootID            string
+	version           string
+	handler           http.Handler
+	started           time.Time
+	static            http.Handler
+	sshConfig         *sshconfig.Repository
+	sshKeys           *sshkey.Inventory
+	connectionOptions *connectionoptions.Store
 }
 
 func New(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client) *Server {
@@ -40,9 +42,9 @@ func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.
 	return s
 }
 
-func NewWithSources(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory) *Server {
+func NewWithSources(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store) *Server {
 	s := NewWithStatic(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, static)
-	s.sshConfig, s.sshKeys = configRepo, keys
+	s.sshConfig, s.sshKeys, s.connectionOptions = configRepo, keys, options
 	return s
 }
 
@@ -112,6 +114,10 @@ func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
 		s.withAuth(w, r, s.heartbeatPost)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/connection-instances":
 		s.withAuth(w, r, s.listConnectionInstances)
+	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-launches":
+		s.withAuth(w, r, s.createConnectionLaunch)
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-launches/"):
+		s.withAuth(w, r, s.deleteConnectionLaunch)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && !strings.HasSuffix(r.URL.Path, "/title"):
 		s.withAuth(w, r, s.getConnectionInstance)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-instances":

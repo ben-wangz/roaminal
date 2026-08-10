@@ -5,11 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
+	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
-	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 )
 
@@ -34,7 +33,7 @@ func (s *Server) sources() (*sshconfig.Repository, map[string]bool) {
 func (s *Server) listConnectionDefinitions(w http.ResponseWriter, _ *http.Request, _ string) {
 	repo, keys := s.sources()
 	if repo == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"configSource": map[string]any{"status": "unavailable", "readable": false, "writable": false, "warnings": []any{}, "blockers": []string{"ssh_directory"}}, "definitions": []any{map[string]any{"connectionDefinitionId": "local", "type": "local"}}})
+		writeJSON(w, http.StatusOK, map[string]any{"configSource": map[string]any{"status": "unavailable", "readable": false, "writable": false, "warnings": []any{}, "blockers": []string{"ssh_directory"}}, "tmuxOptionsSource": map[string]any{"status": "unavailable", "readable": false, "writable": false}, "definitions": []any{map[string]any{"connectionDefinitionId": "local", "type": "local"}}})
 		return
 	}
 	collection, err := repo.Collection(keys)
@@ -42,21 +41,49 @@ func (s *Server) listConnectionDefinitions(w http.ResponseWriter, _ *http.Reques
 		writeError(w, http.StatusInternalServerError, "config unavailable")
 		return
 	}
+	s.enrichConnectionOptions(&collection)
 	w.Header().Set("ETag", collection.ETag)
 	writeJSON(w, http.StatusOK, collection)
 }
 
+func (s *Server) enrichConnectionOptions(collection *sshconfig.Collection) {
+	if s.connectionOptions == nil {
+		collection.TmuxOptionsSource = connectionoptions.Source{Status: "unavailable", Reason: "options store unavailable"}
+		return
+	}
+	aliases := make(map[string]bool)
+	if !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing" {
+		loaded, _ := s.connectionOptions.Load(nil)
+		collection.TmuxOptionsSource = loaded.Source
+		return
+	}
+	for _, definition := range collection.Definitions {
+		if definition.Type == "ssh" {
+			aliases[definition.HostAlias] = true
+		}
+	}
+	loaded, _ := s.connectionOptions.Load(aliases)
+	collection.TmuxOptionsSource = loaded.Source
+	for index := range collection.Definitions {
+		definition := &collection.Definitions[index]
+		if option, ok := loaded.Options[definition.HostAlias]; ok && definition.Type == "ssh" {
+			definition.Tmux = &sshconfig.TmuxOptions{Enabled: option.Enabled, SessionName: option.SessionName}
+		}
+	}
+}
+
 type definitionBody struct {
-	Type                  string   `json:"type"`
-	HostAlias             string   `json:"hostAlias"`
-	HostName              *string  `json:"hostName"`
-	User                  *string  `json:"user"`
-	Port                  *uint16  `json:"port"`
-	IdentityFileNames     []string `json:"identityFileNames"`
-	IdentitiesOnly        *string  `json:"identitiesOnly"`
-	StrictHostKeyChecking *string  `json:"strictHostKeyChecking"`
-	UserKnownHostsFile    *string  `json:"userKnownHostsFile"`
-	ServerAliveInterval   *uint32  `json:"serverAliveInterval"`
+	Type                  string                 `json:"type"`
+	HostAlias             string                 `json:"hostAlias"`
+	HostName              *string                `json:"hostName"`
+	User                  *string                `json:"user"`
+	Port                  *uint16                `json:"port"`
+	IdentityFileNames     []string               `json:"identityFileNames"`
+	IdentitiesOnly        *string                `json:"identitiesOnly"`
+	StrictHostKeyChecking *string                `json:"strictHostKeyChecking"`
+	UserKnownHostsFile    *string                `json:"userKnownHostsFile"`
+	ServerAliveInterval   *uint32                `json:"serverAliveInterval"`
+	Tmux                  *sshconfig.TmuxOptions `json:"tmux"`
 }
 
 func editFromBody(body definitionBody) sshconfig.Edit {
@@ -107,6 +134,13 @@ func (s *Server) createConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		s.definitionError(w, err)
 		return
 	}
+	if body.Tmux != nil {
+		if err := s.saveTmuxOption(body.HostAlias, body.Tmux); err != nil {
+			s.definitionError(w, err)
+			return
+		}
+	}
+	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
 }
 
@@ -134,6 +168,13 @@ func (s *Server) updateConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		s.definitionError(w, err)
 		return
 	}
+	if body.Tmux != nil {
+		if err := s.saveTmuxOption(alias, body.Tmux); err != nil {
+			s.definitionError(w, err)
+			return
+		}
+	}
+	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
 }
 
@@ -160,6 +201,7 @@ func (s *Server) duplicateConnectionDefinition(w http.ResponseWriter, r *http.Re
 		s.definitionError(w, err)
 		return
 	}
+	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
 }
 
@@ -179,67 +221,10 @@ func (s *Server) deleteConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		s.definitionError(w, err)
 		return
 	}
+	if err := s.saveTmuxOption(alias, nil); err != nil {
+		s.definitionError(w, err)
+		return
+	}
+	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
-}
-
-func (s *Server) definitionError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, sshconfig.ErrPreconditionRequired):
-		writeError(w, http.StatusPreconditionRequired, "config etag is required", "if_match")
-	case errors.Is(err, sshconfig.ErrPreconditionFailed):
-		writeError(w, http.StatusPreconditionFailed, "config etag does not match", "if_match")
-	case errors.Is(err, sshconfig.ErrFieldNotEditable):
-		writeError(w, http.StatusUnprocessableEntity, err.Error(), "field")
-	case errors.Is(err, os.ErrNotExist):
-		writeError(w, http.StatusNotFound, "definition not found")
-	default:
-		writeError(w, http.StatusBadRequest, err.Error())
-	}
-}
-
-func (s *Server) listSSHKeys(w http.ResponseWriter, _ *http.Request, _ string) {
-	if s.sshKeys == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"keys": []sshkey.Key{}})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"keys": s.sshKeys.List()})
-}
-
-func (s *Server) publicSSHKey(w http.ResponseWriter, r *http.Request, _ string) {
-	if s.sshKeys == nil {
-		writeError(w, http.StatusNotFound, "key not found")
-		return
-	}
-	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/ssh-keys/"), "/public-key")
-	value, err := s.sshKeys.Public(id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "public key not found")
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]string{"publicKey": value})
-}
-
-func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request, _ string) {
-	if s.sshKeys == nil {
-		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable", "ssh_keys")
-		return
-	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/ssh-keys/")
-	if id == "" || strings.Contains(id, "/") {
-		writeError(w, http.StatusBadRequest, "invalid key id")
-		return
-	}
-	if err := s.sshKeys.Delete(id); err != nil {
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			writeError(w, http.StatusNotFound, "key not found")
-		case errors.Is(err, sshfs.ErrNotWritable), errors.Is(err, sshfs.ErrUnavailable):
-			writeError(w, http.StatusConflict, err.Error(), "ssh_keys")
-		default:
-			writeError(w, http.StatusBadRequest, err.Error(), "ssh_keys")
-		}
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }

@@ -21,7 +21,7 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 		return Summary{}, errors.New("invalid terminal dimensions")
 	}
 	m.mu.Lock()
-	if len(m.sessions)+m.createReservations >= m.connectionLimit() {
+	if len(m.sessions)+len(m.pending)+m.createReservations >= m.connectionLimit() {
 		m.mu.Unlock()
 		return Summary{}, errors.New("session capacity reached")
 	}

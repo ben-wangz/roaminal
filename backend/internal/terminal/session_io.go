@@ -42,7 +42,8 @@ func (s *Session) waitLoop() {
 		s.meta.ExitSignal = &value
 	}
 	s.meta.UpdatedAt = time.Now().UTC()
-	if s.manager.store != nil {
+	ephemeral := s.ephemeral
+	if s.manager.store != nil && !ephemeral {
 		_ = s.manager.store.SaveSession(s.meta)
 	}
 	s.broadcastLocked(message(map[string]any{"type": "status", "status": "terminated", "code": statusCode(status), "signal": status.Signal, "exitStatus": s.exitStatus}))
@@ -55,6 +56,10 @@ func (s *Session) waitLoop() {
 	if onExit != nil {
 		onExit(*status)
 	}
+	if ephemeral {
+		s.manager.finishEphemeral(context.Background(), s)
+		return
+	}
 	if err := s.manager.retireSession(context.Background(), s); err != nil {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s cleanup warning: %v\n", s.meta.ID, err)
 	}
@@ -66,6 +71,9 @@ func (s *Session) waitLoop() {
 func (s *Session) takeExitHook() func(ExitStatus) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.ephemeral {
+		s.lastActivity = time.Now()
+	}
 	hook := s.onExit
 	s.onExit = nil
 	return hook

@@ -9,12 +9,23 @@ import (
 )
 
 func (m *Manager) Input(id string, client *Client, data string) error {
+	return m.input(id, client, data, false)
+}
+func (m *Manager) InputPending(id string, client *Client, data string) error {
+	return m.input(id, client, data, true)
+}
+func (m *Manager) input(id string, client *Client, data string, pending bool) error {
 	if len([]byte(data)) > 1024*1024 {
 		return errors.New("input too large")
 	}
-	m.mu.RLock()
-	session := m.sessions[id]
-	m.mu.RUnlock()
+	var session *Session
+	if pending {
+		session = m.pendingOrSession(id)
+	} else {
+		m.mu.RLock()
+		session = m.sessions[id]
+		m.mu.RUnlock()
+	}
 	if session == nil {
 		return os.ErrNotExist
 	}
@@ -25,6 +36,10 @@ func (m *Manager) Input(id string, client *Client, data string) error {
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.ephemeral {
+		session.lastActivity = time.Now()
+		session.detachedAt = time.Time{}
+	}
 	if session.closed {
 		return os.ErrProcessDone
 	}
@@ -48,17 +63,31 @@ func (m *Manager) Input(id string, client *Client, data string) error {
 }
 
 func (m *Manager) Resize(id string, client *Client, cols, rows int) error {
+	return m.resize(id, client, cols, rows, false)
+}
+func (m *Manager) ResizePending(id string, client *Client, cols, rows int) error {
+	return m.resize(id, client, cols, rows, true)
+}
+func (m *Manager) resize(id string, client *Client, cols, rows int, pending bool) error {
 	if cols < 2 || cols > 1000 || rows < 1 || rows > 1000 {
 		return errors.New("invalid terminal dimensions")
 	}
-	m.mu.RLock()
-	session := m.sessions[id]
-	m.mu.RUnlock()
+	var session *Session
+	if pending {
+		session = m.pendingOrSession(id)
+	} else {
+		m.mu.RLock()
+		session = m.sessions[id]
+		m.mu.RUnlock()
+	}
 	if session == nil {
 		return os.ErrNotExist
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.ephemeral {
+		session.lastActivity = time.Now()
+	}
 	if session.closed {
 		return os.ErrProcessDone
 	}
@@ -74,7 +103,9 @@ func (m *Manager) Resize(id string, client *Client, cols, rows int) error {
 		m.fail(err)
 		return err
 	}
-	_ = m.store.SaveSession(session.meta)
+	if m.store != nil && !session.ephemeral {
+		_ = m.store.SaveSession(session.meta)
+	}
 	session.scheduleSnapshotLocked()
 	return nil
 }

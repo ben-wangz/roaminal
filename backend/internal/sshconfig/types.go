@@ -69,4 +69,12 @@ type Definition struct {
 	Warnings                   []Warning       `json:"warnings"`
 	Capabilities               map[string]bool `json:"capabilities"`
 	HostVerificationAssessment string          `json:"hostVerificationAssessment"`
+	Tmux                       *TmuxOptions    `json:"tmux,omitempty"`
+}
+
+// TmuxOptions is an Roaminal-owned add-on. SSH facts remain exclusively in
+// ~/.ssh/config; this value is only merged into a definition for the UI/API.
+type TmuxOptions struct {
+	Enabled     bool   `json:"enabled"`
+	SessionName string `json:"sessionName"`
 }

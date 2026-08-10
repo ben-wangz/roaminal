@@ -3,12 +3,10 @@ package connection
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/config"
+	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
@@ -20,6 +18,7 @@ type Manager struct {
 	*terminal.Manager
 	configRepo  *sshconfig.Repository
 	keys        *sshkey.Inventory
+	options     *connectionoptions.Store
 	sshPath     string
 	runtimeDir  string
 	transportMu sync.Mutex
@@ -33,14 +32,16 @@ type Client = terminal.Client
 type ExitStatus = terminal.ExitStatus
 
 type Transport struct {
-	Alias           string
-	ControlPath     string
-	ContextRevision string
-	OwnerID         string
-	Channels        int
-	OwnerClosed     bool
-	Draining        bool
-	stopRequested   bool
+	Alias              string
+	ControlPath        string
+	ContextRevision    string // retained for compatibility with existing state/tests
+	SourceRevision     string
+	TmuxLaunchRevision string
+	OwnerID            string
+	Channels           int
+	OwnerClosed        bool
+	Draining           bool
+	stopRequested      bool
 }
 
 func transportAcceptsReuse(transport *Transport) bool {
@@ -51,6 +52,7 @@ var ErrClientCapacity = terminal.ErrClientCapacity
 var ErrControlNotOwner = terminal.ErrControlNotOwner
 var ErrTransportUnavailable = errors.New("ssh transport unavailable")
 var ErrTransportDraining = errors.New("ssh transport is draining")
+var ErrTmuxNotEnabled = errors.New("tmux is not enabled for this connection")
 
 func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *worker.Client) *Manager {
 	return &Manager{Manager: terminal.NewManager(cfg, store, terminalWorker), sshPath: discover("ssh"), transports: make(map[string]*Transport), instances: make(map[string]*Transport)}
@@ -70,6 +72,19 @@ func (m *Manager) SetRuntimeID(id string) {
 
 func (m *Manager) SetSources(repo *sshconfig.Repository, keys *sshkey.Inventory) {
 	m.configRepo, m.keys = repo, keys
+}
+
+func (m *Manager) SetConnectionOptions(store *connectionoptions.Store) { m.options = store }
+
+func (m *Manager) tmuxOptions(aliases map[string]bool) (map[string]connectionoptions.Tmux, error) {
+	if m.options == nil {
+		return map[string]connectionoptions.Tmux{}, nil
+	}
+	collection, err := m.options.Load(aliases)
+	if err != nil {
+		return nil, err
+	}
+	return collection.Options, nil
 }
 
 func (m *Manager) Start(ctx context.Context) error {
@@ -104,64 +119,6 @@ func (m *Manager) Shutdown(ctx context.Context) {
 		m.stopTransport(ctx, transport)
 	}
 	m.Manager.Shutdown(ctx)
-}
-
-func (m *Manager) CreateRemote(ctx context.Context, definitionID string, cols, rows int, reuseFrom string) (Summary, error) {
-	if reuseFrom != "" {
-		return m.createReuse(ctx, definitionID, cols, rows, reuseFrom)
-	}
-	if m.sshPath == "" || m.configRepo == nil || m.runtimeDir == "" {
-		return Summary{}, ErrTransportUnavailable
-	}
-	alias, err := aliasFromDefinitionID(definitionID)
-	if err != nil {
-		return Summary{}, err
-	}
-	collection, err := m.configRepo.Collection(keySet(m.keys))
-	if err != nil {
-		return Summary{}, err
-	}
-	var definition *sshconfig.Definition
-	for index := range collection.Definitions {
-		if collection.Definitions[index].HostAlias == alias {
-			definition = &collection.Definitions[index]
-			break
-		}
-	}
-	if definition == nil {
-		return Summary{}, errors.New("connection definition not found")
-	}
-	id := terminalID()
-	// Unix domain sockets have a small path limit. Keep the persisted session
-	// ID intact, but use a short unique transport directory name for the mux.
-	transportDir := filepath.Join(m.runtimeDir, "t-"+shortPathToken(id))
-	if err := os.MkdirAll(transportDir, 0o700); err != nil {
-		return Summary{}, err
-	}
-	controlPath := filepath.Join(transportDir, "ctl")
-	transport := &Transport{Alias: alias, ControlPath: controlPath, ContextRevision: collection.ETag, OwnerID: id, Channels: 1}
-	aliasPtr := alias
-	meta := persistence.SessionMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "live", SourceState: "current", HostVerificationAssessment: definition.HostVerificationAssessment, Cols: cols, Rows: rows, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), AutomaticTitle: alias}
-	argv := []string{m.sshPath, "-o", "ControlMaster=yes", "-o", "ControlPersist=yes", "-o", "ControlPath=" + controlPath, "--", alias}
-	m.transportMu.Lock()
-	m.transports[id] = transport
-	m.instances[id] = transport
-	m.transportMu.Unlock()
-	result, err := m.CreateProcessWithExit(ctx, meta, argv, nil, func(_ terminal.ExitStatus) {
-		m.finishInstance(context.Background(), id, true)
-	})
-	if err != nil {
-		m.transportMu.Lock()
-		delete(m.instances, id)
-		delete(m.transports, id)
-		m.transportMu.Unlock()
-		_ = os.RemoveAll(transportDir)
-		return Summary{}, err
-	}
-	if !m.transportReady(transport) {
-		transport.Draining = false
-	}
-	return result, nil
 }
 
 func (m *Manager) Close(ctx context.Context, id string) error {

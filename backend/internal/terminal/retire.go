@@ -120,6 +120,10 @@ func (m *Manager) terminateSession(ctx context.Context, session *Session, lifecy
 		// must run so resources owned by the process can be released.
 		onExit(ExitStatus{})
 	}
+	if session.ephemeral {
+		m.finishEphemeral(ctx, session)
+		return terminateErr
+	}
 	retireErr := m.retireSession(ctx, session)
 	if terminateErr != nil {
 		return terminateErr

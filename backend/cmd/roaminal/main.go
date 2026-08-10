@@ -17,6 +17,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/buildinfo"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/frontend"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
@@ -85,7 +86,9 @@ func run(cfg config.Config) error {
 	}
 	configRepo := sshconfig.New(sshRoot)
 	keyInventory := sshkey.New(sshRoot)
+	connectionOptions := connectionoptions.New(cfg.StateDir)
 	terminals.SetSources(configRepo, keyInventory)
+	terminals.SetConnectionOptions(connectionOptions)
 	if err := terminals.Start(context.Background()); err != nil {
 		_ = terminalWorker.Shutdown(context.Background())
 		return err
@@ -95,7 +98,7 @@ func run(cfg config.Config) error {
 		terminals.Shutdown(context.Background())
 		return err
 	}
-	service := server.NewWithSources(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory)
+	service := server.NewWithSources(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory, connectionOptions)
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {
 		_ = terminalWorker.Shutdown(context.Background())

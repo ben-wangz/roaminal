@@ -45,6 +45,8 @@ type Summary struct {
 	GenerationStatus           string      `json:"generationStatus,omitempty"`
 	GenerationError            string      `json:"generationError,omitempty"`
 	GenerationStaging          string      `json:"generationStaging,omitempty"`
+	TmuxEnabled                bool        `json:"tmuxEnabled,omitempty"`
+	TmuxSessionName            string      `json:"tmuxSessionName,omitempty"`
 }
 
 type Client struct {
@@ -115,6 +117,7 @@ type Manager struct {
 	worker             *worker.Client
 	mu                 sync.RWMutex
 	sessions           map[string]*Session
+	pending            map[string]*Session
 	createReservations int
 	fatal              chan error
 	runtimeID          string
@@ -143,10 +146,16 @@ type Session struct {
 	readDone      chan struct{}
 	retiring      bool
 	retired       bool
+	ephemeral     bool
+	published     bool
+	onMarker      func(string)
+	lastActivity  time.Time
+	detachedAt    time.Time
+	pendingOwner  string
 }
 
 func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *worker.Client) *Manager {
-	return &Manager{cfg: cfg, store: store, worker: terminalWorker, sessions: make(map[string]*Session), fatal: make(chan error, 1)}
+	return &Manager{cfg: cfg, store: store, worker: terminalWorker, sessions: make(map[string]*Session), pending: make(map[string]*Session), fatal: make(chan error, 1)}
 }
 func (m *Manager) Fatal() <-chan error       { return m.fatal }
 func (m *Manager) WorkerFatal(err error)     { m.fail(err) }

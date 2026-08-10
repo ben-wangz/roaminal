@@ -14,16 +14,35 @@ import (
 )
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/ws/connection-instances/")
+	pending := strings.HasPrefix(r.URL.Path, "/ws/connection-launches/")
+	prefix := "/ws/connection-instances/"
+	if pending {
+		prefix = "/ws/connection-launches/"
+	}
+	id := strings.TrimPrefix(r.URL.Path, prefix)
 	if id == "" || strings.Contains(id, "/") {
 		writeError(w, 404, "not found")
 		return
 	}
-	if _, err := s.auth.Authenticate(websocketToken(r)); err != nil {
+	authSessionID, err := s.auth.Authenticate(websocketToken(r))
+	if err != nil {
 		writeError(w, 401, "unauthorized")
 		return
 	}
-	if err := s.terms.ReserveAttach(id); err != nil {
+	if pending {
+		owner := s.terms.PendingOwner(id)
+		if owner != "" && owner != authSessionID {
+			writeError(w, http.StatusForbidden, "launch belongs to another auth session")
+			return
+		}
+	}
+	reserve := s.terms.ReserveAttach
+	release := s.terms.ReleaseAttach
+	if pending {
+		reserve = s.terms.ReservePendingAttach
+		release = s.terms.ReleasePendingAttach
+	}
+	if err := reserve(id); err != nil {
 		if errors.Is(err, connection.ErrClientCapacity) {
 			writeError(w, http.StatusTooManyRequests, "client capacity reached")
 		} else if errors.Is(err, os.ErrNotExist) {
@@ -36,7 +55,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	reserved := true
 	defer func() {
 		if reserved {
-			s.terms.ReleaseAttach(id)
+			release(id)
 		}
 	}()
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"roaminal.v1"}})
@@ -46,13 +65,27 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close(websocket.StatusNormalClosure, "")
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	client, err := s.terms.AttachReserved(ctx, id)
+	attach := s.terms.AttachReserved
+	detach := s.terms.Detach
+	input := s.terms.Input
+	resize := s.terms.Resize
+	claim := s.terms.ClaimControl
+	touch := func(string) {}
+	if pending {
+		attach = s.terms.AttachPendingReserved
+		detach = s.terms.DetachPending
+		input = s.terms.InputPending
+		resize = s.terms.ResizePending
+		claim = s.terms.ClaimPendingControl
+		touch = s.terms.TouchPending
+	}
+	client, err := attach(ctx, id)
 	if err != nil {
 		_ = conn.Close(websocket.StatusCode(1011), "attach failed")
 		return
 	}
 	reserved = false
-	defer s.terms.Detach(id, client)
+	defer detach(id, client)
 	writerDone := make(chan struct{})
 	go func() {
 		defer close(writerDone)
@@ -109,7 +142,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			var value string
 			inputErr := json.Unmarshal(msg["data"], &value)
 			if inputErr == nil {
-				inputErr = s.terms.Input(id, client, value)
+				inputErr = input(id, client, value)
 			}
 			if errors.Is(inputErr, connection.ErrControlNotOwner) {
 				continue
@@ -127,16 +160,17 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
 				return
 			}
-			if err := s.terms.Resize(id, client, value.Cols, value.Rows); errors.Is(err, connection.ErrControlNotOwner) {
+			if err := resize(id, client, value.Cols, value.Rows); errors.Is(err, connection.ErrControlNotOwner) {
 				continue
 			} else if err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
 				return
 			}
 		case "ping":
+			touch(id)
 			_ = client.EnqueueControl([]byte(`{"type":"pong"}`))
 		case "claim_terminal_control":
-			if err := s.terms.ClaimControl(id, client); err != nil {
+			if err := claim(id, client); err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "claim_failed")
 				return
 			}

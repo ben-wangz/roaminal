@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
 )
 
@@ -28,9 +29,10 @@ type ConfigSource struct {
 }
 
 type Collection struct {
-	ConfigSource ConfigSource `json:"configSource"`
-	Definitions  []Definition `json:"definitions"`
-	ETag         string       `json:"-"`
+	ConfigSource      ConfigSource             `json:"configSource"`
+	TmuxOptionsSource connectionoptions.Source `json:"tmuxOptionsSource"`
+	Definitions       []Definition             `json:"definitions"`
+	ETag              string                   `json:"-"`
 }
 
 type Repository struct {

@@ -10,6 +10,9 @@ import (
 )
 
 func (s *Session) scheduleSnapshotLocked() {
+	if s.ephemeral {
+		return
+	}
 	if s.snapshotTimer == nil {
 		s.dirtySince = time.Now()
 		s.snapshotTimer = time.AfterFunc(250*time.Millisecond, func() { s.saveSnapshot() })
@@ -25,6 +28,10 @@ func (s *Session) saveSnapshotFinal() error {
 
 func (s *Session) saveSnapshotWithClosed(force bool) error {
 	s.mu.Lock()
+	if s.ephemeral {
+		s.mu.Unlock()
+		return nil
+	}
 	if s.closed && !force {
 		s.mu.Unlock()
 		return nil
