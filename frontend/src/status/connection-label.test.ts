@@ -15,8 +15,8 @@ describe('connection display names', () => {
   it('numbers instances of the same connection by creation order', () => {
     const first = instance('first', '2026-08-10T00:00:00Z');
     const second = instance('second', '2026-08-10T00:01:00Z');
-    expect(connectionDisplayName(second, [second, first])).toBe('codespace 2');
-    expect(connectionDisplayName(first, [second, first])).toBe('codespace 1');
+    expect(connectionDisplayName(second, [second, first])).toBe('codespace-2');
+    expect(connectionDisplayName(first, [second, first])).toBe('codespace-1');
   });
 
   it('does not number unrelated aliases or connection types together', () => {

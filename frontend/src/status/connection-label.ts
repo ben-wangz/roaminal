@@ -6,7 +6,7 @@ export function connectionDisplayName(active: ConnectionInstanceSummary | null, 
   const peers = sessions.filter((session) => sameConnection(session, active)).sort(compareCreatedAt);
   if (peers.length < 2) return base;
   const index = peers.findIndex((session) => session.id === active.id);
-  return `${base} ${index >= 0 ? index + 1 : 1}`;
+  return `${base}-${index >= 0 ? index + 1 : 1}`;
 }
 
 function connectionBaseName(session: ConnectionInstanceSummary): string {
