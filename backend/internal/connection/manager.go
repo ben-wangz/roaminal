@@ -24,6 +24,9 @@ type Manager struct {
 	transportMu sync.Mutex
 	transports  map[string]*Transport
 	instances   map[string]*Transport
+	remoteMu    sync.Mutex
+	remoteState map[string]*remoteMonitorState
+	remoteSem   chan struct{}
 	watchCancel context.CancelFunc
 }
 
@@ -39,6 +42,7 @@ type Transport struct {
 	TmuxLaunchRevision string
 	OwnerID            string
 	Channels           int
+	AuxiliaryChannels  int
 	OwnerClosed        bool
 	Draining           bool
 	stopRequested      bool
@@ -55,7 +59,7 @@ var ErrTransportDraining = errors.New("ssh transport is draining")
 var ErrTmuxNotEnabled = errors.New("tmux is not enabled for this connection")
 
 func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *worker.Client) *Manager {
-	return &Manager{Manager: terminal.NewManager(cfg, store, terminalWorker), sshPath: discover("ssh"), transports: make(map[string]*Transport), instances: make(map[string]*Transport)}
+	return &Manager{Manager: terminal.NewManager(cfg, store, terminalWorker), sshPath: discover("ssh"), transports: make(map[string]*Transport), instances: make(map[string]*Transport), remoteState: make(map[string]*remoteMonitorState), remoteSem: make(chan struct{}, 4)}
 }
 
 func (m *Manager) SetRuntimeID(id string) {
@@ -115,6 +119,14 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	m.transports = make(map[string]*Transport)
 	m.instances = make(map[string]*Transport)
 	m.transportMu.Unlock()
+	m.remoteMu.Lock()
+	for _, state := range m.remoteState {
+		if state != nil && state.inflight != nil {
+			close(state.inflight)
+		}
+	}
+	m.remoteState = make(map[string]*remoteMonitorState)
+	m.remoteMu.Unlock()
 	for _, transport := range transports {
 		m.stopTransport(ctx, transport)
 	}
@@ -146,12 +158,13 @@ func (m *Manager) finishInstance(ctx context.Context, id string, closed bool) {
 		if id == transport.OwnerID {
 			transport.OwnerClosed = true
 		}
-		if transport.OwnerClosed && transport.Channels == 0 {
+		if transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0 {
 			delete(m.transports, transport.OwnerID)
 		}
 	}
 	m.transportMu.Unlock()
-	if transport != nil && transport.OwnerClosed && transport.Channels == 0 {
+	if transport != nil && transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0 {
+		m.clearRemoteState(transport.OwnerID)
 		m.stopTransport(ctx, transport)
 	}
 }

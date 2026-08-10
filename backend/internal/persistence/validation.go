@@ -58,6 +58,21 @@ func validateSessionMeta(meta SessionMeta) error {
 	if meta.Cols < 2 || meta.Cols > 1000 || meta.Rows < 1 || meta.Rows > 1000 || meta.CreatedAt.IsZero() || meta.UpdatedAt.IsZero() || meta.UpdatedAt.Before(meta.CreatedAt) {
 		return errors.New("invalid session dimensions or timestamp")
 	}
+	if meta.TmuxPrefixKey != "" && (len(meta.TmuxPrefixKey) != 1 || meta.TmuxPrefixKey[0] < 'a' || meta.TmuxPrefixKey[0] > 'z') {
+		return errors.New("invalid tmux prefix key")
+	}
+	if meta.TmuxPrefixSource != "" && meta.TmuxPrefixSource != "runtime" && meta.TmuxPrefixSource != "fallback" && meta.TmuxPrefixSource != "unsupported" {
+		return errors.New("invalid tmux prefix source")
+	}
+	if (meta.TmuxPrefixSource == "runtime" || meta.TmuxPrefixSource == "fallback") && meta.TmuxPrefixKey == "" {
+		return errors.New("tmux prefix source requires a key")
+	}
+	if meta.TmuxPrefixSource == "unsupported" && meta.TmuxPrefixKey != "" {
+		return errors.New("unsupported tmux prefix cannot have a key")
+	}
+	if !meta.TmuxEnabled && (meta.TmuxPrefixKey != "" || meta.TmuxPrefixSource != "") {
+		return errors.New("non-tmux session has tmux prefix metadata")
+	}
 	if len(meta.Executions) > 100 {
 		return errors.New("too many executions")
 	}

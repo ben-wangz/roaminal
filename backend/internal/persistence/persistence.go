@@ -64,6 +64,8 @@ type SessionMeta struct {
 	GenerationStaging                 string            `json:"generationStaging,omitempty"`
 	TmuxEnabled                       bool              `json:"tmuxEnabled,omitempty"`
 	TmuxSessionName                   string            `json:"tmuxSessionName,omitempty"`
+	TmuxPrefixKey                     string            `json:"tmuxPrefixKey,omitempty"`
+	TmuxPrefixSource                  string            `json:"tmuxPrefixSource,omitempty"`
 }
 
 func (meta SessionMeta) EffectiveTitle() string {

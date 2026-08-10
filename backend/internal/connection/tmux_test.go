@@ -26,3 +26,22 @@ func TestTmuxLaunchRevisionChangesWithSession(t *testing.T) {
 		t.Fatalf("unexpected launch revisions: %q %q", first, second)
 	}
 }
+
+func TestNormalizeTmuxPrefix(t *testing.T) {
+	for _, test := range []struct {
+		input string
+		want  string
+		ok    bool
+	}{
+		{input: "C-k\n", want: "k", ok: true},
+		{input: "c-B", want: "b", ok: true},
+		{input: "C-k extra", ok: false},
+		{input: "C-1", ok: false},
+		{input: "C-k\nC-j", ok: false},
+	} {
+		got, ok := normalizeTmuxPrefix(test.input)
+		if got != test.want || ok != test.ok {
+			t.Fatalf("normalizeTmuxPrefix(%q) = %q, %v; want %q, %v", test.input, got, ok, test.want, test.ok)
+		}
+	}
+}

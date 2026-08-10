@@ -72,6 +72,7 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 			_ = m.AbortPending(context.Background(), id)
 			return
 		}
+		meta.TmuxPrefixKey, meta.TmuxPrefixSource = probeTmuxPrefix(context.Background(), m, transport)
 		if _, err := m.Manager.PromotePending(id, meta); err != nil {
 			_ = m.AbortPending(context.Background(), id)
 		}
@@ -113,6 +114,7 @@ func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias strin
 			_ = m.AbortPending(context.Background(), id)
 			return
 		}
+		meta.TmuxPrefixKey, meta.TmuxPrefixSource = probeTmuxPrefix(context.Background(), m, transport)
 		if _, err := m.Manager.PromotePending(id, meta); err != nil {
 			_ = m.AbortPending(context.Background(), id)
 		}
