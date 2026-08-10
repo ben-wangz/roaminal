@@ -58,3 +58,7 @@ export async function apiWithMeta<T>(path: string, init: RequestInit = {}, auth:
 }
 
 export { clearAuth, loadAuth };
+
+export function currentAccessToken(): string | null {
+  return loadAuth()?.accessToken || null;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanelLeftOpen, Search, ShieldCheck } from 'lucide-react';
-import { api, clearAuth, loadAuth, login, refresh } from '../auth/auth-client';
+import { api, clearAuth, currentAccessToken, loadAuth, login, refresh } from '../auth/auth-client';
 import { AuthSessionUI, AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-session-ui';
 import { heartbeat, type Heartbeat } from '../status/heartbeat';
 import { notify } from '../status/notifications'; import { SystemStatus } from '../status/system-status'; import { Toast } from '../ui/toast'; import { Sidebar } from '../ui/sidebar';
@@ -65,7 +65,7 @@ export function AppShell() {
       setCurrentRuntime(null);
       return;
     }
-    const next = new TerminalRuntime(runtimeId, () => auth.accessToken, heartbeatState?.runtime.scrollbackLines || 1000, activeLaunchId ? 'connection-launches' : 'connection-instances');
+    const next = new TerminalRuntime(runtimeId, currentAccessToken, heartbeatState?.runtime.scrollbackLines || 1000, activeLaunchId ? 'connection-launches' : 'connection-instances');
     const previous = mainRuntime.current;
     mainRuntime.current = next;
     setCurrentRuntime(next);

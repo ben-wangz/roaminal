@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { currentAccessToken } from '../auth/auth-client';
 import { TerminalPreviewRuntime } from '../terminal/terminal-preview';
 
 type Auth = { accessToken: string } | null;
@@ -15,7 +16,9 @@ export function useTerminalPreview(auth: Auth, previewSessionId: string | null, 
     if (!auth || !previewSessionId || !sidebarOpen) return;
     const timer = window.setTimeout(() => {
       if (currentGeneration !== generation.current) return;
-      const next = new TerminalPreviewRuntime(previewSessionId, () => auth.accessToken);
+      // The refresh path updates localStorage without necessarily changing the
+      // React auth object. Resolve the token when the preview reconnects.
+      const next = new TerminalPreviewRuntime(previewSessionId, currentAccessToken);
       previewRuntimeRef.current = next;
       setPreviewRuntime(next);
     }, 100);
