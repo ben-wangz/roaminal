@@ -48,8 +48,7 @@ export function AppShell() {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => { setToast(null); toastTimer.current = null; }, 4500);
   }
-  function setActiveView(next: SessionView) { viewRef.current = next; setView(next); }
-  function activateSession(id: string) { setActiveView(selectStoredSession(viewRef.current, id)); }
+  function setActiveView(next: SessionView) { viewRef.current = next; setView(next); } function activateSession(id: string) { setActiveView(selectStoredSession(viewRef.current, id)); }
   useEffect(() => { saveStoredSession(window.localStorage, view); }, [view]);
   useEffect(() => { viewRef.current = view; }, [view]);
   useEffect(() => { if (!sidebarOpen) sidebarOpenButton.current?.focus(); }, [sidebarOpen]);
@@ -83,6 +82,7 @@ export function AppShell() {
     if (!currentRuntime || currentRuntime.sessionId !== runtimeId) return;
     return currentRuntime.subscribeMessage((message) => {
       if (message?.type === 'launch_published') {
+        setCurrentRuntime((current) => current === currentRuntime ? null : current);
         setActiveLaunchId(null);
         stateRevision.current += 1;
         setSessions((current) => [...current.filter((session) => session.id !== message.instance.id), message.instance]);
@@ -93,6 +93,7 @@ export function AppShell() {
       if (message?.type === 'status' && message.status === 'terminated') {
         const exitedID = currentRuntime.sessionId;
         if (activeLaunchId === exitedID) {
+          setCurrentRuntime((current) => current === currentRuntime ? null : current);
           setActiveLaunchId(null);
           setWorkspaceOpen(false);
           showToast('tmux connection could not be started.');
@@ -129,6 +130,7 @@ export function AppShell() {
     try {
       if (tmuxEnabled) {
         const launch = await startConnectionLaunch(connectionDefinitionId, reuseFrom);
+        setCurrentRuntime(null);
         setActiveLaunchId(launch.launchId);
         setWorkspaceOpen(true);
         return;
@@ -193,6 +195,7 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', handler);
   }, [view.activeSessionId]);
   function selectSession(id: string) {
+    if (viewRef.current.activeSessionId !== id || activeLaunchId) setCurrentRuntime(null);
     activateSession(id);
     setWorkspaceOpen(true);
     setSearch(false);
@@ -276,7 +279,8 @@ export function AppShell() {
   }
   if (!auth) return <AuthSessionUI error={error} onLogin={onLogin} />;
   const currentSession = sessions.find((session) => session.id === view.activeSessionId);
-  const activeRuntime = currentRuntime?.sessionId === view.activeSessionId ? currentRuntime : null;
+  const activeRuntimeId = activeLaunchId || view.activeSessionId;
+  const activeRuntime = currentRuntime?.sessionId === activeRuntimeId ? currentRuntime : null;
   const dialogSession = dialog && 'sessionId' in dialog ? sessions.find((session) => session.id === dialog.sessionId) : undefined;
   return <div className="app-shell">
     {workspaceOpen && <Sidebar id="connection-sidebar" sessions={sessions} active={view.activeSessionId} open={sidebarOpen} previewSessionId={previewSessionId} previewRuntime={previewRuntime?.sessionId === previewSessionId ? previewRuntime : null} onToggle={toggleSidebar} onSelect={selectSession} onPreviewStart={(id) => setPreviewSessionId(id)} onPreviewEnd={(id) => setPreviewSessionId((current) => current === id ? null : current)} onUnavailableExtension={(name) => showToast(`${name} extension unavailable`)} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={resetTitle} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={() => setWorkspaceOpen(false)} />}

@@ -29,7 +29,9 @@ export class TerminalRuntime {
   }
 
   attach(element: HTMLElement): void {
-    if (this.disposed) throw new Error(`terminal runtime ${this.sessionId} is disposed`);
+    // React may deliver a delayed ref callback while a runtime transition is
+    // being committed. A disposed runtime has no work left to attach.
+    if (this.disposed) return;
     if (this.element === element) return;
     if (this.element && this.terminal.element?.parentElement === this.element) this.terminal.element.remove();
     this.element = element;
