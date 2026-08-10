@@ -42,10 +42,11 @@ export class TerminalRuntime {
       this.terminal.loadAddon(this.fit); this.terminal.loadAddon(this.search); this.terminal.loadAddon(new LigaturesAddon()); this.terminal.loadAddon(new ProgressAddon());
       this.addonsLoaded = true;
     }
+    if (this.disposed) return;
     this.fit.fit();
     this.connect();
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => { if (this.element) this.fit.fit(); });
+    this.resizeObserver = new ResizeObserver(() => { if (!this.disposed && this.element) this.fit.fit(); });
     this.resizeObserver.observe(element);
   }
   private connect(): void {
@@ -54,8 +55,8 @@ export class TerminalRuntime {
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${scheme}//${location.host}/ws/${this.endpoint}/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
     this.socket = socket;
-    socket.onopen = () => { this.connected = true; this.emit(); this.claim(); this.fit.fit(); };
-    socket.onmessage = (event) => { const message = parseServerMessage(String(event.data)); if (!message) return; if (message.type === 'status' && message.status === 'terminated') { this.closed = true; this.connected = false; this.terminal.options.disableStdin = true; } if (message.type === 'snapshot') this.terminal.reset(); if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data); for (const listener of this.messageListeners) listener(message); this.emit(); };
+    socket.onopen = () => { if (this.disposed || this.closed || this.socket !== socket) return; this.connected = true; this.emit(); this.claim(); this.fit.fit(); };
+    socket.onmessage = (event) => { if (this.disposed || this.socket !== socket) return; const message = parseServerMessage(String(event.data)); if (!message) return; if (message.type === 'status' && message.status === 'terminated') { this.closed = true; this.connected = false; this.terminal.options.disableStdin = true; } if (message.type === 'snapshot') this.terminal.reset(); if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data); for (const listener of this.messageListeners) listener(message); this.emit(); };
     socket.onclose = () => {
       if (this.socket === socket) this.socket = null;
       this.connected = false;

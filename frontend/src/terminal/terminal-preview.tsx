@@ -27,16 +27,17 @@ export class TerminalPreviewRuntime {
   }
 
   attach(element: HTMLElement): void {
-    if (this.disposed) throw new Error(`terminal preview ${this.sessionId} is disposed`);
+    if (this.disposed) return;
     if (this.element === element) return;
     this.element = element;
     if (this.terminal.element) element.replaceChildren(this.terminal.element);
     else this.terminal.open(element);
     this.terminal.loadAddon(this.fit);
+    if (this.disposed) return;
     this.fit.fit();
     this.connect();
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => this.fit.fit());
+    this.resizeObserver = new ResizeObserver(() => { if (!this.disposed) this.fit.fit(); });
     this.resizeObserver.observe(element);
   }
 
@@ -47,8 +48,9 @@ export class TerminalPreviewRuntime {
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${scheme}//${location.host}/ws/connection-instances/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
     this.socket = socket;
-    socket.onopen = () => { this.connected = true; this.fit.fit(); };
+    socket.onopen = () => { if (this.disposed || this.socket !== socket) return; this.connected = true; this.fit.fit(); };
     socket.onmessage = (event) => {
+      if (this.disposed || this.socket !== socket) return;
       const message = parseServerMessage(String(event.data));
       if (!message) return;
       if (message.type === 'snapshot') this.terminal.reset();
