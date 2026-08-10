@@ -70,8 +70,12 @@ export class TerminalPreviewRuntime {
     this.disposed = true;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
-    this.socket?.close();
-    this.socket = null;
+    const socket = this.socket; this.socket = null;
+    if (socket?.readyState === WebSocket.CONNECTING) {
+      socket.onopen = () => socket.close(); socket.onerror = () => undefined;
+    } else if (socket) {
+      socket.onopen = null; socket.onmessage = null; socket.onclose = null; socket.onerror = null; socket.close();
+    }
     this.element = null;
     this.disposeFrame = window.requestAnimationFrame(() => { this.disposeFrame = null; this.terminal.dispose(); });
   }

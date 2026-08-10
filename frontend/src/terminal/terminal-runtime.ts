@@ -74,7 +74,23 @@ export class TerminalRuntime {
     if (this.element && this.terminal.element?.parentElement === this.element) this.terminal.element.remove();
     this.element = null;
   }
-  dispose(): void { if (this.disposed) return; this.disposed = true; if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer); this.reconnectTimer = null; this.resizeObserver?.disconnect(); this.resizeObserver = null; this.element?.removeEventListener('focusin', this.activate); this.element?.removeEventListener('pointerdown', this.activate); this.socket?.close(); this.socket = null; this.element = null; this.disposeFrame = window.requestAnimationFrame(() => { this.disposeFrame = null; this.terminal.dispose(); }); this.listeners.clear(); this.messageListeners.clear(); }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.resizeObserver?.disconnect(); this.resizeObserver = null;
+    this.element?.removeEventListener('focusin', this.activate); this.element?.removeEventListener('pointerdown', this.activate);
+    const socket = this.socket; this.socket = null;
+    if (socket?.readyState === WebSocket.CONNECTING) {
+      socket.onopen = () => socket.close(); socket.onerror = () => undefined;
+    } else if (socket) {
+      socket.onopen = null; socket.onmessage = null; socket.onclose = null; socket.onerror = null; socket.close();
+    }
+    this.element = null;
+    this.disposeFrame = window.requestAnimationFrame(() => { this.disposeFrame = null; this.terminal.dispose(); });
+    this.listeners.clear(); this.messageListeners.clear();
+  }
   subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   subscribeMessage(listener: (message: ReturnType<typeof parseServerMessage>) => void): () => void { this.messageListeners.add(listener); return () => this.messageListeners.delete(listener); }
   connectedState(): boolean { return this.connected; }
