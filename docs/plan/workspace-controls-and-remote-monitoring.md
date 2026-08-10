@@ -1,6 +1,6 @@
 # Roaminal 场景虚拟键盘与远端监控实施计划
 
-> 状态：实施中（已完成代码落地与自动化验证，待部署验收）。
+> 状态：已完成（代码、ForgeKit gate、develop rollout、直接 Service 与 Playwright 验收均通过）。
 >
 > 本文是交给实施 agent 的连续执行计划。获得明确实施授权前，只允许修改本文，
 > 不得改动业务代码、部署资源或运行中的 connection。
