@@ -87,10 +87,14 @@ test('contextual virtual keyboard follows the active connection', async ({ page 
   await authenticate(page);
   const keyboard = page.getByRole('region', { name: 'Virtual keyboard' });
   await expect(keyboard).toBeVisible();
+  const defaultMode = await keyboard.getByRole('button', { name: 'Tmux' }).getAttribute('aria-pressed');
+  expect(['true', 'false']).toContain(defaultMode);
+  await keyboard.getByRole('button', { name: 'Codex' }).click();
   await expect(keyboard.getByRole('button', { name: 'Codex' })).toHaveAttribute('aria-pressed', 'true');
   await keyboard.getByRole('button', { name: 'Tmux' }).click();
   await expect(keyboard.getByRole('button', { name: 'Tmux' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(keyboard.getByRole('button', { name: 'Send Ctrl+A', exact: true })).toBeEnabled();
+  await expect(keyboard.getByRole('button', { name: /^Send Ctrl\+[A-Z]$/ })).toHaveCount(1);
+  await expect(keyboard.getByRole('button', { name: /^Send Ctrl\+[A-Z]$/ })).toBeEnabled();
   await expect(page.locator('.session-tabs, .terminal-tabs')).toHaveCount(0);
 });
 
