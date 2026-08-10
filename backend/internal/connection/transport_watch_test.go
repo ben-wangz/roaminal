@@ -17,3 +17,21 @@ func TestShortPathTokenKeepsMuxSocketPathBounded(t *testing.T) {
 		t.Fatalf("short token length = %d, want 12", len(got))
 	}
 }
+
+func TestTransportSourceStateStaysCurrentWhenConfigIsUnchanged(t *testing.T) {
+	transport := &Transport{Alias: "codespace", ContextRevision: "etag-1"}
+	current := map[string]bool{"codespace": true}
+
+	if got := transportSourceState(transport, "etag-1", false, current); got != "" {
+		t.Fatalf("unchanged transport state = %q, want empty", got)
+	}
+	if got := transportSourceState(transport, "etag-2", false, current); got != "changed" {
+		t.Fatalf("changed config state = %q, want changed", got)
+	}
+	if got := transportSourceState(transport, "etag-1", false, map[string]bool{}); got != "deleted" {
+		t.Fatalf("missing host state = %q, want deleted", got)
+	}
+	if got := transportSourceState(transport, "etag-1", true, map[string]bool{}); got != "" {
+		t.Fatalf("unavailable config state = %q, want empty", got)
+	}
+}

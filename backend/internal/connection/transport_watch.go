@@ -69,9 +69,9 @@ func (m *Manager) refreshSources() {
 			transport.stopRequested = false
 			m.transportMu.Unlock()
 		}
-		state := "changed"
-		if !configUnavailable && !current[transport.Alias] {
-			state = "deleted"
+		state := transportSourceState(transport, collection.ETag, configUnavailable, current)
+		if state == "" {
+			continue
 		}
 		for _, summary := range m.Summaries() {
 			if summary.SourceHostAlias != nil && *summary.SourceHostAlias == transport.Alias {
@@ -79,6 +79,16 @@ func (m *Manager) refreshSources() {
 			}
 		}
 	}
+}
+
+func transportSourceState(transport *Transport, revision string, configUnavailable bool, current map[string]bool) string {
+	if !configUnavailable && !current[transport.Alias] {
+		return "deleted"
+	}
+	if transport.ContextRevision != revision {
+		return "changed"
+	}
+	return ""
 }
 
 func (m *Manager) drainTransport(transport *Transport) {
