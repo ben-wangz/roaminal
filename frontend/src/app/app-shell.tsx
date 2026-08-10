@@ -3,20 +3,15 @@ import { PanelLeftOpen, Search, ShieldCheck } from 'lucide-react';
 import { api, clearAuth, loadAuth, login, refresh } from '../auth/auth-client';
 import { AuthSessionUI, AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-session-ui';
 import { heartbeat, type Heartbeat } from '../status/heartbeat';
-import { notify } from '../status/notifications';
-import { SystemStatus } from '../status/system-status';
-import { Toast } from '../ui/toast';
-import { Sidebar } from '../ui/sidebar';
+import { notify } from '../status/notifications'; import { SystemStatus } from '../status/system-status'; import { Toast } from '../ui/toast'; import { Sidebar } from '../ui/sidebar';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
-import { TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import { TerminalViewport } from '../terminal/terminal-viewport';
 import { TerminalSearch } from '../terminal/terminal-search';
-import { TouchKeyboard } from '../input/touch-keyboard';
-import { observeViewportHeight } from '../input/viewport';
-import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
+import { TouchKeyboard } from '../input/touch-keyboard'; import { observeViewportHeight } from '../input/viewport'; import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 import { RenameTitleDialog, TerminateDialog } from '../ui/terminal-dialogs';
-import { ConnectionManager } from '../connections/connection-manager';
+import { ConnectionManager } from '../connections/connection-manager'; import { startConnectionLaunch } from '../connections/connection-api';
 import { loadStoredSession, reconcileSession, saveStoredSession, selectSession as selectStoredSession, type SessionView } from './session-view';
+import { useTerminalPreview } from './use-terminal-preview';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 type Dialog = { type: 'rename' | 'terminate'; sessionId: string } | { type: 'auth' } | null;
 export function AppShell() {
@@ -24,6 +19,7 @@ export function AppShell() {
   const [sessions, setSessions] = useState<ConnectionInstanceSummary[]>([]);
   const [view, setView] = useState<SessionView>(() => loadStoredSession(typeof window === 'undefined' ? null : window.localStorage));
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [activeLaunchId, setActiveLaunchId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || !window.matchMedia('(max-width: 800px)').matches);
   const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
   const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
@@ -37,10 +33,8 @@ export function AppShell() {
   const [authSessionBusy, setAuthSessionBusy] = useState<string | null>(null);
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
-  const previewRuntimeRef = useRef<TerminalPreviewRuntime | null>(null);
   const [previewSessionId, setPreviewSessionId] = useState<string | null>(null);
-  const [previewRuntime, setPreviewRuntime] = useState<TerminalPreviewRuntime | null>(null);
-  const previewGeneration = useRef(0);
+  const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewSessionId, sidebarOpen);
   const sessionOrder = useRef<string[]>([]);
   const viewRef = useRef(view);
   const hydrated = useRef(false);
@@ -66,13 +60,14 @@ export function AppShell() {
     previewRuntimeRef.current = null;
   }, []);
   useEffect(() => {
-    if (!auth || !workspaceOpen || !view.activeSessionId) {
+    const runtimeId = activeLaunchId || view.activeSessionId;
+    if (!auth || !workspaceOpen || !runtimeId) {
       mainRuntime.current?.dispose();
       mainRuntime.current = null;
       setCurrentRuntime(null);
       return;
     }
-    const next = new TerminalRuntime(view.activeSessionId, () => auth.accessToken, heartbeatState?.runtime.scrollbackLines || 1000);
+    const next = new TerminalRuntime(runtimeId, () => auth.accessToken, heartbeatState?.runtime.scrollbackLines || 1000, activeLaunchId ? 'connection-launches' : 'connection-instances');
     const previous = mainRuntime.current;
     mainRuntime.current = next;
     setCurrentRuntime(next);
@@ -82,12 +77,27 @@ export function AppShell() {
       if (mainRuntime.current === next) mainRuntime.current = null;
       setCurrentRuntime((current) => current === next ? null : current);
     };
-  }, [auth, workspaceOpen, view.activeSessionId, heartbeatState?.runtime.scrollbackLines]);
+  }, [auth, workspaceOpen, view.activeSessionId, activeLaunchId, heartbeatState?.runtime.scrollbackLines]);
   useEffect(() => {
-    if (!currentRuntime || currentRuntime.sessionId !== view.activeSessionId) return;
+    const runtimeId = activeLaunchId || view.activeSessionId;
+    if (!currentRuntime || currentRuntime.sessionId !== runtimeId) return;
     return currentRuntime.subscribeMessage((message) => {
+      if (message?.type === 'launch_published') {
+        setActiveLaunchId(null);
+        stateRevision.current += 1;
+        setSessions((current) => [...current.filter((session) => session.id !== message.instance.id), message.instance]);
+        activateSession(message.instance.id);
+        setWorkspaceOpen(true);
+        return;
+      }
       if (message?.type === 'status' && message.status === 'terminated') {
         const exitedID = currentRuntime.sessionId;
+        if (activeLaunchId === exitedID) {
+          setActiveLaunchId(null);
+          setWorkspaceOpen(false);
+          showToast('tmux connection could not be started.');
+          return;
+        }
         setSessions((current) => {
           const next = current.filter((session) => session.id !== exitedID);
           const nextView = reconcileSession(next, viewRef.current, current.map((session) => session.id));
@@ -114,29 +124,16 @@ export function AppShell() {
         notify('Roaminal', 'Command completed');
       }
     });
-  }, [currentRuntime, view.activeSessionId]);
-  useEffect(() => {
-    const generation = ++previewGeneration.current;
-    previewRuntimeRef.current?.dispose();
-    previewRuntimeRef.current = null;
-    setPreviewRuntime(null);
-    if (!auth || !previewSessionId || !sidebarOpen) return;
-    const timer = window.setTimeout(() => {
-      if (generation !== previewGeneration.current) return;
-      const next = new TerminalPreviewRuntime(previewSessionId, () => auth.accessToken);
-      previewRuntimeRef.current = next;
-      setPreviewRuntime(next);
-    }, 100);
-    return () => {
-      window.clearTimeout(timer);
-      if (previewGeneration.current !== generation) return;
-      previewRuntimeRef.current?.dispose();
-      previewRuntimeRef.current = null;
-      setPreviewRuntime(null);
-    };
-  }, [auth, previewSessionId, sidebarOpen]);
-  async function createConnection(connectionDefinitionId: string, reuseFrom?: string) {
+  }, [currentRuntime, view.activeSessionId, activeLaunchId]);
+  async function createConnection(connectionDefinitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) {
     try {
+      if (tmuxEnabled) {
+        const launch = await startConnectionLaunch(connectionDefinitionId, reuseFrom);
+        setActiveLaunchId(launch.launchId);
+        setWorkspaceOpen(true);
+        return;
+      }
+      setActiveLaunchId(null);
       const session = await api<ConnectionInstanceSummary>('/api/connection-instances', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFrom || null }) });
       stateRevision.current += 1; setSessions((current) => [...current.filter((item) => item.id !== session.id), session]);
       activateSession(session.id);
@@ -161,10 +158,10 @@ export function AppShell() {
       bootId.current = next.runtime.bootId;
       setHeartbeatState(next);
       const nextView = reconcileSession(next.connectionInstances, viewRef.current, sessionOrder.current); setActiveView(nextView);
-      if (!hydrated.current) {
+      if (!hydrated.current && !activeLaunchId) {
         hydrated.current = true;
         setWorkspaceOpen(Boolean(nextView.activeSessionId));
-      } else if (!nextView.activeSessionId) {
+      } else if (!activeLaunchId && !nextView.activeSessionId) {
         setWorkspaceOpen(false);
       }
       sessionOrder.current = next.connectionInstances.map((session) => session.id);
@@ -181,7 +178,7 @@ export function AppShell() {
     void sync();
     const timer = window.setInterval(() => void sync(), 1000);
     return () => window.clearInterval(timer);
-  }, [auth]);
+  }, [auth, activeLaunchId]);
   useEffect(() => {
     const activeSession = sessions.find((session) => session.id === view.activeSessionId);
     document.title = activeSession ? `Roaminal - ${activeSession.title || activeSession.cwd || 'Connection'}` : 'Roaminal';
@@ -244,7 +241,6 @@ export function AppShell() {
         mainRuntime.current = null;
         previewRuntimeRef.current?.dispose();
         previewRuntimeRef.current = null;
-        setPreviewRuntime(null);
         setPreviewSessionId(null);
         clearAuth();
         setAuth(null);
