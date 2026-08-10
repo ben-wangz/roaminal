@@ -1,8 +1,8 @@
 import type { Heartbeat } from './heartbeat';
 
-type Props = { connected: boolean; system: Heartbeat['system'] | null; sessionCount: number; latencyMs: number | null; persistenceDegraded: boolean };
+type Props = { connected: boolean; connectionName: string; system: Heartbeat['system'] | null; sessionCount: number; latencyMs: number | null; persistenceDegraded: boolean };
 
-export function SystemStatus({ connected, system, sessionCount, latencyMs, persistenceDegraded }: Props) {
+export function SystemStatus({ connected, connectionName, system, sessionCount, latencyMs, persistenceDegraded }: Props) {
   const cpu = system?.cpu.usagePercent ?? null;
   const memory = system?.memory.usagePercent ?? null;
   const cpuCapacity = system?.cpu.capacityCores;
@@ -11,7 +11,7 @@ export function SystemStatus({ connected, system, sessionCount, latencyMs, persi
   return <div className="system-status">
     <span className={`connection-dot ${connected ? 'online' : 'offline'}`} />
     <span className="connection-label">{connected ? 'Connected' : 'Reconnecting'}</span>
-    <span className="status-host">{system?.hostname || 'Roaminal'}</span>
+    <span className="status-host" title={connectionName}>{connectionName}</span>
     <Metric label="CPU" value={formatPercent(cpu)} progress={cpu} detail={cpuCapacity === null || cpuCapacity === undefined ? 'capacity N/A' : `${cpuCapacity.toFixed(2)} cores`} />
     <Metric label="MEM" value={formatPercent(memory)} progress={memory} detail={formatMemory(memoryWorkingSet, memoryLimit)} />
     <span className="status-detail uptime">UP {formatDuration(system?.processUptimeSeconds ?? 0)}</span>
