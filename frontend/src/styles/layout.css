@@ -44,9 +44,9 @@ body { background: var(--base); }
 .extension-button[aria-disabled='true'] { opacity: .78; }
 .sidebar-footer { padding: 14px 16px; color: var(--muted); font-size: .7rem; border-top: 1px solid var(--border); }
 .main-panel { min-width: 0; flex: 1; display: flex; flex-direction: column; }
-.topbar { justify-content: space-between; min-height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.topbar { position: relative; justify-content: space-between; min-height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .system-status { display: flex; flex: 1 1 auto; align-items: center; gap: 9px; min-width: 0; color: #eee8d5; font-size: .72rem; }
-.status-monitor { display: flex; align-items: center; gap: 9px; min-width: 0; margin-inline: auto; }
+.status-monitor { display: flex; position: absolute; top: 50%; left: 50%; align-items: center; gap: 9px; min-width: 0; margin: 0; transform: translate(-50%, -50%); }
 .connection-dot.offline { background: var(--red); }
 .status-host { max-width: 150px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .status-metric { display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 5px; min-width: 86px; }
