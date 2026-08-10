@@ -22,6 +22,7 @@ endpoints below. Other HTTP endpoints require `Authorization: Bearer <access>`.
 | GET/POST | `/api/heartbeat` | authoritative connection-instance list; POST accepts resize updates |
 | GET | `/api/connection-instances` | list connection instances |
 | GET | `/api/connection-instances/:id` | inspect one connection instance |
+| GET | `/api/connection-instances/:id/remote-monitor` | cached metrics from a live SSH transport (`200`); `404` unknown instance; `409` `no_remote_transport` for local/exited/draining instances |
 | POST | `/api/connection-instances` | create a local connection instance (`201`) |
 | PATCH | `/api/connection-instances/:id/title` | update a connection title |
 | POST | `/api/connection-instances/:id/close` | stop, archive, and retire a connection instance (`204`) |
@@ -35,6 +36,21 @@ endpoints below. Other HTTP endpoints require `Authorization: Bearer <access>`.
 an existing absolute directory. Dimensions are `cols: 2..1000` and
 `rows: 1..1000`. Capacity returns `409`. Remote definitions are introduced by
 the SSH connection manager in a later API section.
+
+SSH connection summaries may include `tmuxPrefixKey` and `tmuxPrefixSource` when tmux is
+enabled. The key is a single lowercase letter; `source` is `runtime`, `fallback`, or
+`unsupported`. These fields are a startup snapshot of the effective remote tmux server
+prefix, never raw `.tmux.conf` content.
+
+`GET /api/connection-instances/:id/remote-monitor` returns a typed snapshot with top-level
+`status` (`warming`, `available`, `partial`, `stale`, or `unavailable`), `sampledAt`,
+`ageMs`, `probeRttMs`, and per-metric `status`/`scope` fields. CPU and memory scope is
+`cgroup-v1`, `cgroup-v2`, `host`, or `unknown`; uptime is `pid1`, load is `system`, and
+disk is `rootfs` with mount `/`. Values are nullable when a capability is unavailable.
+CPU's first cumulative sample is `warming`; after 15 seconds without a successful sample
+the snapshot is `stale`, and three consecutive probe failures make it `unavailable` while
+retaining the last successful values. The fixed collector runs over an existing
+ControlMaster and never creates a login session or persists output.
 
 ## WebSocket
 

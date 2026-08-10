@@ -25,3 +25,14 @@ hour for long-lived terminal connections.
 Do not put access or refresh tokens in URLs, logs, screenshots, issue reports, or
 proxy access logs. The worker protocol is local and must never be exposed by a
 Service or port-forward in production.
+
+Remote monitoring uses only the existing SSH ControlMaster. Auxiliary channels use
+`ControlMaster=no`, the existing `ControlPath`, `BatchMode=yes`, `ProxyCommand=/bin/false`,
+`ClearAllForwardings=yes`, and `RemoteCommand=none`; a missing control socket cannot fall
+back to a new network connection or credential prompt. The backend sends a versioned,
+nonce-framed, fixed POSIX collector over stdin, limits stdout/stderr to 8 KiB and execution
+to two seconds, and parses an allowlist of bounded fields. Raw collector output, remote
+configuration, counters, terminal input, and probe failure details are not persisted or
+returned. Snapshots are cached and singleflighted by internal transport identity under the
+existing authenticated API. CPU and memory scopes remain `unknown` when ownership cannot be
+proven; PID1 uptime, system load, and root filesystem capacity are labelled independently.

@@ -118,6 +118,8 @@ func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
 		s.withAuth(w, r, s.createConnectionLaunch)
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-launches/"):
 		s.withAuth(w, r, s.deleteConnectionLaunch)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/remote-monitor"):
+		s.withAuth(w, r, s.remoteMonitor)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && !strings.HasSuffix(r.URL.Path, "/title"):
 		s.withAuth(w, r, s.getConnectionInstance)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-instances":
