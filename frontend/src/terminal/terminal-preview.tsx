@@ -9,6 +9,7 @@ export class TerminalPreviewRuntime {
   private element: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
+  private disposeFrame: number | null = null;
   private connected = false;
 
   constructor(readonly sessionId: string, private readonly token: () => string | null) {
@@ -65,13 +66,14 @@ export class TerminalPreviewRuntime {
   connectedState(): boolean { return this.connected; }
 
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.socket?.close();
     this.socket = null;
     this.element = null;
-    this.terminal.dispose();
+    this.disposeFrame = window.requestAnimationFrame(() => { this.disposeFrame = null; this.terminal.dispose(); });
   }
 }
 
