@@ -26,7 +26,7 @@ export class TerminalRuntime {
     this.terminal = new Terminal({ convertEol: false, cursorBlink: true, scrollback: Math.max(0, Math.min(50000, scrollbackLines)), fontFamily: 'Monaspace Neon, monospace', theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' } });
     this.fit = new FitAddon(); this.search = new SearchAddon();
     this.terminal.onData((data) => { if (this.closed) return; this.claim(); this.send({ type: 'input', data }); });
-    this.terminal.onResize(({ cols, rows }) => { if (!this.closed) this.send({ type: 'resize', cols, rows }); });
+    this.terminal.onResize(({ cols, rows }) => this.sendResize(cols, rows));
   }
 
   attach(element: HTMLElement): void {
@@ -56,7 +56,7 @@ export class TerminalRuntime {
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${scheme}//${location.host}/ws/${this.endpoint}/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
     this.socket = socket;
-    socket.onopen = () => { if (this.disposed || this.closed || this.socket !== socket) return; this.connected = true; this.emit(); this.claim(); this.fit.fit(); };
+    socket.onopen = () => { if (this.disposed || this.closed || this.socket !== socket) return; this.connected = true; this.emit(); this.claim(); this.fit.fit(); this.sendResize(this.terminal.cols, this.terminal.rows); };
     socket.onmessage = (event) => { if (this.disposed || this.socket !== socket) return; const message = parseServerMessage(String(event.data)); if (!message) return; if (message.type === 'status' && message.status === 'terminated') { this.closed = true; this.connected = false; this.terminal.options.disableStdin = true; } if (message.type === 'snapshot') this.terminal.reset(); if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data); for (const listener of this.messageListeners) listener(message); this.emit(); };
     socket.onclose = () => {
       if (this.socket === socket) this.socket = null;
@@ -81,6 +81,7 @@ export class TerminalRuntime {
   closedState(): boolean { return this.closed; }
   find(query: string, options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {}): boolean { return this.search.findNext(query, options); }
   send(message: Record<string, unknown>): void { if (this.closed) return; if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)); }
+  private sendResize(cols: number, rows: number): void { if (!this.closed && this.socket?.readyState === WebSocket.OPEN) this.send({ type: 'resize', cols, rows }); }
   private claim(): void { if (!this.closed) this.send({ type: 'claim_terminal_control' }); }
   private emit(): void { for (const listener of this.listeners) listener(); }
 }
