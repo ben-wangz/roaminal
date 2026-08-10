@@ -10,14 +10,13 @@ body { background: var(--base); }
 .brand-mark { width: 58px; height: 58px; border: 1px solid var(--cyan); display: grid; place-items: center; color: var(--cyan); font-size: 2rem; line-height: 1; }
 .brand-mark span { color: var(--yellow); }
 .brand-mark.small { width: 28px; height: 28px; font-size: 1.1rem; }
-.sidebar-actions { padding: 16px; }
 .primary { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--yellow); background: var(--yellow); color: var(--base); padding: 0 16px; font-weight: 600; }
 .primary:disabled { opacity: .45; cursor: not-allowed; }
 .full { width: 100%; }
 .icon-button, .text-button { border: 0; background: transparent; color: var(--text); }
 .icon-button { width: 34px; height: 34px; display: inline-grid; place-items: center; font-size: 1.25rem; }
 .icon-button:hover, .text-button:hover, .extension-button:hover, .terminal-action-trigger:hover { color: #eee8d5; background: rgba(147,161,161,.12); }
-.session-list { flex: 1; overflow: auto; padding: 0 10px 12px; }
+.session-list { flex: 1; min-height: 0; overflow: auto; padding: 10px 10px 12px; }
 .session-card { min-height: 126px; position: relative; overflow: hidden; isolation: isolate; border: 1px solid transparent; border-left: 2px solid transparent; background: rgba(0,43,54,.6); }
 .session-card + .session-card { margin-top: 8px; }
 .session-card.active { border-color: var(--border); border-left-color: var(--yellow); background: rgba(88,110,117,.25); }
@@ -43,6 +42,18 @@ body { background: var(--base); }
 .extension-button, .terminal-action-trigger { width: 28px; height: 28px; display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--muted); }
 .extension-button[aria-disabled='true'] { opacity: .78; }
 .sidebar-footer { padding: 14px 16px; color: var(--muted); font-size: .7rem; border-top: 1px solid var(--border); }
+.contextual-keyboard { flex: 0 0 auto; display: grid; gap: 8px; padding: 10px; border-top: 1px solid var(--border); background: rgba(0,43,54,.45); }
+.contextual-keyboard-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #eee8d5; font-size: .72rem; }
+.contextual-mode { display: inline-flex; gap: 2px; }
+.contextual-mode button { min-height: 26px; border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 3px 8px; font-size: .66rem; }
+.contextual-mode button.active { border-color: var(--cyan); color: #eee8d5; background: rgba(42,161,152,.16); }
+.contextual-keyboard-status { color: var(--muted); font-size: .62rem; }
+.contextual-key-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.contextual-key-grid button { min-width: 0; min-height: 32px; border: 1px solid var(--border); background: var(--base1); color: var(--text); padding: 3px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contextual-key-grid button:hover:not(:disabled), .contextual-key-grid button:focus-visible { border-color: var(--cyan); color: #eee8d5; outline: 0; }
+.contextual-key-grid button:disabled { cursor: not-allowed; opacity: .42; }
+.contextual-key-grid kbd { font: inherit; }
+.contextual-key-grid.mode-codex button:last-child { grid-column: 1 / -1; }
 .main-panel { min-width: 0; flex: 1; display: flex; flex-direction: column; }
 .topbar { position: relative; justify-content: space-between; min-height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .system-status { display: flex; flex: 1 1 auto; align-items: center; gap: 9px; min-width: 0; color: #eee8d5; font-size: .72rem; }
@@ -58,6 +69,19 @@ body { background: var(--base); }
 .status-warning { color: var(--yellow); font-size: .7rem; }
 .top-actions { display: flex; gap: 5px; align-items: center; }
 .text-button { min-height: 34px; padding: 8px; font-size: .78rem; }
+.remote-monitor-band { flex: 0 0 auto; display: grid; gap: 8px; padding: 8px 16px 9px; border-bottom: 1px solid var(--border); background: rgba(0,43,54,.32); }
+.remote-monitor-heading { display: flex; align-items: center; gap: 9px; min-width: 0; color: #eee8d5; font-size: .72rem; }
+.remote-monitor-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-monitor-status { color: var(--muted); font-size: .62rem; text-transform: uppercase; }
+.remote-monitor-status.status-available { color: var(--green); }
+.remote-monitor-status.status-partial, .remote-monitor-status.status-warming, .remote-monitor-status.status-stale { color: var(--yellow); }
+.remote-monitor-status.status-unavailable, .remote-monitor-error { color: #ff938f; }
+.remote-monitor-error { margin-left: auto; font-size: .62rem; }
+.remote-monitor-grid { display: grid; grid-template-columns: repeat(7, minmax(90px, 1fr)); gap: 8px; min-width: 0; }
+.remote-monitor-metric { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; min-width: 0; }
+.remote-monitor-metric b { color: var(--muted); font-size: .62rem; font-weight: 500; }
+.remote-monitor-metric strong { overflow: hidden; color: #eee8d5; font-size: .72rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.remote-monitor-metric small { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-size: .58rem; text-overflow: ellipsis; white-space: nowrap; }
 .terminal-stage { min-height: 0; flex: 1; position: relative; padding: 12px 16px 0; }
 .terminal-viewport { width: 100%; height: 100%; }
 .xterm { height: 100%; }
@@ -115,3 +139,5 @@ body { background: var(--base); }
 .terminal-viewport .xterm-viewport { scrollbar-color: var(--base2) var(--base); }
 .terminal-viewport .xterm-screen { padding-bottom: 8px; }
 @media (prefers-reduced-motion: reduce) { .sidebar, .session-card-overlay { transition: none; } }
+@media (max-width: 1100px) { .remote-monitor-grid { grid-template-columns: repeat(4, minmax(100px, 1fr)); } }
+@media (max-width: 700px) { .remote-monitor-band { padding: 7px 10px 8px; } .remote-monitor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px 8px; } .remote-monitor-metric strong { font-size: .66rem; } }

@@ -25,7 +25,7 @@ export class TerminalRuntime {
   constructor(readonly sessionId: string, private readonly token: () => string | null, scrollbackLines = 1000, private readonly endpoint: 'connection-instances' | 'connection-launches' = 'connection-instances') {
     this.terminal = new Terminal({ convertEol: false, cursorBlink: true, scrollback: Math.max(0, Math.min(50000, scrollbackLines)), fontFamily: 'Monaspace Neon, monospace', theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' } });
     this.fit = new FitAddon(); this.search = new SearchAddon();
-    this.terminal.onData((data) => { if (this.closed) return; this.claim(); this.send({ type: 'input', data }); });
+    this.terminal.onData((data) => this.input(data));
     this.terminal.onResize(({ cols, rows }) => this.sendResize(cols, rows));
   }
 
@@ -95,6 +95,7 @@ export class TerminalRuntime {
   subscribeMessage(listener: (message: ReturnType<typeof parseServerMessage>) => void): () => void { this.messageListeners.add(listener); return () => this.messageListeners.delete(listener); }
   connectedState(): boolean { return this.connected; }
   closedState(): boolean { return this.closed; }
+  input(data: string): void { if (this.disposed || this.closed || !data) return; this.claim(); this.send({ type: 'input', data }); }
   find(query: string, options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {}): boolean { return this.search.findNext(query, options); }
   send(message: Record<string, unknown>): void { if (this.closed) return; if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)); }
   private sendResize(cols: number, rows: number): void { if (!this.closed && this.socket?.readyState === WebSocket.OPEN) this.send({ type: 'resize', cols, rows }); }

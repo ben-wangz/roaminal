@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Bot, FolderOpen, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
+import { Bot, FolderOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
+import type { TerminalRuntime } from '../terminal/terminal-runtime';
+import { ContextualKeyboard } from '../input/contextual-keyboard';
+import type { ContextualMode } from '../input/contextual-keyboard-model';
 import { TerminalActions } from './terminal-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 
@@ -19,7 +22,10 @@ type Props = {
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
-  onCreate: () => void;
+  activeInstance: ConnectionInstanceSummary | null;
+  activeRuntime: TerminalRuntime | null;
+  contextualMode: ContextualMode;
+  onContextualModeChange: (mode: ContextualMode) => void;
 };
 
 export function shortId(id: string): string {
@@ -52,7 +58,7 @@ function canPreview(): boolean {
   return window.matchMedia('(pointer: fine)').matches && window.innerWidth > 800;
 }
 
-export function Sidebar({ id, sessions, active, open, previewSessionId, previewRuntime, onToggle, onSelect, onPreviewStart, onPreviewEnd, onUnavailableExtension, onRename, onAutomaticTitle, onTerminate, onCreate }: Props) {
+export function Sidebar({ id, sessions, active, open, previewSessionId, previewRuntime, onToggle, onSelect, onPreviewStart, onPreviewEnd, onUnavailableExtension, onRename, onAutomaticTitle, onTerminate, activeInstance, activeRuntime, contextualMode, onContextualModeChange }: Props) {
   const aside = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
@@ -92,7 +98,6 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
     {open && <button className="sidebar-backdrop" type="button" aria-label="Close sidebar" onClick={onToggle} />}
     <aside ref={aside} id={id} className={`sidebar ${open ? 'open' : 'closed'}`} aria-hidden={!open} inert={!open || undefined}>
       <div className="sidebar-header"><div className="brand-mark small">r<span>&gt;</span></div><strong>Roaminal</strong><button ref={toggle} className="icon-button sidebar-toggle" type="button" onClick={onToggle} aria-label="Toggle sidebar" title="Toggle sidebar" aria-expanded={open} aria-controls={id}>{open ? <PanelLeftClose aria-hidden="true" size={18} /> : <PanelLeftOpen aria-hidden="true" size={18} />}</button></div>
-      <div className="sidebar-actions"><button className="primary full" onClick={onCreate}><Plus aria-hidden="true" size={16} /> Connections</button></div>
       <div className="session-list">{sessions.map((session) => {
         const previewing = previewSessionId === session.id && previewRuntime;
         const pathLabel = sessionPathLabel(session);
@@ -127,6 +132,7 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
           </div>
         </article>;
       })}</div>
+      <ContextualKeyboard instance={activeInstance} runtime={activeRuntime} mode={contextualMode} onModeChange={onContextualModeChange} />
       <div className="sidebar-footer">Connection workspace</div>
     </aside>
   </>;

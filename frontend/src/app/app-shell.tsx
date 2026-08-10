@@ -3,11 +3,13 @@ import { PanelLeftOpen, Search, ShieldCheck } from 'lucide-react';
 import { api, clearAuth, currentAccessToken, loadAuth, login, refresh } from '../auth/auth-client';
 import { AuthSessionUI, AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-session-ui';
 import { heartbeat, type Heartbeat } from '../status/heartbeat';
+import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { notify } from '../status/notifications'; import { connectionDisplayName } from '../status/connection-label'; import { SystemStatus } from '../status/system-status'; import { Toast } from '../ui/toast'; import { Sidebar } from '../ui/sidebar';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { TerminalViewport } from '../terminal/terminal-viewport';
 import { TerminalSearch } from '../terminal/terminal-search';
 import { TouchKeyboard } from '../input/touch-keyboard'; import { observeViewportHeight } from '../input/viewport'; import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
+import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
 import { RenameTitleDialog, TerminateDialog } from '../ui/terminal-dialogs';
 import { ConnectionManager } from '../connections/connection-manager'; import { startConnectionLaunch } from '../connections/connection-api';
 import { loadStoredSession, reconcileSession, saveStoredSession, selectSession as selectStoredSession, type SessionView } from './session-view';
@@ -41,6 +43,7 @@ export function AppShell() {
   const syncing = useRef(false);
   const stateRevision = useRef(0); const sidebarOpenButton = useRef<HTMLButtonElement>(null);
   const toastTimer = useRef<number | null>(null);
+  const contextualModes = useRef(new Map<string, ContextualMode>());
   useEffect(() => observeViewportHeight(), []);
   function showToast(message: string) {
     setToast(message);
@@ -281,16 +284,24 @@ export function AppShell() {
   const currentSession = sessions.find((session) => session.id === view.activeSessionId);
   const activeRuntimeId = activeLaunchId || view.activeSessionId;
   const activeRuntime = currentRuntime?.sessionId === activeRuntimeId ? currentRuntime : null;
+  const activeInstance = sessions.find((session) => session.id === view.activeSessionId) || null;
+  const contextualMode = activeInstance ? (contextualModes.current.get(activeInstance.id) || defaultContextualMode(activeInstance)) : 'codex';
+  function setContextualMode(mode: ContextualMode) {
+    if (!activeInstance) return;
+    contextualModes.current.set(activeInstance.id, mode);
+    setSessions((current) => [...current]);
+  }
   const dialogSession = dialog && 'sessionId' in dialog ? sessions.find((session) => session.id === dialog.sessionId) : undefined;
   return <div className="app-shell">
-    {workspaceOpen && <Sidebar id="connection-sidebar" sessions={sessions} active={view.activeSessionId} open={sidebarOpen} previewSessionId={previewSessionId} previewRuntime={previewRuntime?.sessionId === previewSessionId ? previewRuntime : null} onToggle={toggleSidebar} onSelect={selectSession} onPreviewStart={(id) => setPreviewSessionId(id)} onPreviewEnd={(id) => setPreviewSessionId((current) => current === id ? null : current)} onUnavailableExtension={(name) => showToast(`${name} extension unavailable`)} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={resetTitle} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} onCreate={() => setWorkspaceOpen(false)} />}
+    {workspaceOpen && <Sidebar id="connection-sidebar" sessions={sessions} active={view.activeSessionId} open={sidebarOpen} previewSessionId={previewSessionId} previewRuntime={previewRuntime?.sessionId === previewSessionId ? previewRuntime : null} onToggle={toggleSidebar} onSelect={selectSession} onPreviewStart={(id) => setPreviewSessionId(id)} onPreviewEnd={(id) => setPreviewSessionId((current) => current === id ? null : current)} onUnavailableExtension={(name) => showToast(`${name} extension unavailable`)} onRename={(id) => setDialog({ type: 'rename', sessionId: id })} onAutomaticTitle={resetTitle} onTerminate={(id) => setDialog({ type: 'terminate', sessionId: id })} activeInstance={activeInstance} activeRuntime={activeRuntime} contextualMode={contextualMode} onContextualModeChange={setContextualMode} />}
     <main className={`main-panel ${workspaceOpen && !sidebarOpen ? 'expanded' : ''}`}>
       <header className="topbar">
         {workspaceOpen && !sidebarOpen && <button ref={sidebarOpenButton} className="icon-button sidebar-open-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" title="Open sidebar" aria-expanded={false} aria-controls="connection-sidebar"><PanelLeftOpen aria-hidden="true" size={18} /></button>}
         <SystemStatus connected={Boolean(heartbeatState)} connectionName={connectionDisplayName(currentSession || null, sessions)} system={heartbeatState?.system || null} sessionCount={sessions.length} latencyMs={heartbeatLatency} persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)} />
         <div className="top-actions">{workspaceOpen && <><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal"><Search aria-hidden="true" size={17} /></button><button className="text-button" onClick={() => { cancelLaunch(); setWorkspaceOpen(false); }}>Connections</button></>}<button className="text-button" onClick={() => void openAuthSessions()}><ShieldCheck aria-hidden="true" size={15} /> Sessions</button><button className="text-button" onClick={signOut}>Sign out</button></div>
       </header>
-    {workspaceOpen ? <><>{search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}</><section className="terminal-stage">{activeRuntime ? <TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} /> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={() => { cancelLaunch(); setWorkspaceOpen(false); }}>Open connection manager</button></div>}</section>{activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.send({ type: 'input', data: value })} />}<footer className="statusbar"><span>{currentSession?.cwd || 'No connection'}</span><span className="execution-status" aria-live="polite">{executionStatus || (currentSession ? `${currentSession.cols}x${currentSession.rows}` : '')}</span></footer></> : <ConnectionManager instances={sessions} onConnect={createConnection} onGenerated={acceptGenerated} onOpenWorkspace={() => { if (view.activeSessionId) setWorkspaceOpen(true); }} onToast={showToast} />}
+      {workspaceOpen && <RemoteMonitorBand instance={activeInstance} />}
+    {workspaceOpen ? <><>{search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}</><section className="terminal-stage">{activeRuntime ? <TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} /> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={() => { cancelLaunch(); setWorkspaceOpen(false); }}>Open connection manager</button></div>}</section>{activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.input(value)} />}<footer className="statusbar"><span>{currentSession?.cwd || 'No connection'}</span><span className="execution-status" aria-live="polite">{executionStatus || (currentSession ? `${currentSession.cols}x${currentSession.rows}` : '')}</span></footer></> : <ConnectionManager instances={sessions} onConnect={createConnection} onGenerated={acceptGenerated} onOpenWorkspace={() => { if (view.activeSessionId) setWorkspaceOpen(true); }} onToast={showToast} />}
     </main>
     <Toast message={toast} />
     {dialog?.type === 'rename' && dialogSession && <RenameTitleDialog session={dialogSession} onSave={(title) => updateTitle(dialogSession.id, title)} onClose={() => setDialog(null)} />}
