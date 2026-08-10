@@ -35,6 +35,19 @@ export function sinceLabel(createdAt: string): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(hour % 12 || 12)}:${pad(date.getMinutes())} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
+function sessionStateLabel(session: ConnectionInstanceSummary): string {
+  if (session.closed) return 'Exited';
+  if (session.attention) return 'Activity waiting';
+  if (session.purpose === 'ssh_key_generation') return 'SSH key generation';
+  return session.type === 'ssh' ? 'SSH connection' : 'Local connection';
+}
+
+function sessionPathLabel(session: ConnectionInstanceSummary): string | null {
+  if (session.purpose === 'ssh_key_generation') return `TARGET: ${session.title || 'key'}`;
+  const cwd = session.cwd?.trim();
+  return cwd ? `PWD: ${cwd}` : null;
+}
+
 function canPreview(): boolean {
   return window.matchMedia('(pointer: fine)').matches && window.innerWidth > 800;
 }
@@ -82,6 +95,7 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
       <div className="sidebar-actions"><button className="primary full" onClick={onCreate}><Plus aria-hidden="true" size={16} /> Connections</button></div>
       <div className="session-list">{sessions.map((session) => {
         const previewing = previewSessionId === session.id && previewRuntime;
+        const pathLabel = sessionPathLabel(session);
         const startPreview = () => { if (canPreview()) onPreviewStart(session.id); };
         const stopPreview = () => onPreviewEnd(session.id);
         return <article
@@ -98,11 +112,11 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
           <div className="session-card-overlay">
             <button className="session-select" type="button" onClick={() => onSelect(session.id)} aria-current={session.id === active ? 'page' : undefined} title={session.id}>
               <span className="session-indicator" />
-              <span className="session-title-wrap"><b>{session.title || 'Connection'}</b><small>{session.closed ? 'Exited' : session.attention ? 'Activity waiting' : session.type === 'ssh' ? `SSH | ${session.sourceHostAlias || 'remote'}` : session.purpose === 'ssh_key_generation' ? 'SSH key generation' : 'Local connection'}</small></span>
+              <span className="session-title-wrap"><b>{session.title || 'Connection'}</b><small>{sessionStateLabel(session)}</small></span>
             </button>
             <div className="session-metadata">
               <span>ID: {shortId(session.id)}</span>
-              <span className="session-path" title={session.type === 'ssh' ? session.sourceHostAlias : session.cwd}>{session.purpose === 'ssh_key_generation' ? `TARGET: ${session.title || 'key'}` : session.type === 'ssh' ? `TARGET: ${session.sourceHostAlias || 'remote'}` : `PWD: ${session.cwd || 'unknown'}`}</span>
+              {pathLabel && <span className="session-path" title={session.cwd}>{pathLabel}</span>}
               <time dateTime={session.createdAt} title={session.createdAt}>SINCE: {sinceLabel(session.createdAt)}</time>
             </div>
           </div>

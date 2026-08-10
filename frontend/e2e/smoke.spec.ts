@@ -48,8 +48,9 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
   await expect(page.locator('.terminal-tabs, .terminal-tab')).toHaveCount(0);
   const cards = page.locator('.session-card');
   await expect(cards.first().getByText(/ID:/)).toBeVisible();
-  await expect(cards.first().getByText(/PWD:/)).toBeVisible();
   await expect(cards.first().getByText(/SINCE:/)).toBeVisible();
+  const pathMetadata = cards.first().locator('.session-path');
+  if (await pathMetadata.count()) await expect(pathMetadata).toHaveText(/^(PWD|TARGET):/);
   await expect(cards.first().locator('time')).toHaveAttribute('datetime', /T/);
   await expect(cards.first().locator('time')).toHaveText(/SINCE: \d{2}-\d{2} \d{2}:\d{2} (AM|PM)/);
   await expect(cards.first().getByRole('button', { name: 'Agent extension' })).toHaveAttribute('aria-disabled', 'true');
