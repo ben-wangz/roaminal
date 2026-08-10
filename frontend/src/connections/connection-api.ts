@@ -46,6 +46,20 @@ export async function deleteDefinition(id: string, etag: string): Promise<{ data
 export async function startConnectionLaunch(connectionDefinitionId: string, reuseFromConnectionInstanceId?: string): Promise<{ launchId: string; connectionDefinitionId: string; lifecycle: 'pending'; tmuxSessionName: string }> {
   return api('/api/connection-launches', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFromConnectionInstanceId || null }) });
 }
+
+// A page refresh can happen before the launch websocket completes its
+// handshake. Keep the cancellation request small and allow the browser to
+// finish it while the document is being unloaded.
+export function abortConnectionLaunch(id: string, auth: { accessToken: string } | null = null): void {
+  const token = auth?.accessToken;
+  if (!token) return;
+  void fetch(`/api/connection-launches/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 export async function generateKey(body: GenerationRequest): Promise<ConnectionInstanceSummary> {
   return api<ConnectionInstanceSummary>('/api/ssh-key-generations', { method: 'POST', body: JSON.stringify(body) });
 }

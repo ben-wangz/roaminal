@@ -11,15 +11,13 @@ import { TouchKeyboard } from '../input/touch-keyboard'; import { observeViewpor
 import { RenameTitleDialog, TerminateDialog } from '../ui/terminal-dialogs';
 import { ConnectionManager } from '../connections/connection-manager'; import { startConnectionLaunch } from '../connections/connection-api';
 import { loadStoredSession, reconcileSession, saveStoredSession, selectSession as selectStoredSession, type SessionView } from './session-view';
-import { useTerminalPreview } from './use-terminal-preview';
-import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-type Dialog = { type: 'rename' | 'terminate'; sessionId: string } | { type: 'auth' } | null;
+import { useTerminalPreview } from './use-terminal-preview'; import { usePendingLaunch } from './use-pending-launch';
+import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol'; type Dialog = { type: 'rename' | 'terminate'; sessionId: string } | { type: 'auth' } | null;
 export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
   const [sessions, setSessions] = useState<ConnectionInstanceSummary[]>([]);
   const [view, setView] = useState<SessionView>(() => loadStoredSession(typeof window === 'undefined' ? null : window.localStorage));
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [activeLaunchId, setActiveLaunchId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || !window.matchMedia('(max-width: 800px)').matches);
   const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
   const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
@@ -36,6 +34,7 @@ export function AppShell() {
   const [previewSessionId, setPreviewSessionId] = useState<string | null>(null);
   const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewSessionId, sidebarOpen);
   const sessionOrder = useRef<string[]>([]);
+  const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(auth, mainRuntime, previewRuntimeRef);
   const viewRef = useRef(view);
   const hydrated = useRef(false);
   const bootId = useRef<string | null>(null);
@@ -83,7 +82,7 @@ export function AppShell() {
     return currentRuntime.subscribeMessage((message) => {
       if (message?.type === 'launch_published') {
         setCurrentRuntime((current) => current === currentRuntime ? null : current);
-        setActiveLaunchId(null);
+        clearLaunch();
         stateRevision.current += 1;
         setSessions((current) => [...current.filter((session) => session.id !== message.instance.id), message.instance]);
         activateSession(message.instance.id);
@@ -94,7 +93,7 @@ export function AppShell() {
         const exitedID = currentRuntime.sessionId;
         if (activeLaunchId === exitedID) {
           setCurrentRuntime((current) => current === currentRuntime ? null : current);
-          setActiveLaunchId(null);
+          clearLaunch();
           setWorkspaceOpen(false);
           showToast('tmux connection could not be started.');
           return;
@@ -131,11 +130,11 @@ export function AppShell() {
       if (tmuxEnabled) {
         const launch = await startConnectionLaunch(connectionDefinitionId, reuseFrom);
         setCurrentRuntime(null);
-        setActiveLaunchId(launch.launchId);
+        startLaunch(launch.launchId);
         setWorkspaceOpen(true);
         return;
       }
-      setActiveLaunchId(null);
+      clearLaunch();
       const session = await api<ConnectionInstanceSummary>('/api/connection-instances', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFrom || null }) });
       stateRevision.current += 1; setSessions((current) => [...current.filter((item) => item.id !== session.id), session]);
       activateSession(session.id);
@@ -237,6 +236,7 @@ export function AppShell() {
   function signOut() {
     const current = auth;
     if (!current) return;
+    cancelLaunch();
     void api('/api/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken: current.refreshToken }) }, current)
       .catch(() => showToast('Local sign-out completed; server session may remain.'))
       .finally(() => {
@@ -288,9 +288,9 @@ export function AppShell() {
       <header className="topbar">
         {workspaceOpen && !sidebarOpen && <button ref={sidebarOpenButton} className="icon-button sidebar-open-button" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar" title="Open sidebar" aria-expanded={false} aria-controls="connection-sidebar"><PanelLeftOpen aria-hidden="true" size={18} /></button>}
         <SystemStatus connected={Boolean(heartbeatState)} system={heartbeatState?.system || null} sessionCount={sessions.length} latencyMs={heartbeatLatency} persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)} />
-        <div className="top-actions">{workspaceOpen && <><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal"><Search aria-hidden="true" size={17} /></button><button className="text-button" onClick={() => setWorkspaceOpen(false)}>Connections</button></>}<button className="text-button" onClick={() => void openAuthSessions()}><ShieldCheck aria-hidden="true" size={15} /> Sessions</button><button className="text-button" onClick={signOut}>Sign out</button></div>
+        <div className="top-actions">{workspaceOpen && <><button className="icon-button" onClick={() => setSearch((value) => !value)} aria-label="Search terminal" title="Search terminal"><Search aria-hidden="true" size={17} /></button><button className="text-button" onClick={() => { cancelLaunch(); setWorkspaceOpen(false); }}>Connections</button></>}<button className="text-button" onClick={() => void openAuthSessions()}><ShieldCheck aria-hidden="true" size={15} /> Sessions</button><button className="text-button" onClick={signOut}>Sign out</button></div>
       </header>
-      {workspaceOpen ? <><>{search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}</><section className="terminal-stage">{activeRuntime ? <TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} /> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={() => setWorkspaceOpen(false)}>Open connection manager</button></div>}</section>{activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.send({ type: 'input', data: value })} />}<footer className="statusbar"><span>{currentSession?.cwd || 'No connection'}</span><span className="execution-status" aria-live="polite">{executionStatus || (currentSession ? `${currentSession.cols}x${currentSession.rows}` : '')}</span></footer></> : <ConnectionManager instances={sessions} onConnect={createConnection} onGenerated={acceptGenerated} onOpenWorkspace={() => { if (view.activeSessionId) setWorkspaceOpen(true); }} onToast={showToast} />}
+    {workspaceOpen ? <><>{search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={() => setSearch(false)} />}</><section className="terminal-stage">{activeRuntime ? <TerminalViewport key={activeRuntime.sessionId} runtime={activeRuntime} /> : <div className="empty-state"><div className="brand-mark">r<span>&gt;</span></div><button className="primary" onClick={() => { cancelLaunch(); setWorkspaceOpen(false); }}>Open connection manager</button></div>}</section>{activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.send({ type: 'input', data: value })} />}<footer className="statusbar"><span>{currentSession?.cwd || 'No connection'}</span><span className="execution-status" aria-live="polite">{executionStatus || (currentSession ? `${currentSession.cols}x${currentSession.rows}` : '')}</span></footer></> : <ConnectionManager instances={sessions} onConnect={createConnection} onGenerated={acceptGenerated} onOpenWorkspace={() => { if (view.activeSessionId) setWorkspaceOpen(true); }} onToast={showToast} />}
     </main>
     <Toast message={toast} />
     {dialog?.type === 'rename' && dialogSession && <RenameTitleDialog session={dialogSession} onSave={(title) => updateTitle(dialogSession.id, title)} onClose={() => setDialog(null)} />}
