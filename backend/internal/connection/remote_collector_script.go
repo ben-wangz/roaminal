@@ -7,12 +7,12 @@ printf 'ROAMINAL_MONITOR_V1_BEGIN_%s\n' "$nonce"
 scope=unknown
 cg=/sys/fs/cgroup
 has_cgroup=0
-grep -qE '^[^:]+:[^:]+:' /proc/self/cgroup 2>/dev/null && has_cgroup=1
+grep -qE '^[^:]*:[^:]*:' /proc/self/cgroup 2>/dev/null && has_cgroup=1
 v2info=$(awk -F' - ' '$2 ~ /^cgroup2[[:space:]]/ {print $1; exit}' /proc/self/mountinfo 2>/dev/null || true)
 v2root=$(printf '%s\n' "$v2info" | awk '{print $4}')
 v2mount=$(printf '%s\n' "$v2info" | awk '{print $5}')
 [ -n "$v2mount" ] && cg=$v2mount
-if [ -r "$cg/cpu.stat" ] && [ -r "$cg/memory.current" ]; then
+if [ -r "$cg/cpu.stat" ] || [ -r "$cg/memory.current" ]; then
   path=$(awk -F: '$1 == "0" {print $3; exit}' /proc/self/cgroup 2>/dev/null || true)
   if [ -n "$v2root" ] && [ "$v2root" != "/" ]; then
     case "$path" in ("$v2root"|"$v2root"/*) path=${path#"$v2root"};; (*) path=;; esac
@@ -21,23 +21,27 @@ if [ -r "$cg/cpu.stat" ] && [ -r "$cg/memory.current" ]; then
   [ -n "$path" ] && [ "$path" != "/" ] && cg="$cg$path"
   usage=$(awk '$1 == "usage_usec" {print $2; exit}' "$cg/cpu.stat" 2>/dev/null || true)
   current=$(cat "$cg/memory.current" 2>/dev/null || true)
-  if [ -n "$usage" ] && [ -n "$current" ]; then
+  if [ -n "$usage" ] || [ -n "$current" ]; then
     scope=cgroup-v2
-    printf 'cpu_usage_ns=%s\n' "$((usage * 1000))"
-    max=$(awk '{print $1}' "$cg/cpu.max" 2>/dev/null || true)
-    period=$(awk '{print $2}' "$cg/cpu.max" 2>/dev/null || true)
-    cpuset=$(cat "$cg/cpuset.cpus.effective" 2>/dev/null || true)
-    set_capacity=$(printf '%s\n' "$cpuset" | awk -F, 'NF {for (i=1; i<=NF; i++) {split($i, r, "-"); if (r[2] != "") n += r[2] - r[1] + 1; else n++}} END {if (n > 0) print n * 1000}' 2>/dev/null || true)
-    case "$max:$period" in
-      (max:*|'':*) [ -n "$set_capacity" ] && printf 'cpu_capacity_milli=%s\n' "$set_capacity";;
-      (*:0|'':0) [ -n "$set_capacity" ] && printf 'cpu_capacity_milli=%s\n' "$set_capacity";;
-      (*) quota_capacity=$((max * 1000 / period)); if [ -n "$set_capacity" ] && [ "$set_capacity" -lt "$quota_capacity" ]; then quota_capacity=$set_capacity; fi; printf 'cpu_capacity_milli=%s\n' "$quota_capacity";;
-    esac
-    printf 'memory_current_bytes=%s\n' "$current"
-    inactive=$(awk '$1 == "inactive_file" {print $2; exit}' "$cg/memory.stat" 2>/dev/null || true)
-    [ -n "$inactive" ] && printf 'memory_inactive_file_bytes=%s\n' "$inactive"
-    limit=$(cat "$cg/memory.max" 2>/dev/null || true)
-    case "$limit" in (''|max) ;; (*) printf 'memory_limit_bytes=%s\n' "$limit";; esac
+    if [ -n "$usage" ]; then
+      printf 'cpu_usage_ns=%s\n' "$((usage * 1000))"
+      max=$(awk '{print $1}' "$cg/cpu.max" 2>/dev/null || true)
+      period=$(awk '{print $2}' "$cg/cpu.max" 2>/dev/null || true)
+      cpuset=$(cat "$cg/cpuset.cpus.effective" 2>/dev/null || true)
+      set_capacity=$(printf '%s\n' "$cpuset" | awk -F, 'NF {for (i=1; i<=NF; i++) {split($i, r, "-"); if (r[2] != "") n += r[2] - r[1] + 1; else n++}} END {if (n > 0) print n * 1000}' 2>/dev/null || true)
+      case "$max:$period" in
+        (max:*|'':*) [ -n "$set_capacity" ] && printf 'cpu_capacity_milli=%s\n' "$set_capacity";;
+        (*:0|'':0) [ -n "$set_capacity" ] && printf 'cpu_capacity_milli=%s\n' "$set_capacity";;
+        (*) quota_capacity=$((max * 1000 / period)); if [ -n "$set_capacity" ] && [ "$set_capacity" -lt "$quota_capacity" ]; then quota_capacity=$set_capacity; fi; printf 'cpu_capacity_milli=%s\n' "$quota_capacity";;
+      esac
+    fi
+    if [ -n "$current" ]; then
+      printf 'memory_current_bytes=%s\n' "$current"
+      inactive=$(awk '$1 == "inactive_file" {print $2; exit}' "$cg/memory.stat" 2>/dev/null || true)
+      [ -n "$inactive" ] && printf 'memory_inactive_file_bytes=%s\n' "$inactive"
+      limit=$(cat "$cg/memory.max" 2>/dev/null || true)
+      case "$limit" in (''|max) ;; (*) printf 'memory_limit_bytes=%s\n' "$limit";; esac
+    fi
   fi
 fi
 if [ "$scope" = unknown ] && [ "$has_cgroup" = 1 ]; then
