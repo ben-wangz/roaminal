@@ -43,6 +43,10 @@ type Transport struct {
 	stopRequested   bool
 }
 
+func transportAcceptsReuse(transport *Transport) bool {
+	return transport != nil && transport.Channels > 0 && !transport.Draining
+}
+
 var ErrClientCapacity = terminal.ErrClientCapacity
 var ErrControlNotOwner = terminal.ErrControlNotOwner
 var ErrTransportUnavailable = errors.New("ssh transport unavailable")

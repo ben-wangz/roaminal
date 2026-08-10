@@ -57,7 +57,10 @@ func (m *Manager) createReuse(ctx context.Context, definitionID string, cols, ro
 	meta := newReuseMeta(m, id, definitionID, &aliasPtr, cols, rows, sourceID)
 	argv := []string{m.sshPath, "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "--", definitionAlias}
 	m.transportMu.Lock()
-	if transport.Draining || transport.OwnerClosed {
+	// ControlPersist keeps the mux usable after the original owner exits as
+	// long as at least one channel still references it. Only an explicitly
+	// draining or channel-less transport is unavailable for another reuse.
+	if !transportAcceptsReuse(transport) {
 		m.transportMu.Unlock()
 		return Summary{}, ErrTransportDraining
 	}

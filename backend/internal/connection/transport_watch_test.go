@@ -35,3 +35,20 @@ func TestTransportSourceStateStaysCurrentWhenConfigIsUnchanged(t *testing.T) {
 		t.Fatalf("unavailable config state = %q, want empty", got)
 	}
 }
+
+func TestClosedOwnerKeepsTransportReusableWhileChannelsRemain(t *testing.T) {
+	transport := &Transport{Channels: 1, OwnerClosed: true}
+	if !transportAcceptsReuse(transport) {
+		t.Fatal("closed owner should not block reuse while a channel remains")
+	}
+
+	transport.Draining = true
+	if transportAcceptsReuse(transport) {
+		t.Fatal("draining transport should block reuse")
+	}
+	transport.Draining = false
+	transport.Channels = 0
+	if transportAcceptsReuse(transport) {
+		t.Fatal("channel-less transport should block reuse")
+	}
+}
