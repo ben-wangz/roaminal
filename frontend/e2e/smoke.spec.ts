@@ -82,6 +82,18 @@ test('sidebar cards switch one main terminal and expose preview/actions', async 
   expect(errors.filter((message) => !message.includes('favicon'))).not.toContain(expect.stringContaining('onShowLinkUnderline'));
 });
 
+test('contextual virtual keyboard follows the active connection', async ({ page }) => {
+  test.skip((page.viewportSize()?.width || 0) <= 800, 'sidebar keyboard runs in desktop projects');
+  await authenticate(page);
+  const keyboard = page.getByRole('region', { name: 'Virtual keyboard' });
+  await expect(keyboard).toBeVisible();
+  await expect(keyboard.getByRole('button', { name: 'Codex' })).toHaveAttribute('aria-pressed', 'true');
+  await keyboard.getByRole('button', { name: 'Tmux' }).click();
+  await expect(keyboard.getByRole('button', { name: 'Tmux' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(keyboard.getByRole('button', { name: 'Send Ctrl+A', exact: true })).toBeEnabled();
+  await expect(page.locator('.session-tabs, .terminal-tabs')).toHaveCount(0);
+});
+
 test('terminal action menu renames without a close-tab command', async ({ page }) => {
   test.skip((page.viewportSize()?.width || 0) < 1000, 'desktop action menu runs in desktop projects');
   await authenticate(page);
