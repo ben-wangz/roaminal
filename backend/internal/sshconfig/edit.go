@@ -170,8 +170,12 @@ func renderIdentityLines(values []string, newline string) string {
 }
 func canonicalKey(key string) string {
 	switch key {
+	case "port":
+		return "Port"
 	case "hostname":
 		return "HostName"
+	case "user":
+		return "User"
 	case "identitiesonly":
 		return "IdentitiesOnly"
 	case "identityfile":
@@ -183,7 +187,7 @@ func canonicalKey(key string) string {
 	case "serveraliveinterval":
 		return "ServerAliveInterval"
 	}
-	return strings.Title(key)
+	return key
 }
 
 func applyReplacements(data []byte, replacements []replacement) []byte {
@@ -212,12 +216,23 @@ func validAlias(alias string) bool {
 		return false
 	}
 	for index, r := range alias {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') || index == 0 && (r < 'A' || r > 'z') && (r < '0' || r > '9') {
+		if index == 0 {
+			if !asciiLetter(r) {
+				return false
+			}
+			continue
+		}
+		if !asciiLetter(r) && !asciiDigit(r) && r != '.' && r != '_' && r != '-' {
 			return false
 		}
 	}
 	return true
 }
+
+func asciiLetter(value rune) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
+}
+func asciiDigit(value rune) bool { return value >= '0' && value <= '9' }
 func managedIdentityToken(d Directive) bool {
 	if len(d.Tokens) == 0 {
 		return false

@@ -63,3 +63,36 @@ func TestRepositoryUpdateIsLosslessAndUsesETag(t *testing.T) {
 	}
 	_ = doc
 }
+
+func TestValidAliasRequiresLeadingAsciiLetter(t *testing.T) {
+	valid := []string{"prod", "A1", "host.example", "host_name", "host-name", strings.Repeat("a", 255)}
+	invalid := []string{"", "1host", "_host", ".host", "-host", strings.Repeat("a", 256), "host/one", "host name", "éhost"}
+	for _, value := range valid {
+		if !validAlias(value) {
+			t.Errorf("validAlias(%q) = false", value)
+		}
+	}
+	for _, value := range invalid {
+		if validAlias(value) {
+			t.Errorf("validAlias(%q) = true", value)
+		}
+	}
+}
+
+func TestCanonicalKeyUsesOpenSSHSpelling(t *testing.T) {
+	want := map[string]string{
+		"hostname":              "HostName",
+		"user":                  "User",
+		"port":                  "Port",
+		"identityfile":          "IdentityFile",
+		"identitiesonly":        "IdentitiesOnly",
+		"stricthostkeychecking": "StrictHostKeyChecking",
+		"userknownhostsfile":    "UserKnownHostsFile",
+		"serveraliveinterval":   "ServerAliveInterval",
+	}
+	for key, expected := range want {
+		if got := canonicalKey(key); got != expected {
+			t.Errorf("canonicalKey(%q) = %q, want %q", key, got, expected)
+		}
+	}
+}
