@@ -17,7 +17,7 @@ body { background: var(--base); }
 .icon-button { width: 34px; height: 34px; display: inline-grid; place-items: center; font-size: 1.25rem; }
 .icon-button:hover, .text-button:hover, .extension-button:hover, .connection-action-trigger:hover { color: #eee8d5; background: rgba(147,161,161,.12); }
 .connection-list { flex: 1; min-height: 0; overflow: auto; padding: 10px 10px 12px; }
-.connection-card { min-height: 126px; position: relative; overflow: hidden; isolation: isolate; border: 1px solid transparent; border-left: 2px solid transparent; background: rgba(0,43,54,.6); }
+.connection-card { width: 100%; min-width: 0; min-height: 126px; flex: 0 0 auto; position: relative; overflow: hidden; isolation: isolate; border: 1px solid transparent; border-left: 2px solid transparent; background: rgba(0,43,54,.6); }
 .connection-card + .connection-card { margin-top: 8px; }
 .connection-card.active { border-color: var(--border); border-left-color: var(--yellow); background: rgba(88,110,117,.25); }
 .connection-card.attention:not(.active) { border-left-color: var(--cyan); }
