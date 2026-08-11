@@ -1,20 +1,26 @@
 # Repository operating rules
 
-- `container/VERSION` is the single Roaminal product version. Never edit it
-  manually; use `setup/forgekit.sh` and `forgekit version bump`.
-- `version-control.yaml` registers only the `roaminal` Chart. The
-  `roaminal-runtime` container is a Chart-linked target from `Chart.yaml`, not
-  a second top-level app. Read linked runtime metadata from
-  `forgekit version get roaminal --output json`; direct `version get
-  roaminal-runtime` is not supported by ForgeKit 0.6.1.
-- Release tags use `roaminal-v<chart-semver>`. Do not create or move release
-  tags before the remote `lint` workflow succeeds.
-- GitHub Actions `lint` is the required quality gate for pull requests, `main`,
-  and release commits. Local full ForgeKit lint is optional; run focused checks
-  for the changed module when useful. Local container builds and Chart packages
-  are diagnostic-only and must not publish release artifacts.
-- `frontend/package.json` and `terminal-worker/package.json` are private module
-  manifests. Their `0.0.0` versions are intentionally not release versions and
-  must not be bumped with a Roaminal release.
-- Keep `deploy/kubernetes/` as ordinary checked-in YAML. Do not convert it to a
-  chart as part of routine feature work.
+- Roaminal is a connection platform. Use `connection definition` and
+  `connection instance` for product concepts; reserve `session` for login/auth
+  sessions, tmux sessions, or strictly internal PTY details.
+- Backend, frontend, and terminal-worker code belongs in `backend/`, `frontend/`,
+  and `terminal-worker/`. Container build files belong in `container/`.
+- `container/VERSION` is the runtime version. The Helm Chart version is
+  independent. Use ForgeKit to mutate versions and synchronize Chart
+  `appVersion` and `image.tag`; never edit managed version fields manually.
+- `version-control.yaml` registers only the `roaminal` Chart. Read its linked
+  `roaminal-runtime` metadata from `forgekit version get roaminal --output json`.
+- GitHub Actions `lint` is the required quality gate. Local full lint, container
+  builds, and Chart packages are optional diagnostics and must not publish
+  release artifacts.
+- Release tags use `roaminal-v<chart-semver>` and may be created only after the
+  exact release commit passes the remote `lint` workflow.
+- `chart/` is the only Kubernetes template source. `deploy/kubernetes/` contains
+  only the repository values override and migration guidance; do not add raw
+  manifests or another Chart there.
+- Frontend and terminal-worker package versions remain private `0.0.0` values.
+  They are not Roaminal release versions.
+- Browser regression cases are maintained as AI-agent specifications in
+  `tests/playwright/`. Do not recreate a second checked-in Playwright suite.
+- Keep documentation concise and English-only. Remove completed planning files
+  instead of retaining them as permanent product documentation.
