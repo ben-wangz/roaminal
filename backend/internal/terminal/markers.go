@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 )
 
 func (s *Session) parseMarkersLocked(text string) string {
@@ -109,7 +107,7 @@ func (s *Session) applyMarkerLocked(marker string) {
 			id, _ := newID()
 			now := time.Now().UTC()
 			s.currentExecID = id
-			s.currentExec = &persistence.ExecutionRecord{Command: command, StartedAt: now}
+			s.currentExec = &executionRecord{Command: command, StartedAt: now}
 			s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "started", "executionId": id, "command": command, "startedAt": now}))
 		}
 	case "finish":
@@ -124,10 +122,6 @@ func (s *Session) applyMarkerLocked(marker string) {
 		s.currentExec.CompletedAt = time.Now().UTC()
 		s.currentExec.DurationMs = s.currentExec.CompletedAt.Sub(s.currentExec.StartedAt).Milliseconds()
 		record := *s.currentExec
-		s.meta.Executions = append(s.meta.Executions, record)
-		if len(s.meta.Executions) > 100 {
-			s.meta.Executions = s.meta.Executions[len(s.meta.Executions)-100:]
-		}
 		s.meta.UpdatedAt = time.Now().UTC()
 		if s.controlOwner == nil {
 			s.attention = true

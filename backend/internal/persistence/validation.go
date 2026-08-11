@@ -24,19 +24,6 @@ func validateAuthSession(session AuthSession) error {
 	return nil
 }
 
-func validateExecution(record ExecutionRecord) error {
-	if !utf8.ValidString(record.Command) || !utf8.ValidString(record.Input) || !utf8.ValidString(record.Output) {
-		return errors.New("execution contains invalid UTF-8")
-	}
-	if len([]byte(record.Command))+len([]byte(record.Input)) > 64*1024 || len([]byte(record.Output)) > 960*1024 {
-		return errors.New("execution exceeds size limit")
-	}
-	if record.ExitCode == nil || record.StartedAt.IsZero() || record.CompletedAt.IsZero() || record.CompletedAt.Before(record.StartedAt) || record.DurationMs < 0 {
-		return errors.New("execution is not completed")
-	}
-	return nil
-}
-
 func validateSessionMeta(meta SessionMeta) error {
 	if meta.FormatVersion != 0 && meta.FormatVersion != FormatVersion && meta.FormatVersion != SessionFormatVersion {
 		return errors.New("unsupported session format version")
@@ -72,14 +59,6 @@ func validateSessionMeta(meta SessionMeta) error {
 	}
 	if !meta.TmuxEnabled && (meta.TmuxPrefixKey != "" || meta.TmuxPrefixSource != "") {
 		return errors.New("non-tmux session has tmux prefix metadata")
-	}
-	if len(meta.Executions) > 100 {
-		return errors.New("too many executions")
-	}
-	for _, record := range meta.Executions {
-		if err := validateExecution(record); err != nil {
-			return err
-		}
 	}
 	return nil
 }

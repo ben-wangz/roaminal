@@ -17,6 +17,17 @@ type ExitStatus struct {
 	Signal   *int `json:"signal"`
 }
 
+type executionRecord struct {
+	Command     string    `json:"command"`
+	ExitCode    *int      `json:"exitCode"`
+	Input       string    `json:"input"`
+	Output      string    `json:"output"`
+	StartedAt   time.Time `json:"startedAt"`
+	CompletedAt time.Time `json:"completedAt"`
+	DurationMs  int64     `json:"durationMs"`
+	Truncated   bool      `json:"truncated"`
+}
+
 var ErrClientCapacity = errors.New("client capacity reached")
 var ErrControlNotOwner = errors.New("terminal control is owned by another client")
 
@@ -139,7 +150,7 @@ type Session struct {
 	snapshotTimer *time.Timer
 	dirtySince    time.Time
 	currentExecID string
-	currentExec   *persistence.ExecutionRecord
+	currentExec   *executionRecord
 	attention     bool
 	closed        bool
 	exitStatus    *ExitStatus

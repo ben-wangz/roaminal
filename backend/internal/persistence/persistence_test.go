@@ -76,7 +76,7 @@ func TestConnectionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"formatVersion": 2`) || !strings.Contains(string(data), `"automaticTitle": "shell"`) || strings.Contains(string(data), `"title":`) {
+	if !strings.Contains(string(data), `"formatVersion": 2`) || !strings.Contains(string(data), `"automaticTitle": "shell"`) || strings.Contains(string(data), `"title":`) || strings.Contains(string(data), `"executions"`) {
 		t.Fatalf("metadata was not written as v2: %s", data)
 	}
 }
@@ -125,7 +125,7 @@ func TestPersistenceDegradedTracksSessionsIndependently(t *testing.T) {
 		t.Fatal("expected degraded state")
 	}
 	now := time.Now().UTC()
-	if err := store.SaveSession(SessionMeta{ID: first, InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now, Executions: []ExecutionRecord{}}); err != nil {
+	if err := store.SaveSession(SessionMeta{ID: first, InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	if !store.PersistenceDegraded() {
