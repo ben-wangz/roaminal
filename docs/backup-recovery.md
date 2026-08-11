@@ -27,8 +27,11 @@ Container layers and the terminal worker are ephemeral and need no backup.
 
 Stop the release, restore the full directory tree, then start the same or a
 newer compatible image. Preserve the top-level `state/`, `workspace/`, and
-`ssh/` directories. Changing `ROAMINAL_PASSWORD`, or restarting with a generated
+`ssh/` directories. On startup, active connection instances are archived and
+retired; they are not reopened. Audit copies remain available only as backup
+material. Changing `ROAMINAL_PASSWORD`, or restarting with a generated
 password, invalidates existing refresh sessions.
 
-Invalid snapshots are renamed with a `.corrupt.<timestamp>` suffix and reopen
-with empty scrollback. A corrupt auth file is quarantined and requires login.
+Corrupt state is quarantined and reported through the degraded-persistence
+status. A corrupt auth file requires login; a corrupt terminal snapshot is not
+used to recreate a connection instance.

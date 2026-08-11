@@ -26,6 +26,8 @@ error; when no password is supplied a new random password is printed once at
 startup, so stable passwords are required for refresh sessions to survive a
 restart. Invalid values fail startup rather than being clamped.
 
-The state directory is `~/.roaminal` and contains only the auth file and the
-session metadata/snapshot files described in [API](api.md) and
-[backup/recovery](backup-recovery.md).
+The state directory is `~/.roaminal`. It contains the auth file, active
+`connection-instances/<id>/metadata.json` and `terminal.snapshot` files, audit
+copies under `audit/connection-instances/`, and
+`ssh-connection-options.yaml` for Roaminal-only tmux settings. SSH config and
+key material remain under `~/.ssh/`.

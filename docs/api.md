@@ -1,41 +1,54 @@
 # API
 
-JSON requests use `Content-Type: application/json`, are limited to 1 MiB, and
-reject unknown fields. Browser requests must use the current page Origin. Errors
-are `{ "error": "message" }`. Unless listed as public, HTTP endpoints require
-`Authorization: Bearer <access-token>`.
+Requests use `Content-Type: application/json`, are limited to 1 MiB, and reject
+unknown fields. Browser requests must use the current page Origin. Errors use
+`{"error":"message","code":"stable_code"}` and may include `field`.
+Unless listed as public, endpoints require `Authorization: Bearer
+<access-token>`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/healthz` | `200 {"status":"ok"}`; `503` when the worker is unavailable |
-| GET | `/api/version` | product, API version, and process `bootId` |
-| POST | `/api/auth/challenge`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | authentication |
-| GET | `/api/auth/session`, `/api/auth/sessions` | current or all refresh sessions |
-| DELETE | `/api/auth/sessions/:id` | revoke one refresh session |
-| POST | `/api/auth/logout-others` | revoke all other refresh sessions |
-| GET/POST | `/api/heartbeat` | connection instances and resize updates |
-| GET/POST | `/api/connection-instances` | list or create local instances |
-| GET | `/api/connection-instances/:id` | inspect an instance |
-| PATCH | `/api/connection-instances/:id/title` | change an instance title |
-| POST/DELETE | `/api/connection-instances/:id/close`, `/api/connection-instances/:id` | retire an instance |
-| GET | `/api/connection-instances/:id/remote-monitor` | cached monitor data for a live SSH transport |
-| GET | `/api/ssh-keys`, `/api/ssh-keys/:keyId/public-key` | list keys or read a public key |
-| DELETE | `/api/ssh-keys/:keyId` | delete a writable managed key pair |
-| POST | `/api/ssh-key-generations` | generate an absent Ed25519/RSA key |
+| GET | `/healthz` | Worker health (`503` while unavailable) |
+| GET | `/api/version` | Product, API version, and process `bootId` |
+| POST | `/api/auth/challenge`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | Authentication |
+| GET | `/api/auth/session`, `/api/auth/sessions` | Current or all login sessions |
+| DELETE | `/api/auth/sessions/:authSessionId` | Revoke one login session |
+| POST | `/api/auth/logout-others` | Revoke other login sessions |
+| GET/POST | `/api/heartbeat` | Read instances or submit resize updates |
+| GET/POST | `/api/connection-instances` | List or create local/remote instances |
+| GET | `/api/connection-instances/:connectionInstanceId` | Inspect an active instance |
+| PATCH | `/api/connection-instances/:connectionInstanceId/title` | Set or clear a title |
+| DELETE | `/api/connection-instances/:connectionInstanceId` | Retire an active instance |
+| GET | `/api/connection-instances/:connectionInstanceId/remote-monitor` | Monitor a live SSH transport |
+| POST | `/api/connection-launches` | Start an owned pending tmux launch |
+| DELETE | `/api/connection-launches/:launchId` | Abort an owned pending launch |
+| GET/POST | `/api/connection-definitions` | List or create structured SSH definitions |
+| PUT/DELETE | `/api/connection-definitions/:connectionDefinitionId` | Update or delete a definition |
+| POST | `/api/connection-definitions/:connectionDefinitionId/duplicate` | Duplicate a definition |
+| GET | `/api/ssh-keys` | List detected Ed25519/RSA keys |
+| GET | `/api/ssh-keys/:keyId/public-key` | Read a public key |
+| DELETE | `/api/ssh-keys/:keyId` | Delete a writable managed key pair |
+| POST | `/api/ssh-key-generations` | Generate an absent Ed25519/RSA key |
 
-Local instance creation accepts `connectionDefinitionId: "local"`, optional
-absolute `initialCwd`, and `cols: 2..1000` / `rows: 1..1000`. Capacity returns
-`409`. Remote-monitor responses expose status, sample age, RTT, and scoped CPU,
-memory, uptime, load, and disk values. They use an existing SSH ControlMaster,
-never create a login session, and return `409 no_remote_transport` for local,
-exited, or draining instances.
+Connection-instance responses use `connectionInstanceId` as their only
+instance identifier. Active lists do not include retired or exited instances.
+Definition writes require the current `ETag` in `If-Match`; stale or missing
+tags return `412` or `428`. Capacity and transport state errors return `409`
+with stable codes such as `capacity`, `transport`, or `no_remote_transport`.
+
+Local creation accepts `connectionDefinitionId: "local"`, optional absolute
+`initialCwd`, and `cols: 2..1000` / `rows: 1..1000`. Remote creation uses an SSH
+definition and may set `reuseFromConnectionInstanceId` to reuse a live
+ControlMaster. Remote-monitor responses expose status, freshness, RTT, and
+scoped CPU, memory, uptime, load, and disk values.
 
 ## WebSocket
 
-Connect to `/ws/connection-instances/:connectionInstanceId` from the current
-Origin with `roaminal.v1` and `roaminal.auth.<access-token>` subprotocols. The
-server selects only `roaminal.v1`; attach order is `snapshot`, `meta`, `status`,
-then live `output`.
+Connect to `/ws/connection-instances/:connectionInstanceId` or
+`/ws/connection-launches/:launchId` from the current Origin with the
+`roaminal.v1` and `roaminal.auth.<access-token>` subprotocols. Pending launches
+are owned by the login session that created them. Attach order is `snapshot`,
+`meta`, `status`, then live `output`.
 
 ```json
 {"type":"input","data":"ls\n"}
@@ -45,5 +58,5 @@ then live `output`.
 ```
 
 Server messages are `snapshot`, `meta`, `status`, `output`, `execution`, and
-`pong`. Invalid messages close with `1008`, oversized messages with `1009`, and
-slow clients with `1013`.
+`pong`. Invalid messages close with `1008`, oversized messages with `1009`,
+and slow clients with `1013`.

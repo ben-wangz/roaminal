@@ -2,11 +2,11 @@ import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 export function connectionDisplayName(
   active: ConnectionInstanceSummary | null,
-  sessions: ConnectionInstanceSummary[],
+  connections: ConnectionInstanceSummary[],
 ): string {
   if (!active) return 'Roaminal';
   const base = connectionBaseName(active);
-  const peers = sessions.filter((session) => sameConnection(session, active)).sort(compareCreatedAt);
+  const peers = connections.filter((connection) => sameConnection(connection, active)).sort(compareCreatedAt);
   if (peers.length < 2) return base;
   const index = peers.findIndex((session) => session.connectionInstanceId === active.connectionInstanceId);
   return `${base}-${index >= 0 ? index + 1 : 1}`;

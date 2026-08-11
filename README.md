@@ -1,13 +1,17 @@
 # Roaminal
 
-Roaminal is a self-hosted, browser-based persistent Bash terminal. The Go
-service owns Linux PTYs and HTTP/WebSocket access; an in-process Node worker
-maintains xterm.js shadow state so scrollback can be restored after a restart.
+Roaminal is a self-hosted browser platform for local and SSH connection
+instances. The Go service owns PTYs, OpenSSH transports, and HTTP/WebSocket
+access; a Node child process maintains the xterm.js shadow state. Connection
+definitions and SSH keys are read from `~/.ssh/config` and `~/.ssh/` rather
+than copied into application storage. Optional tmux attachment, local and
+remote monitoring, audit artifacts, and browser refresh re-attachment are
+supported.
 
-The service supports one instance with multiple persistent terminals. It is a
-Linux-container deployment and is tested with Google Chrome on desktop, tablet,
-and phone-sized viewports. It intentionally has no file browser, host registry,
-agent integration, native client, PWA manifest, service worker, or CDN assets.
+Browser refresh persistence applies while the backend process is running. A
+backend or Pod restart retires active instances; it does not restore PTYs,
+SSH transports, or scrollback. Roaminal is a Linux-container deployment tested
+with Chrome on desktop, tablet, and phone-sized viewports.
 
 ## Local development
 
@@ -71,6 +75,7 @@ podman run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   -e ROAMINAL_PASSWORD='change-this' \
   -v roaminal-state:/home/roaminal/.roaminal \
   -v roaminal-workspace:/workspace \
+  -v roaminal-ssh:/home/roaminal/.ssh \
   "$IMAGE"
 ```
 

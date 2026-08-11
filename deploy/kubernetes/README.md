@@ -1,4 +1,4 @@
-# Kubernetes deployment migration
+# Helm values and legacy migration
 
 The supported Kubernetes source is now [`chart/`](../../chart/), and published
 deployments use the OCI Chart from GHCR. The former raw manifests are
