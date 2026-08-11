@@ -85,6 +85,7 @@ app:
   authAccessTTL: 15m
   authRefreshTTL: 2160h
   authMaxAttempts: 30
+  clientDiagnosticsEnabled: true
 
 auth:
   existingSecret: roaminal

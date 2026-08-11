@@ -20,6 +20,7 @@ Roaminal fields are accepted. Durations use Go syntax.
 | `authAccessTTL` | `--auth-access-ttl` | `ROAMINAL_AUTH_ACCESS_TTL` | `15m` |
 | `authRefreshTTL` | `--auth-refresh-ttl` | `ROAMINAL_AUTH_REFRESH_TTL` | `2160h` |
 | `authMaxAttempts` | `--auth-max-attempts` | `ROAMINAL_AUTH_MAX_ATTEMPTS` | `30` |
+| `clientDiagnosticsEnabled` | `--client-diagnostics=<bool>` | `ROAMINAL_CLIENT_DIAGNOSTICS_ENABLED` | `true` |
 
 Terms acknowledgement is required. Explicitly supplied empty passwords are an
 error; when no password is supplied a new random password is printed once at
@@ -30,4 +31,5 @@ The state directory is `~/.roaminal`. It contains the auth file, active
 `connection-instances/<id>/metadata.json` and `terminal.snapshot` files, audit
 copies under `audit/connection-instances/`, and
 `ssh-connection-options.yaml` for Roaminal-only tmux settings. SSH config and
-key material remain under `~/.ssh/`.
+key material remain under `~/.ssh/`. When enabled, recent redacted browser
+diagnostics are stored below `diagnostics/` with bounded retention.

@@ -22,3 +22,13 @@ Remote monitoring uses only an existing SSH ControlMaster. It disables new
 connections, credential prompts, forwarding, and remote commands; collector
 output is bounded, parsed from an allowlist, and never persisted. Metrics remain
 unknown when cgroup ownership cannot be established.
+
+Client diagnostics are same-origin and require an access token. They collect
+redacted browser errors, uncaught rejections, failed resource paths, and
+Roaminal WebSocket lifecycle metadata. They never collect terminal input or
+output, commands, PWD, SSH configuration, key material, passwords, tokens,
+cookies, headers, DOM text, or arbitrary object properties. The server redacts
+again, writes one-line records to stdout, and keeps at most five private NDJSON
+files (10 MiB total, seven days). Review application-authored error strings
+before sharing logs. Production source maps remain private GitHub Actions
+artifacts and are not served by the runtime.

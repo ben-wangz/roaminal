@@ -64,9 +64,10 @@
         "initialCwd": {"type": "string", "minLength": 1},
         "authAccessTTL": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
         "authRefreshTTL": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
-        "authMaxAttempts": {"type": "integer", "minimum": 1, "maximum": 1000}
+        "authMaxAttempts": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "clientDiagnosticsEnabled": {"type": "boolean"}
       },
-      "required": ["host", "port", "websocketPingInterval", "scrollbackLines", "maxConnectionInstances", "maxClientsPerConnectionInstance", "debug", "acceptTerms", "initialCwd", "authAccessTTL", "authRefreshTTL", "authMaxAttempts"]
+      "required": ["host", "port", "websocketPingInterval", "scrollbackLines", "maxConnectionInstances", "maxClientsPerConnectionInstance", "debug", "acceptTerms", "initialCwd", "authAccessTTL", "authRefreshTTL", "authMaxAttempts", "clientDiagnosticsEnabled"]
     },
     "auth": {
       "type": "object",

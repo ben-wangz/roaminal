@@ -156,6 +156,11 @@ spec:
                 configMapKeyRef:
                   name: {{ include "roaminal.configMapName" . }}
                   key: authMaxAttempts
+            - name: ROAMINAL_CLIENT_DIAGNOSTICS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: clientDiagnosticsEnabled
             - name: ROAMINAL_PASSWORD
               valueFrom:
                 secretKeyRef:

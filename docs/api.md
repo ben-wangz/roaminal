@@ -1,7 +1,7 @@
 # API
 
-Requests use `Content-Type: application/json`, are limited to 1 MiB, and reject
-unknown fields. Browser requests must use the current page Origin. Errors use
+Requests use `Content-Type: application/json`, are limited to 1 MiB (or 256 KiB
+for `/api/client-diagnostics`), and reject unknown fields. Browser requests must use the current page Origin. Errors use
 `{"error":"message","code":"stable_code"}` and may include `field`.
 Unless listed as public, endpoints require `Authorization: Bearer
 <access-token>`.
@@ -9,7 +9,7 @@ Unless listed as public, endpoints require `Authorization: Bearer
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/healthz` | Worker health (`503` while unavailable) |
-| GET | `/api/version` | Product, API version, and process `bootId` |
+| GET | `/api/version` | Product, API version, process `bootId`, and diagnostic capability |
 | POST | `/api/auth/challenge`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | Authentication |
 | GET | `/api/auth/session`, `/api/auth/sessions` | Current or all login sessions |
 | DELETE | `/api/auth/sessions/:authSessionId` | Revoke one login session |
@@ -29,6 +29,7 @@ Unless listed as public, endpoints require `Authorization: Bearer
 | GET | `/api/ssh-keys/:keyId/public-key` | Read a public key |
 | DELETE | `/api/ssh-keys/:keyId` | Delete a writable managed key pair |
 | POST | `/api/ssh-key-generations` | Generate an absent Ed25519/RSA key |
+| POST | `/api/client-diagnostics` | Submit an authenticated bounded browser error batch |
 
 Connection-instance responses use `connectionInstanceId` as their only
 instance identifier. Active lists do not include retired or exited instances.
@@ -41,6 +42,13 @@ Local creation accepts `connectionDefinitionId: "local"`, optional absolute
 definition and may set `reuseFromConnectionInstanceId` to reuse a live
 ControlMaster. Remote-monitor responses expose status, freshness, RTT, and
 scoped CPU, memory, uptime, load, and disk values.
+
+`POST /api/client-diagnostics` accepts at most 20 redacted error events in a
+256 KiB JSON body and returns `204` when accepted. It requires the current
+access token and same-origin request. The endpoint returns `400` for invalid
+schemas, `413` for oversized bodies, and `429` when the per-login-session
+budget is exhausted. The server records only bounded event metadata; it does
+not accept terminal content, SSH material, or request bodies.
 
 ## WebSocket
 

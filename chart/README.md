@@ -83,6 +83,11 @@ Read-only SSH mounts still support reading connections. UI config edits, key
 generation/deletion, and known-host updates fail only for the files that are
 not writable.
 
+Client diagnostics are enabled by default. Set
+`app.clientDiagnosticsEnabled=false` to disable browser reports. When enabled,
+redacted events use the existing `state/` subdirectory and are capped at five
+files and 10 MiB; no extra PVC is created.
+
 ## Ingress and WebSockets
 
 Ingress is disabled by default. When enabled, configure an existing TLS Secret

@@ -75,12 +75,55 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
+      - name: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: setup-forgekit
         id: forgekit
         run: |
           FORGEKIT_BIN="$(bash "$GITHUB_WORKSPACE/setup/forgekit.sh")"
           echo "bin=${FORGEKIT_BIN}" >> "$GITHUB_OUTPUT"
           "$FORGEKIT_BIN" --version
+
+      - name: build-frontend-sourcemaps
+        env:
+          RELEASE_VERSION: ${{ needs.plan.outputs.runtime_version }}
+          RELEASE_COMMIT: ${{ needs.plan.outputs.commit_sha }}
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+          mkdir -p sourcemaps
+          find frontend/dist -type f \( -name '*.map' -o -name '*.js' \) -exec cp --parents {} sourcemaps/ \;
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const path = require('node:path');
+          const root = 'sourcemaps/frontend/dist';
+          const files = [];
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(full);
+              else if (entry.name.endsWith('.js') || entry.name.endsWith('.map')) {
+                files.push({ path: full.slice('sourcemaps/'.length), sha256: crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex') });
+              }
+            }
+          }
+          walk(root);
+          fs.writeFileSync('sourcemaps/manifest.json', JSON.stringify({ runtimeVersion: process.env.RELEASE_VERSION, commitSHA: process.env.RELEASE_COMMIT, files }, null, 2) + '\n');
+          NODE
+
+      - name: upload-frontend-sourcemaps
+        uses: actions/upload-artifact@v4
+        with:
+          name: roaminal-frontend-sourcemaps-${{ needs.plan.outputs.runtime_version }}
+          path: sourcemaps
+          if-no-files-found: error
+          retention-days: 90
 
       - name: publish-container
         env:

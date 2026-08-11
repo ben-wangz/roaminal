@@ -7,6 +7,9 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
+FROM frontend-builder AS frontend-runtime
+RUN find /src/frontend/dist -type f -name '*.map' -delete
+
 FROM docker.io/library/node:24.13.1-bookworm-slim@sha256:85a395c77b811fa7f5b5e4aa69cd6eb4c3b80c7f1a8e34704dc0ce061e5b404e AS worker-deps
 WORKDIR /opt/roaminal/terminal-worker
 COPY terminal-worker/package.json terminal-worker/package-lock.json ./
@@ -37,7 +40,7 @@ RUN apt-get update \
     && chmod 0700 /home/roaminal/.ssh \
     && chown -R roaminal:roaminal /opt/roaminal /home/roaminal /workspace
 COPY --from=backend-builder /out/roaminal /usr/local/bin/roaminal
-COPY --from=frontend-builder /src/frontend/dist /opt/roaminal/frontend
+COPY --from=frontend-runtime /src/frontend/dist /opt/roaminal/frontend
 COPY --from=worker-deps --chown=roaminal:roaminal /opt/roaminal/terminal-worker /opt/roaminal/terminal-worker
 COPY --chown=roaminal:roaminal backend/shell /opt/roaminal/shell
 COPY LICENSE THIRD_PARTY_NOTICES.md docs/licensing.md /usr/share/licenses/roaminal/

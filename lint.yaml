@@ -104,6 +104,9 @@ commands:
         --set persistence.enabled=false --set ssh.source=volume
         --set ssh.volume.name=ssh-projected
         --set-json 'extraVolumes=[{"name":"ssh-projected","projected":{"sources":[]}}]'
+        >/dev/null;
+        helm template roaminal chart --namespace chart-ci
+        --set app.acceptTerms=true --set app.clientDiagnosticsEnabled=false
         >/dev/null
 
   - name: "Helm chart validation cases"

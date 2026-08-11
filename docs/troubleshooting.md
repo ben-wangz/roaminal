@@ -37,6 +37,26 @@ Origin values on the Upgrade request. The HTTP and WebSocket routes must use the
 same external host and TLS termination settings. Do not disable Origin checks;
 fix the proxy's WebSocket route instead.
 
+## Browser diagnostics
+
+When client diagnostics are enabled, search the application log for
+`client_diagnostic=` and inspect the redacted NDJSON files below
+`<state-root>/diagnostics/`. Correlate `pageId`, `eventId`, `bootId`, and the
+runtime version with the browser and proxy timestamps. Review application-
+authored messages for sensitive material before sharing a record; diagnostics
+never include terminal content or SSH credentials by design, but arbitrary
+application error strings are retained after pattern redaction.
+
+The browser cannot expose every DevTools network message. For a WebSocket
+handshake failure, use the reported endpoint/phase and the corresponding
+server or proxy access log; the browser event does not invent an HTTP status.
+
+Production stacks may reference minified assets such as `index-<hash>.js:19`.
+Download the matching private GitHub Actions artifact
+`roaminal-frontend-sourcemaps-<runtime-version>`, verify its manifest SHA-256
+values, and use the included JavaScript and `.map` files with a source-map
+viewer. The runtime image intentionally does not serve `.map` files.
+
 ## PVC pod is not ready
 
 Confirm the unified RWO PVC is bound and its root is writable by UID/GID 1000.
