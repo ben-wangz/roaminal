@@ -55,16 +55,16 @@
       "properties": {
         "host": {"type": "string", "minLength": 1},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535},
-        "websocketPingInterval": {"type": "string", "minLength": 1},
-        "scrollbackLines": {"type": "integer", "minimum": 1},
-        "maxConnectionInstances": {"type": "integer", "minimum": 1},
-        "maxClientsPerConnectionInstance": {"type": "integer", "minimum": 1},
+        "websocketPingInterval": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
+        "scrollbackLines": {"type": "integer", "minimum": 0, "maximum": 50000},
+        "maxConnectionInstances": {"type": "integer", "minimum": 1, "maximum": 256},
+        "maxClientsPerConnectionInstance": {"type": "integer", "minimum": 1, "maximum": 64},
         "debug": {"type": "boolean"},
-        "acceptTerms": {"type": "boolean", "const": true},
+        "acceptTerms": {"type": "boolean"},
         "initialCwd": {"type": "string", "minLength": 1},
-        "authAccessTTL": {"type": "string", "minLength": 1},
-        "authRefreshTTL": {"type": "string", "minLength": 1},
-        "authMaxAttempts": {"type": "integer", "minimum": 1}
+        "authAccessTTL": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
+        "authRefreshTTL": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
+        "authMaxAttempts": {"type": "integer", "minimum": 1, "maximum": 1000}
       },
       "required": ["host", "port", "websocketPingInterval", "scrollbackLines", "maxConnectionInstances", "maxClientsPerConnectionInstance", "debug", "acceptTerms", "initialCwd", "authAccessTTL", "authRefreshTTL", "authMaxAttempts"]
     },

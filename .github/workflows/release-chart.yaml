@@ -99,8 +99,9 @@ jobs:
 
       - name: lint-and-render-chart
         run: |
-          helm lint "$CHART_DIR" --strict
-          helm template roaminal "$CHART_DIR" --namespace release-ci >/dev/null
+          helm lint "$CHART_DIR" --strict --set app.acceptTerms=true
+          helm template roaminal "$CHART_DIR" --namespace release-ci \
+            --set app.acceptTerms=true >/dev/null
 
       - name: setup-forgekit
         id: forgekit

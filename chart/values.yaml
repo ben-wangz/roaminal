@@ -80,7 +80,7 @@ app:
   maxConnectionInstances: 32
   maxClientsPerConnectionInstance: 8
   debug: false
-  acceptTerms: true
+  acceptTerms: false
   initialCwd: /workspace
   authAccessTTL: 15m
   authRefreshTTL: 2160h
