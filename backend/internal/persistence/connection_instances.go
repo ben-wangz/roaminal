@@ -115,37 +115,32 @@ type legacyExecutionRecord struct {
 }
 
 type connectionMetaV2 struct {
-	FormatVersion                     int                     `json:"formatVersion"`
-	ID                                string                  `json:"connectionInstanceId"`
-	BackendRuntimeID                  string                  `json:"backendRuntimeId"`
-	ConnectionDefinitionID            string                  `json:"connectionDefinitionId"`
-	Type                              string                  `json:"type"`
-	Purpose                           string                  `json:"purpose"`
-	SourceHostAlias                   *string                 `json:"sourceHostAlias"`
-	Lifecycle                         string                  `json:"lifecycle"`
-	SourceState                       string                  `json:"sourceState"`
-	AutomaticTitle                    string                  `json:"automaticTitle"`
-	TitleOverride                     *string                 `json:"titleOverride"`
-	InitialCwd                        string                  `json:"initialCwd"`
-	Cwd                               string                  `json:"cwd"`
-	Cols                              int                     `json:"cols"`
-	Rows                              int                     `json:"rows"`
-	CreatedAt                         time.Time               `json:"createdAt"`
-	UpdatedAt                         time.Time               `json:"updatedAt"`
-	ExitCode                          *int                    `json:"exitCode"`
-	ExitSignal                        *string                 `json:"exitSignal"`
-	ReuseFromConnectionInstanceID     *string                 `json:"reuseFromConnectionInstanceId"`
-	GenerationStatus                  string                  `json:"generationStatus"`
-	GenerationError                   string                  `json:"generationError"`
-	TmuxEnabled                       bool                    `json:"tmuxEnabled"`
-	TmuxSessionName                   string                  `json:"tmuxSessionName"`
-	TmuxPrefixKey                     string                  `json:"tmuxPrefixKey"`
-	TmuxPrefixSource                  string                  `json:"tmuxPrefixSource"`
-	Executions                        []legacyExecutionRecord `json:"executions,omitempty"`
-	HostVerificationAssessment        string                  `json:"hostVerificationAssessment,omitempty"`
-	ReconnectFromConnectionInstanceID *string                 `json:"reconnectFromConnectionInstanceId,omitempty"`
-	RelaunchFromConnectionInstanceID  *string                 `json:"relaunchFromConnectionInstanceId,omitempty"`
-	GenerationStaging                 string                  `json:"generationStaging,omitempty"`
+	FormatVersion                 int       `json:"formatVersion"`
+	ID                            string    `json:"connectionInstanceId"`
+	BackendRuntimeID              string    `json:"backendRuntimeId"`
+	ConnectionDefinitionID        string    `json:"connectionDefinitionId"`
+	Type                          string    `json:"type"`
+	Purpose                       string    `json:"purpose"`
+	SourceHostAlias               *string   `json:"sourceHostAlias"`
+	Lifecycle                     string    `json:"lifecycle"`
+	SourceState                   string    `json:"sourceState"`
+	AutomaticTitle                string    `json:"automaticTitle"`
+	TitleOverride                 *string   `json:"titleOverride"`
+	InitialCwd                    string    `json:"initialCwd"`
+	Cwd                           string    `json:"cwd"`
+	Cols                          int       `json:"cols"`
+	Rows                          int       `json:"rows"`
+	CreatedAt                     time.Time `json:"createdAt"`
+	UpdatedAt                     time.Time `json:"updatedAt"`
+	ExitCode                      *int      `json:"exitCode"`
+	ExitSignal                    *string   `json:"exitSignal"`
+	ReuseFromConnectionInstanceID *string   `json:"reuseFromConnectionInstanceId"`
+	GenerationStatus              string    `json:"generationStatus"`
+	GenerationError               string    `json:"generationError"`
+	TmuxEnabled                   bool      `json:"tmuxEnabled"`
+	TmuxSessionName               string    `json:"tmuxSessionName"`
+	TmuxPrefixKey                 string    `json:"tmuxPrefixKey"`
+	TmuxPrefixSource              string    `json:"tmuxPrefixSource"`
 }
 
 func decodeConnectionInstanceMeta(data []byte) (ConnectionInstanceMeta, error) {

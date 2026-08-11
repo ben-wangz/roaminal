@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestConnectionLayoutUsesPerInstanceFiles(t *testing.T) {
+func TestConnectionInstanceLayoutUsesPerInstanceFiles(t *testing.T) {
 	store, err := New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestConnectionLayoutUsesPerInstanceFiles(t *testing.T) {
 	}
 }
 
-func TestConnectionLayoutRejectsLegacySessions(t *testing.T) {
+func TestConnectionInstanceLayoutRejectsLegacySessions(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "sessions"), 0o700); err != nil {
 		t.Fatal(err)
