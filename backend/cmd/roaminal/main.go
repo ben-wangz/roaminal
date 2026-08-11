@@ -95,8 +95,11 @@ func run(cfg config.Config) error {
 		_ = terminalWorker.Shutdown(context.Background())
 		return err
 	}
-	diagnostics := clientdiag.New(store.DiagnosticsDir, buildinfo.Version, bootID, log.Default())
-	defer diagnostics.Close()
+	var diagnostics *clientdiag.Sink
+	if cfg.ClientDiagnosticsEnabled {
+		diagnostics = clientdiag.New(store.DiagnosticsDir, buildinfo.Version, bootID, log.Default())
+		defer diagnostics.Close()
+	}
 	static, err := frontend.Handler(cfg.FrontendDir)
 	if err != nil {
 		terminals.Shutdown(context.Background())
