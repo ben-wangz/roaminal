@@ -1,9 +1,8 @@
 # Tests
 
-This directory contains human- and AI-readable regression specifications.
-The current Playwright implementation remains in `frontend/e2e/`; the cases in
-`playwright/` define the intended complete browser coverage for future
-automation and manual agent-driven validation.
+This directory contains the authoritative human- and AI-readable regression
+specifications. Browser cases are executed by an AI agent with Playwright when
+needed; there is no second checked-in executable E2E suite to keep in sync.
 
 All cases target a Kubernetes system deployed from Roaminal's `chart/` Helm
 Chart. They do not define acceptance coverage for `go run`, a frontend dev

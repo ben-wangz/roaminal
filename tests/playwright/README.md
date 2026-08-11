@@ -3,9 +3,8 @@
 ## Purpose
 
 These cases describe end-to-end browser behavior supported by the current
-Roaminal code. They are written for AI agents that will either execute the
-workflow through Playwright or convert the case into a maintained spec under
-`frontend/e2e/`.
+Roaminal code. They are written for AI agents to execute through Playwright.
+The Markdown cases are the maintained browser regression specification.
 
 The system under test is exclusively a Kubernetes release installed from this
 repository's `chart/` Helm Chart. A locally started backend/frontend, Podman
@@ -103,8 +102,8 @@ must be deployed or repaired before testing.
 
 ## Standard projects
 
-Run core visual and interaction coverage in the same five viewports as the
-checked-in Playwright configuration:
+Run core visual and interaction coverage in the five standard viewports defined
+by this contract:
 
 | Project | Viewport |
 | --- | --- |

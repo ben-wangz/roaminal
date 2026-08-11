@@ -26,8 +26,8 @@ license notices in their module distributions:
 The following packages are distributed under MIT licenses unless noted by their
 package metadata:
 
-- React, React DOM, TypeScript, Vite, Vitest, ESLint, typescript-eslint,
-  `@vitejs/plugin-react`, and `@playwright/test`
+- React, React DOM, TypeScript, Vite, Vitest, ESLint, typescript-eslint, and
+  `@vitejs/plugin-react`
 - xterm.js packages (`xterm`, `xterm-headless`, `xterm-addon-serialize`, and the
   `@xterm/*` frontend packages)
 - `@fontsource/monaspace-neon` and its bundled Monaspace Neon font files -
