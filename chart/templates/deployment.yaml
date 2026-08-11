@@ -169,6 +169,8 @@ spec:
             {{- toYaml .Values.extraEnvFrom | nindent 12 }}
           {{- end }}
           volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             - name: roaminal-data
               mountPath: /home/roaminal/.roaminal
               subPath: {{ .Values.persistence.paths.state }}
@@ -227,6 +229,14 @@ spec:
             failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
           {{- end }}
       volumes:
+        - name: tmp
+          emptyDir:
+            {{- if .Values.tmp.medium }}
+            medium: {{ .Values.tmp.medium | quote }}
+            {{- end }}
+            {{- if .Values.tmp.sizeLimit }}
+            sizeLimit: {{ .Values.tmp.sizeLimit | quote }}
+            {{- end }}
         - name: roaminal-data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:

@@ -113,6 +113,15 @@
       },
       "required": ["enabled", "existingClaim", "storageClass", "accessModes", "size", "volumeMode", "annotations", "labels", "selector", "dataSource", "paths", "emptyDir"]
     },
+    "tmp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "medium": {"type": "string", "enum": ["", "Memory"]},
+        "sizeLimit": {"type": "string", "minLength": 1}
+      },
+      "required": ["medium", "sizeLimit"]
+    },
     "ssh": {
       "type": "object",
       "additionalProperties": false,
@@ -218,7 +227,7 @@
     "extraVolumeMounts": {"type": "array", "items": {"type": "object"}},
     "extraDeploy": {"type": "array", "items": {"type": "object"}}
   },
-  "required": ["replicaCount", "image", "app", "auth", "persistence", "ssh", "service", "ingress", "probes"],
+  "required": ["replicaCount", "image", "app", "auth", "persistence", "tmp", "ssh", "service", "ingress", "probes"],
   "definitions": {
     "probe": {
       "type": "object",

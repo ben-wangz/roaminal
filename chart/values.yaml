@@ -110,6 +110,12 @@ persistence:
     medium: ""
     sizeLimit: ""
 
+# The application keeps SSH multiplexing sockets below /tmp. The root
+# filesystem is read-only, so this writable volume is always mounted there.
+tmp:
+  medium: ""
+  sizeLimit: 64Mi
+
 # SSH data normally comes from the ssh/ subdirectory of the unified PVC.
 # secret and volume modes replace only that subdirectory mount and keep state
 # and workspace on the unified PVC.

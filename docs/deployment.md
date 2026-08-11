@@ -170,6 +170,8 @@ policy that sets ownership). The init container creates the three logical
 directories on an empty claim but intentionally does not repair an existing
 mount's ownership or permissions. A read-only Secret/projected SSH source does
 not need a writable PVC `ssh/` directory, but state and workspace still do.
+The chart always mounts a writable `emptyDir` at `/tmp` for runtime sockets;
+configure its quota with `tmp.sizeLimit` when the default `64Mi` is not enough.
 Treat the complete unified PVC as high-sensitivity credential material because
 it contains SSH data as well as state and workspace. Back it up before upgrades.
 `Recreate` intentionally interrupts the single service during an upgrade; the
