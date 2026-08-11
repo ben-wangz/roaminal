@@ -108,5 +108,5 @@ func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request, _ string) 
 		}
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeNoContent(w)
 }

@@ -45,6 +45,12 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
+
+func writeNoContent(w http.ResponseWriter) {
+	w.Header().Set("Content-Length", "0")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func writeError(w http.ResponseWriter, status int, message string, fields ...string) {
 	if status >= 500 {
 		id := requestID()
