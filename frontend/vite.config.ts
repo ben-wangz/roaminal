@@ -7,7 +7,8 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     emptyOutDir: true,
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    sourcemap: 'hidden'
   },
   server: {
     port: 5173,
