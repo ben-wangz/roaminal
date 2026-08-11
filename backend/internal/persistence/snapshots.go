@@ -59,33 +59,33 @@ func DecodeSnapshot(data []byte) (SnapshotHeader, []byte, error) {
 
 func (s *Store) SaveSnapshot(id string, header SnapshotHeader, payload []byte) error {
 	if !uuidPattern.MatchString(id) {
-		return s.markSessionError(id, errors.New("invalid session id"))
+		return s.markConnectionInstanceError(id, errors.New("invalid connection instance id"))
 	}
 	data, err := EncodeSnapshot(header, payload)
 	if err != nil {
-		return s.markSessionError(id, err)
+		return s.markConnectionInstanceError(id, err)
 	}
-	if err := os.MkdirAll(filepath.Dir(s.SnapshotPath(id)), 0o700); err != nil {
-		return s.markSessionError(id, err)
+	if err := os.MkdirAll(filepath.Dir(s.ConnectionSnapshotPath(id)), 0o700); err != nil {
+		return s.markConnectionInstanceError(id, err)
 	}
-	if err := s.atomicWrite(s.SnapshotPath(id), data); err != nil {
-		return s.markSessionError(id, err)
+	if err := s.atomicWrite(s.ConnectionSnapshotPath(id), data); err != nil {
+		return s.markConnectionInstanceError(id, err)
 	}
-	s.clearSessionError(id)
+	s.clearConnectionInstanceError(id)
 	return nil
 }
 
 func (s *Store) LoadSnapshot(id string) (SnapshotHeader, []byte, error) {
 	if !uuidPattern.MatchString(id) {
-		return SnapshotHeader{}, nil, errors.New("invalid session id")
+		return SnapshotHeader{}, nil, errors.New("invalid connection instance id")
 	}
-	data, err := os.ReadFile(s.SnapshotPath(id))
+	data, err := os.ReadFile(s.ConnectionSnapshotPath(id))
 	if err != nil {
 		return SnapshotHeader{}, nil, err
 	}
 	header, payload, err := DecodeSnapshot(data)
 	if err != nil {
-		_ = s.quarantine(s.SnapshotPath(id), "corrupt")
+		_ = s.quarantine(s.ConnectionSnapshotPath(id), "corrupt")
 		return SnapshotHeader{}, nil, err
 	}
 	return header, payload, nil

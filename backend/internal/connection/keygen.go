@@ -20,7 +20,7 @@ func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequ
 		return Summary{}, err
 	}
 	cwd := m.InitialCwd()
-	meta := persistence.SessionMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: "local", Type: "local", Purpose: "ssh_key_generation", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, AutomaticTitle: "Generate " + request.FileName, GenerationStatus: "running"}
+	meta := persistence.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: "local", Type: "local", Purpose: "ssh_key_generation", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, AutomaticTitle: "Generate " + request.FileName, GenerationStatus: "running"}
 	argv := m.keys.GenerationCommand(paths, request)
 	result, err := m.Manager.CreateProcessWithExit(ctx, meta, argv, nil, func(status terminal.ExitStatus) {
 		m.finishKeyGeneration(id, paths, status)

@@ -36,7 +36,7 @@ func (s *Session) parseMarkersLocked(text string) string {
 			s.meta.UpdatedAt = time.Now().UTC()
 			if s.manager.store != nil && !s.ephemeral {
 				if s.manager.store != nil && !s.ephemeral {
-					_ = s.manager.store.SaveSession(s.meta)
+					_ = s.manager.store.SaveConnectionInstance(s.meta)
 				}
 			}
 			s.broadcastMetaLocked()
@@ -94,7 +94,7 @@ func (s *Session) applyMarkerLocked(marker string) {
 			if path := string(decoded); filepath.IsAbs(path) {
 				s.meta.Cwd = path
 				s.meta.UpdatedAt = time.Now().UTC()
-				_ = s.manager.store.SaveSession(s.meta)
+				_ = s.manager.store.SaveConnectionInstance(s.meta)
 				s.broadcastMetaLocked()
 			}
 		}
@@ -127,7 +127,7 @@ func (s *Session) applyMarkerLocked(marker string) {
 			s.attention = true
 		}
 		if s.manager.store != nil && !s.ephemeral {
-			_ = s.manager.store.SaveSession(s.meta)
+			_ = s.manager.store.SaveConnectionInstance(s.meta)
 		}
 		s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "completed", "executionId": s.currentExecID, "entry": record}))
 		s.currentExec, s.currentExecID = nil, ""

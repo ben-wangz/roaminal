@@ -77,13 +77,13 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 		return Summary{}, err
 	}
 	now := time.Now().UTC()
-	meta := persistence.SessionMeta{FormatVersion: persistence.SessionFormatVersion, ID: id, BackendRuntimeID: m.runtimeID, ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now}
+	meta := persistence.ConnectionInstanceMeta{FormatVersion: persistence.ConnectionFormatVersion, ID: id, BackendRuntimeID: m.runtimeID, ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now}
 	session, err := m.startSession(ctx, meta, cwd, true)
 	if err != nil {
 		return Summary{}, err
 	}
 	if m.store != nil {
-		if err := m.store.SaveSession(meta); err != nil {
+		if err := m.store.SaveConnectionInstance(meta); err != nil {
 			m.abortSession(ctx, session, true)
 			return Summary{}, err
 		}

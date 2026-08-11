@@ -9,61 +9,61 @@ import (
 	"time"
 )
 
-func (s *Store) SessionPath(id string) string {
+func (s *Store) ConnectionInstancePath(id string) string {
 	return filepath.Join(s.ConnectionsDir, id, "metadata.json")
 }
-func (s *Store) SnapshotPath(id string) string {
+func (s *Store) ConnectionSnapshotPath(id string) string {
 	return filepath.Join(s.ConnectionsDir, id, "terminal.snapshot")
 }
 
-func (s *Store) SaveSession(meta SessionMeta) error {
+func (s *Store) SaveConnectionInstance(meta ConnectionInstanceMeta) error {
 	if meta.AutomaticTitle == "" && meta.TitleOverride == nil && meta.Title != "" {
 		meta.AutomaticTitle = meta.Title
 	}
 	meta.SyncEffectiveTitle()
-	if err := validateSessionMeta(meta); err != nil {
-		return s.markSessionError(meta.ID, err)
+	if err := validateConnectionInstanceMeta(meta); err != nil {
+		return s.markConnectionInstanceError(meta.ID, err)
 	}
 	meta.FormatVersion = ConnectionFormatVersion
 	value := connectionMetaV2{FormatVersion: ConnectionFormatVersion, ID: meta.ID, BackendRuntimeID: meta.BackendRuntimeID, ConnectionDefinitionID: meta.ConnectionDefinitionID, Type: meta.Type, Purpose: meta.Purpose, SourceHostAlias: meta.SourceHostAlias, Lifecycle: meta.Lifecycle, SourceState: meta.SourceState, AutomaticTitle: meta.AutomaticTitle, TitleOverride: meta.TitleOverride, InitialCwd: meta.InitialCwd, Cwd: meta.Cwd, Cols: meta.Cols, Rows: meta.Rows, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt, ExitCode: meta.ExitCode, ExitSignal: meta.ExitSignal, ReuseFromConnectionInstanceID: meta.ReuseFromConnectionInstanceID, GenerationStatus: meta.GenerationStatus, GenerationError: meta.GenerationError, TmuxEnabled: meta.TmuxEnabled, TmuxSessionName: meta.TmuxSessionName, TmuxPrefixKey: meta.TmuxPrefixKey, TmuxPrefixSource: meta.TmuxPrefixSource}
-	if err := os.MkdirAll(filepath.Dir(s.SessionPath(meta.ID)), 0o700); err != nil {
-		return s.markSessionError(meta.ID, err)
+	if err := os.MkdirAll(filepath.Dir(s.ConnectionInstancePath(meta.ID)), 0o700); err != nil {
+		return s.markConnectionInstanceError(meta.ID, err)
 	}
 	data, err := encodeJSON(value)
 	if err != nil {
-		return s.markSessionError(meta.ID, err)
+		return s.markConnectionInstanceError(meta.ID, err)
 	}
-	if err := s.atomicWrite(s.SessionPath(meta.ID), append(data, '\n')); err != nil {
-		return s.markSessionError(meta.ID, err)
+	if err := s.atomicWrite(s.ConnectionInstancePath(meta.ID), append(data, '\n')); err != nil {
+		return s.markConnectionInstanceError(meta.ID, err)
 	}
-	s.clearSessionError(meta.ID)
+	s.clearConnectionInstanceError(meta.ID)
 	return nil
 }
 
-func (s *Store) DeleteSession(id string) error {
+func (s *Store) DeleteConnectionInstance(id string) error {
 	if !uuidPattern.MatchString(id) {
-		return errors.New("invalid session id")
+		return errors.New("invalid connection instance id")
 	}
 	if err := os.RemoveAll(filepath.Join(s.ConnectionsDir, id)); err != nil {
-		return s.markSessionError(id, err)
+		return s.markConnectionInstanceError(id, err)
 	}
-	s.clearSessionError(id)
+	s.clearConnectionInstanceError(id)
 	return nil
 }
 
-func (s *Store) LoadSession(id string) (SessionMeta, error) {
+func (s *Store) LoadConnectionInstance(id string) (ConnectionInstanceMeta, error) {
 	if !uuidPattern.MatchString(id) {
-		return SessionMeta{}, errors.New("invalid session id")
+		return ConnectionInstanceMeta{}, errors.New("invalid connection instance id")
 	}
-	data, err := os.ReadFile(s.SessionPath(id))
+	data, err := os.ReadFile(s.ConnectionInstancePath(id))
 	if err != nil {
-		return SessionMeta{}, err
+		return ConnectionInstanceMeta{}, err
 	}
-	meta, err := decodeSessionMeta(data)
-	if err != nil || meta.ID != id || validateSessionMeta(meta) != nil {
-		_ = s.quarantine(s.SessionPath(id), "corrupt")
-		_ = s.quarantine(s.SnapshotPath(id), "corrupt")
-		return SessionMeta{}, fmt.Errorf("invalid session metadata %s", id)
+	meta, err := decodeConnectionInstanceMeta(data)
+	if err != nil || meta.ID != id || validateConnectionInstanceMeta(meta) != nil {
+		_ = s.quarantine(s.ConnectionInstancePath(id), "corrupt")
+		_ = s.quarantine(s.ConnectionSnapshotPath(id), "corrupt")
+		return ConnectionInstanceMeta{}, fmt.Errorf("invalid connection instance metadata %s", id)
 	}
 	meta.SyncEffectiveTitle()
 	return meta, nil
@@ -148,46 +148,46 @@ type connectionMetaV2 struct {
 	GenerationStaging                 string                  `json:"generationStaging,omitempty"`
 }
 
-func decodeSessionMeta(data []byte) (SessionMeta, error) {
+func decodeConnectionInstanceMeta(data []byte) (ConnectionInstanceMeta, error) {
 	var version struct {
 		FormatVersion int `json:"formatVersion"`
 	}
 	if err := json.Unmarshal(data, &version); err != nil {
-		return SessionMeta{}, err
+		return ConnectionInstanceMeta{}, err
 	}
 	switch version.FormatVersion {
 	case LegacyConnectionFormatVersion:
 		var current connectionMetaV1
 		if err := decodeStrict(data, &current); err != nil {
-			return SessionMeta{}, err
+			return ConnectionInstanceMeta{}, err
 		}
-		meta := SessionMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, TmuxEnabled: current.TmuxEnabled, TmuxSessionName: current.TmuxSessionName, TmuxPrefixKey: current.TmuxPrefixKey, TmuxPrefixSource: current.TmuxPrefixSource}
+		meta := ConnectionInstanceMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, TmuxEnabled: current.TmuxEnabled, TmuxSessionName: current.TmuxSessionName, TmuxPrefixKey: current.TmuxPrefixKey, TmuxPrefixSource: current.TmuxPrefixSource}
 		meta.SyncEffectiveTitle()
 		return meta, nil
 	case ConnectionFormatVersion:
 		var current connectionMetaV2
 		if err := decodeStrict(data, &current); err != nil {
-			return SessionMeta{}, err
+			return ConnectionInstanceMeta{}, err
 		}
-		meta := SessionMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, TmuxEnabled: current.TmuxEnabled, TmuxSessionName: current.TmuxSessionName, TmuxPrefixKey: current.TmuxPrefixKey, TmuxPrefixSource: current.TmuxPrefixSource}
+		meta := ConnectionInstanceMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, TmuxEnabled: current.TmuxEnabled, TmuxSessionName: current.TmuxSessionName, TmuxPrefixKey: current.TmuxPrefixKey, TmuxPrefixSource: current.TmuxPrefixSource}
 		meta.SyncEffectiveTitle()
 		return meta, nil
 	default:
-		return SessionMeta{}, errors.New("unsupported session format version")
+		return ConnectionInstanceMeta{}, errors.New("unsupported connection instance format version")
 	}
 }
 
-func (s *Store) ListSessions() ([]SessionMeta, error) {
+func (s *Store) ListConnectionInstances() ([]ConnectionInstanceMeta, error) {
 	entries, err := os.ReadDir(s.ConnectionsDir)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]SessionMeta, 0)
+	result := make([]ConnectionInstanceMeta, 0)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		meta, err := s.LoadSession(entry.Name())
+		meta, err := s.LoadConnectionInstance(entry.Name())
 		if err == nil {
 			result = append(result, meta)
 		}

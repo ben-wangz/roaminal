@@ -75,7 +75,7 @@ func (s *Session) broadcastLocked(data []byte) {
 func message(value any) []byte { data, _ := json.Marshal(value); return data }
 func (m *Manager) storeDegraded(id string, err error) {
 	if m.store != nil {
-		m.store.MarkSessionDegraded(id)
+		m.store.MarkConnectionInstanceDegraded(id)
 	}
 	fmt.Printf("Roaminal persistence degraded: %v\n", err)
 }

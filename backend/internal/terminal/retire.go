@@ -39,13 +39,13 @@ func (m *Manager) retireSession(ctx context.Context, session *Session) error {
 		session.meta.UpdatedAt = time.Now().UTC()
 		meta := session.meta
 		session.mu.Unlock()
-		if err := m.store.SaveSession(meta); err != nil {
+		if err := m.store.SaveConnectionInstance(meta); err != nil {
 			return fmt.Errorf("save final metadata: %w", err)
 		}
-		if err := m.store.ArchiveSession(meta.ID); err != nil {
+		if err := m.store.ArchiveConnectionInstance(meta.ID); err != nil {
 			return fmt.Errorf("archive session: %w", err)
 		}
-		if err := m.store.DeleteSession(meta.ID); err != nil {
+		if err := m.store.DeleteConnectionInstance(meta.ID); err != nil {
 			return fmt.Errorf("remove active session: %w", err)
 		}
 	}

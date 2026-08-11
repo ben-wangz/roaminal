@@ -78,7 +78,7 @@ func (m *Manager) watchPending(session *Session) {
 // PromotePending publishes a successful runtime launch as a normal connection
 // instance. The final metadata is persisted before the instance enters the
 // heartbeat-visible map.
-func (m *Manager) PromotePending(id string, meta persistence.SessionMeta) (Summary, error) {
+func (m *Manager) PromotePending(id string, meta persistence.ConnectionInstanceMeta) (Summary, error) {
 	session := m.pendingSession(id)
 	if session == nil {
 		return Summary{}, os.ErrNotExist
@@ -117,7 +117,7 @@ func (m *Manager) PromotePending(id string, meta persistence.SessionMeta) (Summa
 	session.published = true
 	session.onMarker = nil
 	if m.store != nil {
-		if err := m.store.SaveSession(meta); err != nil {
+		if err := m.store.SaveConnectionInstance(meta); err != nil {
 			session.ephemeral = true
 			session.meta.Lifecycle = "pending"
 			session.mu.Unlock()

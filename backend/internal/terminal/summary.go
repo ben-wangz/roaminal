@@ -65,7 +65,7 @@ func lifecycle(session *Session) string {
 	}
 	return "live"
 }
-func titleMode(meta persistence.SessionMeta) string {
+func titleMode(meta persistence.ConnectionInstanceMeta) string {
 	if meta.TitleOverride != nil {
 		return "custom"
 	}
@@ -89,7 +89,7 @@ func (m *Manager) MarkSourceState(id, state string) error {
 		session.meta.SourceState = state
 	}
 	if m.store != nil {
-		if err := m.store.SaveSession(session.meta); err != nil {
+		if err := m.store.SaveConnectionInstance(session.meta); err != nil {
 			return err
 		}
 	}
@@ -109,7 +109,7 @@ func (m *Manager) MarkGenerationResult(id, state, detail string) error {
 	session.meta.GenerationError = detail
 	session.meta.UpdatedAt = time.Now().UTC()
 	if m.store != nil {
-		if err := m.store.SaveSession(session.meta); err != nil {
+		if err := m.store.SaveConnectionInstance(session.meta); err != nil {
 			session.mu.Unlock()
 			return err
 		}
@@ -139,7 +139,7 @@ func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
 	session.meta.SyncEffectiveTitle()
 	session.meta.UpdatedAt = time.Now().UTC()
 	if m.store != nil {
-		if err := m.store.SaveSession(session.meta); err != nil {
+		if err := m.store.SaveConnectionInstance(session.meta); err != nil {
 			session.meta.TitleOverride, session.meta.UpdatedAt = oldOverride, oldUpdated
 			session.meta.SyncEffectiveTitle()
 			session.mu.Unlock()

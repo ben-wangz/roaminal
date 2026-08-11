@@ -24,15 +24,15 @@ func validateAuthSession(session AuthSession) error {
 	return nil
 }
 
-func validateSessionMeta(meta SessionMeta) error {
-	if meta.FormatVersion != 0 && meta.FormatVersion != FormatVersion && meta.FormatVersion != SessionFormatVersion {
-		return errors.New("unsupported session format version")
+func validateConnectionInstanceMeta(meta ConnectionInstanceMeta) error {
+	if meta.FormatVersion != 0 && meta.FormatVersion != ConnectionFormatVersion {
+		return errors.New("unsupported connection instance format version")
 	}
 	if !uuidPattern.MatchString(meta.ID) {
-		return errors.New("invalid session id")
+		return errors.New("invalid connection instance id")
 	}
 	if !utf8.ValidString(meta.EffectiveTitle()) || len([]byte(meta.EffectiveTitle())) > 512 || !utf8.ValidString(meta.AutomaticTitle) || len([]byte(meta.AutomaticTitle)) > 512 || !utf8.ValidString(meta.InitialCwd) || !utf8.ValidString(meta.Cwd) || !utf8.ValidString(meta.GenerationStatus) || len([]byte(meta.GenerationStatus)) > 64 || !utf8.ValidString(meta.GenerationError) || len([]byte(meta.GenerationError)) > 512 {
-		return errors.New("invalid session text")
+		return errors.New("invalid connection instance text")
 	}
 	if meta.TitleOverride != nil {
 		if err := ValidateTitleOverride(*meta.TitleOverride); err != nil {
@@ -40,10 +40,10 @@ func validateSessionMeta(meta SessionMeta) error {
 		}
 	}
 	if !filepath.IsAbs(meta.InitialCwd) || !filepath.IsAbs(meta.Cwd) || len([]byte(meta.InitialCwd)) > 4096 || len([]byte(meta.Cwd)) > 4096 {
-		return errors.New("invalid session cwd")
+		return errors.New("invalid connection instance cwd")
 	}
 	if meta.Cols < 2 || meta.Cols > 1000 || meta.Rows < 1 || meta.Rows > 1000 || meta.CreatedAt.IsZero() || meta.UpdatedAt.IsZero() || meta.UpdatedAt.Before(meta.CreatedAt) {
-		return errors.New("invalid session dimensions or timestamp")
+		return errors.New("invalid connection instance dimensions or timestamp")
 	}
 	if meta.TmuxPrefixKey != "" && (len(meta.TmuxPrefixKey) != 1 || meta.TmuxPrefixKey[0] < 'a' || meta.TmuxPrefixKey[0] > 'z') {
 		return errors.New("invalid tmux prefix key")
@@ -58,7 +58,7 @@ func validateSessionMeta(meta SessionMeta) error {
 		return errors.New("unsupported tmux prefix cannot have a key")
 	}
 	if !meta.TmuxEnabled && (meta.TmuxPrefixKey != "" || meta.TmuxPrefixSource != "") {
-		return errors.New("non-tmux session has tmux prefix metadata")
+		return errors.New("non-tmux connection has tmux prefix metadata")
 	}
 	return nil
 }

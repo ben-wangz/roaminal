@@ -26,16 +26,16 @@ func TestSnapshotRoundTripAndCorruptionIsolation(t *testing.T) {
 	if header.ByteLength != len(payload) || string(got) != string(payload) {
 		t.Fatalf("round trip mismatch: %+v %q", header, got)
 	}
-	if err := os.MkdirAll(filepath.Dir(store.SnapshotPath("11111111-1111-4111-8111-111111111111")), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(store.ConnectionSnapshotPath("11111111-1111-4111-8111-111111111111")), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(store.SnapshotPath("11111111-1111-4111-8111-111111111111"), []byte("bad"), 0o600); err != nil {
+	if err := os.WriteFile(store.ConnectionSnapshotPath("11111111-1111-4111-8111-111111111111"), []byte("bad"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := store.LoadSnapshot("11111111-1111-4111-8111-111111111111"); err == nil {
 		t.Fatal("expected corruption error")
 	}
-	entries, _ := os.ReadDir(filepath.Dir(store.SnapshotPath("11111111-1111-4111-8111-111111111111")))
+	entries, _ := os.ReadDir(filepath.Dir(store.ConnectionSnapshotPath("11111111-1111-4111-8111-111111111111")))
 	found := false
 	for _, entry := range entries {
 		if len(entry.Name()) > len(".snapshot.corrupt.") && entry.Name() != "11111111-1111-4111-8111-111111111111.snapshot" {
@@ -56,23 +56,23 @@ func TestConnectionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	legacy := fmt.Sprintf(`{"formatVersion":1,"connectionInstanceId":%q,"connectionDefinitionId":"local","type":"local","purpose":"interactive","lifecycle":"live","sourceState":"current","automaticTitle":"shell","initialCwd":"/workspace","cwd":"/workspace","cols":80,"rows":24,"createdAt":%q,"updatedAt":%q}`,
 		id, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
-	if err := os.MkdirAll(filepath.Dir(store.SessionPath(id)), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(store.ConnectionInstancePath(id)), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(store.SessionPath(id), []byte(legacy), 0o600); err != nil {
+	if err := os.WriteFile(store.ConnectionInstancePath(id), []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	meta, err := store.LoadSession(id)
+	meta, err := store.LoadConnectionInstance(id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if meta.FormatVersion != ConnectionFormatVersion || meta.AutomaticTitle != "shell" || meta.EffectiveTitle() != "shell" || meta.TitleOverride != nil {
 		t.Fatalf("unexpected migrated metadata: %+v", meta)
 	}
-	if err := store.SaveSession(meta); err != nil {
+	if err := store.SaveConnectionInstance(meta); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(store.SessionPath(id))
+	data, err := os.ReadFile(store.ConnectionInstancePath(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,27 +112,27 @@ func TestValidateTitleOverride(t *testing.T) {
 	}
 }
 
-func TestPersistenceDegradedTracksSessionsIndependently(t *testing.T) {
+func TestPersistenceDegradedTracksConnectionInstancesIndependently(t *testing.T) {
 	store, err := New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	first := "11111111-1111-4111-8111-111111111111"
 	second := "22222222-2222-4222-8222-222222222222"
-	store.MarkSessionDegraded(first)
-	store.MarkSessionDegraded(second)
+	store.MarkConnectionInstanceDegraded(first)
+	store.MarkConnectionInstanceDegraded(second)
 	if !store.PersistenceDegraded() {
 		t.Fatal("expected degraded state")
 	}
 	now := time.Now().UTC()
-	if err := store.SaveSession(SessionMeta{ID: first, InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}); err != nil {
+	if err := store.SaveConnectionInstance(ConnectionInstanceMeta{ID: first, InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	if !store.PersistenceDegraded() {
-		t.Fatal("a second failed session must keep persistence degraded")
+		t.Fatal("a second failed connection instance must keep persistence degraded")
 	}
-	store.clearSessionError(second)
+	store.clearConnectionInstanceError(second)
 	if store.PersistenceDegraded() {
-		t.Fatal("expected healthy state after all session checkpoints recover")
+		t.Fatal("expected healthy state after all connection-instance checkpoints recover")
 	}
 }

@@ -10,7 +10,6 @@ import (
 
 const (
 	FormatVersion                 = 1
-	SessionFormatVersion          = 2 // retained as the connection metadata write version during the transition
 	ConnectionFormatVersion       = 2
 	LegacyConnectionFormatVersion = 1
 	SnapshotMagic                 = "ROAMINAL-SNAPSHOT/1"
@@ -23,7 +22,7 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89a
 var hex64Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var sequencePattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
 
-type SessionMeta struct {
+type ConnectionInstanceMeta struct {
 	FormatVersion                 int       `json:"-"`
 	ID                            string    `json:"id"`
 	Title                         string    `json:"-"`
@@ -53,7 +52,7 @@ type SessionMeta struct {
 	TmuxPrefixSource              string    `json:"tmuxPrefixSource,omitempty"`
 }
 
-func (meta SessionMeta) EffectiveTitle() string {
+func (meta ConnectionInstanceMeta) EffectiveTitle() string {
 	if meta.TitleOverride != nil {
 		return *meta.TitleOverride
 	}
@@ -62,7 +61,7 @@ func (meta SessionMeta) EffectiveTitle() string {
 	}
 	return meta.Title
 }
-func (meta *SessionMeta) SyncEffectiveTitle() { meta.Title = meta.EffectiveTitle() }
+func (meta *ConnectionInstanceMeta) SyncEffectiveTitle() { meta.Title = meta.EffectiveTitle() }
 
 type AuthSession struct {
 	ID                  string    `json:"id"`
@@ -119,15 +118,15 @@ func (s *Store) markError(err error) error {
 	s.degradedMu.Unlock()
 	return err
 }
-func (s *Store) markSessionError(id string, err error) error {
+func (s *Store) markConnectionInstanceError(id string, err error) error {
 	s.degradedMu.Lock()
 	s.degradedIDs[id] = struct{}{}
 	s.degradedMu.Unlock()
 	return err
 }
-func (s *Store) clearSessionError(id string) {
+func (s *Store) clearConnectionInstanceError(id string) {
 	s.degradedMu.Lock()
 	delete(s.degradedIDs, id)
 	s.degradedMu.Unlock()
 }
-func (s *Store) MarkSessionDegraded(id string) { s.markSessionError(id, nil) }
+func (s *Store) MarkConnectionInstanceDegraded(id string) { s.markConnectionInstanceError(id, nil) }

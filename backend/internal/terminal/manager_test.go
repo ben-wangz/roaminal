@@ -15,7 +15,7 @@ func TestTerminateSessionRunsExitHook(t *testing.T) {
 	cwd := t.TempDir()
 	manager := NewManager(config.Config{InitialCwd: cwd}, nil, nil)
 	id := "11111111-1111-4111-8111-111111111111"
-	session, err := manager.startCommand(persistence.SessionMeta{ID: id, Cwd: cwd, Cols: 80, Rows: 24}, cwd, []string{"/bin/sh", "-c", "sleep 30"}, nil)
+	session, err := manager.startCommand(persistence.ConnectionInstanceMeta{ID: id, Cwd: cwd, Cols: 80, Rows: 24}, cwd, []string{"/bin/sh", "-c", "sleep 30"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestAttachReservationIsAtomic(t *testing.T) {
 	}
 	id := "11111111-1111-4111-8111-111111111111"
 	manager := NewManager(config.Config{MaxClientsPerConnectionInstance: 1}, store, nil)
-	manager.sessions[id] = &Session{manager: manager, meta: persistence.SessionMeta{ID: id}, clients: map[*Client]struct{}{}}
+	manager.sessions[id] = &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{ID: id}, clients: map[*Client]struct{}{}}
 	if err := manager.ReserveAttach(id); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestControlOwnerRejectsNonOwnerInput(t *testing.T) {
 	id := "11111111-1111-4111-8111-111111111111"
 	owner, other := newClient(), newClient()
 	manager := NewManager(config.Config{}, store, nil)
-	manager.sessions[id] = &Session{manager: manager, meta: persistence.SessionMeta{ID: id}, clients: map[*Client]struct{}{owner: {}, other: {}}}
+	manager.sessions[id] = &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{ID: id}, clients: map[*Client]struct{}{owner: {}, other: {}}}
 	if err := manager.ClaimControl(id, owner); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestPrivateMarkersAreFilteredAcrossChunks(t *testing.T) {
 	}
 	manager := NewManager(config.Config{ScrollbackLines: 1000}, store, nil)
 	now := time.Now().UTC()
-	session := &Session{manager: manager, meta: persistence.SessionMeta{FormatVersion: persistence.FormatVersion, ID: "11111111-1111-4111-8111-111111111111", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}}
+	session := &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{FormatVersion: persistence.ConnectionFormatVersion, ID: "11111111-1111-4111-8111-111111111111", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}}
 	encoded := base64.StdEncoding.EncodeToString([]byte("/tmp"))
 	first := "before\x1b]777;roaminal;cwd:" + encoded[:4]
 	session.mu.Lock()
@@ -140,9 +140,9 @@ func TestSummariesHaveDeterministicOrder(t *testing.T) {
 		"11111111-1111-4111-8111-111111111111",
 		"22222222-2222-4222-8222-222222222222",
 	}
-	manager.sessions[ids[0]] = &Session{manager: manager, meta: persistence.SessionMeta{ID: ids[0], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base, UpdatedAt: base}}
-	manager.sessions[ids[1]] = &Session{manager: manager, meta: persistence.SessionMeta{ID: ids[1], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base, UpdatedAt: base}}
-	manager.sessions[ids[2]] = &Session{manager: manager, meta: persistence.SessionMeta{ID: ids[2], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base.Add(time.Second), UpdatedAt: base.Add(time.Second)}}
+	manager.sessions[ids[0]] = &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{ID: ids[0], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base, UpdatedAt: base}}
+	manager.sessions[ids[1]] = &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{ID: ids[1], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base, UpdatedAt: base}}
+	manager.sessions[ids[2]] = &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{ID: ids[2], InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: base.Add(time.Second), UpdatedAt: base.Add(time.Second)}}
 	want := []string{ids[1], ids[0], ids[2]}
 	for attempt := 0; attempt < 20; attempt++ {
 		got := manager.Summaries()
@@ -162,7 +162,7 @@ func TestSetTitlePersistsOverrideAndAutomaticReset(t *testing.T) {
 	manager := NewManager(config.Config{}, store, nil)
 	now := time.Now().UTC()
 	id := "11111111-1111-4111-8111-111111111111"
-	manager.sessions[id] = &Session{manager: manager, meta: persistence.SessionMeta{FormatVersion: persistence.SessionFormatVersion, ID: id, AutomaticTitle: "shell", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}, clients: map[*Client]struct{}{}}
+	manager.sessions[id] = &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{FormatVersion: persistence.ConnectionFormatVersion, ID: id, AutomaticTitle: "shell", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}, clients: map[*Client]struct{}{}}
 	custom := "custom title"
 	result, err := manager.SetTitle(id, &custom)
 	if err != nil {
@@ -171,7 +171,7 @@ func TestSetTitlePersistsOverrideAndAutomaticReset(t *testing.T) {
 	if result.Title != custom || result.TitleMode != "custom" {
 		t.Fatalf("unexpected custom title result: %+v", result)
 	}
-	loaded, err := store.LoadSession(id)
+	loaded, err := store.LoadConnectionInstance(id)
 	if err != nil || loaded.TitleOverride == nil || *loaded.TitleOverride != custom {
 		t.Fatalf("custom title was not persisted: %+v %v", loaded, err)
 	}

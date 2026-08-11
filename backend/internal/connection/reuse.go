@@ -88,6 +88,6 @@ func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, col
 	return result, nil
 }
 
-func newReuseMeta(m *Manager, id, definitionID string, alias *string, cols, rows int, sourceID string) persistence.SessionMeta {
-	return persistence.SessionMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: alias, Lifecycle: "live", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), AutomaticTitle: *alias, ReuseFromConnectionInstanceID: &sourceID}
+func newReuseMeta(m *Manager, id, definitionID string, alias *string, cols, rows int, sourceID string) persistence.ConnectionInstanceMeta {
+	return persistence.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: alias, Lifecycle: "live", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), AutomaticTitle: *alias, ReuseFromConnectionInstanceID: &sourceID}
 }

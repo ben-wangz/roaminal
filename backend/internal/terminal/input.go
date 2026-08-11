@@ -104,7 +104,7 @@ func (m *Manager) resize(id string, client *Client, cols, rows int, pending bool
 		return err
 	}
 	if m.store != nil && !session.ephemeral {
-		_ = m.store.SaveSession(session.meta)
+		_ = m.store.SaveConnectionInstance(session.meta)
 	}
 	session.scheduleSnapshotLocked()
 	return nil

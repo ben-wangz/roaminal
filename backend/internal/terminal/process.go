@@ -12,28 +12,28 @@ import (
 
 // CreateProcess starts a managed PTY for a fixed argv. It is used by the SSH
 // connection manager; arbitrary command templates are never exposed to HTTP.
-func (m *Manager) CreateProcess(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string) (Summary, error) {
+func (m *Manager) CreateProcess(ctx context.Context, meta persistence.ConnectionInstanceMeta, argv []string, extraEnv []string) (Summary, error) {
 	return m.createProcess(ctx, meta, argv, extraEnv, false, "", nil, nil)
 }
 
 // CreateProcessWithExit starts a fixed process and invokes onExit after its
 // PTY exits, outside the session lock. The callback receives no input/output.
-func (m *Manager) CreateProcessWithExit(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string, onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) CreateProcessWithExit(ctx context.Context, meta persistence.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit func(ExitStatus)) (Summary, error) {
 	return m.createProcess(ctx, meta, argv, extraEnv, false, "", nil, onExit)
 }
 
 // CreatePendingProcess starts a runtime-only launch. It is attachable over the
 // launch websocket, but is excluded from persistence, heartbeat summaries, and
 // audit until PromotePending is called.
-func (m *Manager) CreatePendingProcess(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) CreatePendingProcess(ctx context.Context, meta persistence.ConnectionInstanceMeta, argv []string, extraEnv []string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
 	return m.CreatePendingProcessOwned(ctx, meta, argv, extraEnv, "", onMarker, onExit)
 }
 
-func (m *Manager) CreatePendingProcessOwned(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) CreatePendingProcessOwned(ctx context.Context, meta persistence.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
 	return m.createProcess(ctx, meta, argv, extraEnv, true, ownerID, onMarker, onExit)
 }
 
-func (m *Manager) createProcess(ctx context.Context, meta persistence.SessionMeta, argv []string, extraEnv []string, ephemeral bool, ownerID string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) createProcess(ctx context.Context, meta persistence.ConnectionInstanceMeta, argv []string, extraEnv []string, ephemeral bool, ownerID string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
 	if len(argv) == 0 {
 		return Summary{}, errors.New("empty process argv")
 	}
@@ -118,7 +118,7 @@ func (m *Manager) createProcess(ctx context.Context, meta persistence.SessionMet
 		session.detachedAt = session.lastActivity
 	}
 	if m.store != nil && !ephemeral {
-		if err := m.store.SaveSession(meta); err != nil {
+		if err := m.store.SaveConnectionInstance(meta); err != nil {
 			m.abortSession(ctx, session, true)
 			return Summary{}, err
 		}

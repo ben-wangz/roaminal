@@ -44,7 +44,7 @@ func (s *Session) waitLoop() {
 	s.meta.UpdatedAt = time.Now().UTC()
 	ephemeral := s.ephemeral
 	if s.manager.store != nil && !ephemeral {
-		_ = s.manager.store.SaveSession(s.meta)
+		_ = s.manager.store.SaveConnectionInstance(s.meta)
 	}
 	s.broadcastLocked(message(map[string]any{"type": "status", "status": "terminated", "code": statusCode(status), "signal": status.Signal, "exitStatus": s.exitStatus}))
 	if err != nil && !errors.Is(err, os.ErrProcessDone) {

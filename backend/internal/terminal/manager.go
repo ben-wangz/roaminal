@@ -133,7 +133,7 @@ type Manager struct {
 type Session struct {
 	manager       *Manager
 	mu            sync.Mutex
-	meta          persistence.SessionMeta
+	meta          persistence.ConnectionInstanceMeta
 	cmd           *exec.Cmd
 	pty           *os.File
 	clients       map[*Client]struct{}
