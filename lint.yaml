@@ -123,15 +123,10 @@ commands:
         --set persistence.enabled=false
         --set persistence.emptyDir.medium=Memory
         --set persistence.emptyDir.sizeLimit=1Gi >/dev/null;
-        if helm template roaminal chart --namespace chart-ci
-          --set app.acceptTerms=false >/dev/null 2>&1; then exit 1; fi;
-        if helm template roaminal chart --namespace chart-ci
-          --set app.acceptTerms=true --set app.scrollbackLines=50001 >/dev/null 2>&1; then exit 1; fi;
-        if helm template roaminal chart --namespace chart-ci
-          --set app.acceptTerms=true --set ssh.source=secret >/dev/null 2>&1; then exit 1; fi;
-        if helm template roaminal chart --namespace chart-ci
-          --set app.acceptTerms=true --set persistence.enabled=false
-          --set persistence.existingClaim=invalid >/dev/null 2>&1; then exit 1; fi
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=false >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set app.scrollbackLines=50001 >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set ssh.source=secret >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set persistence.enabled=false --set persistence.existingClaim=invalid >/dev/null 2>&1; then exit 1; fi
 
   - name: "Workflow YAML syntax"
     cmd: "ruby"
