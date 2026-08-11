@@ -2,6 +2,7 @@ import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
+import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
 
 type TerminalModules = [
   typeof import('@xterm/xterm'),
@@ -107,11 +108,7 @@ export class TerminalRuntime {
     if (this.disposed || this.closed || !this.element || this.socket || this.reconnectTimer !== null) return;
     const token = this.token();
     if (!token) return;
-    const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(
-      `${scheme}//${location.host}/ws/${this.endpoint}/${encodeURIComponent(this.connectionInstanceId)}`,
-      ['roaminal.v1', `roaminal.auth.${token}`],
-    );
+    const socket = createRoaminalWebSocket(this.connectionInstanceId, this.endpoint, token);
     this.socket = socket;
     socket.onopen = () => {
       if (this.disposed || this.closed || this.socket !== socket || !this.terminal || !this.fit) return;
@@ -126,6 +123,7 @@ export class TerminalRuntime {
       const message = parseServerMessage(String(event.data));
       if (!message) return;
       if (message.type === 'status' && message.status === 'terminated') {
+        expectRoaminalWebSocketClose(socket);
         this.closed = true;
         this.connected = false;
         this.terminal.options.disableStdin = true;
@@ -170,14 +168,15 @@ export class TerminalRuntime {
     const socket = this.socket;
     this.socket = null;
     if (socket?.readyState === WebSocket.CONNECTING) {
-      socket.onopen = () => socket.close();
+      expectRoaminalWebSocketClose(socket);
+      socket.onopen = () => closeRoaminalWebSocket(socket);
       socket.onerror = () => undefined;
     } else if (socket) {
       socket.onopen = null;
       socket.onmessage = null;
       socket.onclose = null;
       socket.onerror = null;
-      socket.close();
+      closeRoaminalWebSocket(socket);
     }
     this.element = null;
     const terminal = this.terminal;

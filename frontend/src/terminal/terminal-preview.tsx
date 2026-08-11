@@ -1,6 +1,7 @@
 import type { FitAddon } from '@xterm/addon-fit';
 import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
+import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
 
 export class TerminalPreviewRuntime {
   terminal?: Terminal;
@@ -67,11 +68,7 @@ export class TerminalPreviewRuntime {
     if (this.disposed || !this.element || this.socket) return;
     const token = this.token();
     if (!token) return;
-    const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(
-      `${scheme}//${location.host}/ws/connection-instances/${encodeURIComponent(this.connectionInstanceId)}`,
-      ['roaminal.v1', `roaminal.auth.${token}`],
-    );
+    const socket = createRoaminalWebSocket(this.connectionInstanceId, 'connection-instances', token);
     this.socket = socket;
     socket.onopen = () => {
       if (this.disposed || this.socket !== socket || !this.fit) return;
@@ -103,14 +100,15 @@ export class TerminalPreviewRuntime {
     const socket = this.socket;
     this.socket = null;
     if (socket?.readyState === WebSocket.CONNECTING) {
-      socket.onopen = () => socket.close();
+      expectRoaminalWebSocketClose(socket);
+      socket.onopen = () => closeRoaminalWebSocket(socket);
       socket.onerror = () => undefined;
     } else if (socket) {
       socket.onopen = null;
       socket.onmessage = null;
       socket.onclose = null;
       socket.onerror = null;
-      socket.close();
+      closeRoaminalWebSocket(socket);
     }
     this.element = null;
     const terminal = this.terminal;
