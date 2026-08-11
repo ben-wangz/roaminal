@@ -2,8 +2,6 @@
 /frontend/dist/
 /frontend/node_modules/
 /terminal-worker/node_modules/
-/frontend/test-results/
-/frontend/playwright-report/
 /build/
 *.tmp
 *.log

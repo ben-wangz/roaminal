@@ -19,19 +19,22 @@ license notices in their module distributions:
 
 - `github.com/creack/pty v1.1.24` - MIT
 - `github.com/coder/websocket v1.8.15` - MIT
-- `golang.org/x/sys v0.47.0` - BSD-3-Clause
+- `gopkg.in/yaml.v3 v3.0.1` - MIT
 
 ## Direct JavaScript dependencies
 
-The following packages are distributed under MIT licenses unless noted by their
-package metadata:
+Runtime packages:
 
-- React, React DOM, TypeScript, Vite, Vitest, ESLint, typescript-eslint, and
-  `@vitejs/plugin-react`
-- xterm.js packages (`xterm`, `xterm-headless`, `xterm-addon-serialize`, and the
-  `@xterm/*` frontend packages)
+- React and React DOM - MIT
+- `@xterm/xterm`, `@xterm/headless`, `@xterm/addon-fit`,
+  `@xterm/addon-ligatures`, `@xterm/addon-progress`, `@xterm/addon-search`, and
+  `@xterm/addon-serialize` - MIT
+- `lucide-react` - ISC
 - `@fontsource/monaspace-neon` and its bundled Monaspace Neon font files -
   SIL Open Font License 1.1; see `LICENSES/OFL-1.1.txt`
+
+Development-only packages include TypeScript, Vite, Vitest, ESLint,
+typescript-eslint, and `@vitejs/plugin-react`.
 
 The production image includes the terminal worker's production dependency tree
 and the notices copied by the `Containerfile`. License text remains owned by

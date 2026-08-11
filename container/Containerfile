@@ -51,7 +51,6 @@ ENV HOME=/home/roaminal \
     ROAMINAL_FRONTEND_DIR=/opt/roaminal/frontend \
     ROAMINAL_WORKER_PATH=/opt/roaminal/terminal-worker/src/index.mjs \
     ROAMINAL_SHELL_RC=/opt/roaminal/shell/roaminal-bashrc
-VOLUME ["/home/roaminal/.roaminal", "/workspace"]
 EXPOSE 9846
 USER 1000:1000
 WORKDIR /home/roaminal
