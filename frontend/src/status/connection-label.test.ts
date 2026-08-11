@@ -2,8 +2,27 @@ import { describe, expect, it } from 'vitest';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { connectionDisplayName } from './connection-label';
 
-function instance(id: string, createdAt: string, overrides: Partial<ConnectionInstanceSummary> = {}): ConnectionInstanceSummary {
-  return { id, connectionDefinitionId: 'ssh-codespace', type: 'ssh', purpose: 'interactive', sourceHostAlias: 'codespace', createdAt, updatedAt: createdAt, shell: 'ssh', initialCwd: '/workspace', title: 'codespace', titleMode: 'automatic', cwd: '/workspace', cols: 80, rows: 24, closed: false, attention: false, exitStatus: null, ...overrides };
+function instance(
+  id: string,
+  createdAt: string,
+  overrides: Partial<ConnectionInstanceSummary> = {},
+): ConnectionInstanceSummary {
+  return {
+    connectionInstanceId: id,
+    connectionDefinitionId: 'ssh-codespace',
+    type: 'ssh',
+    purpose: 'interactive',
+    sourceHostAlias: 'codespace',
+    createdAt,
+    updatedAt: createdAt,
+    title: 'codespace',
+    titleMode: 'automatic',
+    cwd: '/workspace',
+    cols: 80,
+    rows: 24,
+    attention: false,
+    ...overrides,
+  };
 }
 
 describe('connection display names', () => {
@@ -21,8 +40,15 @@ describe('connection display names', () => {
 
   it('does not number unrelated aliases or connection types together', () => {
     const remote = instance('remote', '2026-08-10T00:00:00Z');
-    const other = instance('other', '2026-08-10T00:01:00Z', { connectionDefinitionId: 'ssh-other', sourceHostAlias: 'other' });
-    const local = instance('local', '2026-08-10T00:02:00Z', { connectionDefinitionId: 'local', type: 'local', sourceHostAlias: undefined });
+    const other = instance('other', '2026-08-10T00:01:00Z', {
+      connectionDefinitionId: 'ssh-other',
+      sourceHostAlias: 'other',
+    });
+    const local = instance('local', '2026-08-10T00:02:00Z', {
+      connectionDefinitionId: 'local',
+      type: 'local',
+      sourceHostAlias: undefined,
+    });
     expect(connectionDisplayName(remote, [remote, other, local])).toBe('codespace');
     expect(connectionDisplayName(local, [remote, other, local])).toBe('Local');
   });

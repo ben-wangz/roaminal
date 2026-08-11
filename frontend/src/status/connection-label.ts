@@ -1,11 +1,14 @@
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
-export function connectionDisplayName(active: ConnectionInstanceSummary | null, sessions: ConnectionInstanceSummary[]): string {
+export function connectionDisplayName(
+  active: ConnectionInstanceSummary | null,
+  sessions: ConnectionInstanceSummary[],
+): string {
   if (!active) return 'Roaminal';
   const base = connectionBaseName(active);
   const peers = sessions.filter((session) => sameConnection(session, active)).sort(compareCreatedAt);
   if (peers.length < 2) return base;
-  const index = peers.findIndex((session) => session.id === active.id);
+  const index = peers.findIndex((session) => session.connectionInstanceId === active.connectionInstanceId);
   return `${base}-${index >= 0 ? index + 1 : 1}`;
 }
 
@@ -17,7 +20,8 @@ function connectionBaseName(session: ConnectionInstanceSummary): string {
 
 function sameConnection(left: ConnectionInstanceSummary, right: ConnectionInstanceSummary): boolean {
   if (left.type !== right.type || left.purpose !== right.purpose) return false;
-  if (left.connectionDefinitionId && right.connectionDefinitionId) return left.connectionDefinitionId === right.connectionDefinitionId;
+  if (left.connectionDefinitionId && right.connectionDefinitionId)
+    return left.connectionDefinitionId === right.connectionDefinitionId;
   return left.sourceHostAlias === right.sourceHostAlias;
 }
 
@@ -25,5 +29,5 @@ function compareCreatedAt(left: ConnectionInstanceSummary, right: ConnectionInst
   const leftTime = Date.parse(left.createdAt);
   const rightTime = Date.parse(right.createdAt);
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
-  return left.id.localeCompare(right.id);
+  return left.connectionInstanceId.localeCompare(right.connectionInstanceId);
 }

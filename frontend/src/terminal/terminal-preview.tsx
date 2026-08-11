@@ -1,18 +1,27 @@
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
+import type { FitAddon } from '@xterm/addon-fit';
+import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
 
 export class TerminalPreviewRuntime {
-  readonly terminal: Terminal;
-  readonly fit: FitAddon;
+  terminal?: Terminal;
+  private fit?: FitAddon;
   private socket: WebSocket | null = null;
   private element: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
-  private disposeFrame: number | null = null;
   private connected = false;
+  private readonly ready: Promise<void>;
 
-  constructor(readonly sessionId: string, private readonly token: () => string | null) {
+  constructor(
+    readonly connectionInstanceId: string,
+    private readonly token: () => string | null,
+  ) {
+    this.ready = this.loadTerminal();
+  }
+
+  private async loadTerminal(): Promise<void> {
+    const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]);
+    if (this.disposed) return;
     this.terminal = new Terminal({
       convertEol: false,
       cursorBlink: false,
@@ -22,23 +31,35 @@ export class TerminalPreviewRuntime {
       cols: 80,
       fontSize: 10,
       fontFamily: 'Monaspace Neon, monospace',
-      theme: { background: '#002b36', foreground: '#839496', cursor: 'transparent', selectionBackground: 'transparent' }
+      theme: {
+        background: '#002b36',
+        foreground: '#839496',
+        cursor: 'transparent',
+        selectionBackground: 'transparent',
+      },
     });
     this.fit = new FitAddon();
+    this.mount();
   }
 
   attach(element: HTMLElement): void {
-    if (this.disposed) return;
-    if (this.element === element) return;
+    if (this.disposed || this.element === element) return;
     this.element = element;
-    if (this.terminal.element) element.replaceChildren(this.terminal.element);
-    else this.terminal.open(element);
-    this.terminal.loadAddon(this.fit);
-    if (this.disposed) return;
-    this.fit.fit();
+    this.mount();
+  }
+
+  private mount(): void {
+    const { element, terminal, fit } = this;
+    if (this.disposed || !element || !terminal || !fit) return;
+    if (terminal.element) element.replaceChildren(terminal.element);
+    else terminal.open(element);
+    terminal.loadAddon(fit);
+    fit.fit();
     this.connect();
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => { if (!this.disposed) this.fit.fit(); });
+    this.resizeObserver = new ResizeObserver(() => {
+      if (!this.disposed && this.fit) this.fit.fit();
+    });
     this.resizeObserver.observe(element);
   }
 
@@ -47,11 +68,18 @@ export class TerminalPreviewRuntime {
     const token = this.token();
     if (!token) return;
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${scheme}//${location.host}/ws/connection-instances/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
+    const socket = new WebSocket(
+      `${scheme}//${location.host}/ws/connection-instances/${encodeURIComponent(this.connectionInstanceId)}`,
+      ['roaminal.v1', `roaminal.auth.${token}`],
+    );
     this.socket = socket;
-    socket.onopen = () => { if (this.disposed || this.socket !== socket) return; this.connected = true; this.fit.fit(); };
+    socket.onopen = () => {
+      if (this.disposed || this.socket !== socket || !this.fit) return;
+      this.connected = true;
+      this.fit.fit();
+    };
     socket.onmessage = (event) => {
-      if (this.disposed || this.socket !== socket) return;
+      if (this.disposed || this.socket !== socket || !this.terminal) return;
       const message = parseServerMessage(String(event.data));
       if (!message) return;
       if (message.type === 'snapshot') this.terminal.reset();
@@ -63,24 +91,42 @@ export class TerminalPreviewRuntime {
     };
   }
 
-  connectedState(): boolean { return this.connected; }
+  connectedState(): boolean {
+    return this.connected;
+  }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
-    const socket = this.socket; this.socket = null;
+    const socket = this.socket;
+    this.socket = null;
     if (socket?.readyState === WebSocket.CONNECTING) {
-      socket.onopen = () => socket.close(); socket.onerror = () => undefined;
+      socket.onopen = () => socket.close();
+      socket.onerror = () => undefined;
     } else if (socket) {
-      socket.onopen = null; socket.onmessage = null; socket.onclose = null; socket.onerror = null; socket.close();
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.close();
     }
     this.element = null;
-    this.disposeFrame = window.requestAnimationFrame(() => { this.disposeFrame = null; this.terminal.dispose(); });
+    void this.ready.then(() => {
+      if (this.terminal) this.terminal.dispose();
+    });
   }
 }
 
 export function TerminalPreview({ runtime }: { runtime: TerminalPreviewRuntime }) {
-  return <div className="terminal-preview-viewport" ref={(element) => { if (element) runtime.attach(element); }} aria-label="Terminal preview" />;
+  return (
+    <div
+      className="terminal-preview-viewport"
+      ref={(element) => {
+        if (element) runtime.attach(element);
+      }}
+      aria-label="Terminal preview"
+    />
+  );
 }

@@ -4,15 +4,15 @@ import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import { ContextualKeyboard } from '../input/contextual-keyboard';
 import type { ContextualMode } from '../input/contextual-keyboard-model';
-import { TerminalActions } from './terminal-actions';
+import { ConnectionActions } from './connection-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 
 type Props = {
   id: string;
-  sessions: ConnectionInstanceSummary[];
+  connections: ConnectionInstanceSummary[];
   active: string | null;
   open: boolean;
-  previewSessionId: string | null;
+  previewConnectionInstanceId: string | null;
   previewRuntime: TerminalPreviewRuntime | null;
   onToggle: () => void;
   onSelect: (id: string) => void;
@@ -28,7 +28,7 @@ type Props = {
   onContextualModeChange: (mode: ContextualMode) => void;
 };
 
-export function shortId(id: string): string {
+export function shortConnectionId(id: string): string {
   const part = id.split('-').pop();
   return part && part.length >= 12 ? part.slice(-12) : id.slice(0, 12);
 }
@@ -41,16 +41,15 @@ export function sinceLabel(createdAt: string): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(hour % 12 || 12)}:${pad(date.getMinutes())} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
-function sessionStateLabel(session: ConnectionInstanceSummary): string {
-  if (session.closed) return 'Exited';
-  if (session.attention) return 'Activity waiting';
-  if (session.purpose === 'ssh_key_generation') return 'SSH key generation';
-  return session.type === 'ssh' ? 'SSH connection' : 'Local connection';
+function connectionStateLabel(connection: ConnectionInstanceSummary): string {
+  if (connection.attention) return 'Activity waiting';
+  if (connection.purpose === 'ssh_key_generation') return 'SSH key generation';
+  return connection.type === 'ssh' ? 'SSH connection' : 'Local connection';
 }
 
-function sessionPathLabel(session: ConnectionInstanceSummary): string | null {
-  if (session.purpose === 'ssh_key_generation') return `TARGET: ${session.title || 'key'}`;
-  const cwd = session.cwd?.trim();
+function connectionPathLabel(connection: ConnectionInstanceSummary): string | null {
+  if (connection.purpose === 'ssh_key_generation') return `TARGET: ${connection.title || 'key'}`;
+  const cwd = connection.cwd?.trim();
   return cwd ? `PWD: ${cwd}` : null;
 }
 
@@ -58,7 +57,26 @@ function canPreview(): boolean {
   return window.matchMedia('(pointer: fine)').matches && window.innerWidth > 800;
 }
 
-export function Sidebar({ id, sessions, active, open, previewSessionId, previewRuntime, onToggle, onSelect, onPreviewStart, onPreviewEnd, onUnavailableExtension, onRename, onAutomaticTitle, onTerminate, activeInstance, activeRuntime, contextualMode, onContextualModeChange }: Props) {
+export function ConnectionSidebar({
+  id,
+  connections,
+  active,
+  open,
+  previewConnectionInstanceId,
+  previewRuntime,
+  onToggle,
+  onSelect,
+  onPreviewStart,
+  onPreviewEnd,
+  onUnavailableExtension,
+  onRename,
+  onAutomaticTitle,
+  onTerminate,
+  activeInstance,
+  activeRuntime,
+  contextualMode,
+  onContextualModeChange,
+}: Props) {
   const aside = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
@@ -75,7 +93,11 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
         return;
       }
       if (event.key !== 'Tab' || !window.matchMedia('(max-width: 800px)').matches || !aside.current) return;
-      const focusable = Array.from(aside.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+      const focusable = Array.from(
+        aside.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -94,46 +116,132 @@ export function Sidebar({ id, sessions, active, open, previewSessionId, previewR
     return () => document.removeEventListener('keydown', handleKeyboard);
   }, [onToggle, open]);
 
-  return <>
-    {open && <button className="sidebar-backdrop" type="button" aria-label="Close sidebar" onClick={onToggle} />}
-    <aside ref={aside} id={id} className={`sidebar ${open ? 'open' : 'closed'}`} aria-hidden={!open} inert={!open || undefined}>
-      <div className="sidebar-header"><div className="brand-mark small">r<span>&gt;</span></div><strong>Roaminal</strong><button ref={toggle} className="icon-button sidebar-toggle" type="button" onClick={onToggle} aria-label="Toggle sidebar" title="Toggle sidebar" aria-expanded={open} aria-controls={id}>{open ? <PanelLeftClose aria-hidden="true" size={18} /> : <PanelLeftOpen aria-hidden="true" size={18} />}</button></div>
-      <div className="session-list">{sessions.map((session) => {
-        const previewing = previewSessionId === session.id && previewRuntime;
-        const pathLabel = sessionPathLabel(session);
-        const startPreview = () => { if (canPreview()) onPreviewStart(session.id); };
-        const stopPreview = () => onPreviewEnd(session.id);
-        return <article
-          className={`session-card ${session.id === active ? 'active' : ''} ${session.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''}`}
-          data-session-id={session.id}
-          key={session.id}
-          onMouseEnter={startPreview}
-          onMouseLeave={stopPreview}
-          onClick={() => onSelect(session.id)}
-          onFocus={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview(); }}
-          onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) stopPreview(); }}
-        >
-          <div className="session-card-preview">{previewing && <TerminalPreview runtime={previewRuntime} />}</div>
-          <div className="session-card-overlay">
-            <button className="session-select" type="button" onClick={() => onSelect(session.id)} aria-current={session.id === active ? 'page' : undefined} title={session.id}>
-              <span className="session-indicator" />
-              <span className="session-title-wrap"><b>{session.title || 'Connection'}</b><small>{sessionStateLabel(session)}</small></span>
-            </button>
-            <div className="session-metadata">
-              <span>ID: {shortId(session.id)}</span>
-              {pathLabel && <span className="session-path" title={session.cwd}>{pathLabel}</span>}
-              <time dateTime={session.createdAt} title={session.createdAt}>SINCE: {sinceLabel(session.createdAt)}</time>
-            </div>
+  return (
+    <>
+      {open && <button className="sidebar-backdrop" type="button" aria-label="Close sidebar" onClick={onToggle} />}
+      <aside
+        ref={aside}
+        id={id}
+        className={`sidebar ${open ? 'open' : 'closed'}`}
+        aria-hidden={!open}
+        inert={!open || undefined}
+      >
+        <div className="sidebar-header">
+          <div className="brand-mark small">
+            r<span>&gt;</span>
           </div>
-          <div className="session-actions" aria-label="Session extensions and actions">
-            <button className="extension-button" type="button" aria-label="Agent extension" aria-disabled="true" title="Agent extension unavailable" onClick={(event) => { event.stopPropagation(); onUnavailableExtension('Agent'); }}><Bot aria-hidden="true" size={15} /></button>
-            <button className="extension-button" type="button" aria-label="Files extension" aria-disabled="true" title="Files extension unavailable" onClick={(event) => { event.stopPropagation(); onUnavailableExtension('Files'); }}><FolderOpen aria-hidden="true" size={15} /></button>
-            <TerminalActions session={session} onRename={() => onRename(session.id)} onAutomaticTitle={() => onAutomaticTitle(session.id)} onTerminate={() => onTerminate(session.id)} />
-          </div>
-        </article>;
-      })}</div>
-      <ContextualKeyboard instance={activeInstance} runtime={activeRuntime} mode={contextualMode} onModeChange={onContextualModeChange} />
-      <div className="sidebar-footer">Connection workspace</div>
-    </aside>
-  </>;
+          <strong>Roaminal</strong>
+          <button
+            ref={toggle}
+            className="icon-button sidebar-toggle"
+            type="button"
+            onClick={onToggle}
+            aria-label="Toggle sidebar"
+            title="Toggle sidebar"
+            aria-expanded={open}
+            aria-controls={id}
+          >
+            {open ? <PanelLeftClose aria-hidden="true" size={18} /> : <PanelLeftOpen aria-hidden="true" size={18} />}
+          </button>
+        </div>
+        <div className="connection-list">
+          {connections.map((connection) => {
+            const previewing = previewConnectionInstanceId === connection.connectionInstanceId && previewRuntime;
+            const pathLabel = connectionPathLabel(connection);
+            const startPreview = () => {
+              if (canPreview()) onPreviewStart(connection.connectionInstanceId);
+            };
+            const stopPreview = () => onPreviewEnd(connection.connectionInstanceId);
+            return (
+              <article
+                className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''}`}
+                data-connection-id={connection.connectionInstanceId}
+                key={connection.connectionInstanceId}
+                onMouseEnter={startPreview}
+                onMouseLeave={stopPreview}
+                onClick={() => onSelect(connection.connectionInstanceId)}
+                onFocus={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview();
+                }}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) stopPreview();
+                }}
+              >
+                <div className="connection-card-preview">
+                  {previewing && <TerminalPreview runtime={previewRuntime} />}
+                </div>
+                <div className="connection-card-overlay">
+                  <button
+                    className="connection-select"
+                    type="button"
+                    onClick={() => onSelect(connection.connectionInstanceId)}
+                    aria-current={connection.connectionInstanceId === active ? 'page' : undefined}
+                    title={connection.connectionInstanceId}
+                  >
+                    <span className="connection-indicator" />
+                    <span className="connection-title-wrap">
+                      <b>{connection.title || 'Connection'}</b>
+                      <small>{connectionStateLabel(connection)}</small>
+                    </span>
+                  </button>
+                  <div className="connection-metadata">
+                    <span>ID: {shortConnectionId(connection.connectionInstanceId)}</span>
+                    {pathLabel && (
+                      <span className="connection-path" title={connection.cwd}>
+                        {pathLabel}
+                      </span>
+                    )}
+                    <time dateTime={connection.createdAt} title={connection.createdAt}>
+                      SINCE: {sinceLabel(connection.createdAt)}
+                    </time>
+                  </div>
+                </div>
+                <div className="connection-actions" aria-label="Connection extensions and actions">
+                  <button
+                    className="extension-button"
+                    type="button"
+                    aria-label="Agent extension"
+                    aria-disabled="true"
+                    title="Agent extension unavailable"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onUnavailableExtension('Agent');
+                    }}
+                  >
+                    <Bot aria-hidden="true" size={15} />
+                  </button>
+                  <button
+                    className="extension-button"
+                    type="button"
+                    aria-label="Files extension"
+                    aria-disabled="true"
+                    title="Files extension unavailable"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onUnavailableExtension('Files');
+                    }}
+                  >
+                    <FolderOpen aria-hidden="true" size={15} />
+                  </button>
+                  <ConnectionActions
+                    connection={connection}
+                    onRename={() => onRename(connection.connectionInstanceId)}
+                    onAutomaticTitle={() => onAutomaticTitle(connection.connectionInstanceId)}
+                    onTerminate={() => onTerminate(connection.connectionInstanceId)}
+                  />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        <ContextualKeyboard
+          instance={activeInstance}
+          runtime={activeRuntime}
+          mode={contextualMode}
+          onModeChange={onContextualModeChange}
+        />
+        <div className="sidebar-footer">Connection workspace</div>
+      </aside>
+    </>
+  );
 }

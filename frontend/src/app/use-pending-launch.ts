@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { abortConnectionLaunch } from '../connections/connection-api';
 
 type Auth = { accessToken: string } | null;
@@ -21,13 +21,13 @@ export function usePendingLaunch(auth: Auth, mainRuntime: RuntimeRef, previewRun
     window.addEventListener('pagehide', handlePageHide);
     return () => window.removeEventListener('pagehide', handlePageHide);
   }, [auth, mainRuntime, previewRuntimeRef]);
-  function startLaunch(id: string) { activeLaunchRef.current = id; setActiveLaunchId(id); }
-  function clearLaunch() { activeLaunchRef.current = null; setActiveLaunchId(null); }
-  function cancelLaunch() {
+  const startLaunch = useCallback((id: string) => { activeLaunchRef.current = id; setActiveLaunchId(id); }, []);
+  const clearLaunch = useCallback(() => { activeLaunchRef.current = null; setActiveLaunchId(null); }, []);
+  const cancelLaunch = useCallback(() => {
     const id = activeLaunchRef.current;
     activeLaunchRef.current = null;
     if (id) abortConnectionLaunch(id, auth);
     setActiveLaunchId(null);
-  }
+  }, [auth]);
   return { activeLaunchId, startLaunch, clearLaunch, cancelLaunch };
 }

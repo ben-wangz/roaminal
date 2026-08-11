@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { shortId, sinceLabel } from './sidebar';
+import { shortConnectionId, sinceLabel } from './connection-sidebar';
 
 describe('session card metadata', () => {
   it('uses the stable UUID suffix for the short ID', () => {
-    expect(shortId('11111111-2222-4333-8444-abcdef123456')).toBe('abcdef123456');
+    expect(shortConnectionId('11111111-2222-4333-8444-abcdef123456')).toBe('abcdef123456');
   });
 
   it('formats SINCE in the fixed local 12-hour shape', () => {

@@ -1,62 +1,53 @@
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
-export type SessionView = { activeSessionId: string | null };
+export type ConnectionView = { activeConnectionInstanceId: string | null };
 
-export function formatExitStatus(status: ConnectionInstanceSummary['exitStatus']): string {
-  if (!status) return 'The shell ended normally.';
-  if (status.signal !== null) return `Signal ${status.signal}`;
-  return `Exit code ${status.exitCode ?? 0}`;
-}
-
-export function reconcileSession(
-  sessions: ConnectionInstanceSummary[],
-  current: SessionView,
-  previousIds: string[] = []
-): SessionView {
-  const available = new Set(sessions.map((session) => session.id));
-  if (current.activeSessionId && available.has(current.activeSessionId)) {
+export function reconcileConnections(
+  instances: ConnectionInstanceSummary[],
+  current: ConnectionView,
+  previousIds: string[] = [],
+): ConnectionView {
+  const available = new Set(instances.map((instance) => instance.connectionInstanceId));
+  if (current.activeConnectionInstanceId && available.has(current.activeConnectionInstanceId)) {
     return current;
   }
 
-  const currentIndex = current.activeSessionId
-    ? previousIds.indexOf(current.activeSessionId)
+  const currentIndex = current.activeConnectionInstanceId
+    ? previousIds.indexOf(current.activeConnectionInstanceId)
     : -1;
   if (currentIndex >= 0) {
     for (let index = currentIndex + 1; index < previousIds.length; index += 1) {
-      if (available.has(previousIds[index])) return { activeSessionId: previousIds[index] };
+      if (available.has(previousIds[index])) return { activeConnectionInstanceId: previousIds[index] };
     }
     for (let index = currentIndex - 1; index >= 0; index -= 1) {
-      if (available.has(previousIds[index])) return { activeSessionId: previousIds[index] };
+      if (available.has(previousIds[index])) return { activeConnectionInstanceId: previousIds[index] };
     }
   }
 
-  return { activeSessionId: sessions[0]?.id || null };
+  return { activeConnectionInstanceId: instances[0]?.connectionInstanceId || null };
 }
 
-export function selectSession(_current: SessionView, id: string): SessionView {
-  return { activeSessionId: id };
+export function selectConnection(_current: ConnectionView, connectionInstanceId: string): ConnectionView {
+  return { activeConnectionInstanceId: connectionInstanceId };
 }
 
-export function loadStoredSession(storage: Storage | null): SessionView {
-  if (!storage) return { activeSessionId: null };
+export function loadStoredConnection(storage: Storage | null): ConnectionView {
+  if (!storage) return { activeConnectionInstanceId: null };
   try {
-    storage.removeItem('roaminal_active_session_v1');
-    storage.removeItem('roaminal_terminal_tabs_v1');
     const current = storage.getItem('roaminal_active_connection_instance_v1');
     if (current) {
-      const value = JSON.parse(current) as { activeSessionId?: unknown };
-      if (typeof value.activeSessionId === 'string') {
-        return { activeSessionId: value.activeSessionId };
+      const value = JSON.parse(current) as { activeConnectionInstanceId?: unknown };
+      if (typeof value.activeConnectionInstanceId === 'string') {
+        return { activeConnectionInstanceId: value.activeConnectionInstanceId };
       }
     }
-
-    return { activeSessionId: null };
+    return { activeConnectionInstanceId: null };
   } catch {
-    return { activeSessionId: null };
+    return { activeConnectionInstanceId: null };
   }
 }
 
-export function saveStoredSession(storage: Storage | null, view: SessionView): void {
+export function saveStoredConnection(storage: Storage | null, view: ConnectionView): void {
   if (!storage) return;
   storage.setItem('roaminal_active_connection_instance_v1', JSON.stringify(view));
 }

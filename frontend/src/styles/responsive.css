@@ -14,8 +14,8 @@
   .metric-detail { display: none; }
   .status-metric { min-width: 52px; }
   .status-metric progress { width: 52px; }
-  .session-card:hover .session-card-overlay, .session-card:focus-within .session-card-overlay { transform: none; }
-  .session-card-preview { display: none; }
+  .connection-card:hover .connection-card-overlay, .connection-card:focus-within .connection-card-overlay { transform: none; }
+  .connection-card-preview { display: none; }
 }
 @media (min-width: 801px) { .main-panel.expanded { width: 100%; } .sidebar-backdrop { display: none; } }
 @media (max-width: 440px) {
@@ -23,8 +23,8 @@
   .terminal-stage { min-height: 0; }
   .touch-keyboard button { font-size: .63rem; padding: 0 2px; }
   .auth-modal { padding: 22px; }
-  .session-list { padding-inline: 8px; }
-  .session-card { min-height: 120px; }
+  .connection-list { padding-inline: 8px; }
+  .connection-card { min-height: 120px; }
   .connection-label { display: none; }
   .status-metric { min-width: 48px; }
   .status-metric progress { width: 48px; }

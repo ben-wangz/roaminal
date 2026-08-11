@@ -3,6 +3,17 @@ import type { TerminalRuntime } from './terminal-runtime';
 
 export function TerminalViewport({ runtime }: { runtime: TerminalRuntime }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (ref.current) runtime.attach(ref.current); return () => runtime.detach(ref.current || undefined); }, [runtime]);
-  return <div className="terminal-viewport" ref={ref} data-connection-instance-id={runtime.sessionId} aria-label="Connection terminal" />;
+  useEffect(() => {
+    const element = ref.current;
+    if (element) runtime.attach(element);
+    return () => runtime.detach(element || undefined);
+  }, [runtime]);
+  return (
+    <div
+      className="terminal-viewport"
+      ref={ref}
+      data-connection-instance-id={runtime.connectionInstanceId}
+      aria-label="Connection terminal"
+    />
+  );
 }

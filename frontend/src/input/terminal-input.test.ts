@@ -3,7 +3,7 @@ import { controlKey, escape, literal, pageDown, pageUp, tmuxCopyMode } from './t
 import { contextualKeys, defaultContextualMode } from './contextual-keyboard-model';
 
 const instance = (extra: Record<string, unknown> = {}) => ({
-  id: '11111111-2222-4333-8444-abcdef123456', createdAt: '', updatedAt: '', shell: '/bin/sh', initialCwd: '/', title: 'test', titleMode: 'automatic' as const, cwd: '/', cols: 80, rows: 24, closed: false, attention: false, exitStatus: null, lifecycle: 'live' as const, type: 'ssh' as const, tmuxEnabled: true, tmuxPrefixKey: 'k', tmuxPrefixSource: 'runtime' as const, ...extra
+  connectionInstanceId: '11111111-2222-4333-8444-abcdef123456', createdAt: '', updatedAt: '', title: 'test', titleMode: 'automatic' as const, cwd: '/', cols: 80, rows: 24, attention: false, lifecycle: 'live' as const, type: 'ssh' as const, tmuxEnabled: true, tmuxPrefixKey: 'k', tmuxPrefixSource: 'runtime' as const, ...extra
 });
 
 describe('terminal input model', () => {

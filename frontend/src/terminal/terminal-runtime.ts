@@ -1,14 +1,18 @@
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { LigaturesAddon } from '@xterm/addon-ligatures';
-import { ProgressAddon } from '@xterm/addon-progress';
-import { SearchAddon } from '@xterm/addon-search';
+import type { FitAddon } from '@xterm/addon-fit';
+import type { SearchAddon } from '@xterm/addon-search';
+import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
 
+type TerminalModules = [
+  typeof import('@xterm/xterm'),
+  typeof import('@xterm/addon-fit'),
+  typeof import('@xterm/addon-search'),
+];
+
 export class TerminalRuntime {
-  readonly terminal: Terminal;
-  readonly fit: FitAddon;
-  readonly search: SearchAddon;
+  terminal?: Terminal;
+  search?: SearchAddon;
+  private fit?: FitAddon;
   private socket: WebSocket | null = null;
   private element: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -18,87 +22,222 @@ export class TerminalRuntime {
   private connected = false;
   private closed = false;
   private disposed = false;
-  private disposeFrame: number | null = null;
   private addonsLoaded = false;
+  private addonsLoading = false;
+  private readonly ready: Promise<void>;
   private readonly activate = () => this.claim();
 
-  constructor(readonly sessionId: string, private readonly token: () => string | null, scrollbackLines = 1000, private readonly endpoint: 'connection-instances' | 'connection-launches' = 'connection-instances') {
-    this.terminal = new Terminal({ convertEol: false, cursorBlink: true, scrollback: Math.max(0, Math.min(50000, scrollbackLines)), fontFamily: 'Monaspace Neon, monospace', theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' } });
-    this.fit = new FitAddon(); this.search = new SearchAddon();
+  constructor(
+    readonly connectionInstanceId: string,
+    private readonly token: () => string | null,
+    scrollbackLines = 1000,
+    private readonly endpoint: 'connection-instances' | 'connection-launches' = 'connection-instances',
+  ) {
+    this.ready = this.loadTerminal(scrollbackLines);
+  }
+
+  private async loadTerminal(scrollbackLines: number): Promise<void> {
+    const modules = (await Promise.all([
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit'),
+      import('@xterm/addon-search'),
+    ])) as TerminalModules;
+    if (this.disposed) return;
+    const [{ Terminal }, { FitAddon }, { SearchAddon }] = modules;
+    this.terminal = new Terminal({
+      convertEol: false,
+      cursorBlink: true,
+      scrollback: Math.max(0, Math.min(50000, scrollbackLines)),
+      fontFamily: 'Monaspace Neon, monospace',
+      theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' },
+    });
+    this.fit = new FitAddon();
+    this.search = new SearchAddon();
     this.terminal.onData((data) => this.input(data));
     this.terminal.onResize(({ cols, rows }) => this.sendResize(cols, rows));
+    this.mount();
   }
 
   attach(element: HTMLElement): void {
-    // React may deliver a delayed ref callback while a runtime transition is
-    // being committed. A disposed runtime has no work left to attach.
-    if (this.disposed) return;
-    if (this.element === element) return;
-    if (this.element && this.terminal.element?.parentElement === this.element) this.terminal.element.remove();
+    if (this.disposed || this.element === element) return;
+    if (this.element && this.terminal?.element?.parentElement === this.element) this.terminal.element.remove();
     this.element = element;
     element.addEventListener('focusin', this.activate);
     element.addEventListener('pointerdown', this.activate);
-    if (this.terminal.element) element.replaceChildren(this.terminal.element); else this.terminal.open(element);
-    if (!this.addonsLoaded) {
-      this.terminal.loadAddon(this.fit); this.terminal.loadAddon(this.search); this.terminal.loadAddon(new LigaturesAddon()); this.terminal.loadAddon(new ProgressAddon());
-      this.addonsLoaded = true;
+    this.mount();
+  }
+
+  private mount(): void {
+    const { element, terminal, fit, search } = this;
+    if (this.disposed || !element || !terminal || !fit || !search) return;
+    if (terminal.element) element.replaceChildren(terminal.element);
+    else terminal.open(element);
+    if (!this.addonsLoaded && !this.addonsLoading) {
+      this.addonsLoading = true;
+      void Promise.all([import('@xterm/addon-ligatures'), import('@xterm/addon-progress')]).then(
+        ([{ LigaturesAddon }, { ProgressAddon }]) => {
+          this.addonsLoading = false;
+          if (this.disposed || !this.terminal || !this.fit || !this.search) return;
+          this.terminal.loadAddon(this.fit);
+          this.terminal.loadAddon(this.search);
+          this.terminal.loadAddon(new LigaturesAddon());
+          this.terminal.loadAddon(new ProgressAddon());
+          this.addonsLoaded = true;
+          this.fit.fit();
+          this.connect();
+          this.observeResize(element);
+        },
+      );
+      return;
     }
-    if (this.disposed) return;
-    this.fit.fit();
+    fit.fit();
     this.connect();
+    this.observeResize(element);
+  }
+
+  private observeResize(element: HTMLElement): void {
     this.resizeObserver?.disconnect();
-    this.resizeObserver = new ResizeObserver(() => { if (!this.disposed && this.element) this.fit.fit(); });
+    this.resizeObserver = new ResizeObserver(() => {
+      if (!this.disposed && this.element && this.fit) this.fit.fit();
+    });
     this.resizeObserver.observe(element);
   }
+
   private connect(): void {
     if (this.disposed || this.closed || !this.element || this.socket || this.reconnectTimer !== null) return;
-    const token = this.token(); if (!token) return;
+    const token = this.token();
+    if (!token) return;
     const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${scheme}//${location.host}/ws/${this.endpoint}/${encodeURIComponent(this.sessionId)}`, ['roaminal.v1', `roaminal.auth.${token}`]);
+    const socket = new WebSocket(
+      `${scheme}//${location.host}/ws/${this.endpoint}/${encodeURIComponent(this.connectionInstanceId)}`,
+      ['roaminal.v1', `roaminal.auth.${token}`],
+    );
     this.socket = socket;
-    socket.onopen = () => { if (this.disposed || this.closed || this.socket !== socket) return; this.connected = true; this.emit(); this.claim(); this.fit.fit(); this.sendResize(this.terminal.cols, this.terminal.rows); };
-    socket.onmessage = (event) => { if (this.disposed || this.socket !== socket) return; const message = parseServerMessage(String(event.data)); if (!message) return; if (message.type === 'status' && message.status === 'terminated') { this.closed = true; this.connected = false; this.terminal.options.disableStdin = true; } if (message.type === 'snapshot') this.terminal.reset(); if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data); for (const listener of this.messageListeners) listener(message); this.emit(); };
+    socket.onopen = () => {
+      if (this.disposed || this.closed || this.socket !== socket || !this.terminal || !this.fit) return;
+      this.connected = true;
+      this.emit();
+      this.claim();
+      this.fit.fit();
+      this.sendResize(this.terminal.cols, this.terminal.rows);
+    };
+    socket.onmessage = (event) => {
+      if (this.disposed || this.socket !== socket || !this.terminal) return;
+      const message = parseServerMessage(String(event.data));
+      if (!message) return;
+      if (message.type === 'status' && message.status === 'terminated') {
+        this.closed = true;
+        this.connected = false;
+        this.terminal.options.disableStdin = true;
+      }
+      if (message.type === 'snapshot') this.terminal.reset();
+      if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data);
+      for (const listener of this.messageListeners) listener(message);
+      this.emit();
+    };
     socket.onclose = () => {
       if (this.socket === socket) this.socket = null;
       this.connected = false;
       this.emit();
-      if (!this.disposed && !this.closed && this.element && this.reconnectTimer === null) this.reconnectTimer = window.setTimeout(() => { this.reconnectTimer = null; this.connect(); }, 5000);
+      if (!this.disposed && !this.closed && this.element && this.reconnectTimer === null) {
+        this.reconnectTimer = window.setTimeout(() => {
+          this.reconnectTimer = null;
+          this.connect();
+        }, 5000);
+      }
     };
   }
+
   detach(element?: HTMLElement): void {
     if (element && this.element !== element) return;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.element?.removeEventListener('focusin', this.activate);
     this.element?.removeEventListener('pointerdown', this.activate);
-    if (this.element && this.terminal.element?.parentElement === this.element) this.terminal.element.remove();
+    if (this.element && this.terminal?.element?.parentElement === this.element) this.terminal.element.remove();
     this.element = null;
   }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
-    this.resizeObserver?.disconnect(); this.resizeObserver = null;
-    this.element?.removeEventListener('focusin', this.activate); this.element?.removeEventListener('pointerdown', this.activate);
-    const socket = this.socket; this.socket = null;
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.element?.removeEventListener('focusin', this.activate);
+    this.element?.removeEventListener('pointerdown', this.activate);
+    const socket = this.socket;
+    this.socket = null;
     if (socket?.readyState === WebSocket.CONNECTING) {
-      socket.onopen = () => socket.close(); socket.onerror = () => undefined;
+      socket.onopen = () => socket.close();
+      socket.onerror = () => undefined;
     } else if (socket) {
-      socket.onopen = null; socket.onmessage = null; socket.onclose = null; socket.onerror = null; socket.close();
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.close();
     }
     this.element = null;
-    this.disposeFrame = window.requestAnimationFrame(() => { this.disposeFrame = null; this.terminal.dispose(); });
-    this.listeners.clear(); this.messageListeners.clear();
+    void this.ready.then(() => {
+      if (this.terminal) this.terminal.dispose();
+    });
+    this.listeners.clear();
+    this.messageListeners.clear();
   }
-  subscribe(listener: () => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
-  subscribeMessage(listener: (message: ReturnType<typeof parseServerMessage>) => void): () => void { this.messageListeners.add(listener); return () => this.messageListeners.delete(listener); }
-  connectedState(): boolean { return this.connected; }
-  closedState(): boolean { return this.closed; }
-  input(data: string): void { if (this.disposed || this.closed || !data) return; this.claim(); this.send({ type: 'input', data }); }
-  find(query: string, options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {}): boolean { return this.search.findNext(query, options); }
-  send(message: Record<string, unknown>): void { if (this.closed) return; if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)); }
-  private sendResize(cols: number, rows: number): void { if (!this.closed && this.socket?.readyState === WebSocket.OPEN) this.send({ type: 'resize', cols, rows }); }
-  private claim(): void { if (!this.closed) this.send({ type: 'claim_terminal_control' }); }
-  private emit(): void { for (const listener of this.listeners) listener(); }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  subscribeMessage(listener: (message: ReturnType<typeof parseServerMessage>) => void): () => void {
+    this.messageListeners.add(listener);
+    return () => this.messageListeners.delete(listener);
+  }
+
+  connectedState(): boolean {
+    return this.connected;
+  }
+  closedState(): boolean {
+    return this.closed;
+  }
+
+  focus(): void {
+    this.terminal?.focus();
+  }
+
+  input(data: string): void {
+    if (this.disposed || this.closed || !data) return;
+    this.claim();
+    this.send({ type: 'input', data });
+  }
+
+  find(query: string, options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {}): boolean {
+    return this.search?.findNext(query, options) ?? false;
+  }
+
+  findPrevious(
+    query: string,
+    options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {},
+  ): boolean {
+    return this.search?.findPrevious(query, options) ?? false;
+  }
+
+  send(message: Record<string, unknown>): void {
+    if (!this.closed && this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
+  }
+
+  private sendResize(cols: number, rows: number): void {
+    if (!this.closed && this.socket?.readyState === WebSocket.OPEN) this.send({ type: 'resize', cols, rows });
+  }
+
+  private claim(): void {
+    if (!this.closed) this.send({ type: 'claim_terminal_control' });
+  }
+
+  private emit(): void {
+    for (const listener of this.listeners) listener();
+  }
 }
