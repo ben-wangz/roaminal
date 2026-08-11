@@ -240,6 +240,14 @@ export function useAppShellActions({
   async function terminateConnection(id: string) {
     try {
       stateRevision.current += 1;
+      if (mainRuntime.current?.connectionInstanceId === id) {
+        mainRuntime.current.dispose();
+        mainRuntime.current = null;
+        setCurrentRuntime(null);
+      }
+      previewRuntimeRef.current?.dispose();
+      previewRuntimeRef.current = null;
+      setPreviewConnectionInstanceId(null);
       await api(`/api/connection-instances/${id}`, { method: 'DELETE' });
       setConnections((current) => {
         const next = current.filter((connection) => connection.connectionInstanceId !== id);
