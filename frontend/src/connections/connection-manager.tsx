@@ -1,19 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Clipboard,
-  Copy,
-  Edit3,
-  ExternalLink,
-  Home,
-  KeyRound,
-  Play,
-  Plus,
-  RefreshCw,
-  ShieldAlert,
-  Trash2,
-  X,
-} from 'lucide-react';
-import { Modal } from '../ui/modal';
+import { ExternalLink, Plus, RefreshCw } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import {
   createDefinition,
@@ -23,15 +9,23 @@ import {
   generateKey,
   loadDefinitions,
   loadKeys,
-  publicKey,
   updateDefinition,
   type ConnectionDefinition,
-  type ConfigSource,
   type DefinitionCollection,
   type GenerationRequest,
   type SSHKey,
 } from './connection-api';
-import { reusableInstanceForHost } from './connection-instance-selection';
+import { ConnectionDefinitionEditor } from './connection-definition-editor';
+import {
+  bodyFrom,
+  draftFrom,
+  emptyDraft,
+  type ConnectionDraft,
+  type ConnectionEditor,
+} from './connection-definition-model';
+import { ConnectionDefinitionRow, LocalConnectionRow, SourceBand } from './connection-manager-rows';
+import { SSHKeyGenerationDialog } from './ssh-key-generation-dialog';
+import { SSHKeysPanel } from './ssh-keys-panel';
 
 type Props = {
   connections: ConnectionInstanceSummary[];
@@ -40,75 +34,6 @@ type Props = {
   onOpenWorkspace: () => void;
   onToast: (message: string) => void;
 };
-type Draft = {
-  hostAlias: string;
-  hostName: string;
-  user: string;
-  port: string;
-  identities: string[];
-  identitiesOnly: string;
-  strictHostKeyChecking: string;
-  userKnownHostsFile: string;
-  serverAliveInterval: string;
-  tmuxEnabled: boolean;
-  tmuxSessionName: string;
-};
-type Editor = { mode: 'create' | 'edit'; definition?: ConnectionDefinition } | null;
-
-const emptyDraft: Draft = {
-  hostAlias: '',
-  hostName: '',
-  user: 'root',
-  port: '22',
-  identities: [],
-  identitiesOnly: '',
-  strictHostKeyChecking: '',
-  userKnownHostsFile: '',
-  serverAliveInterval: '15',
-  tmuxEnabled: false,
-  tmuxSessionName: '',
-};
-
-function draftFrom(definition?: ConnectionDefinition, keys: SSHKey[] = []): Draft {
-  if (!definition) {
-    const identities = keys
-      .filter((key) => key.algorithm === 'ed25519' && key.status === 'available')
-      .slice(0, 1)
-      .map((key) => key.fileName);
-    return { ...emptyDraft, identities, identitiesOnly: identities.length ? 'yes' : '' };
-  }
-  return {
-    hostAlias: definition.hostAlias || '',
-    hostName: definition.hostName || '',
-    user: definition.user || '',
-    port: definition.port ? String(definition.port) : '',
-    identities: [...definition.identityFileNames],
-    identitiesOnly: definition.identitiesOnly || '',
-    strictHostKeyChecking: definition.strictHostKeyChecking || '',
-    userKnownHostsFile: definition.userKnownHostsFile || '',
-    serverAliveInterval: definition.serverAliveInterval ? String(definition.serverAliveInterval) : '',
-    tmuxEnabled: Boolean(definition.tmux?.enabled),
-    tmuxSessionName: definition.tmux?.sessionName || '',
-  };
-}
-
-function bodyFrom(draft: Draft): Record<string, unknown> {
-  return {
-    type: 'ssh',
-    hostAlias: draft.hostAlias.trim(),
-    hostName: draft.hostName.trim() || null,
-    user: draft.user.trim() || null,
-    port: draft.port ? Number(draft.port) : null,
-    identityFileNames: draft.identities,
-    identitiesOnly: draft.identitiesOnly || null,
-    strictHostKeyChecking: draft.strictHostKeyChecking || null,
-    userKnownHostsFile: draft.userKnownHostsFile || null,
-    serverAliveInterval: draft.serverAliveInterval ? Number(draft.serverAliveInterval) : null,
-    tmux: draft.tmuxEnabled
-      ? { enabled: true, sessionName: draft.tmuxSessionName }
-      : { enabled: false, sessionName: '' },
-  };
-}
 
 export function ConnectionManager({ connections, onConnect, onGenerated, onOpenWorkspace, onToast }: Props) {
   const [tab, setTab] = useState<'connections' | 'keys'>('connections');
@@ -117,12 +42,12 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
   const [etag, setETag] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
-  const [editor, setEditor] = useState<Editor>(null);
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [editor, setEditor] = useState<ConnectionEditor>(null);
+  const [draft, setDraft] = useState<ConnectionDraft>(emptyDraft);
   const [generation, setGeneration] = useState<GenerationRequest | null>(null);
-
   const onToastRef = useRef(onToast);
   onToastRef.current = onToast;
+
   const refreshSources = useCallback(async () => {
     setBusy(true);
     try {
@@ -136,6 +61,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setBusy(false);
     }
   }, []);
+
   useEffect(() => {
     void refreshSources();
   }, [refreshSources]);
@@ -155,6 +81,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
     setEditor({ mode, definition });
     setDraft(draftFrom(definition, keys));
   }
+
   function beginGeneration(algorithm: GenerationRequest['algorithm']) {
     const existing = keys.find((key) => key.algorithm === algorithm);
     if (existing) {
@@ -170,6 +97,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       comment: '',
     });
   }
+
   async function saveDefinition(event: React.FormEvent) {
     event.preventDefault();
     if (!etag) {
@@ -191,6 +119,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setBusy(false);
     }
   }
+
   async function copyDefinition(definition: ConnectionDefinition) {
     if (!etag || !definition.hostAlias) return;
     const alias = window.prompt('New host alias', `${definition.hostAlias}-copy`);
@@ -206,6 +135,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setBusy(false);
     }
   }
+
   async function removeDefinition(definition: ConnectionDefinition) {
     if (!etag || !definition.hostAlias || !window.confirm(`Delete Host ${definition.hostAlias}?`)) return;
     setBusy(true);
@@ -219,6 +149,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setBusy(false);
     }
   }
+
   async function startGeneration(event: React.FormEvent) {
     event.preventDefault();
     if (!generation) return;
@@ -228,6 +159,20 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setGeneration(null);
       await onGenerated(instance);
       onToast(`Key generation connection ${instance.connectionInstanceId.slice(0, 8)} is ready.`);
+    } catch (error) {
+      onToast((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeKey(key: SSHKey) {
+    if (key.readOnly || !window.confirm(`Delete SSH key ${key.fileName} and its public key?`)) return;
+    setBusy(true);
+    try {
+      await deleteKey(key.keyId);
+      setKeys((current) => current.filter((item) => item.keyId !== key.keyId));
+      onToast(`Deleted ${key.fileName}.`);
     } catch (error) {
       onToast((error as Error).message);
     } finally {
@@ -292,11 +237,11 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
             </button>
           </div>
           <div className="connection-list">
-            <LocalRow onConnect={() => void onConnect('local')} />
+            <LocalConnectionRow onConnect={() => void onConnect('local')} />
             {visible
               .filter((definition) => definition.type === 'ssh')
               .map((definition) => (
-                <DefinitionRow
+                <ConnectionDefinitionRow
                   key={definition.connectionDefinitionId}
                   definition={definition}
                   editable={Boolean(definitions?.configSource.writable)}
@@ -313,28 +258,16 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
           </div>
         </>
       ) : (
-        <KeysPanel
+        <SSHKeysPanel
           keys={keys}
           connections={connections}
           onGenerate={beginGeneration}
-          onDelete={async (key) => {
-            if (key.readOnly || !window.confirm(`Delete SSH key ${key.fileName} and its public key?`)) return;
-            setBusy(true);
-            try {
-              await deleteKey(key.keyId);
-              setKeys((current) => current.filter((item) => item.keyId !== key.keyId));
-              onToast(`Deleted ${key.fileName}.`);
-            } catch (error) {
-              onToast((error as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
+          onDelete={removeKey}
           onToast={onToast}
         />
       )}
       {editor && (
-        <DefinitionEditor
+        <ConnectionDefinitionEditor
           editor={editor}
           draft={draft}
           keys={keys}
@@ -345,7 +278,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
         />
       )}
       {generation && (
-        <GenerationDialog
+        <SSHKeyGenerationDialog
           value={generation}
           existingAlgorithms={new Set(keys.map((key) => key.algorithm))}
           busy={busy}
@@ -355,508 +288,5 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
         />
       )}
     </section>
-  );
-}
-
-function SourceBand({ source, label = 'SSH config' }: { source: ConfigSource; label?: string }) {
-  const warnings = source.warnings || [];
-  const blockers = source.blockers || [];
-  return (
-    <div className={`source-band ${source.writable ? 'writable' : 'readonly'}`}>
-      <div>
-        <strong>{label}</strong>
-        <span>{source.status}</span>
-      </div>
-      <div className="source-capabilities">
-        <span>{source.readable ? 'read' : 'unreadable'}</span>
-        <span>{source.writable ? 'write' : 'read-only'}</span>
-        {warnings.length > 0 && <span>{warnings.length} warnings</span>}
-      </div>
-      {(blockers.length > 0 || source.reason) && <small>{source.reason || blockers.join(', ')}</small>}
-    </div>
-  );
-}
-function LocalRow({ onConnect }: { onConnect: () => void }) {
-  return (
-    <article className="connection-row local-row">
-      <div className="connection-row-main">
-        <span className="row-icon local-icon">
-          <Home size={17} aria-hidden="true" />
-        </span>
-        <div>
-          <strong>Local</strong>
-          <small>/workspace</small>
-        </div>
-      </div>
-      <button
-        className="icon-button play-button"
-        type="button"
-        onClick={onConnect}
-        aria-label="Start local connection"
-        title="Start local connection"
-      >
-        <Play size={16} fill="currentColor" aria-hidden="true" />
-      </button>
-    </article>
-  );
-}
-
-function DefinitionRow({
-  definition,
-  editable,
-  connections,
-  onConnect,
-  onEdit,
-  onDuplicate,
-  onDelete,
-}: {
-  definition: ConnectionDefinition;
-  editable: boolean;
-  connections: ConnectionInstanceSummary[];
-  onConnect: (id: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<void>;
-  onEdit: () => void;
-  onDuplicate: () => void;
-  onDelete: () => void;
-}) {
-  const reusable = reusableInstanceForHost(connections, definition.hostAlias || '');
-  const destination =
-    [definition.user, definition.hostName || definition.hostAlias].filter(Boolean).join('@') +
-    (definition.port ? `:${definition.port}` : '');
-  return (
-    <article className="connection-row">
-      <div className="connection-row-main">
-        <span className="row-icon">
-          <KeyRound size={17} aria-hidden="true" />
-        </span>
-        <div className="connection-copy">
-          <strong>{definition.hostAlias}</strong>
-          <small>{destination || 'OpenSSH config destination'}</small>
-          <small className="row-facts">
-            {definition.identityFileNames.length} managed keys |{' '}
-            {definition.hostVerificationAssessment === 'weakened'
-              ? 'weakened trust'
-              : definition.hostVerificationAssessment}
-            {definition.tmux?.enabled ? ` | tmux:${definition.tmux.sessionName}` : ''}
-          </small>
-        </div>
-      </div>
-      <div className="connection-row-status">
-        {definition.warnings.length + definition.advancedDirectiveCount > 0 && (
-          <span className="warning-badge">
-            <ShieldAlert size={13} aria-hidden="true" />{' '}
-            {definition.warnings.length + definition.advancedDirectiveCount}
-          </span>
-        )}
-        {definition.tmux?.enabled && <span className="tmux-badge">tmux</span>}
-        {(!editable || definition.capabilities.edit === false) && <span className="readonly-badge">read-only</span>}
-      </div>
-      <div className="connection-row-actions">
-        <button
-          className="icon-button"
-          type="button"
-          onClick={() =>
-            void onConnect(
-              definition.connectionDefinitionId,
-              reusable?.connectionInstanceId,
-              Boolean(definition.tmux?.enabled),
-            )
-          }
-          aria-label={`Start connection to ${definition.hostAlias}`}
-          title="Start connection"
-        >
-          <Play size={16} fill="currentColor" aria-hidden="true" />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          onClick={onEdit}
-          disabled={!editable || definition.capabilities.edit === false}
-          aria-label={`Edit ${definition.hostAlias}`}
-          title="Edit connection"
-        >
-          <Edit3 size={15} aria-hidden="true" />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          onClick={onDuplicate}
-          disabled={!editable || definition.capabilities.edit === false}
-          aria-label={`Duplicate ${definition.hostAlias}`}
-          title="Duplicate connection"
-        >
-          <Copy size={15} aria-hidden="true" />
-        </button>
-        <button
-          className="icon-button danger-icon"
-          type="button"
-          onClick={onDelete}
-          disabled={!editable || definition.capabilities.delete === false}
-          aria-label={`Delete ${definition.hostAlias}`}
-          title="Delete connection"
-        >
-          <Trash2 size={15} aria-hidden="true" />
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function KeysPanel({
-  keys,
-  connections,
-  onGenerate,
-  onDelete,
-  onToast,
-}: {
-  keys: SSHKey[];
-  connections: ConnectionInstanceSummary[];
-  onGenerate: (algorithm: GenerationRequest['algorithm']) => void;
-  onDelete: (key: SSHKey) => Promise<void>;
-  onToast: (message: string) => void;
-}) {
-  const [copying, setCopying] = useState<string | null>(null);
-  async function copy(key: SSHKey) {
-    setCopying(key.keyId);
-    try {
-      await navigator.clipboard.writeText(await publicKey(key.keyId));
-      onToast('Public key copied.');
-    } catch (error) {
-      onToast((error as Error).message);
-    } finally {
-      setCopying(null);
-    }
-  }
-  return (
-    <div className="keys-panel">
-      <div className="manager-toolbar">
-        <div>
-          <h2>SSH keys</h2>
-          <p className="panel-muted">Private key contents never leave the SSH directory.</p>
-        </div>
-        <div className="key-generate-actions">
-          <button className="text-button" type="button" onClick={() => onGenerate('ed25519')}>
-            <KeyRound size={15} aria-hidden="true" /> Generate Ed25519
-          </button>
-          <button className="primary" type="button" onClick={() => onGenerate('rsa')}>
-            <KeyRound size={15} aria-hidden="true" /> Generate RSA
-          </button>
-        </div>
-      </div>
-      <div className="key-table" role="table" aria-label="SSH keys">
-        <div className="key-table-head" role="row">
-          <span>Filename</span>
-          <span>Algorithm</span>
-          <span>Fingerprint</span>
-          <span>Usage</span>
-          <span />
-        </div>
-        {keys.map((key) => (
-          <div className="key-table-row" role="row" key={key.keyId}>
-            <span>
-              <strong>{key.fileName}</strong>
-              <small>
-                {key.readOnly ? 'read-only' : 'writable'} | {key.status}
-              </small>
-            </span>
-            <span>
-              {key.algorithm}
-              {key.bits ? ` ${key.bits}` : ''}
-            </span>
-            <code>{key.fingerprint || 'Unavailable'}</code>
-            <span>
-              {connections.filter((instance) => instance.connectionDefinitionId && instance.sourceHostAlias).length
-                ? 'referenced'
-                : '-'}
-            </span>
-            <span className="key-actions">
-              {key.publicKeyAvailable && (
-                <button
-                  className="icon-button"
-                  type="button"
-                  disabled={copying === key.keyId}
-                  onClick={() => void copy(key)}
-                  aria-label={`Copy public key ${key.fileName}`}
-                  title="Copy public key"
-                >
-                  <Clipboard size={15} aria-hidden="true" />
-                </button>
-              )}
-              <button
-                className="icon-button danger-icon"
-                type="button"
-                disabled={key.readOnly}
-                onClick={() => void onDelete(key)}
-                aria-label={`Delete SSH key ${key.fileName}`}
-                title={key.readOnly ? 'Mounted key cannot be deleted' : 'Delete SSH key'}
-              >
-                <Trash2 size={15} aria-hidden="true" />
-              </button>
-            </span>
-          </div>
-        ))}
-        {keys.length === 0 && <div className="manager-empty">No managed Ed25519 or RSA keys detected.</div>}
-      </div>
-    </div>
-  );
-}
-
-function DefinitionEditor({
-  editor,
-  draft,
-  keys,
-  busy,
-  onDraft,
-  onSave,
-  onClose,
-}: {
-  editor: Exclude<Editor, null>;
-  draft: Draft;
-  keys: SSHKey[];
-  busy: boolean;
-  onDraft: (draft: Draft) => void;
-  onSave: (event: React.FormEvent) => void;
-  onClose: () => void;
-}) {
-  const set = (key: keyof Draft, value: string) => onDraft({ ...draft, [key]: value });
-  return (
-    <Modal onClose={onClose}>
-      <form className="connection-editor" onSubmit={onSave}>
-        <header>
-          <div>
-            <p className="eyebrow">STRUCTURED SSH CONFIG</p>
-            <h2>{editor.mode === 'create' ? 'New connection' : 'Edit ' + (editor.definition?.hostAlias || '')}</h2>
-          </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close editor">
-            <X size={17} aria-hidden="true" />
-          </button>
-        </header>
-        <label>
-          Host alias
-          <input
-            required
-            pattern={'[A-Za-z0-9][\\-A-Za-z0-9._]{0,254}'}
-            value={draft.hostAlias}
-            onChange={(event) => set('hostAlias', event.target.value)}
-          />
-        </label>
-        <label>
-          HostName
-          <input
-            value={draft.hostName}
-            onChange={(event) => set('hostName', event.target.value)}
-            placeholder="destination hostname"
-          />
-        </label>
-        <div className="form-grid">
-          <label>
-            User
-            <input value={draft.user} onChange={(event) => set('user', event.target.value)} />
-          </label>
-          <label>
-            Port
-            <input
-              type="number"
-              min="1"
-              max="65535"
-              value={draft.port}
-              onChange={(event) => set('port', event.target.value)}
-            />
-          </label>
-        </div>
-        <label>
-          Identity files
-          <div className="identity-options">
-            {keys.map((key) => (
-              <label key={key.keyId}>
-                <input
-                  type="checkbox"
-                  checked={draft.identities.includes(key.fileName)}
-                  onChange={(event) =>
-                    onDraft({
-                      ...draft,
-                      identities: event.target.checked
-                        ? [...draft.identities, key.fileName]
-                        : draft.identities.filter((name) => name !== key.fileName),
-                    })
-                  }
-                />
-                {key.fileName}
-              </label>
-            ))}
-          </div>
-        </label>
-        <div className="form-grid">
-          <label>
-            IdentitiesOnly
-            <select value={draft.identitiesOnly} onChange={(event) => set('identitiesOnly', event.target.value)}>
-              <option value="">Unset</option>
-              <option value="yes">yes</option>
-              <option value="no">no</option>
-            </select>
-          </label>
-          <label>
-            ServerAliveInterval
-            <input
-              type="number"
-              min="0"
-              max="4294967295"
-              value={draft.serverAliveInterval}
-              onChange={(event) => set('serverAliveInterval', event.target.value)}
-            />
-          </label>
-        </div>
-        <div className="form-grid">
-          <label>
-            StrictHostKeyChecking
-            <select
-              value={draft.strictHostKeyChecking}
-              onChange={(event) => set('strictHostKeyChecking', event.target.value)}
-            >
-              <option value="">default</option>
-              <option value="no">no</option>
-            </select>
-          </label>
-          <label>
-            UserKnownHostsFile
-            <select
-              value={draft.userKnownHostsFile}
-              onChange={(event) => set('userKnownHostsFile', event.target.value)}
-            >
-              <option value="">default</option>
-              <option value="/dev/null">/dev/null</option>
-            </select>
-          </label>
-        </div>
-        <details className="advanced-options">
-          <summary>Advanced connection options</summary>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={draft.tmuxEnabled}
-              onChange={(event) => onDraft({ ...draft, tmuxEnabled: event.target.checked })}
-            />{' '}
-            Enable tmux connection
-          </label>
-          <label>
-            Tmux session name
-            <input
-              disabled={!draft.tmuxEnabled}
-              required={draft.tmuxEnabled}
-              pattern="[A-Za-z][A-Za-z0-9_-]{0,63}"
-              maxLength={64}
-              value={draft.tmuxSessionName}
-              onChange={(event) => set('tmuxSessionName', event.target.value)}
-              placeholder="for example t"
-            />
-          </label>
-          <small className="field-help">The name is used by OpenSSH to attach or create the remote tmux session.</small>
-        </details>
-        {(draft.strictHostKeyChecking === 'no' || draft.userKnownHostsFile === '/dev/null') && (
-          <div className="risk-warning" role="alert">
-            <ShieldAlert size={16} aria-hidden="true" /> Host verification is weakened for this connection.
-          </div>
-        )}
-        <footer>
-          <button className="text-button" type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="primary" type="submit" disabled={busy}>
-            {busy ? 'Saving...' : 'Save connection'}
-          </button>
-        </footer>
-      </form>
-    </Modal>
-  );
-}
-function GenerationDialog({
-  value,
-  existingAlgorithms,
-  busy,
-  onChange,
-  onSubmit,
-  onClose,
-}: {
-  value: GenerationRequest;
-  existingAlgorithms: Set<string>;
-  busy: boolean;
-  onChange: (value: GenerationRequest) => void;
-  onSubmit: (event: React.FormEvent) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal onClose={onClose}>
-      <form className="connection-editor" onSubmit={onSubmit}>
-        <header>
-          <div>
-            <p className="eyebrow">SSH KEYGEN</p>
-            <h2>Generate key</h2>
-          </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close key generator">
-            <X size={17} aria-hidden="true" />
-          </button>
-        </header>
-        <label>
-          Algorithm
-          <select
-            value={value.algorithm}
-            onChange={(event) =>
-              onChange({
-                ...value,
-                algorithm: event.target.value as GenerationRequest['algorithm'],
-                fileName: event.target.value === 'rsa' ? 'id_rsa' : 'id_ed25519',
-                rsaBits: event.target.value === 'rsa' ? 3072 : null,
-              })
-            }
-          >
-            <option value="ed25519" disabled={existingAlgorithms.has('ed25519')}>
-              Ed25519{existingAlgorithms.has('ed25519') ? ' (already exists)' : ''}
-            </option>
-            <option value="rsa" disabled={existingAlgorithms.has('rsa')}>
-              RSA{existingAlgorithms.has('rsa') ? ' (already exists)' : ''}
-            </option>
-          </select>
-        </label>
-        {value.algorithm === 'rsa' && (
-          <label>
-            RSA bits
-            <select
-              value={value.rsaBits || 3072}
-              onChange={(event) => onChange({ ...value, rsaBits: Number(event.target.value) })}
-            >
-              <option value="2048">2048</option>
-              <option value="3072">3072</option>
-              <option value="4096">4096</option>
-            </select>
-          </label>
-        )}
-        <label>
-          Filename
-          <input
-            required
-            value={value.fileName}
-            onChange={(event) => onChange({ ...value, fileName: event.target.value })}
-          />
-        </label>
-        <label>
-          Comment <span className="optional">optional</span>
-          <input
-            maxLength={255}
-            value={value.comment}
-            onChange={(event) => onChange({ ...value, comment: event.target.value })}
-          />
-        </label>
-        <div className="risk-warning">
-          <KeyRound size={16} aria-hidden="true" /> Passphrase prompts appear only in the new key generation terminal.
-        </div>
-        <footer>
-          <button className="text-button" type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="primary" type="submit" disabled={busy}>
-            <Play size={15} fill="currentColor" aria-hidden="true" /> {busy ? 'Starting...' : 'Open keygen terminal'}
-          </button>
-        </footer>
-      </form>
-    </Modal>
   );
 }
