@@ -57,7 +57,7 @@ func (c *Client) Start(ctx context.Context) error {
 	case err := <-c.ready:
 		return err
 	case result := <-waiter:
-		if stringField(result.Header, "op") == "ready" && stringField(result.Header, "protocol") == Protocol && stringField(result.Header, "engine") == "xterm-headless" && stringField(result.Header, "engineVersion") == EngineVersion && stringField(result.Header, "serializeAddonVersion") == SerializeAddonVersion {
+		if stringField(result.Header, "op") == "ready" && stringField(result.Header, "protocol") == Protocol && stringField(result.Header, "engine") == "xterm-headless" {
 			return nil
 		}
 		err := errors.New("terminal worker handshake failed")

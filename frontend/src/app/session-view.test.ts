@@ -22,7 +22,6 @@ describe('single active session reconciliation', () => {
   });
 
   it('clears the active session when no connection survives its exit', () => {
-    const exited = { ...session('a'), closed: true, exitStatus: { exitCode: 0, signal: null } };
     expect(reconcileSession([], { activeSessionId: 'a' }, ['a'])).toEqual({ activeSessionId: null });
   });
 

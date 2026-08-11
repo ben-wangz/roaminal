@@ -11,8 +11,8 @@ async function loadHeadlessPackages() {
   const descriptor = hadNavigator ? Object.getOwnPropertyDescriptor(globalThis, 'navigator') : null;
   if (hadNavigator) delete globalThis.navigator;
   try {
-    const headlessPackage = await import('xterm-headless');
-    const serializePackage = await import('xterm-addon-serialize');
+    const headlessPackage = await import('@xterm/headless');
+    const serializePackage = await import('@xterm/addon-serialize');
     return { Terminal: headlessPackage.default?.Terminal ?? headlessPackage.Terminal, SerializeAddon: serializePackage.default?.SerializeAddon ?? serializePackage.SerializeAddon };
   } finally {
     if (hadNavigator && descriptor) Object.defineProperty(globalThis, 'navigator', descriptor);
@@ -171,8 +171,8 @@ async function handle({ header, payload }) {
       protocol: PROTOCOL,
       requestId: header.requestId,
       engine: 'xterm-headless',
-      engineVersion: '5.3.0',
-      serializeAddonVersion: '0.11.0'
+      engineVersion: '6.0.0',
+      serializeAddonVersion: '0.14.0'
     });
     return;
   }
