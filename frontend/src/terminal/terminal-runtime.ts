@@ -180,9 +180,22 @@ export class TerminalRuntime {
       socket.close();
     }
     this.element = null;
-    void this.ready.then(() => {
-      if (this.terminal) this.terminal.dispose();
-    });
+    const terminal = this.terminal;
+    this.terminal = undefined;
+    this.fit = undefined;
+    this.search = undefined;
+    if (terminal) {
+      terminal.dispose();
+    } else {
+      void this.ready.then(() => {
+        // The module load may finish after disposal; release any terminal it created.
+        const loaded = this.terminal;
+        this.terminal = undefined;
+        this.fit = undefined;
+        this.search = undefined;
+        loaded?.dispose();
+      });
+    }
     this.listeners.clear();
     this.messageListeners.clear();
   }

@@ -113,9 +113,19 @@ export class TerminalPreviewRuntime {
       socket.close();
     }
     this.element = null;
-    void this.ready.then(() => {
-      if (this.terminal) this.terminal.dispose();
-    });
+    const terminal = this.terminal;
+    this.terminal = undefined;
+    this.fit = undefined;
+    if (terminal) {
+      terminal.dispose();
+    } else {
+      void this.ready.then(() => {
+        const loaded = this.terminal;
+        this.terminal = undefined;
+        this.fit = undefined;
+        loaded?.dispose();
+      });
+    }
   }
 }
 
