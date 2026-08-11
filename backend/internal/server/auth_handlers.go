@@ -68,7 +68,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = s.auth.Logout(body.RefreshToken, bearer(r))
-	writeNoContent(w)
+	writeSuccess(w)
 }
 
 func (s *Server) revokeAuthSession(w http.ResponseWriter, r *http.Request, _ string) {
@@ -81,14 +81,14 @@ func (s *Server) revokeAuthSession(w http.ResponseWriter, r *http.Request, _ str
 		}
 		return
 	}
-	writeNoContent(w)
+	writeSuccess(w)
 }
 func (s *Server) logoutOthers(w http.ResponseWriter, _ *http.Request, sessionID string) {
 	if err := s.auth.LogoutOthers(sessionID); err != nil {
 		writeError(w, 500, "internal error")
 		return
 	}
-	writeNoContent(w)
+	writeSuccess(w)
 }
 
 var _ = json.RawMessage{}

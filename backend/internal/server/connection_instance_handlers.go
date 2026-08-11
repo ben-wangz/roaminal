@@ -114,7 +114,7 @@ func (s *Server) deleteConnectionLaunch(w http.ResponseWriter, r *http.Request, 
 		}
 		return
 	}
-	writeNoContent(w)
+	writeSuccess(w)
 }
 
 func stringValue(value *string) string {
@@ -138,7 +138,7 @@ func (s *Server) deleteConnectionInstance(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	writeNoContent(w)
+	writeSuccess(w)
 }
 
 type updateConnectionTitleRequest struct {

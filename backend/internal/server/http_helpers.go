@@ -46,9 +46,8 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func writeNoContent(w http.ResponseWriter) {
-	w.Header().Set("Content-Length", "0")
-	w.WriteHeader(http.StatusNoContent)
+func writeSuccess(w http.ResponseWriter) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func writeError(w http.ResponseWriter, status int, message string, fields ...string) {
