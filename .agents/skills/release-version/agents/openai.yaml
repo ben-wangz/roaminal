@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Roaminal"
+  short_description: "Version and publish Roaminal releases"
+  default_prompt: "Use $release-version to prepare and publish a Roaminal release with ForgeKit."

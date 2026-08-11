@@ -25,7 +25,13 @@ commands:
     args:
       - "-n"
       - "setup/forgekit.sh"
-      - "container/test-process-groups.sh"
+      - ".github/scripts/release-plan.sh"
+
+  - name: "Release planner Python syntax"
+    cmd: "python3"
+    args:
+      - "-c"
+      - "import ast; from pathlib import Path; ast.parse(Path('.github/scripts/release-plan.py').read_text())"
 
   - name: "Go formatting"
     cmd: "sh"
@@ -98,3 +104,13 @@ commands:
         --set ssh.volume.name=ssh-projected
         --set-json 'extraVolumes=[{"name":"ssh-projected","projected":{"sources":[]}}]'
         >/dev/null
+
+  - name: "Workflow YAML syntax"
+    cmd: "ruby"
+    args:
+      - "-ryaml"
+      - "-e"
+      - "ARGV.each { |path| YAML.safe_load_file(path, aliases: true) }"
+      - ".github/workflows/lint.yaml"
+      - ".github/workflows/release-chart.yaml"
+      - ".github/workflows/release-container.yaml"

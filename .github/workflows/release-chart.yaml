@@ -5,45 +5,134 @@ on:
     tags:
       - "roaminal-v*"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release-chart-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  plan:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    timeout-minutes: 10
+    outputs:
+      should_run: ${{ steps.plan.outputs.should_run }}
+      tag_version: ${{ steps.plan.outputs.tag_version }}
+      chart_dir: ${{ steps.plan.outputs.chart_dir }}
+      runtime_version: ${{ steps.plan.outputs.runtime_version }}
+      image_ref: ${{ steps.plan.outputs.image_ref }}
+      commit_sha: ${{ steps.plan.outputs.commit_sha }}
     steps:
       - name: checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: setup-helm
-        uses: azure/setup-helm@v4
+      - name: fetch-main
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
 
       - name: setup-forgekit
         id: forgekit
         run: |
           FORGEKIT_BIN="$(bash "$GITHUB_WORKSPACE/setup/forgekit.sh")"
           echo "bin=${FORGEKIT_BIN}" >> "$GITHUB_OUTPUT"
-          "${FORGEKIT_BIN}" --version
+          "$FORGEKIT_BIN" --version
 
-      - name: validate-tag
+      - name: resolve-release
+        id: plan
         env:
           FORGEKIT_BIN: ${{ steps.forgekit.outputs.bin }}
           TAG_NAME: ${{ github.ref_name }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/release-plan.sh" chart
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    env:
+      CONTAINER_REGISTRY: ghcr.io
+      CONTAINER_REGISTRY_USERNAME: ${{ github.actor }}
+      CONTAINER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      RUNTIME_IMAGE: ${{ needs.plan.outputs.image_ref }}
+      RUNTIME_VERSION: ${{ needs.plan.outputs.runtime_version }}
+      CHART_DIR: ${{ needs.plan.outputs.chart_dir }}
+      CHART_VERSION: ${{ needs.plan.outputs.tag_version }}
+      COMMIT_SHA: ${{ needs.plan.outputs.commit_sha }}
+      CHART_REGISTRY: ghcr.io/${{ github.repository }}-charts
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: install-podman
         run: |
-          test "${TAG_NAME#roaminal-v}" = "$(${FORGEKIT_BIN} --project-root "$GITHUB_WORKSPACE" --output json version get roaminal | node -e 'let s=""; process.stdin.on("data", d => s += d).on("end", () => process.stdout.write(JSON.parse(s).data.app.value))')"
-          helm lint "$GITHUB_WORKSPACE/chart" --strict
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: setup-helm
+        uses: azure/setup-helm@v4
+
+      - name: wait-for-runtime-image
+        env:
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$REGISTRY_PASSWORD" | podman login ghcr.io \
+            --username "$REGISTRY_USERNAME" --password-stdin
+          for attempt in $(seq 1 60); do
+            if podman manifest inspect "$RUNTIME_IMAGE" >/dev/null 2>&1; then
+              echo "runtime image is available: $RUNTIME_IMAGE"
+              exit 0
+            fi
+            if [[ "$attempt" == 60 ]]; then
+              echo "runtime image did not become available: $RUNTIME_IMAGE" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: lint-and-render-chart
+        run: |
+          helm lint "$CHART_DIR" --strict
+          helm template roaminal "$CHART_DIR" --namespace release-ci >/dev/null
+
+      - name: setup-forgekit
+        id: forgekit
+        run: |
+          FORGEKIT_BIN="$(bash "$GITHUB_WORKSPACE/setup/forgekit.sh")"
+          echo "bin=${FORGEKIT_BIN}" >> "$GITHUB_OUTPUT"
+          "$FORGEKIT_BIN" --version
+
+      - name: login-chart-registry
+        env:
+          CHART_REGISTRY_USERNAME: ${{ github.actor }}
+          CHART_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$CHART_REGISTRY_PASSWORD" | helm registry login ghcr.io \
+            --username "$CHART_REGISTRY_USERNAME" --password-stdin
 
       - name: publish-chart
         env:
           FORGEKIT_BIN: ${{ steps.forgekit.outputs.bin }}
-          CHART_REGISTRY: ghcr.io/${{ github.repository }}-charts
           CHART_REGISTRY_USERNAME: ${{ github.actor }}
           CHART_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          "$FORGEKIT_BIN" publish chart build \
-            --project-root "$GITHUB_WORKSPACE" \
-            --chart-dir "$GITHUB_WORKSPACE/chart" \
+          "$FORGEKIT_BIN" --project-root "$GITHUB_WORKSPACE" publish chart build \
+            --chart-dir "$CHART_DIR" \
             --semver \
             --multi-tag
+
+      - name: summarize
+        run: |
+          {
+            echo "### Roaminal Helm Chart"
+            echo "- Chart: \`oci://$CHART_REGISTRY/roaminal:$CHART_VERSION\`"
+            echo "- Runtime image: \`$RUNTIME_IMAGE\`"
+            echo "- Commit: \`$COMMIT_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"

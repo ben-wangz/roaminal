@@ -1,0 +1,108 @@
+name: release-container
+
+on:
+  push:
+    tags:
+      - "roaminal-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-container-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      should_run: ${{ steps.plan.outputs.should_run }}
+      runtime_name: ${{ steps.plan.outputs.runtime_name }}
+      runtime_dir: ${{ steps.plan.outputs.runtime_dir }}
+      runtime_version: ${{ steps.plan.outputs.runtime_version }}
+      image_ref: ${{ steps.plan.outputs.image_ref }}
+      commit_sha: ${{ steps.plan.outputs.commit_sha }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: fetch-main
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: setup-forgekit
+        id: forgekit
+        run: |
+          FORGEKIT_BIN="$(bash "$GITHUB_WORKSPACE/setup/forgekit.sh")"
+          echo "bin=${FORGEKIT_BIN}" >> "$GITHUB_OUTPUT"
+          "$FORGEKIT_BIN" --version
+
+      - name: resolve-release
+        id: plan
+        env:
+          FORGEKIT_BIN: ${{ steps.forgekit.outputs.bin }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/release-plan.sh" container
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      CONTAINER_REGISTRY: ghcr.io
+      CONTAINER_REGISTRY_USERNAME: ${{ github.actor }}
+      CONTAINER_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      IMAGE_NAME: ${{ github.repository }}
+      RUNTIME_NAME: ${{ needs.plan.outputs.runtime_name }}
+      RUNTIME_DIR: ${{ needs.plan.outputs.runtime_dir }}
+      RUNTIME_VERSION: ${{ needs.plan.outputs.runtime_version }}
+      IMAGE_REF: ${{ needs.plan.outputs.image_ref }}
+      COMMIT_SHA: ${{ needs.plan.outputs.commit_sha }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: install-podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: setup-forgekit
+        id: forgekit
+        run: |
+          FORGEKIT_BIN="$(bash "$GITHUB_WORKSPACE/setup/forgekit.sh")"
+          echo "bin=${FORGEKIT_BIN}" >> "$GITHUB_OUTPUT"
+          "$FORGEKIT_BIN" --version
+
+      - name: publish-container
+        env:
+          FORGEKIT_BIN: ${{ steps.forgekit.outputs.bin }}
+          BUILD_ARG_ROAMINAL_VERSION: ${{ needs.plan.outputs.runtime_version }}
+        run: |
+          "$FORGEKIT_BIN" --project-root "$GITHUB_WORKSPACE" publish container build \
+            --container-dir "$RUNTIME_DIR" \
+            --module "$RUNTIME_NAME" \
+            --context "$GITHUB_WORKSPACE" \
+            --label "org.opencontainers.image.version=$RUNTIME_VERSION" \
+            --label "org.opencontainers.image.revision=$COMMIT_SHA" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.licenses=MPL-2.0" \
+            --semver \
+            --multi-tag
+
+      - name: summarize
+        run: |
+          {
+            echo "### Roaminal runtime image"
+            echo "- Image: \`$IMAGE_REF\`"
+            echo "- Version: \`$RUNTIME_VERSION\`"
+            echo "- Commit: \`$COMMIT_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -2,7 +2,3 @@ apps:
   - name: roaminal
     type: chart
     path: chart
-  - name: roaminal-runtime
-    type: container
-    path: container
-    versionFile: VERSION
