@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -20,17 +19,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if m.store.ConnectionLayout() {
-		for _, meta := range metas {
-			if err := m.retirePersisted(ctx, meta); err != nil {
-				fmt.Fprintf(os.Stderr, "Roaminal session %s startup cleanup warning: %v\n", meta.ID, err)
-			}
-		}
-		return nil
-	}
 	for _, meta := range metas {
-		if err := m.restore(ctx, meta); err != nil {
-			fmt.Fprintf(os.Stderr, "Roaminal session %s restore warning: %v\n", meta.ID, err)
+		if err := m.retirePersisted(ctx, meta); err != nil {
+			fmt.Fprintf(os.Stderr, "Roaminal session %s startup cleanup warning: %v\n", meta.ID, err)
 		}
 	}
 	return nil
@@ -49,95 +40,6 @@ func (m *Manager) retirePersisted(_ context.Context, meta persistence.SessionMet
 		return err
 	}
 	return m.store.DeleteSession(meta.ID)
-}
-
-func (m *Manager) restoreHistory(ctx context.Context, meta persistence.SessionMeta) error {
-	if meta.Lifecycle == "live" || meta.Lifecycle == "" {
-		meta.Lifecycle = "interrupted"
-		meta.BackendRuntimeID = m.runtimeID
-	}
-	header, payload, err := m.store.LoadSnapshot(meta.ID)
-	if err == nil {
-		if err := m.worker.Restore(ctx, meta.ID, header.Cols, header.Rows, header.ScrollbackLines, header.ThroughSequence, payload); err != nil {
-			return err
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		// Metadata can be committed before the first debounced snapshot. Keep
-		// that historical instance attachable with an empty worker terminal.
-		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
-			return err
-		}
-	} else {
-		return err
-	}
-	session := &Session{manager: m, meta: meta, clients: make(map[*Client]struct{}), closed: true}
-	if err == nil {
-		session.sequence, _ = strconv.ParseUint(header.ThroughSequence, 10, 64)
-	}
-	m.mu.Lock()
-	m.sessions[meta.ID] = session
-	m.mu.Unlock()
-	return m.store.SaveSession(meta)
-}
-
-func (m *Manager) restore(ctx context.Context, meta persistence.SessionMeta) error {
-	cwd := meta.Cwd
-	if info, err := os.Stat(cwd); err != nil || !info.IsDir() {
-		cwd = m.cfg.InitialCwd
-		meta.Cwd = cwd
-	}
-	header, payload, snapshotErr := m.store.LoadSnapshot(meta.ID)
-	if snapshotErr != nil && !errors.Is(snapshotErr, os.ErrNotExist) {
-		fmt.Fprintf(os.Stderr, "Roaminal session %s snapshot warning: %v\n", meta.ID, snapshotErr)
-	}
-	workerReady := false
-	if snapshotErr == nil {
-		workerReady = true
-		if err := m.worker.Restore(ctx, meta.ID, header.Cols, header.Rows, header.ScrollbackLines, header.ThroughSequence, payload); err != nil {
-			_ = m.worker.CloseSession(ctx, meta.ID)
-			return err
-		}
-	} else {
-		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
-			return err
-		}
-		workerReady = true
-	}
-	session, err := m.startShell(meta, cwd)
-	if err != nil {
-		if workerReady {
-			_ = m.worker.CloseSession(ctx, meta.ID)
-		}
-		return err
-	}
-	if snapshotErr == nil {
-		session.sequence, _ = strconv.ParseUint(header.ThroughSequence, 10, 64)
-		if header.Cols != meta.Cols || header.Rows != meta.Rows {
-			if err := pty.Setsize(session.pty, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)}); err != nil {
-				m.abortSession(ctx, session, workerReady)
-				return err
-			}
-			session.sequence++
-			if err := m.worker.Resize(meta.ID, strconv.FormatUint(session.sequence, 10), meta.Cols, meta.Rows); err != nil {
-				m.abortSession(ctx, session, workerReady)
-				return err
-			}
-		}
-	}
-	m.startLoops(session)
-	m.mu.Lock()
-	m.sessions[meta.ID] = session
-	m.mu.Unlock()
-	if m.store != nil {
-		if err := m.store.SaveSession(meta); err != nil {
-			m.mu.Lock()
-			delete(m.sessions, meta.ID)
-			m.mu.Unlock()
-			m.abortSession(ctx, session, true)
-			return err
-		}
-	}
-	return nil
 }
 
 func (m *Manager) startSession(ctx context.Context, meta persistence.SessionMeta, cwd string, createWorker bool) (*Session, error) {

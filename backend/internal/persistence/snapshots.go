@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"unicode/utf8"
 )
 
@@ -62,6 +63,9 @@ func (s *Store) SaveSnapshot(id string, header SnapshotHeader, payload []byte) e
 	}
 	data, err := EncodeSnapshot(header, payload)
 	if err != nil {
+		return s.markSessionError(id, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(s.SnapshotPath(id)), 0o700); err != nil {
 		return s.markSessionError(id, err)
 	}
 	if err := s.atomicWrite(s.SnapshotPath(id), data); err != nil {

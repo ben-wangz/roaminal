@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	FormatVersion           = 1
-	SessionFormatVersion    = 2
-	ConnectionFormatVersion = 1
-	SnapshotMagic           = "ROAMINAL-SNAPSHOT/1"
-	SnapshotMaxSize         = 256 * 1024 * 1024
+	FormatVersion                 = 1
+	SessionFormatVersion          = 2 // retained as the connection metadata write version during the transition
+	ConnectionFormatVersion       = 2
+	LegacyConnectionFormatVersion = 1
+	SnapshotMagic                 = "ROAMINAL-SNAPSHOT/1"
+	SnapshotMaxSize               = 256 * 1024 * 1024
 )
 
 var ErrNotFound = os.ErrNotExist
@@ -103,18 +104,14 @@ type SnapshotHeader struct {
 }
 
 type Store struct {
-	Root             string
-	SessionsDir      string
-	ConnectionsDir   string
-	AuditDir         string
-	Layout           Layout
-	connectionLayout bool
-	degradedMu       sync.RWMutex
-	degradedIDs      map[string]struct{}
-	globalError      bool
+	Root           string
+	ConnectionsDir string
+	AuditDir       string
+	Layout         Layout
+	degradedMu     sync.RWMutex
+	degradedIDs    map[string]struct{}
+	globalError    bool
 }
-
-func (s *Store) ConnectionLayout() bool { return s.connectionLayout }
 
 var ErrAmbiguousStateLayout = errors.New("ambiguous state layout")
 var ErrLegacySessions = errors.New("legacy sessions are not compatible with connection instances")

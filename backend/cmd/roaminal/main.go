@@ -50,7 +50,7 @@ func main() {
 }
 
 func run(cfg config.Config) error {
-	store, err := persistence.NewConnection(cfg.StateDir)
+	store, err := persistence.New(cfg.StateDir)
 	if err != nil {
 		return err
 	}

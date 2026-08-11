@@ -24,9 +24,6 @@ func (s *Store) ArchiveSession(id string) error {
 	if !uuidPattern.MatchString(id) {
 		return s.markSessionError(id, errors.New("invalid session id"))
 	}
-	if !s.connectionLayout {
-		return s.markSessionError(id, errors.New("audit archive is only supported for connection sessions"))
-	}
 	metadata, err := os.ReadFile(s.SessionPath(id))
 	if err != nil {
 		return s.markSessionError(id, err)

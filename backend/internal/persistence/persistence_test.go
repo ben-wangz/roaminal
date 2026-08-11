@@ -26,13 +26,16 @@ func TestSnapshotRoundTripAndCorruptionIsolation(t *testing.T) {
 	if header.ByteLength != len(payload) || string(got) != string(payload) {
 		t.Fatalf("round trip mismatch: %+v %q", header, got)
 	}
+	if err := os.MkdirAll(filepath.Dir(store.SnapshotPath("11111111-1111-4111-8111-111111111111")), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(store.SnapshotPath("11111111-1111-4111-8111-111111111111"), []byte("bad"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := store.LoadSnapshot("11111111-1111-4111-8111-111111111111"); err == nil {
 		t.Fatal("expected corruption error")
 	}
-	entries, _ := os.ReadDir(store.SessionsDir)
+	entries, _ := os.ReadDir(filepath.Dir(store.SnapshotPath("11111111-1111-4111-8111-111111111111")))
 	found := false
 	for _, entry := range entries {
 		if len(entry.Name()) > len(".snapshot.corrupt.") && entry.Name() != "11111111-1111-4111-8111-111111111111.snapshot" {
@@ -44,15 +47,18 @@ func TestSnapshotRoundTripAndCorruptionIsolation(t *testing.T) {
 	}
 }
 
-func TestSessionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
+func TestConnectionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
 	store, err := New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	id := "11111111-1111-4111-8111-111111111111"
 	now := time.Now().UTC().Truncate(time.Second)
-	legacy := fmt.Sprintf(`{"formatVersion":1,"id":%q,"title":"shell","initialCwd":"/workspace","cwd":"/workspace","cols":80,"rows":24,"createdAt":%q,"updatedAt":%q,"executions":[]}`,
+	legacy := fmt.Sprintf(`{"formatVersion":1,"connectionInstanceId":%q,"connectionDefinitionId":"local","type":"local","purpose":"interactive","lifecycle":"live","sourceState":"current","automaticTitle":"shell","initialCwd":"/workspace","cwd":"/workspace","cols":80,"rows":24,"createdAt":%q,"updatedAt":%q}`,
 		id, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano))
+	if err := os.MkdirAll(filepath.Dir(store.SessionPath(id)), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(store.SessionPath(id), []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +66,7 @@ func TestSessionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if meta.FormatVersion != SessionFormatVersion || meta.AutomaticTitle != "shell" || meta.EffectiveTitle() != "shell" || meta.TitleOverride != nil {
+	if meta.FormatVersion != ConnectionFormatVersion || meta.AutomaticTitle != "shell" || meta.EffectiveTitle() != "shell" || meta.TitleOverride != nil {
 		t.Fatalf("unexpected migrated metadata: %+v", meta)
 	}
 	if err := store.SaveSession(meta); err != nil {

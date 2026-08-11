@@ -9,7 +9,7 @@ import (
 )
 
 func TestConnectionLayoutUsesPerInstanceFiles(t *testing.T) {
-	store, err := NewConnection(t.TempDir())
+	store, err := New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,13 +36,13 @@ func TestConnectionLayoutRejectsLegacySessions(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "sessions", "legacy.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewConnection(root); !errors.Is(err, ErrLegacySessions) {
+	if _, err := New(root); !errors.Is(err, ErrLegacySessions) {
 		t.Fatalf("error=%v", err)
 	}
 }
 
 func TestArchiveSessionCopiesMaterialBeforeActiveDelete(t *testing.T) {
-	store, err := NewConnection(t.TempDir())
+	store, err := New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,13 +7,9 @@ import (
 	"path/filepath"
 )
 
-func New(root string) (*Store, error) { return newStore(root, false) }
+func New(root string) (*Store, error) { return newStore(root) }
 
-// NewConnection opens the v1 connection persistence layout and rejects any
-// non-empty pre-connection sessions directory.
-func NewConnection(root string) (*Store, error) { return newStore(root, true) }
-
-func newStore(root string, connectionLayout bool) (*Store, error) {
+func newStore(root string) (*Store, error) {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create state directory: %w", err)
 	}
@@ -51,39 +47,29 @@ func newStore(root string, connectionLayout bool) (*Store, error) {
 		}
 	}
 	sessionsDir := filepath.Join(stateRoot, "sessions")
-	if connectionLayout {
-		if entries, err := os.ReadDir(sessionsDir); err == nil && len(entries) > 0 {
-			return nil, ErrLegacySessions
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("inspect legacy sessions directory: %w", err)
-		}
-	}
-	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
-		return nil, fmt.Errorf("create sessions directory: %w", err)
-	}
-	if err := ensurePrivateDirectory(sessionsDir); err != nil {
-		return nil, fmt.Errorf("prepare sessions directory: %w", err)
+	if entries, err := os.ReadDir(sessionsDir); err == nil && len(entries) > 0 {
+		return nil, ErrLegacySessions
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("inspect legacy sessions directory: %w", err)
 	}
 	connectionsDir := filepath.Join(stateRoot, "connection-instances")
 	auditDir := filepath.Join(stateRoot, "audit")
-	if connectionLayout {
-		if err := os.MkdirAll(connectionsDir, 0o700); err != nil {
-			return nil, fmt.Errorf("create connection instances directory: %w", err)
-		}
-		if err := ensurePrivateDirectory(connectionsDir); err != nil {
-			return nil, fmt.Errorf("prepare connection instances directory: %w", err)
-		}
-		if err := os.MkdirAll(filepath.Join(auditDir, "connection-instances"), 0o700); err != nil {
-			return nil, fmt.Errorf("create audit directory: %w", err)
-		}
-		if err := ensurePrivateDirectory(auditDir); err != nil {
-			return nil, fmt.Errorf("prepare audit directory: %w", err)
-		}
-		if err := ensurePrivateDirectory(filepath.Join(auditDir, "connection-instances")); err != nil {
-			return nil, fmt.Errorf("prepare audit connection directory: %w", err)
-		}
+	if err := os.MkdirAll(connectionsDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create connection instances directory: %w", err)
 	}
-	return &Store{Root: stateRoot, SessionsDir: sessionsDir, ConnectionsDir: connectionsDir, AuditDir: auditDir, Layout: layout, connectionLayout: connectionLayout, degradedIDs: make(map[string]struct{})}, nil
+	if err := ensurePrivateDirectory(connectionsDir); err != nil {
+		return nil, fmt.Errorf("prepare connection instances directory: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Join(auditDir, "connection-instances"), 0o700); err != nil {
+		return nil, fmt.Errorf("create audit directory: %w", err)
+	}
+	if err := ensurePrivateDirectory(auditDir); err != nil {
+		return nil, fmt.Errorf("prepare audit directory: %w", err)
+	}
+	if err := ensurePrivateDirectory(filepath.Join(auditDir, "connection-instances")); err != nil {
+		return nil, fmt.Errorf("prepare audit connection directory: %w", err)
+	}
+	return &Store{Root: stateRoot, ConnectionsDir: connectionsDir, AuditDir: auditDir, Layout: layout, degradedIDs: make(map[string]struct{})}, nil
 }
 
 func stateRootHasData(root string) (bool, error) {
