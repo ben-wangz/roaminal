@@ -25,6 +25,7 @@ describe('terminal input model', () => {
     const codex = contextualKeys(instance(), 'codex');
     expect(codex.at(-1)?.value).toBe('commit and push');
     expect(codex.at(-1)?.value.includes('\n')).toBe(false);
+    expect(codex.at(-1)?.kind).toBe('text');
   });
 
   it('uses safe defaults and disables unsupported tmux prefixes', () => {

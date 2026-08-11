@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Type } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import { contextualKeys, type ContextualMode } from './contextual-keyboard-model';
@@ -30,7 +31,7 @@ export function ContextualKeyboard({ instance, runtime, mode, onModeChange }: Pr
     </header>
     {!enabled && <span className="contextual-keyboard-status" role="status">{disabledReason}</span>}
     <div className={`contextual-key-grid mode-${mode}`}>
-      {keys.map((key) => <button key={key.id} type="button" disabled={!enabled || key.disabled} aria-label={key.ariaLabel} title={key.disabled ? 'Tmux prefix is not supported' : undefined} onClick={() => sendKey(key.value)}><kbd>{key.label}</kbd></button>)}
+      {keys.map((key) => <button key={key.id} type="button" disabled={!enabled || key.disabled} aria-label={key.ariaLabel} title={key.disabled ? 'Tmux prefix is not supported' : undefined} onClick={() => sendKey(key.value)}>{key.kind === 'text' && <Type size={13} aria-hidden="true" />}<kbd>{key.label}</kbd></button>)}
     </div>
   </section>;
 }

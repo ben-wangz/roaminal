@@ -2,7 +2,7 @@ import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { controlKey, escape, literal, pageDown, pageUp, tmuxCopyMode, tmuxPrefix } from './terminal-input';
 
 export type ContextualMode = 'tmux' | 'codex';
-export type ContextualKey = { id: string; label: string; ariaLabel: string; value: string; disabled?: boolean };
+export type ContextualKey = { id: string; label: string; ariaLabel: string; value: string; disabled?: boolean; kind?: 'text' };
 
 export function defaultContextualMode(instance: ConnectionInstanceSummary | null): ContextualMode {
   return instance?.tmuxEnabled ? 'tmux' : 'codex';
@@ -32,6 +32,6 @@ export function contextualKeys(instance: ConnectionInstanceSummary | null, mode:
     { id: 'page-down', label: 'PageDown', ariaLabel: 'Send PageDown', value: pageDown },
     { id: 'escape', label: 'Esc', ariaLabel: 'Send Escape', value: escape },
     { id: 'quit', label: 'q', ariaLabel: 'Send q', value: literal('q') },
-    { id: 'commit-and-push', label: 'commit and push', ariaLabel: 'Type commit and push', value: literal('commit and push') }
+    { id: 'commit-and-push', label: 'commit and push', ariaLabel: 'Type commit and push', value: literal('commit and push'), kind: 'text' }
   ];
 }
