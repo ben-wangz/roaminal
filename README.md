@@ -12,19 +12,18 @@ agent integration, native client, PWA manifest, service worker, or CDN assets.
 ## Local development
 
 Prerequisites are Go 1.26.5, Node.js 24.13.1, npm, and a Linux PTY environment.
-The worker and frontend each use their checked-in lockfile.
+The worker and frontend each use their checked-in lockfile. Run focused local
+checks while iterating; GitHub Actions runs the full ForgeKit gate for pull
+requests and `main` pushes.
+
+Focused checks, when needed:
 
 ```sh
 npm --prefix terminal-worker ci
 npm --prefix frontend ci
 npm --prefix terminal-worker test
-npm --prefix terminal-worker run lint
 npm --prefix frontend run typecheck
-npm --prefix frontend run lint
-npm --prefix frontend run build
 go -C backend test ./...
-go -C backend vet ./...
-go -C backend build ./cmd/roaminal
 ```
 
 ## Product versions and releases
@@ -39,12 +38,13 @@ inspect the linked versions with:
 FORGEKIT_BIN="$(bash ./setup/forgekit.sh)"
 "$FORGEKIT_BIN" --project-root "$PWD" version get roaminal
 "$FORGEKIT_BIN" --project-root "$PWD" version get roaminal --git
-"$FORGEKIT_BIN" --project-root "$PWD" version get roaminal-runtime
 ```
 
-Use `forgekit version bump` for patch, minor, or major releases. The complete
-review, tagging, and container build procedure is in
-[releasing](docs/releasing.md).
+The JSON output includes the linked `roaminal-runtime` container metadata. Use
+`forgekit version bump` for patch, minor, or major releases; do not call
+`version get roaminal-runtime` or edit version fields by hand. The maintainer-only
+review, tagging, and automated image/Chart publication procedure is in
+[release automation](docs/releasing.md).
 
 Start with an explicit password and terms acknowledgement:
 
@@ -58,10 +58,12 @@ validation, and [API](docs/api.md) for the HTTP and WebSocket contract.
 
 ## Containers and Kubernetes
 
-Build and run with Podman only:
+For local integration only, build and run with Podman. Release images are
+published by the tag-triggered GitHub Actions; do not use this command to push
+an artifact:
 
 ```sh
-IMAGE=registry.example.invalid/roaminal:$(git rev-parse HEAD)
+IMAGE=roaminal:dev-$(git rev-parse --short HEAD)
 podman build --file container/Containerfile --tag "$IMAGE" .
 podman run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   -p 9846:9846 \
@@ -70,15 +72,27 @@ podman run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   -v roaminal-state:/home/roaminal/.roaminal \
   -v roaminal-workspace:/workspace \
   "$IMAGE"
-podman push "$IMAGE"
 ```
 
 The Helm Chart in `chart/` is the deployment source of truth. It uses one
 `Recreate` Deployment, one unified RWO PVC with `state/`, `workspace/`, and
 `ssh/` directories, a `ClusterIP` Service, and `/healthz` probes. The former
-`deploy/kubernetes/` directory contains only a migration pointer; it is not a
-second configuration path. The full rollout, TLS, proxy timeout, PVC
+`deploy/kubernetes/` directory contains the migration pointer and an optional
+empty Helm values override; it is not a second Chart or raw-manifest path. The full rollout, TLS, proxy timeout, PVC
 permission, migration, and backup procedure is in [deployment](docs/deployment.md).
+
+Install a published Chart release with Helm and the repository override file:
+
+```sh
+helm registry login ghcr.io
+helm upgrade --install roaminal \
+  oci://ghcr.io/ben-wangz/roaminal-charts/roaminal \
+  --version '<chart-version>' \
+  --namespace develop --create-namespace \
+  --values deploy/kubernetes/values.yaml \
+  --set auth.existingSecret=roaminal \
+  --set app.acceptTerms=true
+```
 
 ## Acknowledgements
 
@@ -106,4 +120,4 @@ requirements.
 - [Backup and recovery](docs/backup-recovery.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Licensing policy](docs/licensing.md)
-- [Release procedure](docs/releasing.md)
+- [Maintainer release automation](docs/releasing.md)

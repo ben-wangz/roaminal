@@ -112,3 +112,19 @@ well as state and workspace data.
 The repository registry owns the chart version and the linked runtime image
 version. Use ForgeKit to inspect or bump them; do not edit `Chart.yaml` version,
 `Chart.yaml` appVersion, or `values.yaml` image tags by hand.
+
+Published artifacts are available from GitHub Container Registry:
+
+```sh
+helm registry login ghcr.io
+helm install roaminal \
+  oci://ghcr.io/ben-wangz/roaminal-charts/roaminal \
+  --version <chart-version> \
+  --namespace roaminal --create-namespace \
+  --set app.acceptTerms=true \
+  --set auth.existingSecret=roaminal-auth
+```
+
+The default image is `ghcr.io/ben-wangz/roaminal`. Override `image.registry`,
+`image.repository`, or `image.digest` for a private mirror or an immutable
+deployment policy.

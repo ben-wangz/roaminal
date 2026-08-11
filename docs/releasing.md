@@ -1,107 +1,40 @@
-# Releasing Roaminal
+# Release Automation
 
-Roaminal releases one runtime image and one Helm Chart. ForgeKit `v0.6.1` is
-pinned by `setup/forgekit.sh`; `version-control.yaml` registers the `roaminal`
-Chart and its linked `roaminal-runtime` container. The Chart `version` and
-runtime `container/VERSION` are separate version sources, while Chart
-`appVersion` and `image.tag` are synchronized from the linked runtime.
+This document is for repository maintainers and release agents. Deployment
+users install published artifacts as described in [deployment](deployment.md).
 
-## Inspect the version
+Roaminal has one ForgeKit app, the `roaminal` Chart, with a linked
+`roaminal-runtime` container. Chart and runtime versions are independent;
+Chart `appVersion` and `image.tag` match the linked runtime version.
 
-Run these commands from any directory inside the checkout; the bootstrap script
-locates the repository from its own path and stores the binary in ignored
-`build/bin/forgekit`:
+## Trigger
 
-```sh
-PROJECT_ROOT="$(git rev-parse --show-toplevel)"
-FORGEKIT_BIN="$(bash "$PROJECT_ROOT/setup/forgekit.sh")"
-"$FORGEKIT_BIN" --version
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version get roaminal
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version get roaminal --git
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version get roaminal-runtime
-```
+After a release-only commit passes the remote `lint` workflow, an annotated
+`roaminal-v<chart-semver>` tag triggers publication:
 
-The normal version is suitable for a release tag. The Git version appends the
-current commit and dirty-worktree state and is useful for development image
-tags only.
+| Workflow | Result |
+| --- | --- |
+| `release-container` | `ghcr.io/ben-wangz/roaminal:<runtime-version>` when the runtime changed |
+| `release-chart` | `oci://ghcr.io/ben-wangz/roaminal-charts/roaminal:<chart-version>` |
 
-## Bump and review
+The Chart workflow waits for the exact runtime image. Chart-only releases reuse
+the existing runtime image. No maintainer manually pushes images or Charts.
 
-Use ForgeKit for every version mutation. Choose exactly one increment for the
-artifact that changed:
+## Maintainer workflow
 
-```sh
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version bump container roaminal-runtime patch
-# or: minor / major
+Use [`.agents/skills/release-version/SKILL.md`](../.agents/skills/release-version/SKILL.md)
+for the complete command sequence. It requires a clean `main` checkout,
+ForgeKit-only version mutations, a remote lint gate, an annotated tag, and
+release-workflow monitoring. Focused local checks are optional; the remote
+`lint` workflow is the required quality gate.
 
-# Chart-only change (also syncs appVersion and image.tag):
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version bump chart roaminal patch --sync
-
-# Runtime change followed by a Chart release:
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version bump container roaminal-runtime patch
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version bump chart roaminal patch --sync
-```
-
-Inspect the version-only diff before staging anything else:
+Use ForgeKit to inspect the version:
 
 ```sh
-git diff -- container/VERSION chart/Chart.yaml chart/values.yaml
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" version get roaminal
+FORGEKIT_BIN="$(bash ./setup/forgekit.sh)"
+"$FORGEKIT_BIN" --project-root "$PWD" version get roaminal --output json
 ```
 
-Run the same gate used by CI, then commit the version change. Do not edit
-`container/VERSION` by hand, and do not bump the private npm module versions.
-
-```sh
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" lint \
-  --config "$PROJECT_ROOT/lint.yaml"
-git add container/VERSION chart/Chart.yaml chart/values.yaml
-git commit -m "release: Roaminal <version>"
-```
-
-## Tagging
-
-Push the version commit and wait for the `lint` workflow on `main` to pass.
-Create the annotated tag only after that successful workflow:
-
-```sh
-VERSION_JSON="$($FORGEKIT_BIN --project-root "$PROJECT_ROOT" --output json version get roaminal)"
-VERSION="$(VERSION_JSON="$VERSION_JSON" node -p 'JSON.parse(process.env.VERSION_JSON).data.app.value')"
-git tag -a "roaminal-v${VERSION}" -m "Roaminal ${VERSION}"
-git push origin "roaminal-v${VERSION}"
-```
-
-Release tags always use `roaminal-v<semver>`. A tag must identify the exact
-version commit that passed CI; do not tag a dirty worktree or a commit whose
-lint workflow is still running.
-
-## Container builds
-
-Development builds use the ForgeKit Git version. A release build uses the
-clean SemVer value so the image label, build argument, CLI output, and
-`/api/version` agree:
-
-```sh
-VERSION_JSON="$($FORGEKIT_BIN --project-root "$PROJECT_ROOT" --output json version get roaminal)"
-ROAMINAL_VERSION="$(VERSION_JSON="$VERSION_JSON" node -p 'JSON.parse(process.env.VERSION_JSON).data.app.linked.find((item) => item.name === "roaminal-runtime").value')"
-CONTAINER_REGISTRY=registry.example.invalid \
-IMAGE_NAME=roaminal \
-BUILD_ARG_ROAMINAL_VERSION="$ROAMINAL_VERSION" \
-"$FORGEKIT_BIN" --project-root "$PROJECT_ROOT" publish container build \
-  --container-dir container \
-  --module roaminal-runtime \
-  --context "$PROJECT_ROOT" \
-  --no-push
-```
-
-The Chart can be packaged locally with:
-
-```sh
-helm lint chart --strict
-helm package chart --destination dist/charts
-```
-
-The release workflow publishes Chart packages to the configured OCI registry
-after a `roaminal-v<chart-version>` tag. Pushing an image, signing it, and
-deploying it remain explicit release-owner actions after the version commit and
-CI checks have passed.
+Do not edit `container/VERSION`, Chart `version`, `appVersion`, or `image.tag`
+by hand. Do not release documentation, tests, or tooling without a changed
+published artifact. Never move or recreate a pushed release tag.
