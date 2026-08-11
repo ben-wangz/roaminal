@@ -45,7 +45,7 @@ func TestAttachReservationIsAtomic(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := "11111111-1111-4111-8111-111111111111"
-	manager := NewManager(config.Config{MaxClientsPerSession: 1}, store, nil)
+	manager := NewManager(config.Config{MaxClientsPerConnectionInstance: 1}, store, nil)
 	manager.sessions[id] = &Session{manager: manager, meta: persistence.SessionMeta{ID: id}, clients: map[*Client]struct{}{}}
 	if err := manager.ReserveAttach(id); err != nil {
 		t.Fatal(err)

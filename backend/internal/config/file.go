@@ -54,11 +54,9 @@ func applyFile(c *Config, v fileConfig) error {
 	}
 	if v.MaxConnectionInstances != nil {
 		c.MaxConnectionInstances = *v.MaxConnectionInstances
-		c.MaxSessions = *v.MaxConnectionInstances
 	}
 	if v.MaxClientsPerConnectionInstance != nil {
 		c.MaxClientsPerConnectionInstance = *v.MaxClientsPerConnectionInstance
-		c.MaxClientsPerSession = *v.MaxClientsPerConnectionInstance
 	}
 	if v.Debug != nil {
 		c.Debug = *v.Debug

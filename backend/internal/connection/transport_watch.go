@@ -50,9 +50,6 @@ func (m *Manager) refreshSources() {
 		transports = append(transports, transport)
 		shouldDrain := false
 		revision := transport.SourceRevision
-		if revision == "" {
-			revision = transport.ContextRevision
-		}
 		if revision != collection.ETag {
 			if !transport.Draining {
 				transport.Draining = true
@@ -90,9 +87,6 @@ func transportSourceState(transport *Transport, revision string, configUnavailab
 		return "deleted"
 	}
 	transportRevision := transport.SourceRevision
-	if transportRevision == "" {
-		transportRevision = transport.ContextRevision
-	}
 	if transportRevision != revision {
 		return "changed"
 	}

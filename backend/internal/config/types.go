@@ -27,22 +27,17 @@ type Config struct {
 	ScrollbackLines                 int
 	MaxConnectionInstances          int
 	MaxClientsPerConnectionInstance int
-	// Deprecated compatibility fields are kept only for the old terminal
-	// package's focused unit tests; no config file, flag, or environment alias
-	// accepts these names.
-	MaxSessions          int
-	MaxClientsPerSession int
-	Debug                bool
-	AcceptTerms          bool
-	InitialCwd           string
-	AuthAccessTTL        time.Duration
-	AuthRefreshTTL       time.Duration
-	AuthMaxAttempts      int
-	StateDir             string
-	WorkerPath           string
-	FrontendDir          string
-	Version              string
-	PasswordGenerated    bool
+	Debug                           bool
+	AcceptTerms                     bool
+	InitialCwd                      string
+	AuthAccessTTL                   time.Duration
+	AuthRefreshTTL                  time.Duration
+	AuthMaxAttempts                 int
+	StateDir                        string
+	WorkerPath                      string
+	FrontendDir                     string
+	Version                         string
+	PasswordGenerated               bool
 }
 
 type fileConfig struct {

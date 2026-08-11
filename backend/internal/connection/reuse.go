@@ -42,9 +42,6 @@ func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, col
 	}
 	m.transportMu.Lock()
 	revision := transport.SourceRevision
-	if revision == "" {
-		revision = transport.ContextRevision
-	}
 	draining, alias := transport.Draining, transport.Alias
 	m.transportMu.Unlock()
 	if draining || revision != collection.ETag {

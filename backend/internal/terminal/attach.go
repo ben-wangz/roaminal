@@ -119,10 +119,7 @@ func (m *Manager) attachPendingMode(ctx context.Context, id string, reserved, pe
 }
 
 func (m *Manager) clientLimit() int {
-	if m.cfg.MaxClientsPerConnectionInstance > 0 {
-		return m.cfg.MaxClientsPerConnectionInstance
-	}
-	return m.cfg.MaxClientsPerSession
+	return m.cfg.MaxClientsPerConnectionInstance
 }
 func (m *Manager) Detach(id string, client *Client) {
 	m.detach(id, client, false)

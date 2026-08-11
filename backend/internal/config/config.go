@@ -17,8 +17,7 @@ func defaults() Config {
 		Host: DefaultHost, Port: DefaultPort, WebsocketPingInterval: DefaultWebsocketPing,
 		ScrollbackLines: DefaultScrollback, MaxConnectionInstances: DefaultMaxConnectionInstances,
 		MaxClientsPerConnectionInstance: DefaultMaxClientsPerConnectionInstance,
-		MaxSessions:                     DefaultMaxConnectionInstances, MaxClientsPerSession: DefaultMaxClientsPerConnectionInstance,
-		AuthAccessTTL: DefaultAuthAccessTTL, AuthRefreshTTL: DefaultAuthRefreshTTL,
+		AuthAccessTTL:                   DefaultAuthAccessTTL, AuthRefreshTTL: DefaultAuthRefreshTTL,
 		AuthMaxAttempts: DefaultAuthMaxAttempts,
 	}
 }

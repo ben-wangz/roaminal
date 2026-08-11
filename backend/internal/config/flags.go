@@ -60,13 +60,13 @@ func applyArgs(c *Config, args []string) error {
 			if err != nil {
 				return err
 			}
-			c.MaxConnectionInstances, c.MaxSessions = n, n
+			c.MaxConnectionInstances = n
 		case "--max-clients-per-connection-instance":
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return err
 			}
-			c.MaxClientsPerConnectionInstance, c.MaxClientsPerSession = n, n
+			c.MaxClientsPerConnectionInstance = n
 		case "--cwd":
 			c.InitialCwd = value
 		case "--frontend-dir":
@@ -120,14 +120,14 @@ func applyEnv(c *Config) error {
 	}
 	if err := set("ROAMINAL_MAX_CONNECTION_INSTANCES", func(v string) error {
 		n, err := strconv.Atoi(v)
-		c.MaxConnectionInstances, c.MaxSessions = n, n
+		c.MaxConnectionInstances = n
 		return err
 	}); err != nil {
 		return err
 	}
 	if err := set("ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE", func(v string) error {
 		n, err := strconv.Atoi(v)
-		c.MaxClientsPerConnectionInstance, c.MaxClientsPerSession = n, n
+		c.MaxClientsPerConnectionInstance = n
 		return err
 	}); err != nil {
 		return err

@@ -19,7 +19,7 @@ func TestShortPathTokenKeepsMuxSocketPathBounded(t *testing.T) {
 }
 
 func TestTransportSourceStateStaysCurrentWhenConfigIsUnchanged(t *testing.T) {
-	transport := &Transport{Alias: "codespace", ContextRevision: "etag-1"}
+	transport := &Transport{Alias: "codespace", SourceRevision: "etag-1"}
 	current := map[string]bool{"codespace": true}
 
 	if got := transportSourceState(transport, "etag-1", false, current); got != "" {

@@ -37,7 +37,6 @@ type ExitStatus = terminal.ExitStatus
 type Transport struct {
 	Alias              string
 	ControlPath        string
-	ContextRevision    string // retained for compatibility with existing state/tests
 	SourceRevision     string
 	TmuxLaunchRevision string
 	OwnerID            string

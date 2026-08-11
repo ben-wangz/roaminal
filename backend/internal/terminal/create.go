@@ -108,10 +108,7 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 }
 
 func (m *Manager) connectionLimit() int {
-	if m.cfg.MaxConnectionInstances > 0 {
-		return m.cfg.MaxConnectionInstances
-	}
-	return m.cfg.MaxSessions
+	return m.cfg.MaxConnectionInstances
 }
 
 // Close ends a live connection and retires its active session. The audit copy
