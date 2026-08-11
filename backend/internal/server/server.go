@@ -76,14 +76,28 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 	if !strings.EqualFold(u.Host, r.Host) {
 		return false
 	}
-	proto := r.Header.Get("X-Forwarded-Proto")
-	if proto == "" {
-		proto = "http"
-	}
+	return strings.EqualFold(u.Scheme, requestOriginScheme(r))
+}
+
+// requestOriginScheme returns the scheme browsers use in Origin headers.
+// Some WebSocket-aware proxies report the transport scheme as ws/wss, while
+// the browser still sends http/https for the page origin.
+func requestOriginScheme(r *http.Request) string {
+	proto := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0])
 	if r.TLS != nil {
 		proto = "https"
 	}
-	return strings.EqualFold(u.Scheme, proto)
+	if proto == "" {
+		proto = "http"
+	}
+	switch strings.ToLower(proto) {
+	case "ws":
+		return "http"
+	case "wss":
+		return "https"
+	default:
+		return proto
+	}
 }
 
 type methodRoute map[string]http.Handler

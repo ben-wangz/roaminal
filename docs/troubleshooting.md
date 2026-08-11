@@ -25,9 +25,17 @@ password or restarting with a generated password revokes old refresh sessions.
 
 Use the current page Origin, `ws:`/`wss:` matching the page, and both
 `roaminal.v1` and `roaminal.auth.<access-token>` subprotocols. Proxies must pass
-the Upgrade request and keep connections open for at least an hour. `1008`
+the Upgrade request, preserve the external Host, and keep connections open for
+at least an hour. A proxy may report the WebSocket transport as `ws`/`wss` in
+`X-Forwarded-Proto`; Roaminal maps those values to the browser's `http`/`https`
+Origin scheme. `1008`
 indicates an invalid JSON message or schema; `1009` is an oversized message and
 `1013` is a slow-client queue overflow.
+
+If the response is `403` with `{"code":"origin_denied"}`, compare the Host and
+Origin values on the Upgrade request. The HTTP and WebSocket routes must use the
+same external host and TLS termination settings. Do not disable Origin checks;
+fix the proxy's WebSocket route instead.
 
 ## PVC pod is not ready
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +47,42 @@ func TestSameOriginRequiresMatchingHostAndScheme(t *testing.T) {
 	request.Header.Set("X-Forwarded-Proto", "https")
 	if !server.sameOrigin(request) {
 		t.Fatal("expected forwarded HTTPS origin to be accepted")
+	}
+	request.Header.Set("X-Forwarded-Proto", "wss")
+	if !server.sameOrigin(request) {
+		t.Fatal("expected forwarded WSS origin to be accepted as HTTPS")
+	}
+	request.Header.Set("Origin", "http://roaminal.test")
+	request.Header.Set("X-Forwarded-Proto", "ws")
+	if !server.sameOrigin(request) {
+		t.Fatal("expected forwarded WS origin to be accepted as HTTP")
+	}
+	request.Header.Set("Origin", "https://roaminal.test")
+	request.Header.Set("X-Forwarded-Proto", "wss, https")
+	if !server.sameOrigin(request) {
+		t.Fatal("expected first forwarded protocol to determine the origin scheme")
+	}
+}
+
+func TestAPIRouteAcceptsHTTPSOriginWhenProxyReportsWSS(t *testing.T) {
+	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, (*connection.Manager)(nil), nil, nil, http.NotFoundHandler())
+	request := httptest.NewRequest(http.MethodGet, "https://roaminal.test/api/version", nil)
+	request.Host = "roaminal.test"
+	request.Header.Set("Origin", "https://roaminal.test")
+	request.Header.Set("X-Forwarded-Proto", "wss")
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+}
+
+func TestRequestOriginSchemeUsesTLSOverForwardedProtocol(t *testing.T) {
+	request := httptest.NewRequest("GET", "https://roaminal.test/api/version", nil)
+	request.Header.Set("X-Forwarded-Proto", "http")
+	request.TLS = &tls.ConnectionState{}
+	if got := requestOriginScheme(request); got != "https" {
+		t.Fatalf("requestOriginScheme = %q, want https for TLS request", got)
 	}
 }
 
