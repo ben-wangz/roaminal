@@ -86,8 +86,9 @@ jobs:
           echo "$REGISTRY_PASSWORD" | podman login ghcr.io \
             --username "$REGISTRY_USERNAME" --password-stdin
           for attempt in $(seq 1 60); do
-            if podman manifest inspect "$RUNTIME_IMAGE" >/dev/null 2>&1; then
+            if podman pull --quiet "$RUNTIME_IMAGE" >/dev/null 2>&1; then
               echo "runtime image is available: $RUNTIME_IMAGE"
+              podman image rm "$RUNTIME_IMAGE" >/dev/null 2>&1 || true
               exit 0
             fi
             if [[ "$attempt" == 60 ]]; then
