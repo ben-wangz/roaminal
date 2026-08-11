@@ -14,13 +14,16 @@ Refresh rotates both tokens and invalidates the previous access token.
 State directories are mode `0700`; JSON, snapshots, temporary files, and
 quarantine copies are mode `0600`, written with fsync and atomic rename. Change
 the configured password to revoke prior refresh sessions. Keep the Secret and
-state PVC protected with the platform's secret-management and backup controls.
+unified PVC protected with the platform's secret-management and backup controls.
+The unified PVC contains state, workspace data, and SSH keys; treat every
+snapshot and backup as credential material.
 
 The container runs as UID/GID 1000 with a read-only root filesystem, dropped
 Linux capabilities, no privilege escalation, and no host or container-runtime
-socket. Mount only the state and workspace volumes. A reverse proxy must enforce
-HTTPS, preserve WebSocket upgrades, and use a read/send timeout of at least one
-hour for long-lived terminal connections.
+socket. The Helm Chart mounts three subpaths from one unified PVC and may
+replace the SSH subpath with a read-only Secret/projected volume. A reverse
+proxy must enforce HTTPS, preserve WebSocket upgrades, and use a read/send
+timeout of at least one hour for long-lived terminal connections.
 
 Do not put access or refresh tokens in URLs, logs, screenshots, issue reports, or
 proxy access logs. The worker protocol is local and must never be exposed by a

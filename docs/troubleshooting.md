@@ -31,6 +31,9 @@ indicates an invalid JSON message or schema; `1009` is an oversized message and
 
 ## PVC pod is not ready
 
-Confirm both RWO PVCs are bound and writable by UID/GID 1000. The service needs
-`/workspace` to exist at startup. Inspect probe events and `kubectl logs`; do not
-expose or edit the worker process directly.
+Confirm the unified RWO PVC is bound and its root is writable by UID/GID 1000.
+The init container creates `state/`, `workspace/`, and `ssh/`; it does not repair
+ownership or permissions on an existing mount. A read-only SSH Secret/projected
+volume is valid, but `/workspace` and the state subpath must remain writable.
+Inspect probe events and `kubectl logs`; do not expose or edit the worker process
+directly.

@@ -29,15 +29,17 @@ go -C backend build ./cmd/roaminal
 
 ## Product versions and releases
 
-Roaminal ships as one product. ForgeKit owns the release version in
-`container/VERSION`; the private `frontend/` and `terminal-worker/` manifests
+Roaminal ships as one runtime image and one Helm Chart. ForgeKit owns the
+runtime version in `container/VERSION` and the Chart version in
+`chart/Chart.yaml`; the private `frontend/` and `terminal-worker/` manifests
 stay at `0.0.0` and are not independently released. Bootstrap ForgeKit and
-inspect the current version with:
+inspect the linked versions with:
 
 ```sh
 FORGEKIT_BIN="$(bash ./setup/forgekit.sh)"
 "$FORGEKIT_BIN" --project-root "$PWD" version get roaminal
 "$FORGEKIT_BIN" --project-root "$PWD" version get roaminal --git
+"$FORGEKIT_BIN" --project-root "$PWD" version get roaminal-runtime
 ```
 
 Use `forgekit version bump` for patch, minor, or major releases. The complete
@@ -71,11 +73,12 @@ podman run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
 podman push "$IMAGE"
 ```
 
-The ordinary manifests in `deploy/kubernetes/` use one `Recreate` Deployment,
-RWO state/workspace PVCs, a `ClusterIP` Service, and `/healthz` probes. Replace
-the example image and Secret with deployment-specific values. The full rollout,
-TLS, proxy timeout, PVC permission, and backup procedure is in
-[deployment](docs/deployment.md).
+The Helm Chart in `chart/` is the deployment source of truth. It uses one
+`Recreate` Deployment, one unified RWO PVC with `state/`, `workspace/`, and
+`ssh/` directories, a `ClusterIP` Service, and `/healthz` probes. The former
+`deploy/kubernetes/` directory contains only a migration pointer; it is not a
+second configuration path. The full rollout, TLS, proxy timeout, PVC
+permission, migration, and backup procedure is in [deployment](docs/deployment.md).
 
 ## Acknowledgements
 
