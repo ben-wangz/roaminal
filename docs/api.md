@@ -1,65 +1,41 @@
 # API
 
-All JSON requests use `Content-Type: application/json`, are limited to 1 MiB,
-reject unknown fields, and must contain exactly one JSON value. Browser requests
-must have the current page Origin. Errors are `{ "error": "message" }`.
+JSON requests use `Content-Type: application/json`, are limited to 1 MiB, and
+reject unknown fields. Browser requests must use the current page Origin. Errors
+are `{ "error": "message" }`. Unless listed as public, HTTP endpoints require
+`Authorization: Bearer <access-token>`.
 
-Public endpoints are `GET /healthz`, `GET /api/version`, and the three auth
-endpoints below. Other HTTP endpoints require `Authorization: Bearer <access>`.
-
-| Method | Path | Result |
+| Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/healthz` | `200 {"status":"ok"}` or `503` while the worker is unavailable |
-| GET | `/api/version` | name, version, API version, and per-process `bootId` |
-| POST | `/api/auth/challenge` | challenge ID, salt, expiry, and algorithm |
-| POST | `/api/auth/login` | access and refresh tokens |
-| POST | `/api/auth/refresh` | rotated access and refresh tokens |
-| POST | `/api/auth/logout` | `204`; refresh token body is optional and idempotent |
-| GET | `/api/auth/session` | current authenticated session |
-| GET | `/api/auth/sessions` | all refresh sessions |
+| GET | `/healthz` | `200 {"status":"ok"}`; `503` when the worker is unavailable |
+| GET | `/api/version` | product, API version, and process `bootId` |
+| POST | `/api/auth/challenge`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | authentication |
+| GET | `/api/auth/session`, `/api/auth/sessions` | current or all refresh sessions |
 | DELETE | `/api/auth/sessions/:id` | revoke one refresh session |
-| POST | `/api/auth/logout-others` | revoke every other refresh session |
-| GET/POST | `/api/heartbeat` | authoritative connection-instance list; POST accepts resize updates |
-| GET | `/api/connection-instances` | list connection instances |
-| GET | `/api/connection-instances/:id` | inspect one connection instance |
-| GET | `/api/connection-instances/:id/remote-monitor` | cached metrics from a live SSH transport (`200`); `404` unknown instance; `409` `no_remote_transport` for local/exited/draining instances |
-| POST | `/api/connection-instances` | create a local connection instance (`201`) |
-| PATCH | `/api/connection-instances/:id/title` | update a connection title |
-| POST | `/api/connection-instances/:id/close` | stop, archive, and retire a connection instance (`204`) |
-| DELETE | `/api/connection-instances/:id` | stop, archive, and retire a connection instance (`204`) |
-| GET | `/api/ssh-keys` | list detected Ed25519/RSA key metadata |
-| DELETE | `/api/ssh-keys/:keyId` | delete a writable managed key pair (`204`) |
-| GET | `/api/ssh-keys/:keyId/public-key` | read a detected public key |
-| POST | `/api/ssh-key-generations` | start generation for an algorithm without an existing key |
+| POST | `/api/auth/logout-others` | revoke all other refresh sessions |
+| GET/POST | `/api/heartbeat` | connection instances and resize updates |
+| GET/POST | `/api/connection-instances` | list or create local instances |
+| GET | `/api/connection-instances/:id` | inspect an instance |
+| PATCH | `/api/connection-instances/:id/title` | change an instance title |
+| POST/DELETE | `/api/connection-instances/:id/close`, `/api/connection-instances/:id` | retire an instance |
+| GET | `/api/connection-instances/:id/remote-monitor` | cached monitor data for a live SSH transport |
+| GET | `/api/ssh-keys`, `/api/ssh-keys/:keyId/public-key` | list keys or read a public key |
+| DELETE | `/api/ssh-keys/:keyId` | delete a writable managed key pair |
+| POST | `/api/ssh-key-generations` | generate an absent Ed25519/RSA key |
 
-`POST /api/connection-instances` accepts `connectionDefinitionId: "local"` and optional `initialCwd`, `cols`, and `rows`. `initialCwd` must be
-an existing absolute directory. Dimensions are `cols: 2..1000` and
-`rows: 1..1000`. Capacity returns `409`. Remote definitions are introduced by
-the SSH connection manager in a later API section.
-
-SSH connection summaries may include `tmuxPrefixKey` and `tmuxPrefixSource` when tmux is
-enabled. The key is a single lowercase letter; `source` is `runtime`, `fallback`, or
-`unsupported`. These fields are a startup snapshot of the effective remote tmux server
-prefix, never raw `.tmux.conf` content.
-
-`GET /api/connection-instances/:id/remote-monitor` returns a typed snapshot with top-level
-`status` (`warming`, `available`, `partial`, `stale`, or `unavailable`), `sampledAt`,
-`ageMs`, `probeRttMs`, and per-metric `status`/`scope` fields. CPU and memory scope is
-`cgroup-v1`, `cgroup-v2`, `host`, or `unknown`; uptime is `pid1`, load is `system`, and
-disk is `rootfs` with mount `/`. Values are nullable when a capability is unavailable.
-CPU's first cumulative sample is `warming`; after 15 seconds without a successful sample
-the snapshot is `stale`, and three consecutive probe failures make it `unavailable` while
-retaining the last successful values. The fixed collector runs over an existing
-ControlMaster and never creates a login session or persists output.
+Local instance creation accepts `connectionDefinitionId: "local"`, optional
+absolute `initialCwd`, and `cols: 2..1000` / `rows: 1..1000`. Capacity returns
+`409`. Remote-monitor responses expose status, sample age, RTT, and scoped CPU,
+memory, uptime, load, and disk values. They use an existing SSH ControlMaster,
+never create a login session, and return `409 no_remote_transport` for local,
+exited, or draining instances.
 
 ## WebSocket
 
-Connect only to `/ws/connection-instances/:connectionInstanceId` from the current Origin. Send the access token
-as the `roaminal.auth.<token>` subprotocol alongside `roaminal.v1`; the server
-selects only `roaminal.v1` and never echoes the token. Attach messages are always
-ordered `snapshot`, `meta`, `status`, then live `output`.
-
-Client messages are:
+Connect to `/ws/connection-instances/:connectionInstanceId` from the current
+Origin with `roaminal.v1` and `roaminal.auth.<access-token>` subprotocols. The
+server selects only `roaminal.v1`; attach order is `snapshot`, `meta`, `status`,
+then live `output`.
 
 ```json
 {"type":"input","data":"ls\n"}
@@ -68,6 +44,6 @@ Client messages are:
 {"type":"ping"}
 ```
 
-The server emits `snapshot`, `meta`, `status`, `output`, `execution`, and `pong`
-messages. Malformed or unknown messages close with WebSocket code `1008`;
-messages over 1 MiB close with `1009`. A slow client is disconnected with `1013`.
+Server messages are `snapshot`, `meta`, `status`, `output`, `execution`, and
+`pong`. Invalid messages close with `1008`, oversized messages with `1009`, and
+slow clients with `1013`.

@@ -1,41 +1,24 @@
 # Security
 
-Roaminal is intended to run behind an authenticated, same-origin HTTPS route.
-The backend binds only its configured address and is the only network listener;
-the Node terminal worker communicates over private process stdin/stdout and has
-no network endpoint.
+Run Roaminal behind an authenticated, same-origin HTTPS proxy. The Go backend is
+the only network listener; the terminal worker uses private stdin/stdout.
+Proxies must preserve WebSocket upgrades and allow one-hour read/send timeouts.
 
-Login uses a 30-second, single-use challenge and HMAC-SHA256. The browser holds
-only the current access/refresh tokens in origin-local storage; the password and
-password proof key never persist. Access tokens are in memory on the server;
-only a SHA-256 refresh-token hash and a password fingerprint are persisted.
-Refresh rotates both tokens and invalidates the previous access token.
+Login uses a 30-second, single-use HMAC-SHA256 challenge. The browser retains
+access and refresh tokens only in origin-local storage. The server persists only
+refresh-token hashes and a password fingerprint; refresh rotates both tokens.
+Changing the password revokes prior refresh sessions.
 
-State directories are mode `0700`; JSON, snapshots, temporary files, and
-quarantine copies are mode `0600`, written with fsync and atomic rename. Change
-the configured password to revoke prior refresh sessions. Keep the Secret and
-unified PVC protected with the platform's secret-management and backup controls.
-The unified PVC contains state, workspace data, and SSH keys; treat every
-snapshot and backup as credential material.
+State directories use `0700`; state files use `0600`, fsync, and atomic rename.
+Protect the authentication Secret and unified PVC as credential material: the
+PVC includes workspace files, SSH keys, and terminal scrollback. Never put
+tokens in URLs, logs, screenshots, reports, or proxy access logs.
 
-The container runs as UID/GID 1000 with a read-only root filesystem, dropped
-Linux capabilities, no privilege escalation, and no host or container-runtime
-socket. The Helm Chart mounts three subpaths from one unified PVC and may
-replace the SSH subpath with a read-only Secret/projected volume. A reverse
-proxy must enforce HTTPS, preserve WebSocket upgrades, and use a read/send
-timeout of at least one hour for long-lived terminal connections.
+The container runs as UID/GID 1000 with a read-only root filesystem, no added
+capabilities, no privilege escalation, and no host/runtime socket. Never expose
+the worker protocol through a Service or production port-forward.
 
-Do not put access or refresh tokens in URLs, logs, screenshots, issue reports, or
-proxy access logs. The worker protocol is local and must never be exposed by a
-Service or port-forward in production.
-
-Remote monitoring uses only the existing SSH ControlMaster. Auxiliary channels use
-`ControlMaster=no`, the existing `ControlPath`, `BatchMode=yes`, `ProxyCommand=/bin/false`,
-`ClearAllForwardings=yes`, and `RemoteCommand=none`; a missing control socket cannot fall
-back to a new network connection or credential prompt. The backend sends a versioned,
-nonce-framed, fixed POSIX collector over stdin, limits stdout/stderr to 8 KiB and execution
-to two seconds, and parses an allowlist of bounded fields. Raw collector output, remote
-configuration, counters, terminal input, and probe failure details are not persisted or
-returned. Snapshots are cached and singleflighted by internal transport identity under the
-existing authenticated API. CPU and memory scopes remain `unknown` when ownership cannot be
-proven; PID1 uptime, system load, and root filesystem capacity are labelled independently.
+Remote monitoring uses only an existing SSH ControlMaster. It disables new
+connections, credential prompts, forwarding, and remote commands; collector
+output is bounded, parsed from an allowlist, and never persisted. Metrics remain
+unknown when cgroup ownership cannot be established.
