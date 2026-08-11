@@ -17,6 +17,7 @@ body { background: var(--base); }
 .icon-button { width: 34px; height: 34px; display: inline-grid; place-items: center; font-size: 1.25rem; }
 .icon-button:hover, .text-button:hover, .extension-button:hover, .connection-action-trigger:hover { color: #eee8d5; background: rgba(147,161,161,.12); }
 .connection-list { flex: 1; min-height: 0; overflow: auto; padding: 10px 10px 12px; }
+.sidebar .connection-list { align-self: stretch; width: auto; max-width: none; margin-inline: 0; box-sizing: border-box; }
 .connection-card { width: 100%; min-width: 0; min-height: 126px; flex: 0 0 auto; position: relative; overflow: hidden; isolation: isolate; border: 1px solid transparent; border-left: 2px solid transparent; background: rgba(0,43,54,.6); }
 .connection-card + .connection-card { margin-top: 8px; }
 .connection-card.active { border-color: var(--border); border-left-color: var(--yellow); background: rgba(88,110,117,.25); }
@@ -102,6 +103,7 @@ body { background: var(--base); }
 .auth-modal .brand-mark { margin-bottom: 4px; }
 .auth-modal h1 { margin: 0; color: #eee8d5; font-size: 1.5rem; }
 .auth-subtitle { color: var(--muted); margin: 0 0 8px; font-size: .82rem; }
+.auth-username-label, .auth-username { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .auth-modal label { color: var(--muted); font-size: .75rem; }
 .auth-modal input[type='password'] { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: #eee8d5; padding: 0 10px; }
 .error-text { color: #ff938f; font-size: .76rem; }
