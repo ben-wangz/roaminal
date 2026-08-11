@@ -12,13 +12,11 @@ import (
 )
 
 type createConnectionRequest struct {
-	ConnectionDefinitionID            string  `json:"connectionDefinitionId"`
-	Cols                              int     `json:"cols,omitempty"`
-	Rows                              int     `json:"rows,omitempty"`
-	InitialCwd                        *string `json:"initialCwd,omitempty"`
-	ReuseFromConnectionInstanceID     *string `json:"reuseFromConnectionInstanceId,omitempty"`
-	ReconnectFromConnectionInstanceID *string `json:"reconnectFromConnectionInstanceId,omitempty"`
-	RelaunchFromConnectionInstanceID  *string `json:"relaunchFromConnectionInstanceId,omitempty"`
+	ConnectionDefinitionID        string  `json:"connectionDefinitionId"`
+	Cols                          int     `json:"cols,omitempty"`
+	Rows                          int     `json:"rows,omitempty"`
+	InitialCwd                    *string `json:"initialCwd,omitempty"`
+	ReuseFromConnectionInstanceID *string `json:"reuseFromConnectionInstanceId,omitempty"`
 }
 
 func (s *Server) listConnectionInstances(w http.ResponseWriter, _ *http.Request, _ string) {
@@ -124,25 +122,6 @@ func stringValue(value *string) string {
 		return ""
 	}
 	return *value
-}
-
-func (s *Server) closeConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {
-	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/connection-instances/"), "/close")
-	if id == "" || strings.Contains(id, "/") {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	if err := s.terms.Close(r.Context(), id); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			writeError(w, http.StatusNotFound, "not found")
-		} else {
-			writeError(w, http.StatusInternalServerError, "internal error")
-		}
-		return
-	}
-	// Close retires the active session after archiving it, so there is no
-	// attachable history to return.
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) deleteConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {

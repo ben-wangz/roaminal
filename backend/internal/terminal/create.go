@@ -110,21 +110,3 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 func (m *Manager) connectionLimit() int {
 	return m.cfg.MaxConnectionInstances
 }
-
-// Close ends a live connection and retires its active session. The audit copy
-// is retained, but no closed history remains attachable in the workspace.
-func (m *Manager) Close(ctx context.Context, id string) error {
-	m.mu.RLock()
-	session := m.sessions[id]
-	m.mu.RUnlock()
-	if session == nil {
-		return os.ErrNotExist
-	}
-	session.mu.Lock()
-	if session.closed {
-		session.mu.Unlock()
-		return m.retireSession(ctx, session)
-	}
-	session.mu.Unlock()
-	return m.terminateSession(ctx, session, "exited")
-}

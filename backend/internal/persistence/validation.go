@@ -31,7 +31,7 @@ func validateSessionMeta(meta SessionMeta) error {
 	if !uuidPattern.MatchString(meta.ID) {
 		return errors.New("invalid session id")
 	}
-	if !utf8.ValidString(meta.EffectiveTitle()) || len([]byte(meta.EffectiveTitle())) > 512 || !utf8.ValidString(meta.AutomaticTitle) || len([]byte(meta.AutomaticTitle)) > 512 || !utf8.ValidString(meta.InitialCwd) || !utf8.ValidString(meta.Cwd) || !utf8.ValidString(meta.GenerationStatus) || len([]byte(meta.GenerationStatus)) > 64 || !utf8.ValidString(meta.GenerationError) || len([]byte(meta.GenerationError)) > 512 || !utf8.ValidString(meta.GenerationStaging) || len([]byte(meta.GenerationStaging)) > 512 {
+	if !utf8.ValidString(meta.EffectiveTitle()) || len([]byte(meta.EffectiveTitle())) > 512 || !utf8.ValidString(meta.AutomaticTitle) || len([]byte(meta.AutomaticTitle)) > 512 || !utf8.ValidString(meta.InitialCwd) || !utf8.ValidString(meta.Cwd) || !utf8.ValidString(meta.GenerationStatus) || len([]byte(meta.GenerationStatus)) > 64 || !utf8.ValidString(meta.GenerationError) || len([]byte(meta.GenerationError)) > 512 {
 		return errors.New("invalid session text")
 	}
 	if meta.TitleOverride != nil {

@@ -32,34 +32,28 @@ var ErrClientCapacity = errors.New("client capacity reached")
 var ErrControlNotOwner = errors.New("terminal control is owned by another client")
 
 type Summary struct {
-	ID                         string      `json:"id"`
-	ConnectionInstanceID       string      `json:"connectionInstanceId"`
-	ConnectionDefinitionID     string      `json:"connectionDefinitionId"`
-	Type                       string      `json:"type"`
-	Purpose                    string      `json:"purpose"`
-	Lifecycle                  string      `json:"lifecycle"`
-	SourceState                string      `json:"sourceState"`
-	SourceHostAlias            *string     `json:"sourceHostAlias,omitempty"`
-	HostVerificationAssessment string      `json:"hostVerificationAssessment,omitempty"`
-	CreatedAt                  time.Time   `json:"createdAt"`
-	UpdatedAt                  time.Time   `json:"updatedAt"`
-	Shell                      string      `json:"shell"`
-	InitialCwd                 string      `json:"initialCwd"`
-	Title                      string      `json:"title"`
-	TitleMode                  string      `json:"titleMode"`
-	Cwd                        string      `json:"cwd"`
-	Cols                       int         `json:"cols"`
-	Rows                       int         `json:"rows"`
-	Closed                     bool        `json:"closed"`
-	Attention                  bool        `json:"attention"`
-	ExitStatus                 *ExitStatus `json:"exitStatus"`
-	GenerationStatus           string      `json:"generationStatus,omitempty"`
-	GenerationError            string      `json:"generationError,omitempty"`
-	GenerationStaging          string      `json:"generationStaging,omitempty"`
-	TmuxEnabled                bool        `json:"tmuxEnabled,omitempty"`
-	TmuxSessionName            string      `json:"tmuxSessionName,omitempty"`
-	TmuxPrefixKey              string      `json:"tmuxPrefixKey,omitempty"`
-	TmuxPrefixSource           string      `json:"tmuxPrefixSource,omitempty"`
+	ID                     string    `json:"-"`
+	ConnectionInstanceID   string    `json:"connectionInstanceId"`
+	ConnectionDefinitionID string    `json:"connectionDefinitionId"`
+	Type                   string    `json:"type"`
+	Purpose                string    `json:"purpose"`
+	Lifecycle              string    `json:"lifecycle"`
+	SourceState            string    `json:"sourceState"`
+	SourceHostAlias        *string   `json:"sourceHostAlias,omitempty"`
+	CreatedAt              time.Time `json:"createdAt"`
+	UpdatedAt              time.Time `json:"updatedAt"`
+	Title                  string    `json:"title"`
+	TitleMode              string    `json:"titleMode"`
+	Cwd                    string    `json:"cwd"`
+	Cols                   int       `json:"cols"`
+	Rows                   int       `json:"rows"`
+	Attention              bool      `json:"attention"`
+	GenerationStatus       string    `json:"generationStatus,omitempty"`
+	GenerationError        string    `json:"generationError,omitempty"`
+	TmuxEnabled            bool      `json:"tmuxEnabled,omitempty"`
+	TmuxSessionName        string    `json:"tmuxSessionName,omitempty"`
+	TmuxPrefixKey          string    `json:"tmuxPrefixKey,omitempty"`
+	TmuxPrefixSource       string    `json:"tmuxPrefixSource,omitempty"`
 }
 
 type Client struct {

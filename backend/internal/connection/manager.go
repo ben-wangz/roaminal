@@ -132,11 +132,6 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	m.Manager.Shutdown(ctx)
 }
 
-func (m *Manager) Close(ctx context.Context, id string) error {
-	err := m.Manager.Close(ctx, id)
-	m.finishInstance(ctx, id, err == nil)
-	return err
-}
 func (m *Manager) Delete(ctx context.Context, id string) error {
 	err := m.Manager.Delete(ctx, id)
 	m.finishInstance(ctx, id, err == nil)

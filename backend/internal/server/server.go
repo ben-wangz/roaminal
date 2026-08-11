@@ -144,8 +144,6 @@ func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
 		s.withAuth(w, r, s.deleteSSHKey)
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/title"):
 		s.withAuth(w, r, s.updateSessionTitle)
-	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/close"):
-		s.withAuth(w, r, s.closeConnectionInstance)
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/auth/sessions/"):
 		s.withAuth(w, r, s.revokeAuthSession)
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-instances/"):

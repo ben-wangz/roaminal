@@ -17,7 +17,13 @@ func (m *Manager) Summaries() []Summary {
 	m.mu.RUnlock()
 	result := make([]Summary, 0, len(sessions))
 	for _, session := range sessions {
-		result = append(result, m.summary(session))
+		session.mu.Lock()
+		if session.closed || session.retiring || session.retired {
+			session.mu.Unlock()
+			continue
+		}
+		result = append(result, m.summaryLocked(session))
+		session.mu.Unlock()
 	}
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
@@ -45,11 +51,7 @@ func (m *Manager) summary(session *Session) Summary {
 }
 func (m *Manager) summaryLocked(session *Session) Summary {
 	session.meta.SyncEffectiveTitle()
-	command := session.command
-	if command == "" {
-		command = "/bin/bash"
-	}
-	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, HostVerificationAssessment: session.meta.HostVerificationAssessment, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Shell: command, InitialCwd: session.meta.InitialCwd, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Closed: session.closed, Attention: session.attention, ExitStatus: session.exitStatus, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError, GenerationStaging: session.meta.GenerationStaging, TmuxEnabled: session.meta.TmuxEnabled, TmuxSessionName: session.meta.TmuxSessionName, TmuxPrefixKey: session.meta.TmuxPrefixKey, TmuxPrefixSource: session.meta.TmuxPrefixSource}
+	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Attention: session.attention, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError, TmuxEnabled: session.meta.TmuxEnabled, TmuxSessionName: session.meta.TmuxSessionName, TmuxPrefixKey: session.meta.TmuxPrefixKey, TmuxPrefixSource: session.meta.TmuxPrefixSource}
 }
 func lifecycle(session *Session) string {
 	if session.ephemeral {
@@ -71,7 +73,7 @@ func titleMode(meta persistence.SessionMeta) string {
 }
 func (s *Session) broadcastMetaLocked() {
 	s.meta.SyncEffectiveTitle()
-	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows, "sourceState": s.meta.SourceState, "generationStatus": s.meta.GenerationStatus, "generationError": s.meta.GenerationError, "generationStaging": s.meta.GenerationStaging}))
+	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows, "sourceState": s.meta.SourceState, "generationStatus": s.meta.GenerationStatus, "generationError": s.meta.GenerationError}))
 }
 
 func (m *Manager) MarkSourceState(id, state string) error {
@@ -105,9 +107,6 @@ func (m *Manager) MarkGenerationResult(id, state, detail string) error {
 	session.mu.Lock()
 	session.meta.GenerationStatus = state
 	session.meta.GenerationError = detail
-	if state == "succeeded" {
-		session.meta.GenerationStaging = ""
-	}
 	session.meta.UpdatedAt = time.Now().UTC()
 	if m.store != nil {
 		if err := m.store.SaveSession(session.meta); err != nil {
