@@ -90,6 +90,7 @@ type Store struct {
 	Root           string
 	ConnectionsDir string
 	AuditDir       string
+	DiagnosticsDir string
 	Layout         Layout
 	degradedMu     sync.RWMutex
 	degradedIDs    map[string]struct{}

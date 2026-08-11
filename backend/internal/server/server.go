@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
+	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
@@ -31,6 +32,7 @@ type Server struct {
 	sshConfig         *sshconfig.Repository
 	sshKeys           *sshkey.Inventory
 	connectionOptions *connectionoptions.Store
+	diagnostics       *clientdiag.Sink
 }
 
 func New(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client) *Server {
@@ -45,8 +47,13 @@ func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.
 }
 
 func NewWithSources(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store) *Server {
+	return NewWithSourcesAndDiagnostics(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, static, configRepo, keys, options, nil)
+}
+
+func NewWithSourcesAndDiagnostics(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store, diagnostics *clientdiag.Sink) *Server {
 	s := NewWithStatic(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, static)
-	s.sshConfig, s.sshKeys, s.connectionOptions = configRepo, keys, options
+	s.sshConfig, s.sshKeys, s.connectionOptions, s.diagnostics = configRepo, keys, options, diagnostics
+	s.api = s.newAPIRouter()
 	return s
 }
 
@@ -131,6 +138,9 @@ func (s *Server) newAPIRouter() http.Handler {
 	}
 	mux.Handle("/healthz", plain(http.MethodGet, s.health))
 	mux.Handle("/api/version", plain(http.MethodGet, s.versionInfo))
+	if s.cfg.ClientDiagnosticsEnabled && s.diagnostics != nil {
+		mux.Handle("/api/client-diagnostics", protected(http.MethodPost, s.clientDiagnostics))
+	}
 	mux.Handle("/api/auth/challenge", plain(http.MethodPost, s.challenge))
 	mux.Handle("/api/auth/login", plain(http.MethodPost, s.login))
 	mux.Handle("/api/auth/refresh", plain(http.MethodPost, s.refresh))
@@ -181,7 +191,7 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 func (s *Server) versionInfo(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"name": "roaminal", "version": s.version, "apiVersion": "roaminal.v1", "bootId": s.bootID})
+	writeJSON(w, http.StatusOK, map[string]any{"name": "roaminal", "version": s.version, "apiVersion": "roaminal.v1", "bootId": s.bootID, "clientDiagnosticsEnabled": s.cfg.ClientDiagnosticsEnabled})
 }
 
 type authenticatedHandler func(http.ResponseWriter, *http.Request, string)

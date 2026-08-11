@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/buildinfo"
+	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
@@ -93,12 +95,14 @@ func run(cfg config.Config) error {
 		_ = terminalWorker.Shutdown(context.Background())
 		return err
 	}
+	diagnostics := clientdiag.New(store.DiagnosticsDir, buildinfo.Version, bootID, log.Default())
+	defer diagnostics.Close()
 	static, err := frontend.Handler(cfg.FrontendDir)
 	if err != nil {
 		terminals.Shutdown(context.Background())
 		return err
 	}
-	service := server.NewWithSources(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory, connectionOptions)
+	service := server.NewWithSourcesAndDiagnostics(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory, connectionOptions, diagnostics)
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {
 		_ = terminalWorker.Shutdown(context.Background())

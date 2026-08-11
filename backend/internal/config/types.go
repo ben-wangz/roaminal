@@ -33,6 +33,7 @@ type Config struct {
 	AuthAccessTTL                   time.Duration
 	AuthRefreshTTL                  time.Duration
 	AuthMaxAttempts                 int
+	ClientDiagnosticsEnabled        bool
 	StateDir                        string
 	WorkerPath                      string
 	FrontendDir                     string
@@ -54,6 +55,7 @@ type fileConfig struct {
 	AuthAccessTTL                   *string `json:"authAccessTTL"`
 	AuthRefreshTTL                  *string `json:"authRefreshTTL"`
 	AuthMaxAttempts                 *int    `json:"authMaxAttempts"`
+	ClientDiagnosticsEnabled        *bool   `json:"clientDiagnosticsEnabled"`
 	FrontendDir                     *string `json:"frontendDir"`
 }
 
@@ -61,5 +63,5 @@ var allowedFileKeys = map[string]bool{
 	"host": true, "port": true, "password": true, "websocketPingInterval": true,
 	"scrollbackLines": true, "maxConnectionInstances": true, "maxClientsPerConnectionInstance": true,
 	"debug": true, "acceptTerms": true, "initialCwd": true, "authAccessTTL": true,
-	"authRefreshTTL": true, "authMaxAttempts": true, "frontendDir": true,
+	"authRefreshTTL": true, "authMaxAttempts": true, "clientDiagnosticsEnabled": true, "frontendDir": true,
 }

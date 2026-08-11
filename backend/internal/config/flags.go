@@ -19,6 +19,18 @@ func applyArgs(c *Config, args []string) error {
 			c.AcceptTerms = true
 			continue
 		}
+		if arg == "--client-diagnostics" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("missing value for %s", arg)
+			}
+			i++
+			parsed, err := parseBool(args[i])
+			if err != nil {
+				return fmt.Errorf("client diagnostics: %w", err)
+			}
+			c.ClientDiagnosticsEnabled = parsed
+			continue
+		}
 		key, value, hasValue := strings.Cut(arg, "=")
 		if !hasValue {
 			switch key {
@@ -89,6 +101,12 @@ func applyArgs(c *Config, args []string) error {
 				return err
 			}
 			c.AuthMaxAttempts = n
+		case "--client-diagnostics":
+			b, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("client diagnostics: %w", err)
+			}
+			c.ClientDiagnosticsEnabled = b
 		default:
 			return fmt.Errorf("unknown argument %s", arg)
 		}
@@ -151,6 +169,9 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := set("ROAMINAL_AUTH_MAX_ATTEMPTS", func(v string) error { n, err := strconv.Atoi(v); c.AuthMaxAttempts = n; return err }); err != nil {
+		return err
+	}
+	if err := set("ROAMINAL_CLIENT_DIAGNOSTICS_ENABLED", func(v string) error { b, err := parseBool(v); c.ClientDiagnosticsEnabled = b; return err }); err != nil {
 		return err
 	}
 	return nil

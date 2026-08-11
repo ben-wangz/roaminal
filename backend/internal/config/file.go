@@ -84,6 +84,9 @@ func applyFile(c *Config, v fileConfig) error {
 	if v.AuthMaxAttempts != nil {
 		c.AuthMaxAttempts = *v.AuthMaxAttempts
 	}
+	if v.ClientDiagnosticsEnabled != nil {
+		c.ClientDiagnosticsEnabled = *v.ClientDiagnosticsEnabled
+	}
 	if v.FrontendDir != nil {
 		c.FrontendDir = *v.FrontendDir
 	}

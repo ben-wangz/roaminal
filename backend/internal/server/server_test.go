@@ -1,15 +1,21 @@
 package server
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/ben-wangz/roaminal/backend/internal/auth"
+	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 )
 
 func TestAPIRoutesTakePrecedenceOverStatic(t *testing.T) {
@@ -103,6 +109,98 @@ func TestAPIRouteMethodMismatchReturnsStableError(t *testing.T) {
 	}
 	if response.Header().Get("Allow") != http.MethodGet {
 		t.Fatalf("Allow = %q, want GET", response.Header().Get("Allow"))
+	}
+}
+
+func TestClientDiagnosticsEndpointRequiresAuthAndAcceptsBatch(t *testing.T) {
+	store, err := persistence.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{Password: "secret", AuthAccessTTL: time.Minute, AuthRefreshTTL: time.Hour, AuthMaxAttempts: 3, ClientDiagnosticsEnabled: true}
+	authManager, err := auth.New(cfg, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	sink := clientdiag.New("", "0.2.11", "boot", log.New(&logs, "", 0))
+	server := NewWithSourcesAndDiagnostics(cfg, "0.2.11", "boot", authManager, nil, nil, nil, http.NotFoundHandler(), nil, nil, nil, sink)
+	body := clientdiag.Batch{SchemaVersion: 1, PageID: "11111111-1111-4000-8000-000000000004", Events: []clientdiag.Event{{EventID: "11111111-1111-4000-8000-000000000005", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano), Kind: "console_error", Message: "test"}}}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(encoded))
+	request.Header.Set("Origin", "http://roaminal.test")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated status = %d, want 401", response.Code)
+	}
+	challenge, err := authManager.Challenge()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := authManager.Login(challenge.ChallengeID, auth.Proof(cfg.Password, challenge), "browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(encoded))
+	request.Header.Set("Origin", "http://roaminal.test")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	response = httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("authenticated status = %d, want 204: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(logs.String(), "client_diagnostic=") {
+		t.Fatalf("missing diagnostic log: %q", logs.String())
+	}
+}
+
+func TestClientDiagnosticsRouteIsAbsentWhenDisabled(t *testing.T) {
+	server := NewWithSourcesAndDiagnostics(config.Config{}, "0.1.0", "boot", nil, nil, nil, nil, http.NotFoundHandler(), nil, nil, nil, nil)
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader([]byte(`{}`)))
+	request.Header.Set("Origin", "http://roaminal.test")
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("disabled route status = %d, want 404", response.Code)
+	}
+}
+
+func TestClientDiagnosticsDecoderUsesStableErrorsAndSizeLimit(t *testing.T) {
+	valid := []byte(`{"schemaVersion":1}`)
+	for name, request := range map[string]*http.Request{
+		"content type":  httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(valid)),
+		"unknown field": httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader([]byte(`{"unknown":true}`))),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if name == "unknown field" {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			response := httptest.NewRecorder()
+			err := decodeClientDiagnostics(response, request, &clientdiag.Batch{})
+			if err == nil || response.Code != http.StatusBadRequest {
+				t.Fatalf("decode status=%d err=%v, want 400", response.Code, err)
+			}
+			var body map[string]string
+			if decodeErr := json.Unmarshal(response.Body.Bytes(), &body); decodeErr != nil {
+				t.Fatal(decodeErr)
+			}
+			if body["code"] != "invalid_client_diagnostics" {
+				t.Fatalf("error code=%q, want invalid_client_diagnostics", body["code"])
+			}
+		})
+	}
+	oversized := append(append([]byte{}, valid...), []byte(" \""+strings.Repeat("x", clientdiag.MaxBodyBytes)+"\"")...)
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(oversized))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	if err := decodeClientDiagnostics(response, request, &clientdiag.Batch{}); err == nil || response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized decode status=%d err=%v, want 413", response.Code, err)
 	}
 }
 
