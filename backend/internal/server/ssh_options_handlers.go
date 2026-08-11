@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
@@ -78,7 +77,7 @@ func (s *Server) publicSSHKey(w http.ResponseWriter, r *http.Request, _ string) 
 		writeError(w, http.StatusNotFound, "key not found")
 		return
 	}
-	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/ssh-keys/"), "/public-key")
+	id := r.PathValue("keyId")
 	value, err := s.sshKeys.Public(id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "public key not found")
@@ -93,8 +92,8 @@ func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request, _ string) 
 		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable", "ssh_keys")
 		return
 	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/ssh-keys/")
-	if id == "" || strings.Contains(id, "/") {
+	id := r.PathValue("keyId")
+	if id == "" {
 		writeError(w, http.StatusBadRequest, "invalid key id")
 		return
 	}

@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 )
 
 func (s *Server) remoteMonitor(w http.ResponseWriter, r *http.Request, _ string) {
-	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/connection-instances/"), "/remote-monitor")
-	if id == "" || strings.Contains(id, "/") {
+	id := r.PathValue("connectionInstanceId")
+	if id == "" {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}

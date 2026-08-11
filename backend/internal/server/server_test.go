@@ -49,6 +49,26 @@ func TestSameOriginRequiresMatchingHostAndScheme(t *testing.T) {
 	}
 }
 
+func TestAPIRouteMethodMismatchReturnsStableError(t *testing.T) {
+	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, (*connection.Manager)(nil), nil, nil, http.NotFoundHandler())
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/version", nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if body["code"] != "method_not_allowed" {
+		t.Fatalf("error code = %q, want method_not_allowed", body["code"])
+	}
+	if response.Header().Get("Allow") != http.MethodGet {
+		t.Fatalf("Allow = %q, want GET", response.Header().Get("Allow"))
+	}
+}
+
 func TestValidWSMessageRejectsUnknownFields(t *testing.T) {
 	if !validWSMessage("input", map[string]json.RawMessage{"type": rawJSON(`"input"`), "data": rawJSON(`"pwd"`)}) {
 		t.Fatal("expected input message")

@@ -96,9 +96,8 @@ func writeCollection(w http.ResponseWriter, collection sshconfig.Collection) {
 	writeJSON(w, http.StatusOK, collection)
 }
 
-func decodeAlias(path, prefix string) (string, error) {
-	raw := strings.TrimPrefix(path, prefix)
-	if strings.Contains(raw, "/") {
+func decodeAlias(raw string) (string, error) {
+	if raw == "" || strings.Contains(raw, "/") {
 		return "", errors.New("invalid definition id")
 	}
 	decoded, err := url.PathUnescape(raw)
@@ -145,7 +144,7 @@ func (s *Server) createConnectionDefinition(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) updateConnectionDefinition(w http.ResponseWriter, r *http.Request, _ string) {
-	alias, err := decodeAlias(r.URL.Path, "/api/connection-definitions/")
+	alias, err := decodeAlias(r.PathValue("connectionDefinitionId"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid definition id")
 		return
@@ -179,8 +178,7 @@ func (s *Server) updateConnectionDefinition(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) duplicateConnectionDefinition(w http.ResponseWriter, r *http.Request, _ string) {
-	path := strings.TrimSuffix(r.URL.Path, "/duplicate")
-	alias, err := decodeAlias(path, "/api/connection-definitions/")
+	alias, err := decodeAlias(r.PathValue("connectionDefinitionId"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid definition id")
 		return
@@ -206,7 +204,7 @@ func (s *Server) duplicateConnectionDefinition(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) deleteConnectionDefinition(w http.ResponseWriter, r *http.Request, _ string) {
-	alias, err := decodeAlias(r.URL.Path, "/api/connection-definitions/")
+	alias, err := decodeAlias(r.PathValue("connectionDefinitionId"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid definition id")
 		return

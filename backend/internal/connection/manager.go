@@ -52,6 +52,7 @@ func transportAcceptsReuse(transport *Transport) bool {
 }
 
 var ErrClientCapacity = terminal.ErrClientCapacity
+var ErrConnectionCapacity = terminal.ErrConnectionCapacity
 var ErrControlNotOwner = terminal.ErrControlNotOwner
 var ErrTransportUnavailable = errors.New("ssh transport unavailable")
 var ErrTransportDraining = errors.New("ssh transport is draining")

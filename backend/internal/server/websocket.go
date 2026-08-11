@@ -14,13 +14,13 @@ import (
 )
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
-	pending := strings.HasPrefix(r.URL.Path, "/ws/connection-launches/")
-	prefix := "/ws/connection-instances/"
+	id := r.PathValue("connectionInstanceId")
+	pendingID := r.PathValue("launchId")
+	pending := pendingID != ""
 	if pending {
-		prefix = "/ws/connection-launches/"
+		id = pendingID
 	}
-	id := strings.TrimPrefix(r.URL.Path, prefix)
-	if id == "" || strings.Contains(id, "/") {
+	if id == "" {
 		writeError(w, 404, "not found")
 		return
 	}

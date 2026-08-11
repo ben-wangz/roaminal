@@ -89,7 +89,7 @@ func (m *Manager) createProcess(ctx context.Context, meta persistence.SessionMet
 	m.mu.Lock()
 	if len(m.sessions)+len(m.pending)+m.createReservations >= m.connectionLimit() {
 		m.mu.Unlock()
-		return Summary{}, errors.New("connection capacity reached")
+		return Summary{}, ErrConnectionCapacity
 	}
 	m.createReservations++
 	m.mu.Unlock()

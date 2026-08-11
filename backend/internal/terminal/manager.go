@@ -29,6 +29,7 @@ type executionRecord struct {
 }
 
 var ErrClientCapacity = errors.New("client capacity reached")
+var ErrConnectionCapacity = errors.New("connection capacity reached")
 var ErrControlNotOwner = errors.New("terminal control is owned by another client")
 
 type Summary struct {

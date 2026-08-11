@@ -12,7 +12,7 @@ import (
 type heartbeatUpdate struct {
 	Updates struct {
 		ConnectionInstances []struct {
-			ID     string `json:"id"`
+			ID     string `json:"connectionInstanceId"`
 			Resize *struct {
 				Cols int `json:"cols"`
 				Rows int `json:"rows"`

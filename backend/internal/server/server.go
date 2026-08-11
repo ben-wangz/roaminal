@@ -25,6 +25,7 @@ type Server struct {
 	bootID            string
 	version           string
 	handler           http.Handler
+	api               http.Handler
 	started           time.Time
 	static            http.Handler
 	sshConfig         *sshconfig.Repository
@@ -38,6 +39,7 @@ func New(cfg config.Config, version, bootID string, authManager *auth.Manager, t
 
 func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler) *Server {
 	s := &Server{cfg: cfg, version: version, bootID: bootID, auth: authManager, terms: terms, monitor: monitorService, worker: terminalWorker, started: time.Now(), static: static}
+	s.api = s.newAPIRouter()
 	s.handler = http.HandlerFunc(s.serve)
 	return s
 }
@@ -56,7 +58,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "origin denied")
 			return
 		}
-		s.routeAPI(w, r)
+		s.api.ServeHTTP(w, r)
 		return
 	}
 	s.static.ServeHTTP(w, r)
@@ -84,73 +86,77 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 	return strings.EqualFold(u.Scheme, proto)
 }
 
-func (s *Server) routeAPI(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/ws/") {
-		s.websocket(w, r)
+type methodRoute map[string]http.Handler
+
+func (route methodRoute) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if handler, ok := route[r.Method]; ok {
+		handler.ServeHTTP(w, r)
 		return
 	}
-	switch {
-	case r.Method == http.MethodGet && r.URL.Path == "/healthz":
-		s.health(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/api/version":
-		s.versionInfo(w, r)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/auth/challenge":
-		s.challenge(w, r)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/auth/login":
-		s.login(w, r)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/auth/refresh":
-		s.refresh(w, r)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/auth/logout":
-		s.logout(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/api/auth/session":
-		s.withAuth(w, r, s.currentSession)
-	case r.Method == http.MethodGet && r.URL.Path == "/api/auth/sessions":
-		s.withAuth(w, r, s.authSessions)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/auth/logout-others":
-		s.withAuth(w, r, s.logoutOthers)
-	case r.Method == http.MethodGet && r.URL.Path == "/api/heartbeat":
-		s.withAuth(w, r, s.heartbeatGet)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/heartbeat":
-		s.withAuth(w, r, s.heartbeatPost)
-	case r.Method == http.MethodGet && r.URL.Path == "/api/connection-instances":
-		s.withAuth(w, r, s.listConnectionInstances)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-launches":
-		s.withAuth(w, r, s.createConnectionLaunch)
-	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-launches/"):
-		s.withAuth(w, r, s.deleteConnectionLaunch)
-	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/remote-monitor"):
-		s.withAuth(w, r, s.remoteMonitor)
-	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && !strings.HasSuffix(r.URL.Path, "/title"):
-		s.withAuth(w, r, s.getConnectionInstance)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-instances":
-		s.withAuth(w, r, s.createConnectionInstance)
-	case r.Method == http.MethodGet && r.URL.Path == "/api/connection-definitions":
-		s.withAuth(w, r, s.listConnectionDefinitions)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/connection-definitions":
-		s.withAuth(w, r, s.createConnectionDefinition)
-	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/connection-definitions/"):
-		s.withAuth(w, r, s.updateConnectionDefinition)
-	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/connection-definitions/") && strings.HasSuffix(r.URL.Path, "/duplicate"):
-		s.withAuth(w, r, s.duplicateConnectionDefinition)
-	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-definitions/"):
-		s.withAuth(w, r, s.deleteConnectionDefinition)
-	case r.Method == http.MethodGet && r.URL.Path == "/api/ssh-keys":
-		s.withAuth(w, r, s.listSSHKeys)
-	case r.Method == http.MethodPost && r.URL.Path == "/api/ssh-key-generations":
-		s.withAuth(w, r, s.generateSSHKey)
-	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/ssh-keys/") && strings.HasSuffix(r.URL.Path, "/public-key"):
-		s.withAuth(w, r, s.publicSSHKey)
-	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/ssh-keys/"):
-		s.withAuth(w, r, s.deleteSSHKey)
-	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/api/connection-instances/") && strings.HasSuffix(r.URL.Path, "/title"):
-		s.withAuth(w, r, s.updateSessionTitle)
-	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/auth/sessions/"):
-		s.withAuth(w, r, s.revokeAuthSession)
-	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/connection-instances/"):
-		s.withAuth(w, r, s.deleteConnectionInstance)
-	default:
-		writeError(w, http.StatusNotFound, "not found")
+	if len(route) > 0 {
+		allowed := make([]string, 0, len(route))
+		for method := range route {
+			allowed = append(allowed, method)
+		}
+		w.Header().Set("Allow", strings.Join(allowed, ", "))
 	}
+	writeError(w, http.StatusMethodNotAllowed, "method not allowed", "method")
+}
+
+func (s *Server) authenticatedRoute(fn authenticatedHandler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.withAuth(w, r, fn)
+	})
+}
+
+func (s *Server) newAPIRouter() http.Handler {
+	mux := http.NewServeMux()
+	plain := func(method string, fn http.HandlerFunc) http.Handler { return methodRoute{method: fn} }
+	protected := func(method string, fn authenticatedHandler) http.Handler {
+		return methodRoute{method: s.authenticatedRoute(fn)}
+	}
+	mux.Handle("/healthz", plain(http.MethodGet, s.health))
+	mux.Handle("/api/version", plain(http.MethodGet, s.versionInfo))
+	mux.Handle("/api/auth/challenge", plain(http.MethodPost, s.challenge))
+	mux.Handle("/api/auth/login", plain(http.MethodPost, s.login))
+	mux.Handle("/api/auth/refresh", plain(http.MethodPost, s.refresh))
+	mux.Handle("/api/auth/logout", plain(http.MethodPost, s.logout))
+	mux.Handle("/api/auth/session", protected(http.MethodGet, s.currentSession))
+	mux.Handle("/api/auth/sessions", protected(http.MethodGet, s.authSessions))
+	mux.Handle("/api/auth/sessions/{authSessionId}", protected(http.MethodDelete, s.revokeAuthSession))
+	mux.Handle("/api/auth/logout-others", protected(http.MethodPost, s.logoutOthers))
+	mux.Handle("/api/heartbeat", methodRoute{
+		http.MethodGet:  s.authenticatedRoute(s.heartbeatGet),
+		http.MethodPost: s.authenticatedRoute(s.heartbeatPost),
+	})
+	mux.Handle("/api/connection-instances", methodRoute{
+		http.MethodGet:  s.authenticatedRoute(s.listConnectionInstances),
+		http.MethodPost: s.authenticatedRoute(s.createConnectionInstance),
+	})
+	mux.Handle("/api/connection-instances/{connectionInstanceId}", methodRoute{
+		http.MethodGet:    s.authenticatedRoute(s.getConnectionInstance),
+		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionInstance),
+	})
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/remote-monitor", protected(http.MethodGet, s.remoteMonitor))
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/title", protected(http.MethodPatch, s.updateConnectionTitle))
+	mux.Handle("/api/connection-launches", protected(http.MethodPost, s.createConnectionLaunch))
+	mux.Handle("/api/connection-launches/{launchId}", protected(http.MethodDelete, s.deleteConnectionLaunch))
+	mux.Handle("/api/connection-definitions", methodRoute{
+		http.MethodGet:  s.authenticatedRoute(s.listConnectionDefinitions),
+		http.MethodPost: s.authenticatedRoute(s.createConnectionDefinition),
+	})
+	mux.Handle("/api/connection-definitions/{connectionDefinitionId}", methodRoute{
+		http.MethodPut:    s.authenticatedRoute(s.updateConnectionDefinition),
+		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionDefinition),
+	})
+	mux.Handle("/api/connection-definitions/{connectionDefinitionId}/duplicate", protected(http.MethodPost, s.duplicateConnectionDefinition))
+	mux.Handle("/api/ssh-keys", protected(http.MethodGet, s.listSSHKeys))
+	mux.Handle("/api/ssh-keys/{keyId}", protected(http.MethodDelete, s.deleteSSHKey))
+	mux.Handle("/api/ssh-keys/{keyId}/public-key", protected(http.MethodGet, s.publicSSHKey))
+	mux.Handle("/api/ssh-key-generations", protected(http.MethodPost, s.generateSSHKey))
+	mux.Handle("/ws/connection-instances/{connectionInstanceId}", plain(http.MethodGet, s.websocket))
+	mux.Handle("/ws/connection-launches/{launchId}", plain(http.MethodGet, s.websocket))
+	return mux
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {

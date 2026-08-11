@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 )
@@ -73,7 +72,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) revokeAuthSession(w http.ResponseWriter, r *http.Request, _ string) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/auth/sessions/")
+	id := r.PathValue("authSessionId")
 	if err := s.auth.Revoke(id); err != nil {
 		if errors.Is(err, auth.ErrNotFound) {
 			writeError(w, 404, "not found")

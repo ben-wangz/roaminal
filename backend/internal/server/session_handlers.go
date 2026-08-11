@@ -24,8 +24,8 @@ func (s *Server) listConnectionInstances(w http.ResponseWriter, _ *http.Request,
 }
 
 func (s *Server) getConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/connection-instances/")
-	if strings.Contains(id, "/") || id == "" {
+	id := r.PathValue("connectionInstanceId")
+	if id == "" {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -59,7 +59,7 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")
 		} else if errors.Is(err, connection.ErrTransportUnavailable) {
 			writeError(w, http.StatusConflict, "ssh transport unavailable", "transport")
-		} else if strings.Contains(err.Error(), "capacity") {
+		} else if errors.Is(err, connection.ErrConnectionCapacity) {
 			writeError(w, http.StatusConflict, "connection capacity reached", "capacity")
 		} else {
 			writeError(w, http.StatusBadRequest, err.Error(), "connection")
@@ -86,7 +86,7 @@ func (s *Server) createConnectionLaunch(w http.ResponseWriter, r *http.Request, 
 			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")
 		} else if errors.Is(err, connection.ErrTransportUnavailable) {
 			writeError(w, http.StatusConflict, "ssh transport unavailable", "transport")
-		} else if strings.Contains(err.Error(), "capacity") {
+		} else if errors.Is(err, connection.ErrConnectionCapacity) {
 			writeError(w, http.StatusConflict, "connection capacity reached", "capacity")
 		} else {
 			writeError(w, http.StatusBadRequest, err.Error(), "connection")
@@ -97,8 +97,8 @@ func (s *Server) createConnectionLaunch(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) deleteConnectionLaunch(w http.ResponseWriter, r *http.Request, sessionID string) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/connection-launches/")
-	if id == "" || strings.Contains(id, "/") {
+	id := r.PathValue("launchId")
+	if id == "" {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -125,8 +125,8 @@ func stringValue(value *string) string {
 }
 
 func (s *Server) deleteConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/connection-instances/")
-	if id == "" || strings.Contains(id, "/") {
+	id := r.PathValue("connectionInstanceId")
+	if id == "" {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -141,12 +141,12 @@ func (s *Server) deleteConnectionInstance(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type updateSessionTitleRequest struct {
+type updateConnectionTitleRequest struct {
 	Title json.RawMessage `json:"title"`
 }
 
-func (s *Server) updateSessionTitle(w http.ResponseWriter, r *http.Request, _ string) {
-	var body updateSessionTitleRequest
+func (s *Server) updateConnectionTitle(w http.ResponseWriter, r *http.Request, _ string) {
+	var body updateConnectionTitleRequest
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
@@ -163,8 +163,7 @@ func (s *Server) updateSessionTitle(w http.ResponseWriter, r *http.Request, _ st
 		}
 		title = &value
 	}
-	idPath := strings.TrimPrefix(r.URL.Path, "/api/connection-instances/")
-	id := strings.TrimSuffix(idPath, "/title")
+	id := r.PathValue("connectionInstanceId")
 	result, err := s.terms.SetTitle(id, title)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
