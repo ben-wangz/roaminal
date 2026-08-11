@@ -1,0 +1,9 @@
+# Patterns to ignore when building packages.
+.git/
+.gitignore
+.DS_Store
+*.swp
+*.tmp
+charts/
+Chart.lock
+tests/

@@ -1,0 +1,33 @@
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "roaminal.pvcName" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" .Values.persistence.labels) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    {{- $annotations := include "roaminal.annotations" (dict "context" $ "extra" .Values.persistence.annotations) }}
+    {{- if $annotations }}
+    {{- $annotations | nindent 4 }}
+    {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.accessModes | nindent 4 }}
+  volumeMode: {{ .Values.persistence.volumeMode }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+  {{- end }}
+  {{- if .Values.persistence.selector }}
+  selector:
+    {{- toYaml .Values.persistence.selector | nindent 4 }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+  {{- if .Values.persistence.dataSource }}
+  dataSource:
+    {{- toYaml .Values.persistence.dataSource | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,22 @@
+apiVersion: v2
+name: roaminal
+version: 0.1.0
+appVersion: "0.2.3"
+kubeVersion: ">=1.25.0-0"
+description: Self-hosted browser terminal and SSH connection platform
+type: application
+keywords:
+  - terminal
+  - ssh
+  - workspace
+  - connection-platform
+annotations:
+  roaminal/images: |
+    - name: roaminal-runtime
+      path: container
+      valuesKey: image.tag
+home: https://github.com/ben-wangz/roaminal
+sources:
+  - https://github.com/ben-wangz/roaminal
+maintainers:
+  - name: ben

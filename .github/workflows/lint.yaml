@@ -27,6 +27,9 @@ jobs:
             frontend/package-lock.json
             terminal-worker/package-lock.json
 
+      - name: setup-helm
+        uses: azure/setup-helm@v4
+
       - name: setup-forgekit
         id: forgekit
         run: |

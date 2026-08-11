@@ -76,3 +76,25 @@ commands:
   - name: "Frontend production build"
     cmd: "npm"
     args: ["--prefix", "frontend", "run", "build"]
+
+  - name: "Helm chart lint"
+    cmd: "helm"
+    args: ["lint", "chart", "--strict"]
+
+  - name: "Helm chart render"
+    cmd: "sh"
+    args:
+      - "-c"
+      - >-
+        set -eu;
+        helm template roaminal chart --namespace chart-ci >/dev/null;
+        helm template roaminal chart --namespace chart-ci
+        --set persistence.existingClaim=roaminal-data-ci
+        --set ssh.source=secret --set ssh.secret.name=roaminal-ssh-ci
+        --set ingress.enabled=true --set ingress.tls=true
+        --set ingress.tlsSecret=roaminal-tls-ci >/dev/null;
+        helm template roaminal chart --namespace chart-ci
+        --set persistence.enabled=false --set ssh.source=volume
+        --set ssh.volume.name=ssh-projected
+        --set-json 'extraVolumes=[{"name":"ssh-projected","projected":{"sources":[]}}]'
+        >/dev/null

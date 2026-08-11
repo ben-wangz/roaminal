@@ -1,0 +1,257 @@
+{{- include "roaminal.validateValues" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "roaminal.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
+  {{- $annotations := include "roaminal.annotations" (dict "context" $ "extra" .Values.commonAnnotations) }}
+  {{- if $annotations }}
+  annotations:
+    {{- $annotations | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  strategy:
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "roaminal.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "roaminal.labels" (dict "context" $ "extra" .Values.podLabels) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- $podAnnotations := merge (deepCopy .Values.commonAnnotations) .Values.podAnnotations }}
+        {{- if $podAnnotations }}
+        {{- toYaml $podAnnotations | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "roaminal.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.runtimeClassName }}
+      runtimeClassName: {{ .Values.runtimeClassName | quote }}
+      {{- end }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- end }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.tolerations }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: prepare-data-directories
+          image: {{ include "roaminal.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              umask 077
+              for path in \
+                "/mnt/roaminal-data/{{ .Values.persistence.paths.state }}" \
+                "/mnt/roaminal-data/{{ .Values.persistence.paths.workspace }}" \
+                "/mnt/roaminal-data/{{ .Values.persistence.paths.ssh }}"; do
+                if [ -e "$path" ]; then
+                  [ -d "$path" ] || { echo "expected directory: $path" >&2; exit 1; }
+                else
+                  mkdir -m 700 "$path"
+                fi
+              done
+          securityContext:
+            {{- toYaml .Values.initContainerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: roaminal-data
+              mountPath: /mnt/roaminal-data
+      containers:
+        - name: roaminal
+          image: {{ include "roaminal.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.port }}
+              protocol: TCP
+          env:
+            - name: ROAMINAL_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: host
+            - name: ROAMINAL_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: port
+            - name: ROAMINAL_WEBSOCKET_PING_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: websocketPingInterval
+            - name: ROAMINAL_SCROLLBACK_LINES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: scrollbackLines
+            - name: ROAMINAL_MAX_CONNECTION_INSTANCES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: maxConnectionInstances
+            - name: ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: maxClientsPerConnectionInstance
+            - name: ROAMINAL_DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: debug
+            - name: ROAMINAL_ACCEPT_TERMS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: acceptTerms
+            - name: ROAMINAL_CWD
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: initialCwd
+            - name: ROAMINAL_AUTH_ACCESS_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: authAccessTTL
+            - name: ROAMINAL_AUTH_REFRESH_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: authRefreshTTL
+            - name: ROAMINAL_AUTH_MAX_ATTEMPTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: authMaxAttempts
+            - name: ROAMINAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.passwordKey }}
+          {{- if .Values.extraEnv }}
+            {{- toYaml .Values.extraEnv | nindent 12 }}
+          {{- end }}
+          {{- if .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml .Values.extraEnvFrom | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: roaminal-data
+              mountPath: /home/roaminal/.roaminal
+              subPath: {{ .Values.persistence.paths.state }}
+            - name: roaminal-data
+              mountPath: /workspace
+              subPath: {{ .Values.persistence.paths.workspace }}
+            {{- if eq .Values.ssh.source "pvc" }}
+            - name: roaminal-data
+              mountPath: /home/roaminal/.ssh
+              subPath: {{ .Values.persistence.paths.ssh }}
+            {{- else if eq .Values.ssh.source "secret" }}
+            - name: ssh-directory
+              mountPath: /home/roaminal/.ssh
+              readOnly: true
+            {{- else }}
+            - name: {{ .Values.ssh.volume.name }}
+              mountPath: /home/roaminal/.ssh
+              readOnly: {{ .Values.ssh.volume.readOnly }}
+            {{- end }}
+            {{- range .Values.ssh.fileMounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath | quote }}
+              subPath: {{ .subPath | quote }}
+              readOnly: {{ default true .readOnly }}
+            {{- end }}
+            {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.probes.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- end }}
+      volumes:
+        - name: roaminal-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "roaminal.pvcName" . }}
+          {{- else }}
+          emptyDir:
+            {{- if or .Values.persistence.emptyDir.medium .Values.persistence.emptyDir.sizeLimit }}
+            {{- if .Values.persistence.emptyDir.medium }}
+            medium: {{ .Values.persistence.emptyDir.medium | quote }}
+            {{- end }}
+            {{- if .Values.persistence.emptyDir.sizeLimit }}
+            sizeLimit: {{ .Values.persistence.emptyDir.sizeLimit | quote }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
+        {{- if eq .Values.ssh.source "secret" }}
+        - name: ssh-directory
+          secret:
+            secretName: {{ include "roaminal.sshSecretName" . }}
+            defaultMode: {{ .Values.ssh.secret.defaultMode }}
+            {{- if .Values.ssh.secret.items }}
+            items:
+              {{- toYaml .Values.ssh.secret.items | nindent 14 }}
+            {{- end }}
+        {{- end }}
+        {{- if .Values.extraVolumes }}
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}

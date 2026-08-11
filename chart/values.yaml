@@ -1,0 +1,176 @@
+# Chart metadata and workload identity.
+nameOverride: ""
+fullnameOverride: ""
+commonLabels: {}
+commonAnnotations: {}
+podLabels: {}
+podAnnotations: {}
+revisionHistoryLimit: 10
+replicaCount: 1
+updateStrategy:
+  type: Recreate
+terminationGracePeriodSeconds: 30
+automountServiceAccountToken: false
+
+serviceAccount:
+  create: false
+  name: ""
+  labels: {}
+  annotations: {}
+  automountServiceAccountToken: false
+
+imagePullSecrets: []
+image:
+  registry: ghcr.io
+  repository: ben-wangz/roaminal
+  tag: 0.2.3
+  digest: ""
+  pullPolicy: IfNotPresent
+
+# The application image already contains tini as PID 1. These settings do not
+# replace its entrypoint or command.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+initContainerSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+runtimeClassName: ""
+
+app:
+  host: 0.0.0.0
+  port: 9846
+  websocketPingInterval: 10s
+  scrollbackLines: 1000
+  maxConnectionInstances: 32
+  maxClientsPerConnectionInstance: 8
+  debug: false
+  acceptTerms: true
+  initialCwd: /workspace
+  authAccessTTL: 15m
+  authRefreshTTL: 2160h
+  authMaxAttempts: 30
+
+auth:
+  existingSecret: roaminal
+  passwordKey: password
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  volumeMode: Filesystem
+  annotations: {}
+  labels: {}
+  selector: {}
+  dataSource: {}
+  paths:
+    state: state
+    workspace: workspace
+    ssh: ssh
+  emptyDir:
+    medium: ""
+    sizeLimit: ""
+
+# SSH data normally comes from the ssh/ subdirectory of the unified PVC.
+# secret and volume modes replace only that subdirectory mount and keep state
+# and workspace on the unified PVC.
+ssh:
+  source: pvc
+  secret:
+    name: ""
+    defaultMode: 256
+    items: []
+  volume:
+    name: ""
+    readOnly: true
+  fileMounts: []
+
+service:
+  type: ClusterIP
+  port: 9846
+  annotations: {}
+  labels: {}
+  clusterIP: ""
+  sessionAffinity: ""
+  sessionAffinityConfig: {}
+  externalTrafficPolicy: ""
+  loadBalancerSourceRanges: []
+  loadBalancerIP: ""
+  loadBalancerClass: ""
+  extraPorts: []
+
+ingress:
+  enabled: false
+  ingressClassName: ""
+  hostname: roaminal.example.invalid
+  path: /
+  pathType: Prefix
+  annotations: {}
+  tls: false
+  tlsSecret: ""
+  extraHosts: []
+  extraPaths: []
+  extraTls: []
+  extraRules: []
+
+probes:
+  startup:
+    enabled: true
+    periodSeconds: 2
+    timeoutSeconds: 1
+    failureThreshold: 15
+  readiness:
+    enabled: true
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 2
+  liveness:
+    enabled: true
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3
+
+extraEnv: []
+extraEnvFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+extraDeploy: []

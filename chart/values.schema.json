@@ -1,0 +1,235 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "nameOverride": {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "commonLabels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "commonAnnotations": {"type": "object", "additionalProperties": {"type": "string"}},
+    "podLabels": {"type": "object", "additionalProperties": {"type": "string"}},
+    "podAnnotations": {"type": "object", "additionalProperties": {"type": "string"}},
+    "revisionHistoryLimit": {"type": "integer", "minimum": 0},
+    "replicaCount": {"type": "integer", "const": 1},
+    "updateStrategy": {"type": "object", "required": ["type"], "properties": {"type": {"type": "string", "enum": ["Recreate"]}}, "additionalProperties": true},
+    "terminationGracePeriodSeconds": {"type": "integer", "minimum": 1},
+    "automountServiceAccountToken": {"type": "boolean"},
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": {"type": "boolean"},
+        "name": {"type": "string"},
+        "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}},
+        "automountServiceAccountToken": {"type": "boolean"}
+      },
+      "required": ["create", "name", "labels", "annotations", "automountServiceAccountToken"]
+    },
+    "imagePullSecrets": {"type": "array", "items": {"type": "object"}},
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "registry": {"type": "string"},
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1},
+        "digest": {"type": "string"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      },
+      "required": ["registry", "repository", "tag", "digest", "pullPolicy"]
+    },
+    "podSecurityContext": {"type": "object"},
+    "containerSecurityContext": {"type": "object"},
+    "initContainerSecurityContext": {"type": "object"},
+    "resources": {"type": "object"},
+    "nodeSelector": {"type": "object"},
+    "tolerations": {"type": "array"},
+    "affinity": {"type": "object"},
+    "topologySpreadConstraints": {"type": "array"},
+    "priorityClassName": {"type": "string"},
+    "runtimeClassName": {"type": "string"},
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {"type": "string", "minLength": 1},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "websocketPingInterval": {"type": "string", "minLength": 1},
+        "scrollbackLines": {"type": "integer", "minimum": 1},
+        "maxConnectionInstances": {"type": "integer", "minimum": 1},
+        "maxClientsPerConnectionInstance": {"type": "integer", "minimum": 1},
+        "debug": {"type": "boolean"},
+        "acceptTerms": {"type": "boolean", "const": true},
+        "initialCwd": {"type": "string", "minLength": 1},
+        "authAccessTTL": {"type": "string", "minLength": 1},
+        "authRefreshTTL": {"type": "string", "minLength": 1},
+        "authMaxAttempts": {"type": "integer", "minimum": 1}
+      },
+      "required": ["host", "port", "websocketPingInterval", "scrollbackLines", "maxConnectionInstances", "maxClientsPerConnectionInstance", "debug", "acceptTerms", "initialCwd", "authAccessTTL", "authRefreshTTL", "authMaxAttempts"]
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingSecret": {"type": "string", "minLength": 1},
+        "passwordKey": {"type": "string", "minLength": 1}
+      },
+      "required": ["existingSecret", "passwordKey"]
+    },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "existingClaim": {"type": "string"},
+        "storageClass": {"type": "string"},
+        "accessModes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "size": {"type": "string", "minLength": 1},
+        "volumeMode": {"type": "string", "const": "Filesystem"},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}},
+        "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+        "selector": {"type": "object"},
+        "dataSource": {"type": "object"},
+        "paths": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+            "workspace": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+            "ssh": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}
+          },
+          "required": ["state", "workspace", "ssh"]
+        },
+        "emptyDir": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "medium": {"type": "string", "enum": ["", "Memory"]},
+            "sizeLimit": {"type": "string"}
+          },
+          "required": ["medium", "sizeLimit"]
+        }
+      },
+      "required": ["enabled", "existingClaim", "storageClass", "accessModes", "size", "volumeMode", "annotations", "labels", "selector", "dataSource", "paths", "emptyDir"]
+    },
+    "ssh": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {"type": "string", "enum": ["pvc", "secret", "volume"]},
+        "secret": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {"type": "string"},
+            "defaultMode": {"type": "integer", "minimum": 0, "maximum": 511},
+            "items": {"type": "array", "items": {"type": "object"}}
+          },
+          "required": ["name", "defaultMode", "items"]
+        },
+        "volume": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {"type": "string"},
+            "readOnly": {"type": "boolean"}
+          },
+          "required": ["name", "readOnly"]
+        },
+        "fileMounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "mountPath": {"type": "string", "pattern": "^/home/roaminal/\\.ssh/[^/]+$"},
+              "subPath": {"type": "string", "minLength": 1},
+              "readOnly": {"type": "boolean"}
+            },
+            "required": ["name", "mountPath", "subPath"]
+          }
+        }
+      },
+      "required": ["source", "secret", "volume", "fileMounts"],
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "secret"}}},
+          "then": {"properties": {"secret": {"required": ["name"], "properties": {"name": {"minLength": 1}}}}}
+        },
+        {
+          "if": {"properties": {"source": {"const": "volume"}}},
+          "then": {"properties": {"volume": {"required": ["name"], "properties": {"name": {"minLength": 1}}}}}
+        }
+      ]
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {"type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}},
+        "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+        "clusterIP": {"type": "string"},
+        "sessionAffinity": {"type": "string", "enum": ["", "ClientIP", "None"]},
+        "sessionAffinityConfig": {"type": "object"},
+        "externalTrafficPolicy": {"type": "string", "enum": ["", "Cluster", "Local"]},
+        "loadBalancerSourceRanges": {"type": "array", "items": {"type": "string"}},
+        "loadBalancerIP": {"type": "string"},
+        "loadBalancerClass": {"type": "string"},
+        "extraPorts": {"type": "array", "items": {"type": "object"}}
+      },
+      "required": ["type", "port", "annotations", "labels", "clusterIP", "sessionAffinity", "sessionAffinityConfig", "externalTrafficPolicy", "loadBalancerSourceRanges", "loadBalancerIP", "loadBalancerClass", "extraPorts"]
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "ingressClassName": {"type": "string"},
+        "hostname": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "pathType": {"type": "string", "enum": ["Prefix", "Exact", "ImplementationSpecific"]},
+        "annotations": {"type": "object", "additionalProperties": {"type": "string"}},
+        "tls": {"type": "boolean"},
+        "tlsSecret": {"type": "string"},
+        "extraHosts": {"type": "array", "items": {"type": "object"}},
+        "extraPaths": {"type": "array", "items": {"type": "object"}},
+        "extraTls": {"type": "array", "items": {"type": "object"}},
+        "extraRules": {"type": "array", "items": {"type": "object"}}
+      },
+      "required": ["enabled", "ingressClassName", "hostname", "path", "pathType", "annotations", "tls", "tlsSecret", "extraHosts", "extraPaths", "extraTls", "extraRules"]
+    },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startup": {"$ref": "#/definitions/probe"},
+        "readiness": {"$ref": "#/definitions/probe"},
+        "liveness": {"$ref": "#/definitions/probe"}
+      },
+      "required": ["startup", "readiness", "liveness"]
+    },
+    "extraEnv": {"type": "array", "items": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1}}}},
+    "extraEnvFrom": {"type": "array", "items": {"type": "object"}},
+    "extraVolumes": {"type": "array", "items": {"type": "object"}},
+    "extraVolumeMounts": {"type": "array", "items": {"type": "object"}},
+    "extraDeploy": {"type": "array", "items": {"type": "object"}}
+  },
+  "required": ["replicaCount", "image", "app", "auth", "persistence", "ssh", "service", "ingress", "probes"],
+  "definitions": {
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "periodSeconds": {"type": "integer", "minimum": 1},
+        "timeoutSeconds": {"type": "integer", "minimum": 1},
+        "failureThreshold": {"type": "integer", "minimum": 1}
+      },
+      "required": ["enabled", "periodSeconds", "timeoutSeconds", "failureThreshold"]
+    }
+  }
+}

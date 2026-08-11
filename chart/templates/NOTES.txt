@@ -1,0 +1,19 @@
+Roaminal {{ .Chart.Version }} has been installed as release {{ .Release.Name }}.
+
+Service:
+  {{ include "roaminal.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+
+The chart expects an existing Secret named {{ .Values.auth.existingSecret }} with key
+{{ .Values.auth.passwordKey }}. The chart never prints or generates the password.
+
+{{- if .Values.ingress.enabled }}
+Ingress:
+  https://{{ .Values.ingress.hostname }}{{ .Values.ingress.path }}
+  Ensure TLS termination and WebSocket read/send timeouts of at least 3600 seconds.
+{{- else }}
+No Ingress was created. Expose the ClusterIP Service through a TLS-aware reverse proxy
+that preserves same-origin requests and WebSocket upgrades.
+{{- end }}
+
+The workload intentionally uses one replica and Recreate updates. An upgrade interrupts
+active terminal, SSH, and tmux processes. Back up the unified PVC before uninstalling.

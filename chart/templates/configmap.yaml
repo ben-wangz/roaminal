@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "roaminal.configMapName" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
+  {{- $annotations := include "roaminal.annotations" (dict "context" $ "extra" nil) }}
+  {{- if $annotations }}
+  annotations:
+    {{- $annotations | nindent 4 }}
+  {{- end }}
+data:
+  host: {{ .Values.app.host | quote }}
+  port: {{ .Values.app.port | quote }}
+  websocketPingInterval: {{ .Values.app.websocketPingInterval | quote }}
+  scrollbackLines: {{ .Values.app.scrollbackLines | quote }}
+  maxConnectionInstances: {{ .Values.app.maxConnectionInstances | quote }}
+  maxClientsPerConnectionInstance: {{ .Values.app.maxClientsPerConnectionInstance | quote }}
+  debug: {{ .Values.app.debug | quote }}
+  acceptTerms: {{ .Values.app.acceptTerms | quote }}
+  initialCwd: {{ .Values.app.initialCwd | quote }}
+  authAccessTTL: {{ .Values.app.authAccessTTL | quote }}
+  authRefreshTTL: {{ .Values.app.authRefreshTTL | quote }}
+  authMaxAttempts: {{ .Values.app.authMaxAttempts | quote }}
