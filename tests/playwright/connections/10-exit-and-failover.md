@@ -8,8 +8,7 @@ Viewport: desktop. Run serially.
 1. Create connections A, B, and C in that order, then make B active.
 2. Type `exit` in B. The terminal becomes terminated, the backend copies the
    final metadata/snapshot to audit material, removes the active-instance data,
-   and the card disappears without requiring an `Open manager` or `Delete
-   history` choice.
+   and the card disappears without requiring an intermediate action.
 3. The workspace automatically selects C, the next surviving instance in the
    prior order. Its output and input remain usable. No removed runtime may
    reattach or receive input.

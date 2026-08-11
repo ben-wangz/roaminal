@@ -28,7 +28,4 @@
   .connection-label { display: none; }
   .status-metric { min-width: 48px; }
   .status-metric progress { width: 48px; }
-  .terminal-exited { left: 12px; right: 12px; bottom: 12px; flex-wrap: wrap; }
-  .terminal-exited-actions { width: 100%; margin-left: 0; }
-  .terminal-exited-actions button { flex: 1; }
 }

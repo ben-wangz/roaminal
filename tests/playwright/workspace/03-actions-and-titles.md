@@ -25,5 +25,4 @@ Priority: P0. Capabilities: core. Viewports: desktop and phone portrait.
 ## Pass gate
 
 Run the global diagnostics gate. A close must remove the active instance rather
-than leave an exited history card, so `Delete history...` should not be part of
-the normal current-code workflow.
+than leave an exited history card; the current workflow has no history action.
