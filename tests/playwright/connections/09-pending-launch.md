@@ -3,6 +3,9 @@
 Priority: P0. Capabilities: controllable SSH/tmux fixture. Viewport: desktop.
 Run serially.
 
+Fixture: use the [SSH and tmux codespace](../fixtures/ssh-codespace.md). Apply
+the documented remote-state reset and use only the fixture-owned Host.
+
 ## Procedure and assertions
 
 1. Delay tmux readiness in the fixture and Start. Verify one pending launch ID,

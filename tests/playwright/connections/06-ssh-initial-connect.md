@@ -3,6 +3,9 @@
 Priority: P0. Capabilities: SSH transport with a dedicated definition and
 authorized Ed25519 key. Viewport: desktop.
 
+Fixture: complete [SSH and tmux codespace](../fixtures/ssh-codespace.md) and
+use its non-tmux Host values before this case.
+
 ## Procedure and assertions
 
 1. Start the SSH definition when no live instance for its alias exists. Verify

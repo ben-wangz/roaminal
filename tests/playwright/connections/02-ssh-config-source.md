@@ -3,6 +3,12 @@
 Priority: P1. Capabilities: isolated mutable/read-only SSH fixtures. Viewport:
 desktop. Run serially.
 
+For the writable variant, use the Roaminal Host and disposable
+[SSH/tmux codespace fixture](../fixtures/ssh-codespace.md). Read-only, missing,
+and unsupported-syntax variants must use a separate dedicated Roaminal release
+or a restored copy of its SSH source; never change the codespace Secret or
+another user's SSH directory to create these variants.
+
 ## Variants
 
 Execute each available source variant against a dedicated release:

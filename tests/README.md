@@ -14,3 +14,5 @@ continuing.
 
 Start with [the Playwright execution contract](playwright/README.md). Every
 feature case is stored in its own Markdown file under a functional subdirectory.
+SSH and tmux cases use the disposable [codespace fixture](playwright/fixtures/ssh-codespace.md),
+which must be reset before testing and uninstalled after the suite.

@@ -3,6 +3,9 @@
 Priority: P0. Capabilities: SSH transport plus tmux. Viewports: desktop and
 phone portrait. Run serially.
 
+Fixture: complete [SSH and tmux codespace](../fixtures/ssh-codespace.md),
+including remote-state preparation, before this case.
+
 ## Preconditions
 
 - The definition has tmux enabled in the Roaminal YAML add-on and a unique valid

@@ -2,6 +2,9 @@
 
 Priority: P0. Capabilities: SSH transport. Viewport: desktop. Run serially.
 
+Fixture: reset the [SSH and tmux codespace](../fixtures/ssh-codespace.md) and
+use its non-tmux Host before this case.
+
 ## Procedure and assertions
 
 1. Start instance A for the test alias and prove it is usable. Return to the

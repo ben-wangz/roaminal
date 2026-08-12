@@ -83,14 +83,20 @@ web security globally.
 | --- | --- | --- |
 | Core | `ROAMINAL_E2E_BASE_URL` | Direct `http://` or `https://` Service/Ingress URL |
 | Core | `ROAMINAL_E2E_PASSWORD` | Password for the dedicated test release |
+| SSH fixture | `ROAMINAL_E2E_SSH_FIXTURE_RELEASE` | Disposable codespace Helm release |
+| SSH fixture | `ROAMINAL_E2E_SSH_FIXTURE_NAMESPACE` | Namespace containing only fixture resources |
+| SSH fixture | `ROAMINAL_E2E_SSH_FIXTURE_SECRET` | Secret containing the fixture's authorized public key |
 | Mutable SSH | `ROAMINAL_E2E_SSH_ALIAS` | Unique alias owned by the suite |
 | SSH transport | `ROAMINAL_E2E_SSH_HOST`, `ROAMINAL_E2E_SSH_USER`, `ROAMINAL_E2E_SSH_PORT` | Dedicated reachable OpenSSH fixture |
 | Tmux | `ROAMINAL_E2E_TMUX_ALIAS` | SSH fixture with `tmux` installed and a writable home |
 | Restart | test release and namespace identifiers | Permission to restart only the dedicated Roaminal workload |
 
-The SSH fixture must accept an Ed25519 key owned by the test release, must not
-contain production data, and must be safe for shell exit, tmux session creation,
-and repeated connections. Tests that mutate `~/.ssh/config`,
+The standard SSH/tmux fixture is documented in
+[SSH and tmux codespace](fixtures/ssh-codespace.md). Run that procedure before
+the first SSH/tmux case and reset it between cases that require a clean remote
+home. The fixture must accept an Ed25519 key owned by the test release, must
+not contain production data, and must be safe for shell exit, tmux session
+creation, and repeated connections. Tests that mutate `~/.ssh/config`,
 `~/.roaminal/ssh-connection-options.yaml`, SSH keys, auth sessions, or the
 connection count run serially unless every worker has its own release and PVC.
 
@@ -172,6 +178,7 @@ without explaining the originating request and expiry condition.
 
 | Area | Cases |
 | --- | --- |
+| Fixtures | [SSH and tmux codespace](fixtures/ssh-codespace.md) |
 | Authentication | [login](auth/01-login.md), [token refresh](auth/02-token-refresh.md), [login sessions](auth/03-login-sessions.md), [sign out](auth/04-sign-out.md) |
 | Connection definitions | [manager/filter](connections/01-manager-and-filter.md), [source capabilities](connections/02-ssh-config-source.md), [create/edit](connections/03-definition-create-edit.md), [copy/delete/ETag](connections/04-definition-copy-delete-etag.md) |
 | Connection lifecycle | [local](connections/05-local-connection.md), [SSH](connections/06-ssh-initial-connect.md), [reuse](connections/07-transport-reuse.md), [tmux](connections/08-tmux.md), [pending launch](connections/09-pending-launch.md), [exit/failover](connections/10-exit-and-failover.md), [source change](connections/11-source-change-draining.md) |

@@ -3,6 +3,9 @@
 Priority: P1. Capabilities: mutable SSH config and SSH transport. Viewport:
 desktop. Run serially.
 
+Fixture: complete the [SSH and tmux codespace](../fixtures/ssh-codespace.md)
+with a writable Roaminal SSH config before this case.
+
 ## Procedure and assertions
 
 1. Start A from a definition and prove the SSH channel is live. Edit that
