@@ -1,4 +1,6 @@
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
+export type AppPage = 'workspace' | 'connections' | 'appearance';
+
 export type AppState = {
   connections: ConnectionInstanceSummary[];
   activeConnectionInstanceId: string | null;

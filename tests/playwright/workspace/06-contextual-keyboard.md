@@ -14,15 +14,23 @@ desktop. Run serially for byte-capture fixtures.
 3. Press `commit and push`. It has a visible text icon, enters exactly that
    literal ASCII text with no newline/Enter, and performs no Git, shell-command,
    or external API action until the user explicitly submits it.
-4. For a remote effective prefix `C-k`, Tmux buttons display `Ctrl+K` and
-   `Ctrl+K [` and send `0x0b` and `0x0b 0x5b`. Repeat native `C-b` and fallback
-   `C-a` metadata. Label and bytes must always come from the same model.
-5. With `tmuxPrefixSource=unsupported`, only the two prefix-dependent buttons are
-   disabled with an explanatory tooltip; PageUp, PageDown, and q remain usable.
-6. During a pending launch, before WebSocket connection, after disconnection,
+4. For a remote effective prefix `C-k` (configured in the remote
+   `~/.tmux.conf`), Tmux buttons display `Ctrl+K` and `Ctrl+K [` and send
+   `0x0b` and `0x0b 0x5b`. Repeat native `C-b` and no-config fallback `C-b`
+   metadata; both send `0x02` and `0x02 0x5b`. Label and bytes must always come
+   from the same model.
+5. Tmux mode also provides Esc (`0x1b`), prefix+`o` (next pane), prefix+`d`
+   (detach), and prefix+`"` (horizontal split). With effective `C-k`, the
+   latter buttons display `Ctrl+K o`, `Ctrl+K d`, and `Ctrl+K "` and send
+   `0x0b 0x6f`, `0x0b 0x64`, and `0x0b 0x22`; native/fallback `C-b` uses the
+   same suffixes after `0x02`.
+6. With `tmuxPrefixSource=unsupported`, prefix-dependent buttons (prefix,
+   copy-mode, `o`, `d`, and `"`) are disabled with an explanatory tooltip; Esc,
+   PageUp, PageDown, and q remain usable.
+7. During a pending launch, before WebSocket connection, after disconnection,
    and after exit, every applicable key is disabled and sends no frames to an
    old runtime. Reconnection enables them only for the current live instance.
-7. Every click returns focus to the active xterm without switching cards or
+8. Every click returns focus to the active xterm without switching cards or
    resizing the layout.
 
 ## Pass gate

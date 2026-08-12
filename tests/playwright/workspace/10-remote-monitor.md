@@ -28,7 +28,12 @@ desktop, tablet portrait, and phone portrait.
    restore visibility and verify one immediate poll resumes without a burst.
 8. In two browser contexts and multiple derived instances on one transport,
    use fixture-side probe counters to confirm server cache/singleflight prevents
-   probe count from scaling linearly.
+   probe count from scaling linearly. Also start at least six independent live
+   SSH transports (repeat with tmux-enabled and plain SSH definitions) and
+   request their monitor endpoints concurrently. Every request must return
+   `200` with `warming`, `partial`, or `available`; a full probe pool must
+   queue work and must not make later connections report `status: unavailable`
+   solely because they arrived after the first four.
 
 ## Pass gate
 

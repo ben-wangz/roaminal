@@ -97,7 +97,10 @@ func (m *Manager) probeRemoteMonitor(ctx context.Context, ownerID string, transp
 		}
 		m.remoteMu.Unlock()
 	}
-	if !m.acquireRemoteProbe() {
+	// Queue behind the bounded probe pool instead of failing immediately when
+	// several independent transports are sampled at the same time. The caller
+	// still controls how long a queued request may wait.
+	if !m.acquireRemoteProbe(ctx) {
 		m.remoteMu.Lock()
 		result := remoteUnavailableOrCached(state, time.Now())
 		finishNeeded := state.inflight == inflight
@@ -112,8 +115,8 @@ func (m *Manager) probeRemoteMonitor(ctx context.Context, ownerID string, transp
 	started := time.Now()
 	nonce := monitorNonce()
 	probeCtx, cancel := withAuxiliaryTimeout(ctx)
+	defer cancel()
 	output, err := m.runAuxiliaryInput(probeCtx, transport, strings.NewReader(remoteCollectorScript), "sh", "-s", "--", nonce)
-	cancel()
 	rtt := time.Since(started).Milliseconds()
 	if rtt < 0 {
 		rtt = 0
@@ -143,11 +146,14 @@ func (m *Manager) probeRemoteMonitor(ctx context.Context, ownerID string, transp
 	return result, nil
 }
 
-func (m *Manager) acquireRemoteProbe() bool {
+func (m *Manager) acquireRemoteProbe(ctx context.Context) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	select {
 	case m.remoteSem <- struct{}{}:
 		return true
-	default:
+	case <-ctx.Done():
 		return false
 	}
 }

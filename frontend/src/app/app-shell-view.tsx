@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { PanelLeftOpen, Search, ShieldCheck } from 'lucide-react';
+import { PanelLeftOpen, Search, Settings, ShieldCheck } from 'lucide-react';
 import { AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-session-ui';
 import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { connectionDisplayName } from '../status/connection-label';
@@ -17,11 +17,15 @@ import { ConnectionManager } from '../connections/connection-manager';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { Heartbeat } from '../status/heartbeat';
 import type { ConnectionView } from './connection-view';
+import { AppearanceSettings } from '../appearance/appearance-settings';
+import type { AppPage } from './app-state';
+import type { TerminalAppearance } from '../appearance/appearance-model';
 
 export type Dialog = { type: 'rename' | 'terminate'; connectionInstanceId: string } | { type: 'auth' } | null;
 
 type Props = {
-  workspaceOpen: boolean;
+  page: AppPage;
+  appearance: TerminalAppearance;
   sidebarOpen: boolean;
   sidebarOpenButton: RefObject<HTMLButtonElement | null>;
   connections: ConnectionInstanceSummary[];
@@ -56,12 +60,14 @@ type Props = {
   onToggleSearch: () => void;
   onCloseSearch: () => void;
   onOpenConnections: () => void;
+  onOpenAppearance: () => void;
   onSignOut: () => void;
   onOpenAuthSessions: () => void;
   onOpenManager: () => void;
   onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<void>;
   onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;
   onOpenWorkspace: () => void;
+  onSaveAppearance: (appearance: TerminalAppearance) => void;
   onShowToast: (message: string) => void;
   onRenameTitle: (id: string, title: string | null) => Promise<void>;
   onTerminateConnection: (id: string) => Promise<void>;
@@ -71,7 +77,8 @@ type Props = {
 };
 
 export function AppShellView({
-  workspaceOpen,
+  page,
+  appearance,
   sidebarOpen,
   sidebarOpenButton,
   connections,
@@ -106,12 +113,14 @@ export function AppShellView({
   onToggleSearch,
   onCloseSearch,
   onOpenConnections,
+  onOpenAppearance,
   onSignOut,
   onOpenAuthSessions,
   onOpenManager,
   onCreateConnection,
   onGenerated,
   onOpenWorkspace,
+  onSaveAppearance,
   onShowToast,
   onRenameTitle,
   onTerminateConnection,
@@ -119,6 +128,7 @@ export function AppShellView({
   onLogoutOtherAuthSessions,
   onCloseDialog,
 }: Props) {
+  const workspaceOpen = page === 'workspace';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
   const contextual = activeInstance ? contextualMode || defaultContextualMode(activeInstance) : 'codex';
   return (
@@ -185,6 +195,9 @@ export function AppShellView({
                 </button>
               </>
             )}
+            <button className="icon-button" type="button" onClick={onOpenAppearance} aria-label="Appearance" title="Appearance">
+              <Settings aria-hidden="true" size={17} />
+            </button>
             <button className="text-button" onClick={onOpenAuthSessions}>
               <ShieldCheck aria-hidden="true" size={15} /> Sessions
             </button>
@@ -194,7 +207,7 @@ export function AppShellView({
           </div>
         </header>
         {workspaceOpen && <RemoteMonitorBand instance={activeInstance} />}
-        {workspaceOpen ? (
+        {page === 'workspace' ? (
           <>
             {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={onCloseSearch} />}
             <section className="terminal-stage">
@@ -219,13 +232,22 @@ export function AppShellView({
               </span>
             </footer>
           </>
-        ) : (
+        ) : page === 'connections' ? (
           <ConnectionManager
             connections={connections}
             onConnect={onCreateConnection}
             onGenerated={onGenerated}
             onOpenWorkspace={onOpenWorkspace}
             onToast={onShowToast}
+            onOpenAppearance={onOpenAppearance}
+          />
+        ) : (
+          <AppearanceSettings
+            appearance={appearance}
+            onSave={onSaveAppearance}
+            onBack={onOpenConnections}
+            onWorkspace={onOpenWorkspace}
+            hasWorkspace={Boolean(activeInstance)}
           />
         )}
       </main>

@@ -8,6 +8,7 @@ import { reconcileConnections, selectConnection, type ConnectionView } from './c
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { useAuthSessionActions } from './use-auth-session-actions';
+import type { AppPage } from './app-state';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -22,12 +23,13 @@ type Params = {
   mainRuntime: MutableRefObject<TerminalRuntime | null>;
   previewRuntimeRef: DisposableRuntimeRef;
   viewActiveConnectionInstanceId: string | null;
+  page: AppPage;
   viewRef: MutableRefObject<ConnectionView>;
   setActiveView: (next: ConnectionView) => void;
   connections: ConnectionInstanceSummary[];
   setConnections: Dispatch<SetStateAction<ConnectionInstanceSummary[]>>;
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
-  setWorkspaceOpen: Dispatch<SetStateAction<boolean>>;
+  setPage: Dispatch<SetStateAction<AppPage>>;
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
@@ -55,12 +57,13 @@ export function useAppShellActions({
   mainRuntime,
   previewRuntimeRef,
   viewActiveConnectionInstanceId,
+  page,
   viewRef,
   setActiveView,
   connections,
   setConnections,
   setCurrentRuntime,
-  setWorkspaceOpen,
+  setPage,
   setSidebarOpen,
   setSearch,
   setPreviewConnectionInstanceId,
@@ -91,7 +94,7 @@ export function useAppShellActions({
         const launch = await startConnectionLaunch(connectionDefinitionId, reuseFrom);
         setCurrentRuntime(null);
         startLaunch(launch.launchId);
-        setWorkspaceOpen(true);
+        setPage('workspace');
         return;
       }
       clearLaunch();
@@ -105,7 +108,7 @@ export function useAppShellActions({
         session,
       ]);
       setActiveView(selectConnection(viewRef.current, session.connectionInstanceId));
-      setWorkspaceOpen(true);
+      setPage('workspace');
     } catch (err) {
       showToast((err as Error).message);
     }
@@ -118,7 +121,7 @@ export function useAppShellActions({
       instance,
     ]);
     setActiveView(selectConnection(viewRef.current, instance.connectionInstanceId));
-    setWorkspaceOpen(true);
+    setPage('workspace');
   };
 
   const sync = useCallback(async () => {
@@ -140,9 +143,9 @@ export function useAppShellActions({
       setActiveView(nextView);
       if (!hydrated.current && !activeLaunchId) {
         hydrated.current = true;
-        setWorkspaceOpen(Boolean(nextView.activeConnectionInstanceId));
-      } else if (!activeLaunchId && !nextView.activeConnectionInstanceId) {
-        setWorkspaceOpen(false);
+        if (page !== 'appearance') setPage(nextView.activeConnectionInstanceId ? 'workspace' : 'connections');
+      } else if (!activeLaunchId && !nextView.activeConnectionInstanceId && page !== 'appearance') {
+        setPage('connections');
       }
       connectionOrder.current = next.connectionInstances.map((connection) => connection.connectionInstanceId);
       setConnections(next.connectionInstances);
@@ -161,7 +164,8 @@ export function useAppShellActions({
     setConnections,
     setHeartbeatLatency,
     setHeartbeatState,
-    setWorkspaceOpen,
+    page,
+    setPage,
     stateRevision,
     syncing,
     viewRef,
@@ -194,7 +198,7 @@ export function useAppShellActions({
     const handler = (event: KeyboardEvent) => {
       if (matchesShortcut(event, SHORTCUTS[0])) {
         event.preventDefault();
-        setWorkspaceOpen(false);
+        setPage('connections');
       }
       if (matchesShortcut(event, SHORTCUTS[1]) && viewRef.current.activeConnectionInstanceId) {
         event.preventDefault();
@@ -207,12 +211,12 @@ export function useAppShellActions({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setSearch, setWorkspaceOpen, toggleSidebar, viewRef]);
+  }, [setSearch, setPage, toggleSidebar, viewRef]);
 
   function selectConnectionInstance(id: string) {
     if (viewRef.current.activeConnectionInstanceId !== id || activeLaunchId) setCurrentRuntime(null);
     setActiveView(selectConnection(viewRef.current, id));
-    setWorkspaceOpen(true);
+    setPage('workspace');
     setSearch(false);
     setPreviewConnectionInstanceId(null);
     if (window.matchMedia('(max-width: 800px)').matches) setSidebarOpen(false);

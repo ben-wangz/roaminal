@@ -19,6 +19,10 @@ desktop for preview, tablet/phone for selection.
 4. Leave the card, close the sidebar, and move rapidly across all cards at least
    100 times. At most one preview exists, stale delayed previews never mount,
    sockets close cleanly, and the main terminal never disappears or auto-cycles.
+   Feed a TUI-style stream of cursor movement and redraw sequences while a card
+   is previewed. The preview must coalesce output and render at most twice per
+   second after its initial snapshot; the changing bottom line must not visibly
+   flicker on every WebSocket message. The main terminal remains real-time.
 5. Click Agent and Files extension controls. Each reports its unavailable toast,
    does not select another card, and does not navigate or create a connection.
 6. On coarse-pointer or width `<=800`, no preview runtime is created by hover,

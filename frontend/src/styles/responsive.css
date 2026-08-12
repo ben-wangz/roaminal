@@ -16,6 +16,8 @@
   .status-metric progress { width: 52px; }
   .connection-card:hover .connection-card-overlay, .connection-card:focus-within .connection-card-overlay { transform: none; }
   .connection-card-preview { display: none; }
+  .appearance-content { grid-template-columns: 1fr; gap: 18px; margin-top: 22px; }
+  .appearance-header { align-items: flex-start; }
 }
 @media (min-width: 801px) { .main-panel.expanded { width: 100%; } .sidebar-backdrop { display: none; } }
 @media (max-width: 440px) {
@@ -28,4 +30,8 @@
   .connection-label { display: none; }
   .status-metric { min-width: 48px; }
   .status-metric progress { width: 48px; }
+  .appearance-page { padding: 20px 12px 34px; }
+  .appearance-header { flex-direction: column; gap: 12px; }
+  .appearance-header-actions { justify-content: flex-start; }
+  .appearance-size-controls { grid-template-columns: minmax(0, 1fr) 64px auto; }
 }

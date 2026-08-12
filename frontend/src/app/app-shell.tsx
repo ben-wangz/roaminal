@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { currentAccessToken, loadAuth } from '../auth/auth-client';
+import { loadAuth } from '../auth/auth-client';
 import { AuthSessionUI } from '../auth/auth-session-ui';
 import { type Heartbeat } from '../status/heartbeat';
 import { notify } from '../status/notifications';
@@ -18,13 +18,17 @@ import { usePendingLaunch } from './use-pending-launch';
 import { AppShellView, type Dialog } from './app-shell-view';
 import { useAppShellActions } from './use-app-shell-actions';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
+import { browserAppearanceStorage, loadAppearance, saveAppearance, type TerminalAppearance } from '../appearance/appearance-model';
+import { useAppearanceStorage } from '../appearance/use-appearance-storage';
+import type { AppPage } from './app-state';
+import { useMainTerminalRuntime } from './use-main-terminal-runtime';
+
 export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
   const [connections, setConnections] = useState<ConnectionInstanceSummary[]>([]);
-  const [view, setView] = useState<ConnectionView>(() =>
-    loadStoredConnection(typeof window === 'undefined' ? null : window.localStorage),
-  );
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [view, setView] = useState<ConnectionView>(() => loadStoredConnection(typeof window === 'undefined' ? null : window.localStorage));
+  const [page, setPage] = useState<AppPage>('connections');
+  const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window === 'undefined' || !window.matchMedia('(max-width: 800px)').matches,
   );
@@ -38,7 +42,7 @@ export function AppShell() {
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
   const [previewConnectionInstanceId, setPreviewConnectionInstanceId] = useState<string | null>(null);
-  const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, sidebarOpen);
+  const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, sidebarOpen, appearance);
   const connectionOrder = useRef<string[]>([]);
   const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(
     auth,
@@ -83,12 +87,13 @@ export function AppShell() {
     mainRuntime,
     previewRuntimeRef,
     viewActiveConnectionInstanceId: view.activeConnectionInstanceId,
+    page,
     viewRef,
     setActiveView,
     connections,
     setConnections,
     setCurrentRuntime,
-    setWorkspaceOpen,
+    setPage,
     setSidebarOpen,
     setSearch,
     setPreviewConnectionInstanceId,
@@ -120,30 +125,18 @@ export function AppShell() {
     },
     [previewRuntimeRef],
   );
-  useEffect(() => {
-    const runtimeId = activeLaunchId || view.activeConnectionInstanceId;
-    if (!auth || !workspaceOpen || !runtimeId) {
-      mainRuntime.current?.dispose();
-      mainRuntime.current = null;
-      setCurrentRuntime(null);
-      return;
-    }
-    const next = new TerminalRuntime(
-      runtimeId,
-      currentAccessToken,
-      heartbeatState?.runtime.scrollbackLines || 1000,
-      activeLaunchId ? 'connection-launches' : 'connection-instances',
-    );
-    const previous = mainRuntime.current;
-    mainRuntime.current = next;
-    setCurrentRuntime(next);
-    previous?.dispose();
-    return () => {
-      next.dispose();
-      if (mainRuntime.current === next) mainRuntime.current = null;
-      setCurrentRuntime((current) => (current === next ? null : current));
-    };
-  }, [auth, workspaceOpen, view.activeConnectionInstanceId, activeLaunchId, heartbeatState?.runtime.scrollbackLines]);
+  useMainTerminalRuntime({
+    auth,
+    page,
+    runtimeId: activeLaunchId || view.activeConnectionInstanceId,
+    scrollbackLines: heartbeatState?.runtime.scrollbackLines || 1000,
+    endpoint: activeLaunchId ? 'connection-launches' : 'connection-instances',
+    appearance,
+    mainRuntime,
+    currentRuntime,
+    setCurrentRuntime,
+  });
+  useAppearanceStorage(setAppearance);
   useEffect(() => {
     const runtimeId = activeLaunchId || view.activeConnectionInstanceId;
     if (!currentRuntime || currentRuntime.connectionInstanceId !== runtimeId) return;
@@ -157,7 +150,7 @@ export function AppShell() {
           message.instance,
         ]);
         activateConnection(message.instance.connectionInstanceId);
-        setWorkspaceOpen(true);
+        setPage('workspace');
         return;
       }
       if (message?.type === 'status' && message.status === 'terminated') {
@@ -165,7 +158,7 @@ export function AppShell() {
         if (activeLaunchId === exitedID) {
           setCurrentRuntime((current) => (current === currentRuntime ? null : current));
           clearLaunch();
-          setWorkspaceOpen(false);
+          setPage('connections');
           showToast('tmux connection could not be started.');
           return;
         }
@@ -179,7 +172,7 @@ export function AppShell() {
           setView(nextView);
           connectionOrder.current = next.map((connection) => connection.connectionInstanceId);
           if (!nextView.activeConnectionInstanceId) {
-            setWorkspaceOpen(false);
+            setPage('connections');
             setSearch(false);
           }
           return next;
@@ -237,7 +230,8 @@ export function AppShell() {
       : undefined;
   return (
     <AppShellView
-      workspaceOpen={workspaceOpen}
+      page={page}
+      appearance={appearance}
       sidebarOpen={sidebarOpen}
       sidebarOpenButton={sidebarOpenButton}
       connections={connections}
@@ -271,20 +265,26 @@ export function AppShell() {
       onContextualModeChange={setContextualMode}
       onToggleSearch={() => setSearch((value) => !value)}
       onCloseSearch={() => setSearch(false)}
-      onOpenConnections={() => {
-        cancelLaunch();
-        setWorkspaceOpen(false);
+      onOpenConnections={() => { cancelLaunch(); setPreviewConnectionInstanceId(null); setPage('connections'); }}
+      onOpenAppearance={() => {
+        setPreviewConnectionInstanceId(null);
+        setPage('appearance');
       }}
       onSignOut={actions.signOut}
       onOpenAuthSessions={() => void actions.openAuthSessions()}
-      onOpenManager={() => {
-        cancelLaunch();
-        setWorkspaceOpen(false);
-      }}
+      onOpenManager={() => { cancelLaunch(); setPreviewConnectionInstanceId(null); setPage('connections'); }}
       onCreateConnection={actions.createConnection}
       onGenerated={actions.acceptGenerated}
       onOpenWorkspace={() => {
-        if (view.activeConnectionInstanceId) setWorkspaceOpen(true);
+        if (view.activeConnectionInstanceId) setPage('workspace');
+      }}
+      onSaveAppearance={(next) => {
+        if (!saveAppearance(browserAppearanceStorage(), next)) {
+          showToast('Unable to save appearance in this browser.');
+          return;
+        }
+        setAppearance(next);
+        showToast('Appearance saved.');
       }}
       onShowToast={showToast}
       onRenameTitle={actions.updateTitle}

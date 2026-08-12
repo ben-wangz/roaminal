@@ -16,3 +16,7 @@ export function tmuxPrefix(key: string): string { return controlKey(key); }
 export function tmuxCopyMode(key: string): string {
   return `${tmuxPrefix(key)}[`;
 }
+
+export function tmuxCommand(key: string, command: string): string {
+  return `${tmuxPrefix(key)}${command}`;
+}

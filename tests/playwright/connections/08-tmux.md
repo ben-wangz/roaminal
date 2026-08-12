@@ -23,12 +23,16 @@ phone portrait. Run serially.
    the configured tmux session. Closing one view must not kill tmux or the other
    views.
 4. Verify the sidebar defaults to Tmux virtual-keyboard mode. Its prefix is the
-   effective remote server prefix (`C-k` fixture, native `C-b`, fallback `C-a`,
-   or unsupported state) and not a parse of the local Roaminal config.
-5. Resize both desktop and phone terminals, run `stty size` inside tmux, and
+   effective remote server prefix (`C-k` from the remote `~/.tmux.conf`, native
+   `C-b`, no-config fallback `C-b`, or unsupported state), not a parse of the
+   local Roaminal config.
+5. Verify Esc, prefix+`o` (next pane), prefix+`d` (detach), and prefix+`"`
+   (horizontal split) send the exact sequences for the effective prefix. A
+   custom prefix must change these sequences together with the displayed labels.
+6. Resize both desktop and phone terminals, run `stty size` inside tmux, and
    assert it converges to the active xterm rows/columns. Reattach and repeat to
    catch stale tmux client sizing.
-6. Against an SSH fixture without `tmux`, Start must fail before publishing a
+7. Against an SSH fixture without `tmux`, Start must fail before publishing a
    connection, show a concise error, and leave no pending or active instance.
 
 ## Pass gate

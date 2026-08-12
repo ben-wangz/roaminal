@@ -2,6 +2,8 @@ import type { FitAddon } from '@xterm/addon-fit';
 import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
 import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
+import { PreviewOutputQueue } from './preview-output-queue';
+import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 
 export class TerminalPreviewRuntime {
   terminal?: Terminal;
@@ -11,12 +13,22 @@ export class TerminalPreviewRuntime {
   private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
   private connected = false;
+  private appearance: TerminalAppearance;
+  private appearanceRevision = 0;
+  private readonly outputQueue = new PreviewOutputQueue((reset, data) => {
+    const terminal = this.terminal;
+    if (this.disposed || !terminal) return;
+    if (reset) terminal.reset();
+    if (data) terminal.write(data);
+  });
   private readonly ready: Promise<void>;
 
   constructor(
     readonly connectionInstanceId: string,
     private readonly token: () => string | null,
+    appearance: TerminalAppearance = DEFAULT_APPEARANCE,
   ) {
+    this.appearance = appearance;
     this.ready = this.loadTerminal();
   }
 
@@ -30,8 +42,7 @@ export class TerminalPreviewRuntime {
       scrollback: 0,
       rows: 12,
       cols: 80,
-      fontSize: 10,
-      fontFamily: 'Monaspace Neon, monospace',
+      ...xtermFontOptions(this.appearance, 10),
       theme: {
         background: '#002b36',
         foreground: '#839496',
@@ -41,6 +52,25 @@ export class TerminalPreviewRuntime {
     });
     this.fit = new FitAddon();
     this.mount();
+  }
+
+  async applyAppearance(appearance: TerminalAppearance): Promise<void> {
+    this.appearance = appearance;
+    const revision = ++this.appearanceRevision;
+    const terminal = this.terminal;
+    if (!terminal) return;
+    const options = xtermFontOptions(appearance, 10);
+    terminal.options.fontFamily = options.fontFamily;
+    terminal.options.fontSize = options.fontSize;
+    try {
+      if (typeof document !== 'undefined' && document.fonts) {
+        await document.fonts.load(`${options.fontSize}px ${options.fontFamily}`);
+      }
+    } catch {
+      // A missing font must not prevent the preview from remaining usable.
+    }
+    if (this.disposed || revision !== this.appearanceRevision || !this.fit) return;
+    this.fit.fit();
   }
 
   attach(element: HTMLElement): void {
@@ -79,8 +109,7 @@ export class TerminalPreviewRuntime {
       if (this.disposed || this.socket !== socket || !this.terminal) return;
       const message = parseServerMessage(String(event.data));
       if (!message) return;
-      if (message.type === 'snapshot') this.terminal.reset();
-      if (message.type === 'snapshot' || message.type === 'output') this.terminal.write(message.data);
+      if (message.type === 'snapshot' || message.type === 'output') this.outputQueue.push(message);
     };
     socket.onclose = () => {
       if (this.socket === socket) this.socket = null;
@@ -95,6 +124,7 @@ export class TerminalPreviewRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.outputQueue.dispose();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     const socket = this.socket;

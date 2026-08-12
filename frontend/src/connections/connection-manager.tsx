@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, Plus, RefreshCw } from 'lucide-react';
+import { ExternalLink, Plus, RefreshCw, Settings } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import {
   createDefinition,
@@ -32,10 +32,11 @@ type Props = {
   onConnect: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<void>;
   onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;
   onOpenWorkspace: () => void;
+  onOpenAppearance: () => void;
   onToast: (message: string) => void;
 };
 
-export function ConnectionManager({ connections, onConnect, onGenerated, onOpenWorkspace, onToast }: Props) {
+export function ConnectionManager({ connections, onConnect, onGenerated, onOpenWorkspace, onOpenAppearance, onToast }: Props) {
   const [tab, setTab] = useState<'connections' | 'keys'>('connections');
   const [definitions, setDefinitions] = useState<DefinitionCollection | null>(null);
   const [keys, setKeys] = useState<SSHKey[]>([]);
@@ -200,6 +201,9 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
           </button>
           <button className="text-button" type="button" onClick={onOpenWorkspace}>
             <ExternalLink size={15} aria-hidden="true" /> Workspace
+          </button>
+          <button className="text-button" type="button" onClick={onOpenAppearance}>
+            <Settings size={15} aria-hidden="true" /> Appearance
           </button>
         </div>
       </header>

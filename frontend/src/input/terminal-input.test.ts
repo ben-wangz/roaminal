@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { controlKey, escape, literal, pageDown, pageUp, tmuxCopyMode } from './terminal-input';
+import { controlKey, escape, literal, pageDown, pageUp, tmuxCommand, tmuxCopyMode } from './terminal-input';
 import { contextualKeys, defaultContextualMode } from './contextual-keyboard-model';
 
 const instance = (extra: Record<string, unknown> = {}) => ({
@@ -15,6 +15,8 @@ describe('terminal input model', () => {
     expect(escape).toBe('\u001b');
     expect(literal('commit and push')).toBe('commit and push');
     expect(tmuxCopyMode('k')).toBe('\u000b[');
+    expect(tmuxCommand('k', 'o')).toBe('\u000bo');
+    expect(tmuxCommand('k', 'd')).toBe('\u000bd');
   });
 
   it('builds tmux and codex keys from the same values sent to runtime', () => {
@@ -22,6 +24,13 @@ describe('terminal input model', () => {
     expect(tmux[0].label).toBe('Ctrl+K');
     expect(tmux[0].value).toBe('\u000b');
     expect(tmux[1].value).toBe('\u000b[');
+    expect(tmux.find((key) => key.id === 'tmux-escape')?.value).toBe('\u001b');
+    expect(tmux.find((key) => key.id === 'tmux-next-pane')?.label).toBe('Ctrl+K o');
+    expect(tmux.find((key) => key.id === 'tmux-next-pane')?.value).toBe('\u000bo');
+    expect(tmux.find((key) => key.id === 'tmux-detach')?.label).toBe('Ctrl+K d');
+    expect(tmux.find((key) => key.id === 'tmux-detach')?.value).toBe('\u000bd');
+    expect(tmux.find((key) => key.id === 'tmux-split-window')?.label).toBe('Ctrl+K "');
+    expect(tmux.find((key) => key.id === 'tmux-split-window')?.value).toBe('\u000b"');
     const codex = contextualKeys(instance(), 'codex');
     expect(codex.at(-1)?.value).toBe('commit and push');
     expect(codex.at(-1)?.value.includes('\n')).toBe(false);
@@ -31,9 +40,21 @@ describe('terminal input model', () => {
   it('uses safe defaults and disables unsupported tmux prefixes', () => {
     expect(defaultContextualMode(instance())).toBe('tmux');
     expect(defaultContextualMode(null)).toBe('codex');
+    const fallback = contextualKeys(instance({ tmuxPrefixSource: 'fallback', tmuxPrefixKey: 'a' }), 'tmux');
+    expect(fallback[0].label).toBe('Ctrl+B');
+    expect(fallback[0].value).toBe('\u0002');
+    expect(fallback[1].value).toBe('\u0002[');
+    const missing = contextualKeys(instance({ tmuxPrefixSource: 'fallback', tmuxPrefixKey: '' }), 'tmux');
+    expect(missing[0].label).toBe('Ctrl+B');
+    const legacy = contextualKeys(instance({ tmuxPrefixSource: undefined, tmuxPrefixKey: 'a' }), 'tmux');
+    expect(legacy[0].label).toBe('Ctrl+B');
     const unsupported = contextualKeys(instance({ tmuxPrefixSource: 'unsupported', tmuxPrefixKey: '' }), 'tmux');
     expect(unsupported[0].disabled).toBe(true);
     expect(unsupported[1].disabled).toBe(true);
-    expect(unsupported[2].disabled).toBeFalsy();
+    expect(unsupported.find((key) => key.id === 'tmux-next-pane')?.disabled).toBe(true);
+    expect(unsupported.find((key) => key.id === 'tmux-detach')?.disabled).toBe(true);
+    expect(unsupported.find((key) => key.id === 'tmux-split-window')?.disabled).toBe(true);
+    expect(unsupported.find((key) => key.id === 'tmux-escape')?.disabled).toBeFalsy();
+    expect(unsupported.find((key) => key.id === 'page-up')?.disabled).toBeFalsy();
   });
 });

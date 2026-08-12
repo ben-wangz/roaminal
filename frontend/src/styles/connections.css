@@ -1,4 +1,25 @@
 .connection-manager { min-height: 0; flex: 1; overflow: auto; padding: 28px clamp(18px, 4vw, 64px) 48px; background: var(--base); }
+.appearance-page { min-height: 0; flex: 1; overflow: auto; padding: 28px clamp(18px, 4vw, 64px) 48px; background: var(--base); }
+.appearance-header, .appearance-content { width: min(1120px, 100%); margin-inline: auto; }
+.appearance-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.appearance-header h1 { margin: 0; color: #eee8d5; font-size: 1.35rem; }
+.appearance-subtitle { margin: 7px 0 0; color: var(--muted); font-size: .75rem; }
+.appearance-header-actions, .appearance-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.appearance-content { display: grid; grid-template-columns: minmax(230px, .7fr) minmax(0, 1.3fr); gap: 22px; margin-top: 28px; }
+.appearance-controls { display: grid; align-content: start; gap: 18px; }
+.appearance-controls label { display: grid; gap: 7px; color: var(--muted); font-size: .72rem; }
+.appearance-controls select, .appearance-controls input[type='number'] { min-height: 38px; border: 1px solid var(--border); background: var(--base1); color: #eee8d5; padding: 0 10px; }
+.appearance-size-controls { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto; align-items: center; gap: 9px; }
+.appearance-size-controls input[type='range'] { min-width: 0; accent-color: var(--yellow); }
+.appearance-size-controls span { color: var(--muted); }
+.appearance-error { color: #ff938f; font-size: .68rem; }
+.appearance-actions { justify-content: flex-start; }
+.appearance-actions .text-button { display: inline-flex; align-items: center; gap: 6px; }
+.appearance-preview-region { min-width: 0; }
+.appearance-preview-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; color: #eee8d5; font-size: .75rem; }
+.appearance-preview-heading span { color: var(--muted); font-size: .68rem; }
+.appearance-sample { width: 100%; min-height: 230px; height: min(42vh, 300px); overflow: hidden; border: 1px solid var(--border); background: var(--base); }
+.appearance-sample .xterm { height: 100%; padding: 10px; }
 .manager-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; max-width: 1120px; margin: 0 auto; }
 .manager-header h1, .keys-panel h2, .connection-editor h2 { margin: 0; color: #eee8d5; font-size: 1.35rem; }
 .manager-header-actions, .manager-tabs, .manager-toolbar, .connection-row-actions, .source-capabilities { display: flex; align-items: center; gap: 8px; }

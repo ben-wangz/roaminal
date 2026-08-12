@@ -3,6 +3,7 @@ import type { SearchAddon } from '@xterm/addon-search';
 import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
 import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
+import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 
 type TerminalModules = [
   typeof import('@xterm/xterm'),
@@ -25,6 +26,8 @@ export class TerminalRuntime {
   private disposed = false;
   private addonsLoaded = false;
   private addonsLoading = false;
+  private appearance: TerminalAppearance;
+  private appearanceRevision = 0;
   private readonly ready: Promise<void>;
   private readonly activate = () => this.claim();
 
@@ -33,7 +36,9 @@ export class TerminalRuntime {
     private readonly token: () => string | null,
     scrollbackLines = 1000,
     private readonly endpoint: 'connection-instances' | 'connection-launches' = 'connection-instances',
+    appearance: TerminalAppearance = DEFAULT_APPEARANCE,
   ) {
+    this.appearance = appearance;
     this.ready = this.loadTerminal(scrollbackLines);
   }
 
@@ -49,7 +54,7 @@ export class TerminalRuntime {
       convertEol: false,
       cursorBlink: true,
       scrollback: Math.max(0, Math.min(50000, scrollbackLines)),
-      fontFamily: 'Monaspace Neon, monospace',
+      ...xtermFontOptions(this.appearance),
       theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' },
     });
     this.fit = new FitAddon();
@@ -57,6 +62,25 @@ export class TerminalRuntime {
     this.terminal.onData((data) => this.input(data));
     this.terminal.onResize(({ cols, rows }) => this.sendResize(cols, rows));
     this.mount();
+  }
+
+  async applyAppearance(appearance: TerminalAppearance): Promise<void> {
+    this.appearance = appearance;
+    const revision = ++this.appearanceRevision;
+    const terminal = this.terminal;
+    if (!terminal) return;
+    const options = xtermFontOptions(appearance);
+    terminal.options.fontFamily = options.fontFamily;
+    terminal.options.fontSize = options.fontSize;
+    try {
+      if (typeof document !== 'undefined' && document.fonts) {
+        await document.fonts.load(`${options.fontSize}px ${options.fontFamily}`);
+      }
+    } catch {
+      // A missing font must not prevent the terminal from remaining usable.
+    }
+    if (this.disposed || revision !== this.appearanceRevision || !this.fit) return;
+    this.fit.fit();
   }
 
   attach(element: HTMLElement): void {
