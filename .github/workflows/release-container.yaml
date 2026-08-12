@@ -96,32 +96,34 @@ jobs:
         run: |
           npm --prefix frontend ci
           npm --prefix frontend run build
-          mkdir -p sourcemaps
-          find frontend/dist -type f \( -name '*.map' -o -name '*.js' \) -exec cp --parents {} sourcemaps/ \;
+          sourcemap_dir=build/release-sourcemaps
+          rm -rf "$sourcemap_dir"
+          mkdir -p "$sourcemap_dir"
+          find frontend/dist -type f \( -name '*.map' -o -name '*.js' \) -exec cp --parents {} "$sourcemap_dir/" \;
           node - <<'NODE'
           const fs = require('node:fs');
           const crypto = require('node:crypto');
           const path = require('node:path');
-          const root = 'sourcemaps/frontend/dist';
+          const root = 'build/release-sourcemaps/frontend/dist';
           const files = [];
           function walk(dir) {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
               const full = path.join(dir, entry.name);
               if (entry.isDirectory()) walk(full);
               else if (entry.name.endsWith('.js') || entry.name.endsWith('.map')) {
-                files.push({ path: full.slice('sourcemaps/'.length), sha256: crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex') });
+                files.push({ path: full.slice('build/release-sourcemaps/'.length), sha256: crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex') });
               }
             }
           }
           walk(root);
-          fs.writeFileSync('sourcemaps/manifest.json', JSON.stringify({ runtimeVersion: process.env.RELEASE_VERSION, commitSHA: process.env.RELEASE_COMMIT, files }, null, 2) + '\n');
+          fs.writeFileSync('build/release-sourcemaps/manifest.json', JSON.stringify({ runtimeVersion: process.env.RELEASE_VERSION, commitSHA: process.env.RELEASE_COMMIT, files }, null, 2) + '\n');
           NODE
 
       - name: upload-frontend-sourcemaps
         uses: actions/upload-artifact@v4
         with:
           name: roaminal-frontend-sourcemaps-${{ needs.plan.outputs.runtime_version }}
-          path: sourcemaps
+          path: build/release-sourcemaps
           if-no-files-found: error
           retention-days: 90
 
