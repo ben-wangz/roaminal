@@ -22,6 +22,25 @@ never use real credentials or private key material.
 4. Authenticate through the visible login UI. Record the release version and
    `bootId` from `/api/version` without recording access or refresh tokens.
 
+## Deterministic fault injection
+
+Do not add a test-only backend endpoint or change the deployed application to
+make an error. Use Playwright's network controls against the disposable
+release:
+
+- Fulfill a same-origin image request with `404` to force a resource-load
+  error.
+- Use `page.routeWebSocket` to close exactly one product socket before it
+  opens. If the runner lacks this API, use the designated controllable proxy
+  and report the missing capability as `BLOCKED`; do not substitute a broad
+  WebSocket allowlist.
+- Abort only `POST **/api/client-diagnostics` while testing silent reporting
+  failure, then remove the route and verify a later event is delivered.
+
+These faults are scoped to this browser context and must be restored before
+cleanup. They are not expected server errors and must not be hidden by the
+global diagnostics gate.
+
 ## Procedure
 
 1. Generate a marker containing only a timestamp and random UUID. Evaluate
@@ -31,11 +50,12 @@ never use real credentials or private key material.
    inspection. This intentional error is the only expected Console error in
    this step.
 2. Evaluate an unhandled rejection with `new Error(marker + '-rejection')` and
-   add a broken same-origin image whose URL contains no query or secret. Assert
-   the expected `pageerror`/resource failure and retain the browser evidence.
-3. Start one disposable connection, then use the browser network interception
-   API to abort exactly one product WebSocket attempt before it opens. Assert
-   one `websocket_error` diagnostic later, with endpoint kind, phase, and
+   fulfill a broken same-origin image with `404` using the deterministic fault
+   injection rule. Assert the expected `pageerror`/resource failure and retain
+   the browser evidence.
+3. Start one disposable connection, then close exactly one product WebSocket
+   before it opens using the deterministic fault injection rule. Assert one
+   `websocket_error` diagnostic later, with endpoint kind, phase, and
    connection instance ID. The browser diagnostic may say only that the socket
    failed before open; it must not claim an HTTP status unavailable to the
    WebSocket API.
@@ -46,9 +66,10 @@ never use real credentials or private key material.
    contain none of the fake token, query value, or private-key body.
 5. Repeat the same marker error several times within 30 seconds. Assert that
    the server receives one event with a repeat count rather than one record per
-   call. Temporarily fail the diagnostics POST route and assert that the
-   application remains usable, no recursive diagnostics storm appears, and the
-   bounded retry behavior eventually stops.
+   call. Abort the diagnostics POST route, trigger one new marker error, and
+   assert that the application remains usable, no recursive diagnostics storm
+   appears, and the bounded retry behavior eventually stops. Remove the abort,
+   trigger a fresh marker, and verify delivery resumes.
 6. Inspect the Pod log for `client_diagnostic=` records and inspect the private
    state path with a read-only command. Locate the matching `pageId` and
    `eventId`, verify the runtime version, boot ID, auth session, event kinds,
