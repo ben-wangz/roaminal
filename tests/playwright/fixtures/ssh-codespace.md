@@ -145,8 +145,10 @@ Ed25519 key.
 1. In the authenticated Roaminal UI, open `Connections` and `Keys`. Delete an
    earlier fixture-owned Ed25519 key if one is present, then use `Generate key`
    with algorithm `Ed25519` and a unique filename such as
-   `id_ed25519_roaminal_e2e`. Leave the passphrase empty; passphrase behavior
-   is tested through the terminal prompt, not stored by this fixture.
+   `roaminal_e2e_ed25519`. The filename must end in `_ed25519` so it is
+   recognized by Roaminal's supported key inventory. Leave the passphrase
+   empty; passphrase behavior is tested through the terminal prompt, not
+   stored by this fixture.
 2. Wait for the key-generation connection to finish. Verify the new key appears
    in the key inventory and record only its `keyId`, filename, and public-key
    fingerprint.
