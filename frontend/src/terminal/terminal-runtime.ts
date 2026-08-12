@@ -28,6 +28,7 @@ export class TerminalRuntime {
   private addonsLoading = false;
   private appearance: TerminalAppearance;
   private appearanceRevision = 0;
+  private disposeFrame: number | null = null;
   private readonly ready: Promise<void>;
   private readonly activate = () => this.claim();
 
@@ -208,7 +209,7 @@ export class TerminalRuntime {
     this.fit = undefined;
     this.search = undefined;
     if (terminal) {
-      terminal.dispose();
+      this.deferTerminalDispose(terminal);
     } else {
       void this.ready.then(() => {
         // The module load may finish after disposal; release any terminal it created.
@@ -216,7 +217,7 @@ export class TerminalRuntime {
         this.terminal = undefined;
         this.fit = undefined;
         this.search = undefined;
-        loaded?.dispose();
+        if (loaded) this.deferTerminalDispose(loaded);
       });
     }
     this.listeners.clear();
@@ -275,7 +276,19 @@ export class TerminalRuntime {
     if (this.disposed || !this.element || !terminal || !fit || !terminal.element?.parentElement || !terminal.dimensions) return;
     fit.fit();
   }
-
+  private deferTerminalDispose(terminal: Terminal): void {
+    if (typeof window === 'undefined') {
+      terminal.dispose();
+      return;
+    }
+    const finish = () => {
+      this.disposeFrame = null;
+      window.setTimeout(() => terminal.dispose(), 0);
+    };
+    this.disposeFrame = window.requestAnimationFrame(() => {
+      this.disposeFrame = window.requestAnimationFrame(finish);
+    });
+  }
   private claim(): void {
     if (!this.closed) this.send({ type: 'claim_terminal_control' });
   }

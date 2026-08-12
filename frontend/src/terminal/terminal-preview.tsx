@@ -15,6 +15,7 @@ export class TerminalPreviewRuntime {
   private connected = false;
   private appearance: TerminalAppearance;
   private appearanceRevision = 0;
+  private disposeFrame: number | null = null;
   private readonly outputQueue = new PreviewOutputQueue((reset, data) => {
     const terminal = this.terminal;
     if (this.disposed || !terminal) return;
@@ -152,15 +153,29 @@ export class TerminalPreviewRuntime {
     this.terminal = undefined;
     this.fit = undefined;
     if (terminal) {
-      terminal.dispose();
+      this.deferTerminalDispose(terminal);
     } else {
       void this.ready.then(() => {
         const loaded = this.terminal;
         this.terminal = undefined;
         this.fit = undefined;
-        loaded?.dispose();
+        if (loaded) this.deferTerminalDispose(loaded);
       });
     }
+  }
+
+  private deferTerminalDispose(terminal: Terminal): void {
+    if (typeof window === 'undefined') {
+      terminal.dispose();
+      return;
+    }
+    const finish = () => {
+      this.disposeFrame = null;
+      window.setTimeout(() => terminal.dispose(), 0);
+    };
+    this.disposeFrame = window.requestAnimationFrame(() => {
+      this.disposeFrame = window.requestAnimationFrame(finish);
+    });
   }
 }
 
