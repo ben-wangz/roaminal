@@ -69,8 +69,8 @@ export class TerminalPreviewRuntime {
     } catch {
       // A missing font must not prevent the preview from remaining usable.
     }
-    if (this.disposed || revision !== this.appearanceRevision || !this.fit) return;
-    this.fit.fit();
+    if (this.disposed || revision !== this.appearanceRevision) return;
+    this.fitTerminal();
   }
 
   attach(element: HTMLElement): void {
@@ -85,11 +85,11 @@ export class TerminalPreviewRuntime {
     if (terminal.element) element.replaceChildren(terminal.element);
     else terminal.open(element);
     terminal.loadAddon(fit);
-    fit.fit();
+    this.fitTerminal();
     this.connect();
     this.resizeObserver?.disconnect();
     this.resizeObserver = new ResizeObserver(() => {
-      if (!this.disposed && this.fit) this.fit.fit();
+      this.fitTerminal();
     });
     this.resizeObserver.observe(element);
   }
@@ -103,7 +103,7 @@ export class TerminalPreviewRuntime {
     socket.onopen = () => {
       if (this.disposed || this.socket !== socket || !this.fit) return;
       this.connected = true;
-      this.fit.fit();
+      this.fitTerminal();
     };
     socket.onmessage = (event) => {
       if (this.disposed || this.socket !== socket || !this.terminal) return;
@@ -119,6 +119,13 @@ export class TerminalPreviewRuntime {
 
   connectedState(): boolean {
     return this.connected;
+  }
+
+  private fitTerminal(): void {
+    const terminal = this.terminal;
+    const fit = this.fit;
+    if (this.disposed || !this.element || !terminal || !fit || !terminal.element?.parentElement || !terminal.dimensions) return;
+    fit.fit();
   }
 
   dispose(): void {

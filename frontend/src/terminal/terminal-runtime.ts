@@ -79,8 +79,8 @@ export class TerminalRuntime {
     } catch {
       // A missing font must not prevent the terminal from remaining usable.
     }
-    if (this.disposed || revision !== this.appearanceRevision || !this.fit) return;
-    this.fit.fit();
+    if (this.disposed || revision !== this.appearanceRevision) return;
+    this.fitTerminal();
   }
 
   attach(element: HTMLElement): void {
@@ -108,14 +108,14 @@ export class TerminalRuntime {
           this.terminal.loadAddon(new LigaturesAddon());
           this.terminal.loadAddon(new ProgressAddon());
           this.addonsLoaded = true;
-          this.fit.fit();
+          this.fitTerminal();
           this.connect();
           this.observeResize(element);
         },
       );
       return;
     }
-    fit.fit();
+    this.fitTerminal();
     this.connect();
     this.observeResize(element);
   }
@@ -123,7 +123,7 @@ export class TerminalRuntime {
   private observeResize(element: HTMLElement): void {
     this.resizeObserver?.disconnect();
     this.resizeObserver = new ResizeObserver(() => {
-      if (!this.disposed && this.element && this.fit) this.fit.fit();
+      this.fitTerminal();
     });
     this.resizeObserver.observe(element);
   }
@@ -139,7 +139,7 @@ export class TerminalRuntime {
       this.connected = true;
       this.emit();
       this.claim();
-      this.fit.fit();
+      this.fitTerminal();
       this.sendResize(this.terminal.cols, this.terminal.rows);
     };
     socket.onmessage = (event) => {
@@ -267,6 +267,13 @@ export class TerminalRuntime {
 
   private sendResize(cols: number, rows: number): void {
     if (!this.closed && this.socket?.readyState === WebSocket.OPEN) this.send({ type: 'resize', cols, rows });
+  }
+
+  private fitTerminal(): void {
+    const terminal = this.terminal;
+    const fit = this.fit;
+    if (this.disposed || !this.element || !terminal || !fit || !terminal.element?.parentElement || !terminal.dimensions) return;
+    fit.fit();
   }
 
   private claim(): void {
