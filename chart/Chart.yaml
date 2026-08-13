@@ -1,7 +1,7 @@
 apiVersion: v2
 name: roaminal
-version: 0.1.13
-appVersion: "0.2.15"
+version: 0.1.14
+appVersion: "0.2.16"
 kubeVersion: ">=1.25.0-0"
 description: Self-hosted browser terminal and SSH connection platform
 type: application
