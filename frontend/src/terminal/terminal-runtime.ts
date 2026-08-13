@@ -5,6 +5,7 @@ import { parseServerMessage } from './terminal-protocol';
 import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 import { attachTerminalShortcutHandler } from './terminal-shortcuts';
+import { findTerminalMatch, type TerminalSearchOptions } from './terminal-search-guard';
 
 export class TerminalRuntime {
   terminal?: Terminal;
@@ -247,15 +248,12 @@ export class TerminalRuntime {
     this.send({ type: 'input', data });
   }
 
-  find(query: string, options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {}): boolean {
-    return this.search?.findNext(query, options) ?? false;
+  find(query: string, options: TerminalSearchOptions = {}): boolean {
+    return findTerminalMatch(this.search, query, options, false);
   }
 
-  findPrevious(
-    query: string,
-    options: { regex?: boolean; wholeWord?: boolean; caseSensitive?: boolean } = {},
-  ): boolean {
-    return this.search?.findPrevious(query, options) ?? false;
+  findPrevious(query: string, options: TerminalSearchOptions = {}): boolean {
+    return findTerminalMatch(this.search, query, options, true);
   }
 
   send(message: Record<string, unknown>): void {
