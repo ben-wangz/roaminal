@@ -12,9 +12,9 @@
 .auth-modal label { color: var(--muted); font-size: .75rem; }
 .auth-modal input[type='password'] { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; }
 .error-text { color: var(--danger-soft); font-size: .76rem; }
-.modal-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0,43,54,.72); backdrop-filter: blur(4px); opacity: 1; transition: opacity var(--dur-base) var(--ease-out); }
+.modal-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(0,43,54,.72); backdrop-filter: blur(4px); opacity: 1; transition: opacity var(--dur-base) var(--ease-out); }
 @starting-style { .modal-backdrop { opacity: 0; } }
-.modal-panel { background: var(--base1); border: 1px solid var(--border); padding: 20px; scale: 1; opacity: 1; transition: scale var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out); }
+.modal-panel { position: fixed; top: 50%; left: 50%; z-index: 30; translate: -50% -50%; background: var(--base1); border: 1px solid var(--border); padding: 20px; scale: 1; opacity: 1; transition: scale var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out); }
 @starting-style { .modal-panel { scale: .97; opacity: 0; } }
 .connection-actions-menu { position: relative; flex: 0 0 auto; }
 .connection-action-menu { position: fixed; z-index: 50; display: grid; min-width: 190px; padding: 4px; border: 1px solid var(--border); background: var(--base1); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
