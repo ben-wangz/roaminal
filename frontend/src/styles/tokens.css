@@ -1,2 +1,45 @@
-:root { font-family: 'Monaspace Neon', monospace; color: #93a1a1; background: #002b36; font-synthesis: none; --base: #002b36; --base1: #073642; --base2: #586e75; --text: #93a1a1; --muted: #657b83; --yellow: #b58900; --cyan: #2aa198; --blue: #268bd2; --red: #dc322f; --green: #859900; --border: rgba(147,161,161,.22); }
+:root {
+  font-family: 'Monaspace Neon', monospace;
+  color: var(--text);
+  background: var(--base);
+  font-synthesis: none;
+  /* Solarized ramp (oklch values are exact conversions of the legacy hex) */
+  --base: oklch(26.7337% 0.04861 219.817); /* #002b36 */
+  --base1: oklch(30.9207% 0.05176 219.652); /* #073642 */
+  --base2: oklch(52.3013% 0.02830 219.136); /* #586e75 */
+  --text: oklch(69.7899% 0.01590 196.794); /* #93a1a1 */
+  --muted: oklch(56.8165% 0.02851 221.899); /* #657b83 */
+  --yellow: oklch(65.4479% 0.13401 85.719); /* #b58900 */
+  --cyan: oklch(64.3664% 0.10191 187.384); /* #2aa198 */
+  --blue: oklch(61.4879% 0.13939 244.927); /* #268bd2 */
+  --red: oklch(58.6261% 0.20644 27.117); /* #dc322f */
+  --green: oklch(64.4391% 0.15085 118.597); /* #859900 */
+  --text-bright: oklch(93.0609% 0.02603 92.402); /* #eee8d5 */
+  --danger-soft: oklch(77.6567% 0.13085 22.770); /* #ff938f */
+  --warn-bright: oklch(87.0677% 0.13252 82.737); /* #ffcc66, brighter amber than --yellow */
+  /* semantic metric levels */
+  --ok: var(--green);
+  --warn: var(--yellow);
+  --crit: var(--red);
+  /* borders (text washes) */
+  --border: color-mix(in oklab, var(--text) 22%, transparent);
+  --border-soft: color-mix(in oklab, var(--text) 14%, transparent);
+  --border-faint: color-mix(in oklab, var(--text) 12%, transparent);
+  /* hover washes */
+  --hover-wash: color-mix(in oklab, var(--text) 12%, transparent);
+  --hover-wash-strong: color-mix(in oklab, var(--text) 14%, transparent);
+  /* raised surfaces (base1 washes), 0 = faintest */
+  --surface-0: color-mix(in oklab, var(--base1) 58%, transparent);
+  --surface-1: color-mix(in oklab, var(--base1) 94%, transparent);
+  --surface-2: color-mix(in oklab, var(--base1) 97%, transparent);
+  /* darkening washes (base washes), 1 = lightest */
+  --shade-1: color-mix(in oklab, var(--base) 32%, transparent);
+  --shade-2: color-mix(in oklab, var(--base) 45%, transparent);
+  --shade-3: color-mix(in oklab, var(--base) 60%, transparent);
+  /* motion */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+}
 * { box-sizing: border-box; } button, input { font: inherit; } button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

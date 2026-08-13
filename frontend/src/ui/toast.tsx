@@ -1,1 +1,10 @@
-export function Toast({ message }: { message: string | null }) { return message ? <div className="toast" role="status">{message}</div> : null; }
+export type ToastKind = 'info' | 'success' | 'error';
+export type ToastState = { message: string; kind: ToastKind };
+
+export function Toast({ toast }: { toast: ToastState | null }) {
+  return toast ? (
+    <div className="toast" data-kind={toast.kind} role="status">
+      {toast.message}
+    </div>
+  ) : null;
+}

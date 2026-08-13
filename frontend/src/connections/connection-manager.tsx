@@ -26,6 +26,7 @@ import {
 import { ConnectionDefinitionRow, LocalConnectionRow, SourceBand } from './connection-manager-rows';
 import { SSHKeyGenerationDialog } from './ssh-key-generation-dialog';
 import { SSHKeysPanel } from './ssh-keys-panel';
+import type { ToastKind } from '../ui/toast';
 
 type Props = {
   connections: ConnectionInstanceSummary[];
@@ -33,7 +34,7 @@ type Props = {
   onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;
   onOpenWorkspace: () => void;
   onOpenAppearance: () => void;
-  onToast: (message: string) => void;
+  onToast: (message: string, kind?: ToastKind) => void;
 };
 
 export function ConnectionManager({ connections, onConnect, onGenerated, onOpenWorkspace, onOpenAppearance, onToast }: Props) {
@@ -57,7 +58,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setETag(definitionResult.etag);
       setKeys(keyResult.keys);
     } catch (error) {
-      onToastRef.current((error as Error).message);
+      onToastRef.current((error as Error).message, 'error');
     } finally {
       setBusy(false);
     }
@@ -88,6 +89,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
     if (existing) {
       onToast(
         `${algorithm === 'ed25519' ? 'Ed25519' : 'RSA'} key already exists (${existing.fileName}). Delete it before generating another.`,
+        'error',
       );
       return;
     }
@@ -102,7 +104,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
   async function saveDefinition(event: React.FormEvent) {
     event.preventDefault();
     if (!etag) {
-      onToast('Config ETag unavailable; refresh first.');
+      onToast('Config ETag unavailable; refresh first.', 'error');
       return;
     }
     setBusy(true);
@@ -115,7 +117,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setETag(result.etag);
       setEditor(null);
     } catch (error) {
-      onToast((error as Error).message);
+      onToast((error as Error).message, 'error');
     } finally {
       setBusy(false);
     }
@@ -131,7 +133,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setDefinitions(result.data);
       setETag(result.etag);
     } catch (error) {
-      onToast((error as Error).message);
+      onToast((error as Error).message, 'error');
     } finally {
       setBusy(false);
     }
@@ -145,7 +147,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       setDefinitions(result.data);
       setETag(result.etag);
     } catch (error) {
-      onToast((error as Error).message);
+      onToast((error as Error).message, 'error');
     } finally {
       setBusy(false);
     }
@@ -159,9 +161,9 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       const instance = await generateKey(generation);
       setGeneration(null);
       await onGenerated(instance);
-      onToast(`Key generation connection ${instance.connectionInstanceId.slice(0, 8)} is ready.`);
+      onToast(`Key generation connection ${instance.connectionInstanceId.slice(0, 8)} is ready.`, 'success');
     } catch (error) {
-      onToast((error as Error).message);
+      onToast((error as Error).message, 'error');
     } finally {
       setBusy(false);
     }
@@ -173,9 +175,9 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
     try {
       await deleteKey(key.keyId);
       setKeys((current) => current.filter((item) => item.keyId !== key.keyId));
-      onToast(`Deleted ${key.fileName}.`);
+      onToast(`Deleted ${key.fileName}.`, 'success');
     } catch (error) {
-      onToast((error as Error).message);
+      onToast((error as Error).message, 'error');
     } finally {
       setBusy(false);
     }

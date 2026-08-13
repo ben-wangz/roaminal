@@ -1,0 +1,44 @@
+.system-status { display: flex; flex: 1 1 auto; align-items: center; gap: 9px; min-width: 0; color: var(--text-bright); font-size: .72rem; }
+.status-monitor { display: flex; position: absolute; top: 50%; left: 50%; align-items: center; gap: 9px; min-width: 0; margin: 0; pointer-events: none; transform: translate(-50%, -50%); }
+.connection-dot.offline { background: var(--red); }
+.status-host { max-width: 150px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.status-metric { display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 5px; min-width: 86px; }
+.metric-label { color: var(--muted); font-size: .63rem; }
+.metric-value { color: var(--text-bright); font-variant-numeric: tabular-nums; }
+.status-gauge { grid-column: 1 / -1; display: block; width: 86px; height: 3px; overflow: hidden; background: color-mix(in oklab, var(--text) 20%, transparent); }
+.status-gauge-fill { display: block; height: 100%; background: var(--cyan); transition: width var(--dur-base) var(--ease-out); }
+.status-metric[data-level='warn'] .metric-value { color: var(--warn); }
+.status-metric[data-level='warn'] .status-gauge-fill { background: var(--warn); }
+.status-metric[data-level='crit'] .metric-value { color: var(--crit); }
+.status-metric[data-level='crit'] .status-gauge-fill { background: var(--crit); }
+.metric-detail { grid-column: 1 / -1; color: var(--muted); font-size: .58rem; white-space: nowrap; }
+.status-detail { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.status-warning { color: var(--yellow); font-size: .7rem; }
+.remote-monitor-band { flex: 0 0 auto; display: grid; gap: 8px; padding: 8px 16px 9px; border-bottom: 1px solid var(--border); background: var(--shade-1); container-type: inline-size; opacity: 1; translate: 0 0; transition: opacity var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-out); }
+@starting-style { .remote-monitor-band { opacity: 0; translate: 0 -4px; } }
+.remote-monitor-heading { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--text-bright); font-size: .72rem; }
+.remote-monitor-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-monitor-status { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: .62rem; text-transform: uppercase; }
+.status-pulse { display: inline-block; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.remote-monitor-status.status-warming .status-pulse { animation: monitor-pulse 1.6s ease-in-out infinite; }
+@keyframes monitor-pulse { 50% { opacity: .25; } }
+.remote-monitor-status.status-available { color: var(--green); }
+.remote-monitor-status.status-partial, .remote-monitor-status.status-warming, .remote-monitor-status.status-stale { color: var(--yellow); }
+.remote-monitor-status.status-unavailable, .remote-monitor-error { color: var(--danger-soft); }
+.remote-monitor-error { margin-left: auto; font-size: .62rem; }
+.remote-monitor-grid { display: grid; grid-template-columns: repeat(7, minmax(90px, 1fr)); gap: 8px; min-width: 0; transition: filter var(--dur-base) var(--ease-out); }
+.remote-monitor-grid.stale { filter: saturate(.55) opacity(.75); }
+.remote-monitor-metric { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; column-gap: 6px; min-width: 0; }
+.remote-monitor-metric b { color: var(--muted); font-size: .62rem; font-weight: 500; }
+.remote-monitor-metric strong { overflow: hidden; color: var(--text-bright); font-size: .72rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.remote-monitor-metric small { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-size: .58rem; text-overflow: ellipsis; white-space: nowrap; }
+.metric-sparkline { width: 52px; height: 13px; align-self: center; color: var(--cyan); opacity: .85; }
+.remote-monitor-metric[data-level='warn'] strong, .remote-monitor-metric[data-level='warn'] .metric-sparkline { color: var(--warn); }
+.remote-monitor-metric[data-level='crit'] strong, .remote-monitor-metric[data-level='crit'] .metric-sparkline { color: var(--crit); }
+@container (max-width: 1100px) { .remote-monitor-grid { grid-template-columns: repeat(4, minmax(100px, 1fr)); } }
+@container (max-width: 700px) { .remote-monitor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px 8px; } .remote-monitor-metric strong { font-size: .66rem; } .metric-sparkline { display: none; } }
+@media (max-width: 700px) { .remote-monitor-band { padding: 7px 10px 8px; } }
+@media (prefers-reduced-motion: reduce) {
+  .remote-monitor-band, .remote-monitor-grid, .status-gauge-fill { transition: none; }
+  .remote-monitor-status .status-pulse { animation: none; }
+}

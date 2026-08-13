@@ -1,16 +1,10 @@
 import type { RefObject } from 'react';
-import { PanelLeftOpen, Search, Settings, ShieldCheck } from 'lucide-react';
 import { AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-session-ui';
-import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { connectionDisplayName } from '../status/connection-label';
-import { SystemStatus } from '../status/system-status';
-import { Toast } from '../ui/toast';
+import { Toast, type ToastKind, type ToastState } from '../ui/toast';
 import { ConnectionSidebar } from '../ui/connection-sidebar';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { TerminalPreviewRuntime } from '../terminal/terminal-preview';
-import { TerminalViewport } from '../terminal/terminal-viewport';
-import { TerminalSearch } from '../terminal/terminal-search';
-import { TouchKeyboard } from '../input/touch-keyboard';
 import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
 import { RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialogs';
 import { ConnectionManager } from '../connections/connection-manager';
@@ -20,6 +14,8 @@ import type { ConnectionView } from './connection-view';
 import { AppearanceSettings } from '../appearance/appearance-settings';
 import type { AppPage } from './app-state';
 import type { TerminalAppearance } from '../appearance/appearance-model';
+import { ShellTopbar } from './shell-topbar';
+import { WorkspacePage } from './workspace-page';
 
 export type Dialog = { type: 'rename' | 'terminate'; connectionInstanceId: string } | { type: 'auth' } | null;
 
@@ -41,7 +37,7 @@ type Props = {
   contextualMode: ContextualMode;
   search: boolean;
   executionStatus: string | null;
-  toast: string | null;
+  toast: ToastState | null;
   dialog: Dialog;
   dialogConnection: ConnectionInstanceSummary | undefined;
   authSessions: AuthSessionSummary[];
@@ -68,7 +64,7 @@ type Props = {
   onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;
   onOpenWorkspace: () => void;
   onSaveAppearance: (appearance: TerminalAppearance) => void;
-  onShowToast: (message: string) => void;
+  onShowToast: (message: string, kind?: ToastKind) => void;
   onRenameTitle: (id: string, title: string | null) => Promise<void>;
   onTerminateConnection: (id: string) => Promise<void>;
   onRevokeAuthSession: (id: string) => void;
@@ -156,82 +152,33 @@ export function AppShellView({
         />
       )}
       <main className={`main-panel ${workspaceOpen && !sidebarOpen ? 'expanded' : ''}`}>
-        <header className="topbar">
-          {workspaceOpen && !sidebarOpen && (
-            <button
-              ref={sidebarOpenButton}
-              className="icon-button sidebar-open-button"
-              type="button"
-              onClick={onOpenSidebar}
-              aria-label="Open sidebar"
-              title="Open sidebar"
-              aria-expanded={false}
-              aria-controls="connection-sidebar"
-            >
-              <PanelLeftOpen aria-hidden="true" size={18} />
-            </button>
-          )}
-          <SystemStatus
-            connected={Boolean(heartbeatState)}
-            connectionName={connectionDisplayName(currentConnection || null, connections)}
-            system={heartbeatState?.system || null}
-            connectionCount={connections.length}
-            latencyMs={heartbeatLatency}
-            persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
-          />
-          <div className="top-actions">
-            {workspaceOpen && (
-              <>
-                <button
-                  className="icon-button"
-                  onClick={onToggleSearch}
-                  aria-label="Search terminal"
-                  title="Search terminal"
-                >
-                  <Search aria-hidden="true" size={17} />
-                </button>
-                <button className="text-button" onClick={onOpenConnections}>
-                  Connections
-                </button>
-              </>
-            )}
-            <button className="icon-button" type="button" onClick={onOpenAppearance} aria-label="Appearance" title="Appearance">
-              <Settings aria-hidden="true" size={17} />
-            </button>
-            <button className="text-button" onClick={onOpenAuthSessions}>
-              <ShieldCheck aria-hidden="true" size={15} /> Sessions
-            </button>
-            <button className="text-button" onClick={onSignOut}>
-              Sign out
-            </button>
-          </div>
-        </header>
-        {workspaceOpen && <RemoteMonitorBand instance={activeInstance} />}
+        <ShellTopbar
+          workspaceOpen={workspaceOpen}
+          sidebarOpen={sidebarOpen}
+          sidebarOpenButton={sidebarOpenButton}
+          connected={Boolean(heartbeatState)}
+          connectionName={connectionDisplayName(currentConnection || null, connections)}
+          system={heartbeatState?.system || null}
+          connectionCount={connections.length}
+          latencyMs={heartbeatLatency}
+          persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
+          onOpenSidebar={onOpenSidebar}
+          onToggleSearch={onToggleSearch}
+          onOpenConnections={onOpenConnections}
+          onOpenAppearance={onOpenAppearance}
+          onOpenAuthSessions={onOpenAuthSessions}
+          onSignOut={onSignOut}
+        />
         {page === 'workspace' ? (
-          <>
-            {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={onCloseSearch} />}
-            <section className="terminal-stage">
-              {activeRuntime ? (
-                <TerminalViewport key={activeRuntime.connectionInstanceId} runtime={activeRuntime} />
-              ) : (
-                <div className="empty-state">
-                  <div className="brand-mark">
-                    r<span>&gt;</span>
-                  </div>
-                  <button className="primary" onClick={onOpenManager}>
-                    Open connection manager
-                  </button>
-                </div>
-              )}
-            </section>
-            {activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.input(value)} />}
-            <footer className="statusbar">
-              <span>{currentConnection?.cwd || 'No connection'}</span>
-              <span className="execution-status" aria-live="polite">
-                {executionStatus || (currentConnection ? `${currentConnection.cols}x${currentConnection.rows}` : '')}
-              </span>
-            </footer>
-          </>
+          <WorkspacePage
+            activeInstance={activeInstance}
+            activeRuntime={activeRuntime}
+            currentConnection={currentConnection}
+            search={search}
+            executionStatus={executionStatus}
+            onCloseSearch={onCloseSearch}
+            onOpenManager={onOpenManager}
+          />
         ) : page === 'connections' ? (
           <ConnectionManager
             connections={connections}
@@ -251,7 +198,7 @@ export function AppShellView({
           />
         )}
       </main>
-      <Toast message={toast} />
+      <Toast toast={toast} />
       {dialog?.type === 'rename' && dialogConnection && (
         <RenameTitleDialog
           connection={dialogConnection}

@@ -3,6 +3,7 @@ import { api, clearAuth } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
 import type { AuthSessionSummary } from '../auth/auth-session-ui';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
+import type { ToastKind } from '../ui/toast';
 
 type Params = {
   auth: AuthState | null;
@@ -14,7 +15,7 @@ type Params = {
   setDialog: Dispatch<
     SetStateAction<{ type: 'rename' | 'terminate'; connectionInstanceId: string } | { type: 'auth' } | null>
   >;
-  showToast: (message: string) => void;
+  showToast: (message: string, kind?: ToastKind) => void;
 };
 
 export function useAuthSessionActions({
@@ -57,7 +58,7 @@ export function useAuthSessionActions({
       setCurrentAuthSessionId(current.sessionId);
       setDialog({ type: 'auth' });
     } catch (err) {
-      showToast((err as Error).message);
+      showToast((err as Error).message, 'error');
     }
   }
 
@@ -68,7 +69,7 @@ export function useAuthSessionActions({
       setAuthSessions((current) => current.filter((session) => session.id !== id));
       if (id === currentAuthSessionId) signOut();
     } catch (err) {
-      showToast((err as Error).message);
+      showToast((err as Error).message, 'error');
     } finally {
       setAuthSessionBusy(null);
     }
@@ -80,7 +81,7 @@ export function useAuthSessionActions({
       await api('/api/auth/logout-others', { method: 'POST', body: '{}' });
       setAuthSessions((current) => current.filter((session) => session.id === currentAuthSessionId));
     } catch (err) {
-      showToast((err as Error).message);
+      showToast((err as Error).message, 'error');
     } finally {
       setAuthSessionBusy(null);
     }

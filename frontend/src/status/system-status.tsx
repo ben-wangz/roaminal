@@ -1,3 +1,6 @@
+import { memo } from 'react';
+import { formatBytes, formatDuration, formatPercent } from './format';
+import { metricLevel } from './metric-history';
 import type { Heartbeat } from './heartbeat';
 
 type Props = {
@@ -9,7 +12,7 @@ type Props = {
   persistenceDegraded: boolean;
 };
 
-export function SystemStatus({
+export const SystemStatus = memo(function SystemStatus({
   connected,
   connectionName,
   system,
@@ -55,7 +58,7 @@ export function SystemStatus({
       </span>
     </div>
   );
-}
+});
 
 function Metric({
   label,
@@ -68,34 +71,27 @@ function Metric({
   progress: number | null;
   detail: string;
 }) {
-  const clamped = progress === null ? undefined : Math.max(0, Math.min(100, progress));
+  const clamped = progress === null ? null : Math.max(0, Math.min(100, progress));
   return (
-    <span className="status-metric" title={`${label}: ${value} (${detail})`}>
+    <span className="status-metric" data-level={metricLevel(clamped)} title={`${label}: ${value} (${detail})`}>
       <span className="metric-label">{label}</span>
       <span className="metric-value">{value}</span>
-      <progress max={100} value={clamped} aria-label={`${label} ${value}`} />
+      <span
+        className="status-gauge"
+        role="progressbar"
+        aria-label={`${label} ${value}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={clamped ?? undefined}
+      >
+        <span className="status-gauge-fill" style={{ width: `${clamped ?? 0}%` }} />
+      </span>
       <span className="metric-detail">{detail}</span>
     </span>
   );
 }
 
-function formatPercent(value: number | null): string {
-  return value === null || !Number.isFinite(value) ? 'N/A' : `${value.toFixed(1)}%`;
-}
 function formatMemory(value: number | null, limit: number | null): string {
   if (value === null) return 'N/A';
   return `${formatBytes(value)} / ${limit === null ? 'unlimited' : formatBytes(limit)}`;
-}
-function formatBytes(value: number): string {
-  if (value < 1024 * 1024) return `${Math.round(value / 1024)}K`;
-  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)}M`;
-  return `${(value / 1024 / 1024 / 1024).toFixed(1)}G`;
-}
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return 'N/A';
-  const total = Math.floor(seconds);
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  return days > 0 ? `${days}d ${hours}h` : hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }

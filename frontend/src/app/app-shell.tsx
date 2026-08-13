@@ -4,7 +4,7 @@ import { AuthSessionUI } from '../auth/auth-session-ui';
 import { type Heartbeat } from '../status/heartbeat';
 import { notify } from '../status/notifications';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
-import { observeViewportHeight } from '../input/viewport';
+import { observeViewportHeight, SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
 import {
   loadStoredConnection,
@@ -22,6 +22,7 @@ import { browserAppearanceStorage, loadAppearance, saveAppearance, type Terminal
 import { useAppearanceStorage } from '../appearance/use-appearance-storage';
 import type { AppPage } from './app-state';
 import { useMainTerminalRuntime } from './use-main-terminal-runtime';
+import type { ToastKind, ToastState } from '../ui/toast';
 
 export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
@@ -30,12 +31,12 @@ export function AppShell() {
   const [page, setPage] = useState<AppPage>('connections');
   const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
   const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window === 'undefined' || !window.matchMedia('(max-width: 800px)').matches,
+    () => typeof window === 'undefined' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches,
   );
   const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
   const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const [search, setSearch] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -58,14 +59,14 @@ export function AppShell() {
   const toastTimer = useRef<number | null>(null);
   const contextualModes = useRef(new Map<string, ContextualMode>());
   useEffect(() => observeViewportHeight(), []);
-  function showToast(message: string) {
-    setToast(message);
+  const showToast = useCallback((message: string, kind: ToastKind = 'info') => {
+    setToast({ message, kind });
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => {
       setToast(null);
       toastTimer.current = null;
     }, 4500);
-  }
+  }, []);
   const setActiveView = useCallback((next: ConnectionView) => {
     viewRef.current = next;
     setView(next);
@@ -159,7 +160,7 @@ export function AppShell() {
           setCurrentRuntime((current) => (current === currentRuntime ? null : current));
           clearLaunch();
           setPage('connections');
-          showToast('tmux connection could not be started.');
+          showToast('tmux connection could not be started.', 'error');
           return;
         }
         setConnections((current) => {
@@ -204,12 +205,11 @@ export function AppShell() {
         setExecutionStatus(message.command ? `Running: ${message.command}` : 'Running command');
       } else if (message.phase === 'completed') {
         setExecutionStatus(null);
-        showToast('Command completed');
+        showToast('Command completed', 'success');
         notify('Roaminal', 'Command completed');
       }
     });
-  }, [activateConnection, clearLaunch, currentRuntime, view.activeConnectionInstanceId, activeLaunchId]);
-  if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
+  }, [activateConnection, clearLaunch, currentRuntime, view.activeConnectionInstanceId, activeLaunchId, showToast]);
   const currentConnection = connections.find(
     (connection) => connection.connectionInstanceId === view.activeConnectionInstanceId,
   );
@@ -219,11 +219,53 @@ export function AppShell() {
   const contextualMode = activeInstance
     ? contextualModes.current.get(activeInstance.connectionInstanceId) || defaultContextualMode(activeInstance)
     : 'codex';
-  function setContextualMode(mode: ContextualMode) {
-    if (!activeInstance) return;
-    contextualModes.current.set(activeInstance.connectionInstanceId, mode);
-    setConnections((current) => [...current]);
-  }
+  const setContextualMode = useCallback(
+    (mode: ContextualMode) => {
+      if (!activeInstance) return;
+      contextualModes.current.set(activeInstance.connectionInstanceId, mode);
+      setConnections((current) => [...current]);
+    },
+    [activeInstance],
+  );
+  const handlePreviewStart = useCallback((id: string) => setPreviewConnectionInstanceId(id), []);
+  const handlePreviewEnd = useCallback(
+    (id: string) => setPreviewConnectionInstanceId((current) => (current === id ? null : current)),
+    [],
+  );
+  const handleUnavailableExtension = useCallback(
+    (name: string) => showToast(`${name} extension unavailable`),
+    [showToast],
+  );
+  const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), []);
+  const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), []);
+  const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
+  const handleToggleSearch = useCallback(() => setSearch((value) => !value), []);
+  const handleCloseSearch = useCallback(() => setSearch(false), []);
+  const handleOpenConnections = useCallback(() => {
+    cancelLaunch();
+    setPreviewConnectionInstanceId(null);
+    setPage('connections');
+  }, [cancelLaunch]);
+  const handleOpenAppearance = useCallback(() => {
+    setPreviewConnectionInstanceId(null);
+    setPage('appearance');
+  }, []);
+  const handleOpenWorkspace = useCallback(() => {
+    if (viewRef.current.activeConnectionInstanceId) setPage('workspace');
+  }, []);
+  const handleSaveAppearance = useCallback(
+    (next: TerminalAppearance) => {
+      if (!saveAppearance(browserAppearanceStorage(), next)) {
+        showToast('Unable to save appearance in this browser.', 'error');
+        return;
+      }
+      setAppearance(next);
+      showToast('Appearance saved.', 'success');
+    },
+    [showToast],
+  );
+  const handleCloseDialog = useCallback(() => setDialog(null), []);
+  if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
   const dialogConnection =
     dialog && 'connectionInstanceId' in dialog
       ? connections.find((connection) => connection.connectionInstanceId === dialog.connectionInstanceId)
@@ -254,44 +296,32 @@ export function AppShell() {
       currentAuthSessionId={actions.currentAuthSessionId}
       authSessionBusy={actions.authSessionBusy}
       onToggleSidebar={actions.toggleSidebar}
-      onOpenSidebar={() => setSidebarOpen(true)}
+      onOpenSidebar={handleOpenSidebar}
       onSelectConnection={actions.selectConnectionInstance}
-      onPreviewStart={(id) => setPreviewConnectionInstanceId(id)}
-      onPreviewEnd={(id) => setPreviewConnectionInstanceId((current) => (current === id ? null : current))}
-      onUnavailableExtension={(name) => showToast(`${name} extension unavailable`)}
-      onRename={(id) => setDialog({ type: 'rename', connectionInstanceId: id })}
+      onPreviewStart={handlePreviewStart}
+      onPreviewEnd={handlePreviewEnd}
+      onUnavailableExtension={handleUnavailableExtension}
+      onRename={handleRename}
       onAutomaticTitle={actions.resetTitle}
-      onTerminate={(id) => setDialog({ type: 'terminate', connectionInstanceId: id })}
+      onTerminate={handleTerminate}
       onContextualModeChange={setContextualMode}
-      onToggleSearch={() => setSearch((value) => !value)}
-      onCloseSearch={() => setSearch(false)}
-      onOpenConnections={() => { cancelLaunch(); setPreviewConnectionInstanceId(null); setPage('connections'); }}
-      onOpenAppearance={() => {
-        setPreviewConnectionInstanceId(null);
-        setPage('appearance');
-      }}
+      onToggleSearch={handleToggleSearch}
+      onCloseSearch={handleCloseSearch}
+      onOpenConnections={handleOpenConnections}
+      onOpenAppearance={handleOpenAppearance}
       onSignOut={actions.signOut}
       onOpenAuthSessions={() => void actions.openAuthSessions()}
-      onOpenManager={() => { cancelLaunch(); setPreviewConnectionInstanceId(null); setPage('connections'); }}
+      onOpenManager={handleOpenConnections}
       onCreateConnection={actions.createConnection}
       onGenerated={actions.acceptGenerated}
-      onOpenWorkspace={() => {
-        if (view.activeConnectionInstanceId) setPage('workspace');
-      }}
-      onSaveAppearance={(next) => {
-        if (!saveAppearance(browserAppearanceStorage(), next)) {
-          showToast('Unable to save appearance in this browser.');
-          return;
-        }
-        setAppearance(next);
-        showToast('Appearance saved.');
-      }}
+      onOpenWorkspace={handleOpenWorkspace}
+      onSaveAppearance={handleSaveAppearance}
       onShowToast={showToast}
       onRenameTitle={actions.updateTitle}
       onTerminateConnection={actions.terminateConnection}
       onRevokeAuthSession={(id) => void actions.revokeAuthSession(id)}
       onLogoutOtherAuthSessions={() => void actions.logoutOtherAuthSessions()}
-      onCloseDialog={() => setDialog(null)}
+      onCloseDialog={handleCloseDialog}
     />
   );
 }

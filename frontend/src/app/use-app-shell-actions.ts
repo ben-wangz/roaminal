@@ -1,14 +1,17 @@
 import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
-import { api, login, refresh } from '../auth/auth-client';
+import { api, login } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
-import { heartbeat } from '../status/heartbeat';
+import type { Heartbeat } from '../status/heartbeat';
 import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
+import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import { startConnectionLaunch } from '../connections/connection-api';
 import { reconcileConnections, selectConnection, type ConnectionView } from './connection-view';
+import { useHeartbeat } from './use-heartbeat';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { useAuthSessionActions } from './use-auth-session-actions';
 import type { AppPage } from './app-state';
+import type { ToastKind } from '../ui/toast';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -34,7 +37,7 @@ type Params = {
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setHeartbeatLatency: Dispatch<SetStateAction<number | null>>;
-  setHeartbeatState: Dispatch<SetStateAction<Awaited<ReturnType<typeof heartbeat>> | null>>;
+  setHeartbeatState: Dispatch<SetStateAction<Heartbeat | null>>;
   stateRevision: MutableRefObject<number>;
   connectionOrder: MutableRefObject<string[]>;
   hydrated: MutableRefObject<boolean>;
@@ -43,7 +46,7 @@ type Params = {
   setDialog: Dispatch<
     SetStateAction<{ type: 'rename' | 'terminate'; connectionInstanceId: string } | { type: 'auth' } | null>
   >;
-  showToast: (message: string) => void;
+  showToast: (message: string, kind?: ToastKind) => void;
 };
 
 export function useAppShellActions({
@@ -88,7 +91,7 @@ export function useAppShellActions({
     showToast,
   });
 
-  const createConnection = async (connectionDefinitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => {
+  const createConnection = useCallback(async (connectionDefinitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => {
     try {
       if (tmuxEnabled) {
         const launch = await startConnectionLaunch(connectionDefinitionId, reuseFrom);
@@ -110,11 +113,11 @@ export function useAppShellActions({
       setActiveView(selectConnection(viewRef.current, session.connectionInstanceId));
       setPage('workspace');
     } catch (err) {
-      showToast((err as Error).message);
+      showToast((err as Error).message, 'error');
     }
-  };
+  }, [clearLaunch, setActiveView, setConnections, setCurrentRuntime, setPage, showToast, startLaunch, stateRevision, viewRef]);
 
-  const acceptGenerated = async (instance: ConnectionInstanceSummary) => {
+  const acceptGenerated = useCallback(async (instance: ConnectionInstanceSummary) => {
     stateRevision.current += 1;
     setConnections((current) => [
       ...current.filter((item) => item.connectionInstanceId !== instance.connectionInstanceId),
@@ -122,54 +125,25 @@ export function useAppShellActions({
     ]);
     setActiveView(selectConnection(viewRef.current, instance.connectionInstanceId));
     setPage('workspace');
-  };
+  }, [setActiveView, setConnections, setPage, stateRevision, viewRef]);
 
-  const sync = useCallback(async () => {
-    if (syncing.current) return;
-    syncing.current = true;
-    try {
-      const revision = stateRevision.current;
-      const startedAt = performance.now();
-      const next = await heartbeat();
-      if (revision !== stateRevision.current) return;
-      setHeartbeatLatency(Math.round(performance.now() - startedAt));
-      if (bootId.current && bootId.current !== next.runtime.bootId) {
-        window.location.reload();
-        return;
-      }
-      bootId.current = next.runtime.bootId;
-      setHeartbeatState(next);
-      const nextView = reconcileConnections(next.connectionInstances, viewRef.current, connectionOrder.current);
-      setActiveView(nextView);
-      if (!hydrated.current && !activeLaunchId) {
-        hydrated.current = true;
-        if (page !== 'appearance') setPage(nextView.activeConnectionInstanceId ? 'workspace' : 'connections');
-      } else if (!activeLaunchId && !nextView.activeConnectionInstanceId && page !== 'appearance') {
-        setPage('connections');
-      }
-      connectionOrder.current = next.connectionInstances.map((connection) => connection.connectionInstanceId);
-      setConnections(next.connectionInstances);
-    } catch (err) {
-      if ((err as Error).message === 'unauthorized') setAuth(await refresh());
-    } finally {
-      syncing.current = false;
-    }
-  }, [
-    activeLaunchId,
-    bootId,
-    connectionOrder,
-    hydrated,
-    setActiveView,
+  useHeartbeat({
+    auth,
     setAuth,
+    activeLaunchId,
+    page,
+    setPage,
+    viewRef,
+    setActiveView,
     setConnections,
     setHeartbeatLatency,
     setHeartbeatState,
-    page,
-    setPage,
     stateRevision,
+    connectionOrder,
+    hydrated,
+    bootId,
     syncing,
-    viewRef,
-  ]);
+  });
 
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((value) => {
@@ -177,13 +151,6 @@ export function useAppShellActions({
       return !value;
     });
   }, [setPreviewConnectionInstanceId, setSidebarOpen]);
-
-  useEffect(() => {
-    if (!auth) return;
-    void sync();
-    const timer = window.setInterval(() => void sync(), 1000);
-    return () => window.clearInterval(timer);
-  }, [auth, sync]);
 
   useEffect(() => {
     const activeConnection = connections.find(
@@ -213,16 +180,16 @@ export function useAppShellActions({
     return () => window.removeEventListener('keydown', handler);
   }, [setSearch, setPage, toggleSidebar, viewRef]);
 
-  function selectConnectionInstance(id: string) {
+  const selectConnectionInstance = useCallback((id: string) => {
     if (viewRef.current.activeConnectionInstanceId !== id || activeLaunchId) setCurrentRuntime(null);
     setActiveView(selectConnection(viewRef.current, id));
     setPage('workspace');
     setSearch(false);
     setPreviewConnectionInstanceId(null);
-    if (window.matchMedia('(max-width: 800px)').matches) setSidebarOpen(false);
-  }
+    if (window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches) setSidebarOpen(false);
+  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setSidebarOpen, viewRef]);
 
-  async function updateTitle(id: string, title: string | null) {
+  const updateTitle = useCallback(async (id: string, title: string | null) => {
     const updated = await api<ConnectionInstanceSummary>(`/api/connection-instances/${id}/title`, {
       method: 'PATCH',
       body: JSON.stringify({ title }),
@@ -231,17 +198,17 @@ export function useAppShellActions({
       current.map((connection) => (connection.connectionInstanceId === id ? updated : connection)),
     );
     setDialog(null);
-  }
+  }, [setConnections, setDialog]);
 
-  async function resetTitle(id: string) {
+  const resetTitle = useCallback(async (id: string) => {
     try {
       await updateTitle(id, null);
     } catch (err) {
-      showToast((err as Error).message);
+      showToast((err as Error).message, 'error');
     }
-  }
+  }, [showToast, updateTitle]);
 
-  async function terminateConnection(id: string) {
+  const terminateConnection = useCallback(async (id: string) => {
     try {
       stateRevision.current += 1;
       if (mainRuntime.current?.connectionInstanceId === id) {
@@ -267,18 +234,18 @@ export function useAppShellActions({
       setSearch(false);
       setPreviewConnectionInstanceId(null);
     } catch (err) {
-      showToast((err as Error).message);
+      showToast((err as Error).message, 'error');
     }
-  }
+  }, [mainRuntime, previewRuntimeRef, setActiveView, setConnections, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setSearch, showToast, stateRevision, viewRef]);
 
-  async function onLogin(password: string) {
+  const onLogin = useCallback(async (password: string) => {
     try {
       setAuth(await login(password));
       setError('');
     } catch (err) {
       setError((err as Error).message);
     }
-  }
+  }, [setAuth, setError]);
 
   return {
     ...authActions,

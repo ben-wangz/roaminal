@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Bot, FolderOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import { ContextualKeyboard } from '../input/contextual-keyboard';
+import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import type { ContextualMode } from '../input/contextual-keyboard-model';
 import { ConnectionActions } from './connection-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
@@ -54,10 +55,10 @@ function connectionPathLabel(connection: ConnectionInstanceSummary): string | nu
 }
 
 function canPreview(): boolean {
-  return window.matchMedia('(pointer: fine)').matches && window.innerWidth > 800;
+  return window.matchMedia('(pointer: fine)').matches && !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches;
 }
 
-export function ConnectionSidebar({
+export const ConnectionSidebar = memo(function ConnectionSidebar({
   id,
   connections,
   active,
@@ -87,12 +88,12 @@ export function ConnectionSidebar({
   useEffect(() => {
     if (!open) return;
     const handleKeyboard = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && window.matchMedia('(max-width: 800px)').matches) {
+      if (event.key === 'Escape' && window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches) {
         event.preventDefault();
         onToggle();
         return;
       }
-      if (event.key !== 'Tab' || !window.matchMedia('(max-width: 800px)').matches || !aside.current) return;
+      if (event.key !== 'Tab' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches || !aside.current) return;
       const focusable = Array.from(
         aside.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -244,4 +245,4 @@ export function ConnectionSidebar({
       </aside>
     </>
   );
-}
+});

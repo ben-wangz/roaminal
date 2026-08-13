@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Clipboard, KeyRound, Trash2 } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { publicKey, type GenerationRequest, type SSHKey } from './connection-api';
+import type { ToastKind } from '../ui/toast';
 
 type Props = {
   keys: SSHKey[];
   connections: ConnectionInstanceSummary[];
   onGenerate: (algorithm: GenerationRequest['algorithm']) => void;
   onDelete: (key: SSHKey) => Promise<void>;
-  onToast: (message: string) => void;
+  onToast: (message: string, kind?: ToastKind) => void;
 };
 
 export function SSHKeysPanel({ keys, connections, onGenerate, onDelete, onToast }: Props) {
@@ -17,9 +18,9 @@ export function SSHKeysPanel({ keys, connections, onGenerate, onDelete, onToast 
     setCopying(key.keyId);
     try {
       await navigator.clipboard.writeText(await publicKey(key.keyId));
-      onToast('Public key copied.');
+      onToast('Public key copied.', 'success');
     } catch (error) {
-      onToast((error as Error).message);
+      onToast((error as Error).message, 'error');
     } finally {
       setCopying(null);
     }
