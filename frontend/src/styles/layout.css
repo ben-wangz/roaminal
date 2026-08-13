@@ -13,7 +13,7 @@ body { background: var(--base); }
 .icon-button { width: 34px; height: 34px; display: inline-grid; place-items: center; font-size: 1.25rem; }
 .icon-button:hover, .text-button:hover, .extension-button:hover, .connection-action-trigger:hover { color: var(--text-bright); background: var(--hover-wash); }
 .connection-indicator, .connection-dot, .preview-status { display: inline-block; flex: 0 0 auto; width: 7px; height: 7px; background: var(--green); border-radius: 50%; }
-.main-panel { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.main-panel { min-width: 0; flex: 1; display: flex; flex-direction: column; container: main-panel / inline-size; }
 .topbar { position: relative; justify-content: space-between; min-height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .top-actions { display: flex; gap: 5px; align-items: center; }
 .text-button { min-height: 34px; padding: 8px; font-size: .78rem; }

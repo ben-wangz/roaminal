@@ -1,8 +1,6 @@
 /* 800px breakpoint mirrored in input/viewport.ts (SIDEBAR_BREAKPOINT_QUERY). */
 .sidebar-open-button { flex: 0 0 auto; }
 @media (max-width: 800px) {
-  .topbar { min-height: 82px; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
-  .status-monitor { top: 61px; }
   .sidebar { position: fixed; inset: 0 auto 0 0; width: min(300px, 88vw); flex-basis: min(300px, 88vw); transform: translateX(-100%); box-shadow: 12px 0 28px rgba(0,0,0,.32); }
   .sidebar.open { transform: translateX(0); }
   .sidebar.closed { width: min(300px, 88vw); flex-basis: min(300px, 88vw); overflow: visible; border-right: 1px solid var(--border); pointer-events: none; }
@@ -10,11 +8,6 @@
   .main-panel { width: 100%; }
   .touch-keyboard { display: flex; }
   .terminal-stage { padding: 8px 8px 0; }
-  .status-host { display: none; }
-  .status-detail { display: none; }
-  .metric-detail { display: none; }
-  .status-metric { min-width: 52px; }
-  .status-gauge { width: 52px; }
   .connection-card:hover .connection-card-overlay, .connection-card:focus-within .connection-card-overlay { transform: none; }
   .connection-card-preview { display: none; }
   .appearance-content { grid-template-columns: 1fr; gap: 18px; margin-top: 22px; }
@@ -22,17 +15,39 @@
 }
 @media (min-width: 801px) { .main-panel.expanded { width: 100%; } .sidebar-backdrop { display: none; } }
 @media (max-width: 440px) {
-  .topbar { padding: 10px 8px; }
+  .topbar { padding-inline: 8px; }
   .terminal-stage { min-height: 0; }
   .touch-keyboard button { font-size: .63rem; padding: 0 2px; }
   .auth-modal { padding: 22px; }
   .connection-list { padding-inline: 8px; }
   .connection-card { min-height: 120px; }
-  .connection-label { display: none; }
-  .status-metric { min-width: 48px; }
-  .status-gauge { width: 48px; }
   .appearance-page { padding: 20px 12px 34px; }
   .appearance-header { flex-direction: column; gap: 12px; }
   .appearance-header-actions { justify-content: flex-start; }
   .appearance-size-controls { grid-template-columns: minmax(0, 1fr) 64px auto; }
+}
+/* Topbar monitor tiers key on the main panel's width (the sidebar shrinks
+   it), not the viewport, so the centered monitor never collides with the
+   label or top actions. */
+@container main-panel (max-width: 1130px) {
+  .topbar { min-height: 82px; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
+  .status-monitor { top: 61px; }
+  .metric-detail { display: none; }
+}
+@container main-panel (max-width: 640px) {
+  .status-host { display: none; }
+}
+@container main-panel (max-width: 560px) {
+  .status-detail { display: none; }
+  .status-metric { min-width: 52px; }
+  .status-gauge { width: 52px; }
+}
+@container main-panel (max-width: 460px) {
+  .connection-label { display: none; }
+  .status-metric { min-width: 48px; }
+  .status-gauge { width: 48px; }
+  /* Keep the actions on one line so they stay clear of the monitor row. */
+  .top-actions { gap: 2px; }
+  .top-actions .text-button { padding: 4px; font-size: .7rem; white-space: nowrap; }
+  .top-actions .icon-button { width: 30px; }
 }
