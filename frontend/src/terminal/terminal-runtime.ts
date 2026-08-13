@@ -4,13 +4,7 @@ import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
 import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
-import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
-
-type TerminalModules = [
-  typeof import('@xterm/xterm'),
-  typeof import('@xterm/addon-fit'),
-  typeof import('@xterm/addon-search'),
-];
+import { attachTerminalShortcutHandler } from './terminal-shortcuts';
 
 export class TerminalRuntime {
   terminal?: Terminal;
@@ -45,11 +39,11 @@ export class TerminalRuntime {
   }
 
   private async loadTerminal(scrollbackLines: number): Promise<void> {
-    const modules = (await Promise.all([
+    const modules = await Promise.all([
       import('@xterm/xterm'),
       import('@xterm/addon-fit'),
       import('@xterm/addon-search'),
-    ])) as TerminalModules;
+    ]);
     if (this.disposed) return;
     const [{ Terminal }, { FitAddon }, { SearchAddon }] = modules;
     this.terminal = new Terminal({
@@ -61,12 +55,7 @@ export class TerminalRuntime {
     });
     this.fit = new FitAddon();
     this.search = new SearchAddon();
-    // Let the app shortcuts (see input/shortcuts.ts) bubble to the document
-    // handler instead of xterm consuming them as terminal input.
-    this.terminal.attachCustomKeyEventHandler((event) => {
-      if (event.type !== 'keydown') return true;
-      return !SHORTCUTS.some((shortcut) => matchesShortcut(event, shortcut));
-    });
+    attachTerminalShortcutHandler(this.terminal);
     this.terminal.onData((data) => this.input(data));
     this.terminal.onResize(({ cols, rows }) => this.sendResize(cols, rows));
     this.mount();
