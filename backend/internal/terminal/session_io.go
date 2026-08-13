@@ -106,13 +106,16 @@ func (s *Session) readLoop() {
 func (s *Session) handleOutput(chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pending = append(s.pending, chunk...)
-	text, complete := decodeUTF8(s.pending)
-	if !complete {
+	// Strip invisible markers at the byte level first, so a rune split across
+	// a marker boundary (the shell integration emits markers between commands)
+	// reassembles once the marker bytes are removed.
+	stripped := s.parseMarkersLocked(chunk)
+	if len(stripped) == 0 {
 		return
 	}
-	s.pending = nil
-	cleaned := s.parseMarkersLocked(text)
+	s.pending = append(s.pending, stripped...)
+	cleaned, rest := decodeUTF8(s.pending)
+	s.pending = rest
 	if cleaned == "" {
 		return
 	}
@@ -132,16 +135,19 @@ func (s *Session) handleOutput(chunk []byte) {
 	s.broadcastLocked(message(map[string]any{"type": "output", "data": cleaned}))
 	s.scheduleSnapshotLocked()
 }
-func decodeUTF8(data []byte) (string, bool) {
+// decodeUTF8 decodes the complete UTF-8 prefix of data and returns it with
+// the remaining bytes of a trailing incomplete rune, which the caller buffers
+// until the next chunk arrives.
+func decodeUTF8(data []byte) (string, []byte) {
 	if len(data) == 0 {
-		return "", true
+		return "", nil
 	}
 	var out strings.Builder
 	for len(data) > 0 {
 		runeValue, size := utf8.DecodeRune(data)
 		if runeValue == utf8.RuneError && size == 1 {
 			if !utf8.FullRune(data) {
-				return out.String(), false
+				return out.String(), append([]byte(nil), data...)
 			}
 			out.WriteRune(utf8.RuneError)
 			data = data[1:]
@@ -150,5 +156,5 @@ func decodeUTF8(data []byte) (string, bool) {
 		out.Write(data[:size])
 		data = data[size:]
 	}
-	return out.String(), true
+	return out.String(), nil
 }

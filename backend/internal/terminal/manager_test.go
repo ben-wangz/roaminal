@@ -91,13 +91,17 @@ func TestSlowClientCarriesCloseReason(t *testing.T) {
 }
 
 func TestDecodeUTF8PreservesPartialRune(t *testing.T) {
-	text, complete := decodeUTF8([]byte{0xe2, 0x82})
-	if complete || text != "" {
-		t.Fatalf("expected partial rune, got %q complete=%v", text, complete)
+	text, rest := decodeUTF8([]byte{0xe2, 0x82})
+	if text != "" || string(rest) != "\xe2\x82" {
+		t.Fatalf("expected buffered partial rune, got %q rest=%q", text, rest)
 	}
-	text, complete = decodeUTF8([]byte{0xe2, 0x82, 0xac})
-	if !complete || text != "€" {
-		t.Fatalf("expected euro rune, got %q complete=%v", text, complete)
+	text, rest = decodeUTF8([]byte{0xe2, 0x82, 0xac})
+	if text != "€" || rest != nil {
+		t.Fatalf("expected euro rune, got %q rest=%q", text, rest)
+	}
+	text, rest = decodeUTF8([]byte("ok\xe4\xbd"))
+	if text != "ok" || string(rest) != "\xe4\xbd" {
+		t.Fatalf("expected complete prefix with buffered tail, got %q rest=%q", text, rest)
 	}
 }
 
@@ -112,20 +116,47 @@ func TestPrivateMarkersAreFilteredAcrossChunks(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString([]byte("/tmp"))
 	first := "before\x1b]777;roaminal;cwd:" + encoded[:4]
 	session.mu.Lock()
-	if got := session.parseMarkersLocked(first); got != "before" {
+	if got := session.parseMarkersLocked([]byte(first)); string(got) != "before" {
 		t.Fatalf("first chunk leaked marker: %q", got)
 	}
-	if got := session.parseMarkersLocked(encoded[4:] + "\x07after"); got != "after" {
+	if got := session.parseMarkersLocked([]byte(encoded[4:] + "\x07after")); string(got) != "after" {
 		t.Fatalf("second chunk mismatch: %q", got)
 	}
 	if session.meta.Cwd != "/tmp" {
 		t.Fatalf("cwd marker was not decoded: %q", session.meta.Cwd)
 	}
 	title := "\x1b]0;terminal\x07"
-	if got := session.parseMarkersLocked(title); got != title || !strings.EqualFold(session.meta.Title, "terminal") {
+	if got := session.parseMarkersLocked([]byte(title)); string(got) != title || !strings.EqualFold(session.meta.Title, "terminal") {
 		t.Fatalf("title sequence was not preserved: %q title=%q", got, session.meta.Title)
 	}
 	session.mu.Unlock()
+}
+
+func TestSplitRuneAcrossMarkerBoundary(t *testing.T) {
+	store, err := persistence.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(config.Config{ScrollbackLines: 1000}, store, nil)
+	now := time.Now().UTC()
+	session := &Session{manager: manager, meta: persistence.ConnectionInstanceMeta{FormatVersion: persistence.ConnectionFormatVersion, ID: "22222222-2222-4222-8222-222222222222", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}}
+	encoded := base64.StdEncoding.EncodeToString([]byte("/tmp"))
+	marker := "\x1b]777;roaminal;cwd:" + encoded + "\x07"
+	// The shell integration emits a marker between two commands whose output
+	// splits one rune: 你 = e4 bd a0, 好 = e5 a5 bd.
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	var out strings.Builder
+	for _, chunk := range [][]byte{[]byte("\xe4\xbd" + marker), []byte("\xa0\xe5\xa5\xbd ok")} {
+		stripped := session.parseMarkersLocked(chunk)
+		session.pending = append(session.pending, stripped...)
+		text, rest := decodeUTF8(session.pending)
+		session.pending = rest
+		out.WriteString(text)
+	}
+	if got := out.String(); got != "你好 ok" {
+		t.Fatalf("split rune across marker corrupted: %q", got)
+	}
 }
 
 func TestSummariesHaveDeterministicOrder(t *testing.T) {

@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"bytes"
 	"encoding/base64"
 	"path/filepath"
 	"strconv"
@@ -9,63 +10,65 @@ import (
 	"unicode/utf8"
 )
 
-func (s *Session) parseMarkersLocked(text string) string {
-	text = s.markerPending + text
-	s.markerPending = ""
+// parseMarkersLocked strips Roaminal's private OSC markers from the raw PTY
+// byte stream and applies their side effects. It operates on bytes before any
+// UTF-8 decoding so a rune split across a marker boundary can be reassembled
+// by the caller once the invisible marker bytes are removed.
+func (s *Session) parseMarkersLocked(chunk []byte) []byte {
+	text := append(s.markerPending, chunk...)
+	s.markerPending = nil
 	const titlePrefix = "\x1b]0;"
 	const markerPrefix = "\x1b]777;roaminal;"
-	var cleaned strings.Builder
+	var cleaned bytes.Buffer
 	for index := 0; index < len(text); {
-		relative := strings.IndexByte(text[index:], '\x1b')
+		relative := bytes.IndexByte(text[index:], '\x1b')
 		if relative < 0 {
-			cleaned.WriteString(text[index:])
+			cleaned.Write(text[index:])
 			break
 		}
 		escape := index + relative
-		cleaned.WriteString(text[index:escape])
+		cleaned.Write(text[index:escape])
 		remainder := text[escape:]
-		if strings.HasPrefix(remainder, titlePrefix) {
-			endRel := strings.IndexByte(remainder[len(titlePrefix):], '\x07')
+		if bytes.HasPrefix(remainder, []byte(titlePrefix)) {
+			endRel := bytes.IndexByte(remainder[len(titlePrefix):], '\x07')
 			if endRel < 0 {
-				s.markerPending = remainder
+				s.markerPending = append([]byte(nil), remainder...)
 				break
 			}
-			title := truncateUTF8(remainder[len(titlePrefix):len(titlePrefix)+endRel], 512)
+			title := truncateUTF8(string(remainder[len(titlePrefix):len(titlePrefix)+endRel]), 512)
 			s.meta.AutomaticTitle = title
 			s.meta.SyncEffectiveTitle()
 			s.meta.UpdatedAt = time.Now().UTC()
 			if s.manager.store != nil && !s.ephemeral {
-				if s.manager.store != nil && !s.ephemeral {
-					_ = s.manager.store.SaveConnectionInstance(s.meta)
-				}
+				_ = s.manager.store.SaveConnectionInstance(s.meta)
 			}
 			s.broadcastMetaLocked()
-			cleaned.WriteString(remainder[:len(titlePrefix)+endRel+1])
+			cleaned.Write(remainder[:len(titlePrefix)+endRel+1])
 			index = escape + len(titlePrefix) + endRel + 1
 			continue
 		}
-		if strings.HasPrefix(remainder, markerPrefix) {
-			endRel := strings.IndexByte(remainder[len(markerPrefix):], '\x07')
+		if bytes.HasPrefix(remainder, []byte(markerPrefix)) {
+			endRel := bytes.IndexByte(remainder[len(markerPrefix):], '\x07')
 			if endRel < 0 {
-				s.markerPending = remainder
+				s.markerPending = append([]byte(nil), remainder...)
 				break
 			}
-			marker := remainder[len(markerPrefix) : len(markerPrefix)+endRel]
+			marker := string(remainder[len(markerPrefix) : len(markerPrefix)+endRel])
 			s.applyMarkerLocked(marker)
 			index = escape + len(markerPrefix) + endRel + 1
 			continue
 		}
 		if isControlPrefix(remainder, titlePrefix) || isControlPrefix(remainder, markerPrefix) {
-			s.markerPending = remainder
+			s.markerPending = append([]byte(nil), remainder...)
 			break
 		}
 		cleaned.WriteByte(remainder[0])
 		index = escape + 1
 	}
-	return cleaned.String()
+	return cleaned.Bytes()
 }
-func isControlPrefix(value, full string) bool {
-	return len(value) < len(full) && strings.HasPrefix(full, value)
+func isControlPrefix(value []byte, full string) bool {
+	return len(value) < len(full) && strings.HasPrefix(full, string(value))
 }
 func truncateUTF8(value string, maxBytes int) string {
 	data := []byte(value)

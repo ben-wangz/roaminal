@@ -141,7 +141,7 @@ type Session struct {
 	controlOwner  *Client
 	sequence      uint64
 	pending       []byte
-	markerPending string
+	markerPending []byte
 	snapshotTimer *time.Timer
 	dirtySince    time.Time
 	currentExecID string
