@@ -135,6 +135,7 @@ func (s *Session) handleOutput(chunk []byte) {
 	s.broadcastLocked(message(map[string]any{"type": "output", "data": cleaned}))
 	s.scheduleSnapshotLocked()
 }
+
 // decodeUTF8 decodes the complete UTF-8 prefix of data and returns it with
 // the remaining bytes of a trailing incomplete rune, which the caller buffers
 // until the next chunk arrives.
