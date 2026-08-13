@@ -28,6 +28,7 @@ type Props = {
   view: ConnectionView;
   heartbeatState: Heartbeat | null;
   heartbeatLatency: number | null;
+  heartbeatConnected: boolean;
   currentConnection: ConnectionInstanceSummary | undefined;
   activeInstance: ConnectionInstanceSummary | null;
   currentRuntime: TerminalRuntime | null;
@@ -81,6 +82,7 @@ export function AppShellView({
   view,
   heartbeatState,
   heartbeatLatency,
+  heartbeatConnected,
   currentConnection,
   activeInstance,
   currentRuntime,
@@ -156,7 +158,7 @@ export function AppShellView({
           workspaceOpen={workspaceOpen}
           sidebarOpen={sidebarOpen}
           sidebarOpenButton={sidebarOpenButton}
-          connected={Boolean(heartbeatState)}
+          connected={heartbeatConnected && Boolean(heartbeatState)}
           connectionName={connectionDisplayName(currentConnection || null, connections)}
           system={heartbeatState?.system || null}
           connectionCount={connections.length}

@@ -37,6 +37,7 @@ type Params = {
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setHeartbeatLatency: Dispatch<SetStateAction<number | null>>;
+  setHeartbeatConnected: Dispatch<SetStateAction<boolean>>;
   setHeartbeatState: Dispatch<SetStateAction<Heartbeat | null>>;
   stateRevision: MutableRefObject<number>;
   connectionOrder: MutableRefObject<string[]>;
@@ -71,6 +72,7 @@ export function useAppShellActions({
   setSearch,
   setPreviewConnectionInstanceId,
   setHeartbeatLatency,
+  setHeartbeatConnected,
   setHeartbeatState,
   stateRevision,
   connectionOrder,
@@ -138,6 +140,7 @@ export function useAppShellActions({
     setConnections,
     setHeartbeatLatency,
     setHeartbeatState,
+    setHeartbeatConnected,
     stateRevision,
     connectionOrder,
     hydrated,

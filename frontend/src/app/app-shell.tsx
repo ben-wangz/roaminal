@@ -34,6 +34,7 @@ export function AppShell() {
   );
   const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
   const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
+  const [heartbeatConnected, setHeartbeatConnected] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
@@ -98,6 +99,7 @@ export function AppShell() {
     setSearch,
     setPreviewConnectionInstanceId,
     setHeartbeatLatency,
+    setHeartbeatConnected,
     setHeartbeatState,
     stateRevision,
     connectionOrder,
@@ -224,6 +226,7 @@ export function AppShell() {
       view={view}
       heartbeatState={heartbeatState}
       heartbeatLatency={heartbeatLatency}
+      heartbeatConnected={heartbeatConnected}
       currentConnection={currentConnection}
       activeInstance={activeInstance}
       currentRuntime={currentRuntime}

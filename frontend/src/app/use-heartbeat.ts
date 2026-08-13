@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { refresh } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
 import { heartbeat, type Heartbeat } from '../status/heartbeat';
@@ -40,12 +40,17 @@ type Params = {
   setConnections: Dispatch<SetStateAction<ConnectionInstanceSummary[]>>;
   setHeartbeatLatency: Dispatch<SetStateAction<number | null>>;
   setHeartbeatState: Dispatch<SetStateAction<Heartbeat | null>>;
+  setHeartbeatConnected: Dispatch<SetStateAction<boolean>>;
   stateRevision: MutableRefObject<number>;
   connectionOrder: MutableRefObject<string[]>;
   hydrated: MutableRefObject<boolean>;
   bootId: MutableRefObject<string | null>;
   syncing: MutableRefObject<boolean>;
 };
+
+// Consecutive misses before the header reports Reconnecting; one lost sample
+// of the 1 s poll should not flap the indicator.
+const DISCONNECT_AFTER_FAILURES = 2;
 
 // The 1 s heartbeat: latency measurement, backend-restart detection via
 // bootId, view reconciliation, and first-load page hydration. Deliberately
@@ -61,12 +66,14 @@ export function useHeartbeat({
   setConnections,
   setHeartbeatLatency,
   setHeartbeatState,
+  setHeartbeatConnected,
   stateRevision,
   connectionOrder,
   hydrated,
   bootId,
   syncing,
 }: Params) {
+  const failures = useRef(0);
   const sync = useCallback(async () => {
     if (syncing.current) return;
     syncing.current = true;
@@ -75,6 +82,8 @@ export function useHeartbeat({
       const startedAt = performance.now();
       const next = await heartbeat();
       if (revision !== stateRevision.current) return;
+      failures.current = 0;
+      setHeartbeatConnected(true);
       setHeartbeatLatency(Math.round(performance.now() - startedAt));
       if (bootId.current && bootId.current !== next.runtime.bootId) {
         window.location.reload();
@@ -95,6 +104,8 @@ export function useHeartbeat({
         sameConnectionSummaries(current, next.connectionInstances) ? current : next.connectionInstances,
       );
     } catch (err) {
+      failures.current += 1;
+      if (failures.current >= DISCONNECT_AFTER_FAILURES) setHeartbeatConnected(false);
       if ((err as Error).message === 'unauthorized') setAuth(await refresh());
     } finally {
       syncing.current = false;
@@ -108,6 +119,7 @@ export function useHeartbeat({
     setActiveView,
     setAuth,
     setConnections,
+    setHeartbeatConnected,
     setHeartbeatLatency,
     setHeartbeatState,
     setPage,
