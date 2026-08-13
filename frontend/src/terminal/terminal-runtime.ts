@@ -4,6 +4,7 @@ import type { Terminal } from '@xterm/xterm';
 import { parseServerMessage } from './terminal-protocol';
 import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
+import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 
 type TerminalModules = [
   typeof import('@xterm/xterm'),
@@ -60,6 +61,12 @@ export class TerminalRuntime {
     });
     this.fit = new FitAddon();
     this.search = new SearchAddon();
+    // Let the app shortcuts (see input/shortcuts.ts) bubble to the document
+    // handler instead of xterm consuming them as terminal input.
+    this.terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown') return true;
+      return !SHORTCUTS.some((shortcut) => matchesShortcut(event, shortcut));
+    });
     this.terminal.onData((data) => this.input(data));
     this.terminal.onResize(({ cols, rows }) => this.sendResize(cols, rows));
     this.mount();
