@@ -139,7 +139,7 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, onDraft,
             <input
               disabled={!draft.tmuxEnabled}
               required={draft.tmuxEnabled}
-              pattern="[A-Za-z][A-Za-z0-9_-]{0,63}"
+              pattern={'[A-Za-z][A-Za-z0-9_\\-]{0,63}'}
               maxLength={64}
               value={draft.tmuxSessionName}
               onChange={(event) => set('tmuxSessionName', event.target.value)}
