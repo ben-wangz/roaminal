@@ -2,13 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadAuth } from '../auth/auth-client';
 import { AuthSessionUI } from '../auth/auth-session-ui';
 import { type Heartbeat } from '../status/heartbeat';
-import { notify } from '../status/notifications';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { observeViewportHeight, SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
 import {
   loadStoredConnection,
-  reconcileConnections,
   saveStoredConnection,
   selectConnection,
   type ConnectionView,
@@ -22,6 +20,7 @@ import { browserAppearanceStorage, loadAppearance, saveAppearance, type Terminal
 import { useAppearanceStorage } from '../appearance/use-appearance-storage';
 import type { AppPage } from './app-state';
 import { useMainTerminalRuntime } from './use-main-terminal-runtime';
+import { useRuntimeMessages } from './use-runtime-messages';
 import type { ToastKind, ToastState } from '../ui/toast';
 
 export function AppShell() {
@@ -138,78 +137,23 @@ export function AppShell() {
     setCurrentRuntime,
   });
   useAppearanceStorage(setAppearance);
-  useEffect(() => {
-    const runtimeId = activeLaunchId || view.activeConnectionInstanceId;
-    if (!currentRuntime || currentRuntime.connectionInstanceId !== runtimeId) return;
-    return currentRuntime.subscribeMessage((message) => {
-      if (message?.type === 'launch_published') {
-        setCurrentRuntime((current) => (current === currentRuntime ? null : current));
-        clearLaunch();
-        stateRevision.current += 1;
-        setConnections((current) => [
-          ...current.filter((connection) => connection.connectionInstanceId !== message.instance.connectionInstanceId),
-          message.instance,
-        ]);
-        activateConnection(message.instance.connectionInstanceId);
-        setPage('workspace');
-        return;
-      }
-      if (message?.type === 'status' && message.status === 'terminated') {
-        const exitedID = currentRuntime.connectionInstanceId;
-        if (activeLaunchId === exitedID) {
-          setCurrentRuntime((current) => (current === currentRuntime ? null : current));
-          clearLaunch();
-          setPage('connections');
-          showToast('tmux connection could not be started.', 'error');
-          return;
-        }
-        setConnections((current) => {
-          const next = current.filter((connection) => connection.connectionInstanceId !== exitedID);
-          const nextView = reconcileConnections(
-            next,
-            viewRef.current,
-            current.map((connection) => connection.connectionInstanceId),
-          );
-          setView(nextView);
-          connectionOrder.current = next.map((connection) => connection.connectionInstanceId);
-          if (!nextView.activeConnectionInstanceId) {
-            setPage('connections');
-            setSearch(false);
-          }
-          return next;
-        });
-        return;
-      }
-      if (message?.type === 'meta') {
-        setConnections((current) =>
-          current.map((connection) =>
-            connection.connectionInstanceId === currentRuntime.connectionInstanceId
-              ? {
-                  ...connection,
-                  title: message.title,
-                  titleMode: message.titleMode,
-                  cwd: message.cwd,
-                  cols: message.cols,
-                  rows: message.rows,
-                  sourceState: message.sourceState as ConnectionInstanceSummary['sourceState'],
-                  generationStatus: message.generationStatus,
-                  generationError: message.generationError,
-                }
-              : connection,
-          ),
-        );
-        return;
-      }
-      if (!message || message.type !== 'execution') return;
-      if (message.phase === 'started') {
-        setExecutionStatus(message.command ? `Running: ${message.command}` : 'Running command');
-      } else if (message.phase === 'completed') {
-        setExecutionStatus(null);
-        showToast('Command completed', 'success');
-        notify('Roaminal', 'Command completed');
-      }
-    });
-  }, [activateConnection, clearLaunch, currentRuntime, view.activeConnectionInstanceId, activeLaunchId, showToast]);
+  useRuntimeMessages({
+    currentRuntime,
+    activeLaunchId,
+    viewActiveConnectionInstanceId: view.activeConnectionInstanceId,
+    viewRef,
+    connectionOrder,
+    stateRevision,
+    activateConnection,
+    clearLaunch,
+    setConnections,
+    setCurrentRuntime,
+    setView,
+    setPage,
+    setSearch,
+    setExecutionStatus,
+    showToast,
+  });
   const currentConnection = connections.find(
     (connection) => connection.connectionInstanceId === view.activeConnectionInstanceId,
   );
