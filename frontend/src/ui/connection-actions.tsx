@@ -84,6 +84,9 @@ export function ConnectionActions({ connection, onRename, onAutomaticTitle, onTe
             const current = items.indexOf(document.activeElement as HTMLButtonElement);
             if (event.key === 'Escape') {
               event.preventDefault();
+              // Consume the key so the mobile sidebar drawer under the menu
+              // does not also close on the same press.
+              event.stopPropagation();
               closeMenu(true);
             } else if (event.key === 'ArrowDown') {
               event.preventDefault();

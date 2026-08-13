@@ -12,7 +12,7 @@ export function Modal({ children, onClose }: { children: React.ReactNode; onClos
     const focusable = () => Array.from(element.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
     (focusable()[0] || element).focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current?.(); return; }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onCloseRef.current?.(); return; }
       if (event.key !== 'Tab') return;
       const items = focusable();
       if (!items.length) { event.preventDefault(); element.focus(); return; }
