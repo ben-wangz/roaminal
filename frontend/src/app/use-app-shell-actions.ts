@@ -168,6 +168,7 @@ export function useAppShellActions({
     const handler = (event: KeyboardEvent) => {
       if (matchesShortcut(event, SHORTCUTS[0])) {
         event.preventDefault();
+        setSearch(false);
         setPage('connections');
       }
       if (matchesShortcut(event, SHORTCUTS[1]) && viewRef.current.activeConnectionInstanceId) {

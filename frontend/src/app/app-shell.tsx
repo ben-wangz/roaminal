@@ -190,12 +190,14 @@ export function AppShell() {
   const handleOpenConnections = useCallback(() => {
     cancelLaunch();
     setPreviewConnectionInstanceId(null);
+    setSearch(false);
     setPage('connections');
-  }, [cancelLaunch]);
+  }, [cancelLaunch, setSearch]);
   const handleOpenAppearance = useCallback(() => {
     setPreviewConnectionInstanceId(null);
+    setSearch(false);
     setPage('appearance');
-  }, []);
+  }, [setSearch]);
   const handleOpenWorkspace = useCallback(() => {
     if (viewRef.current.activeConnectionInstanceId) setPage('workspace');
   }, []);
