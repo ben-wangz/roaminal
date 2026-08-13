@@ -38,7 +38,11 @@ export function ConnectionActions({ connection, onRename, onAutomaticTitle, onTe
   }, [open]);
 
   function run(action: () => void) {
-    closeMenu();
+    // Restore focus to the trigger before acting: the menu item unmounts in
+    // the same commit, and a dialog opened while document.activeElement is a
+    // detached node leaves Base UI's focus trap and outside-inert marking in
+    // an inconsistent state.
+    closeMenu(true);
     action();
   }
 
