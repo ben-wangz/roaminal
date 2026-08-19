@@ -5,14 +5,7 @@ import type { Heartbeat } from '../status/heartbeat';
 import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import { saveConnectionInstanceOrder, startConnectionLaunch } from '../connections/connection-api';
-import {
-  moveConnectionInstance,
-  orderConnectionInstances,
-  reconcileConnections,
-  selectConnection,
-  type ConnectionOrderPlacement,
-  type ConnectionView,
-} from './connection-view';
+import { moveConnectionInstance, orderConnectionInstances, reconcileConnections, selectConnection, type ConnectionOrderPlacement, type ConnectionView } from './connection-view';
 import { useHeartbeat } from './use-heartbeat';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';

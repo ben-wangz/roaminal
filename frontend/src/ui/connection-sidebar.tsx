@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type DragEvent } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Bot, FolderOpen, GripVertical, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
@@ -7,6 +7,7 @@ import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import type { ContextualMode } from '../input/contextual-keyboard-model';
 import { ConnectionActions } from './connection-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
+import { useConnectionReorder } from './use-connection-reorder';
 
 type Props = {
   id: string;
@@ -83,9 +84,9 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   const aside = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
-  const [draggedConnectionInstanceId, setDraggedConnectionInstanceId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
-  const [reorderPending, setReorderPending] = useState(false);
+  const {
+    clearDrag, draggedConnectionInstanceId, dragLeave, dragOver, drop, dropTarget, moveWithKeyboard, reorderPending, startDrag,
+  } = useConnectionReorder({ connections, onReorder, onPreviewEnd });
   useEffect(() => {
     if (mounted.current && open) toggle.current?.focus();
     mounted.current = true;
@@ -121,24 +122,6 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
     document.addEventListener('keydown', handleKeyboard);
     return () => document.removeEventListener('keydown', handleKeyboard);
   }, [onToggle, open]);
-
-  const clearDrag = () => {
-    setDraggedConnectionInstanceId(null);
-    setDropTarget(null);
-  };
-  const placementFor = (event: DragEvent<HTMLElement>): 'before' | 'after' => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
-  };
-  const submitReorder = (draggedID: string, targetID: string, placement: 'before' | 'after') => {
-    if (reorderPending || draggedID === targetID) return;
-    clearDrag();
-    setReorderPending(true);
-    void Promise.resolve()
-      .then(() => onReorder(draggedID, targetID, placement))
-      .catch(() => undefined)
-      .finally(() => setReorderPending(false));
-  };
 
   return (
     <>
@@ -185,30 +168,9 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
                 onMouseEnter={startPreview}
                 onMouseLeave={stopPreview}
                 onClick={() => onSelect(connection.connectionInstanceId)}
-                onDragOver={(event) => {
-                  if (!draggedConnectionInstanceId || draggedConnectionInstanceId === connection.connectionInstanceId) return;
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = 'move';
-                  const placement = placementFor(event);
-                  setDropTarget((current) =>
-                    current?.id === connection.connectionInstanceId && current.placement === placement
-                      ? current
-                      : { id: connection.connectionInstanceId, placement },
-                  );
-                }}
-                onDragLeave={(event) => {
-                  if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-                  setDropTarget((current) => (current?.id === connection.connectionInstanceId ? null : current));
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const draggedID = draggedConnectionInstanceId || event.dataTransfer.getData('text/plain');
-                  if (!draggedID) {
-                    clearDrag();
-                    return;
-                  }
-                  submitReorder(draggedID, connection.connectionInstanceId, placementFor(event));
-                }}
+                onDragOver={(event) => dragOver(event, connection.connectionInstanceId)}
+                onDragLeave={(event) => dragLeave(event, connection.connectionInstanceId)}
+                onDrop={(event) => drop(event, connection.connectionInstanceId)}
                 onFocus={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview();
                 }}
@@ -253,30 +215,9 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
                     aria-label={`Reorder ${connection.title || 'connection'}`}
                     title="Reorder connection"
                     onClick={(event) => event.stopPropagation()}
-                    onDragStart={(event) => {
-                      if (reorderPending) {
-                        event.preventDefault();
-                        return;
-                      }
-                      event.dataTransfer.effectAllowed = 'move';
-                      event.dataTransfer.setData('text/plain', connection.connectionInstanceId);
-                      setDraggedConnectionInstanceId(connection.connectionInstanceId);
-                      setDropTarget(null);
-                      onPreviewEnd(connection.connectionInstanceId);
-                    }}
+                    onDragStart={(event) => startDrag(event, connection.connectionInstanceId)}
                     onDragEnd={clearDrag}
-                    onKeyDown={(event) => {
-                      if (reorderPending || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
-                      const currentIndex = connections.findIndex((item) => item.connectionInstanceId === connection.connectionInstanceId);
-                      const target = connections[currentIndex + (event.key === 'ArrowUp' ? -1 : 1)];
-                      if (!target) return;
-                      event.preventDefault();
-                      submitReorder(
-                        connection.connectionInstanceId,
-                        target.connectionInstanceId,
-                        event.key === 'ArrowUp' ? 'before' : 'after',
-                      );
-                    }}
+                    onKeyDown={(event) => moveWithKeyboard(event, connection.connectionInstanceId)}
                   >
                     <GripVertical aria-hidden="true" size={15} />
                   </button>
