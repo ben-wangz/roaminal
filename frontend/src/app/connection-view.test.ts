@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { loadStoredConnection, reconcileConnections, selectConnection } from './connection-view';
+import {
+  loadStoredConnection,
+  moveConnectionInstance,
+  orderConnectionInstances,
+  reconcileConnections,
+  selectConnection,
+} from './connection-view';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 const instance = (connectionInstanceId: string): ConnectionInstanceSummary => ({
@@ -52,5 +58,22 @@ describe('active connection reconciliation', () => {
       setItem: (key: string, value: string) => values.set(key, value),
     } as unknown as Storage;
     expect(loadStoredConnection(storage)).toEqual({ activeConnectionInstanceId: 'current' });
+  });
+});
+
+describe('connection ordering', () => {
+  it('applies the saved order and appends unseen connection instances', () => {
+    const connections = [instance('first'), instance('second'), instance('third')];
+    expect(orderConnectionInstances(connections, ['third', 'first', 'retired']).map((item) => item.connectionInstanceId))
+      .toEqual(['third', 'first', 'second']);
+    expect(connections.map((item) => item.connectionInstanceId)).toEqual(['first', 'second', 'third']);
+  });
+
+  it('moves a connection instance before or after its drop target', () => {
+    const connections = [instance('first'), instance('second'), instance('third')];
+    expect(moveConnectionInstance(connections, 'third', 'first', 'before').map((item) => item.connectionInstanceId))
+      .toEqual(['third', 'first', 'second']);
+    expect(moveConnectionInstance(connections, 'first', 'second', 'after').map((item) => item.connectionInstanceId))
+      .toEqual(['second', 'first', 'third']);
   });
 });

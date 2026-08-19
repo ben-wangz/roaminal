@@ -161,6 +161,7 @@ func (s *Server) newAPIRouter() http.Handler {
 		http.MethodGet:    s.authenticatedRoute(s.getConnectionInstance),
 		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionInstance),
 	})
+	mux.Handle("/api/connection-instances/order", protected(http.MethodPut, s.reorderConnectionInstances))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/remote-monitor", protected(http.MethodGet, s.remoteMonitor))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/title", protected(http.MethodPatch, s.updateConnectionTitle))
 	mux.Handle("/api/connection-launches", protected(http.MethodPost, s.createConnectionLaunch))

@@ -16,6 +16,7 @@ Unless listed as public, endpoints require `Authorization: Bearer
 | POST | `/api/auth/logout-others` | Revoke other login sessions |
 | GET/POST | `/api/heartbeat` | Read instances or submit resize updates |
 | GET/POST | `/api/connection-instances` | List or create local/remote instances |
+| PUT | `/api/connection-instances/order` | Save the current login session's sidebar order |
 | GET | `/api/connection-instances/:connectionInstanceId` | Inspect an active instance |
 | PATCH | `/api/connection-instances/:connectionInstanceId/title` | Set or clear a title |
 | DELETE | `/api/connection-instances/:connectionInstanceId` | Retire an active instance |
@@ -33,6 +34,9 @@ Unless listed as public, endpoints require `Authorization: Bearer
 
 Connection-instance responses use `connectionInstanceId` as their only
 instance identifier. Active lists do not include retired or exited instances.
+Sidebar order is scoped to the current login session. `PUT
+/api/connection-instances/order` accepts `connectionInstanceIds`; retired IDs
+are ignored and current omitted instances are appended.
 Definition writes require the current `ETag` in `If-Match`; stale or missing
 tags return `412` or `428`. Capacity and transport state errors return `409`
 with stable codes such as `capacity`, `transport`, or `no_remote_transport`.

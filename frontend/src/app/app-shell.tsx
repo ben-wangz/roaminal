@@ -45,6 +45,7 @@ export function AppShell() {
   const [previewConnectionInstanceId, setPreviewConnectionInstanceId] = useState<string | null>(null);
   const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, sidebarOpen, appearance);
   const connectionOrder = useRef<string[]>([]);
+  const pendingConnectionOrder = useRef<string[] | null>(null);
   const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(
     auth,
     mainRuntime,
@@ -103,6 +104,7 @@ export function AppShell() {
     setHeartbeatState,
     stateRevision,
     connectionOrder,
+    pendingConnectionOrder,
     hydrated,
     bootId,
     syncing,
@@ -247,6 +249,7 @@ export function AppShell() {
       onToggleSidebar={actions.toggleSidebar}
       onOpenSidebar={handleOpenSidebar}
       onSelectConnection={actions.selectConnectionInstance}
+      onReorderConnection={actions.reorderConnectionInstances}
       onPreviewStart={handlePreviewStart}
       onPreviewEnd={handlePreviewEnd}
       onUnavailableExtension={handleUnavailableExtension}

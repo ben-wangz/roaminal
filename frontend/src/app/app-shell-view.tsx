@@ -47,6 +47,7 @@ type Props = {
   onToggleSidebar: () => void;
   onOpenSidebar: () => void;
   onSelectConnection: (id: string) => void;
+  onReorderConnection: (draggedID: string, targetID: string, placement: 'before' | 'after') => Promise<void>;
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
   onUnavailableExtension: (name: string) => void;
@@ -101,6 +102,7 @@ export function AppShellView({
   onToggleSidebar,
   onOpenSidebar,
   onSelectConnection,
+  onReorderConnection,
   onPreviewStart,
   onPreviewEnd,
   onUnavailableExtension,
@@ -141,6 +143,7 @@ export function AppShellView({
           previewRuntime={previewRuntime?.connectionInstanceId === previewConnectionInstanceId ? previewRuntime : null}
           onToggle={onToggleSidebar}
           onSelect={onSelectConnection}
+          onReorder={onReorderConnection}
           onPreviewStart={onPreviewStart}
           onPreviewEnd={onPreviewEnd}
           onUnavailableExtension={onUnavailableExtension}

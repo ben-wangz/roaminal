@@ -21,6 +21,27 @@ func validateAuthSession(session AuthSession) error {
 	if !utf8.ValidString(session.UserAgent) || len([]byte(session.UserAgent)) > 500 {
 		return errors.New("invalid auth user agent")
 	}
+	if err := ValidateConnectionInstanceOrder(session.ConnectionInstanceOrder); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateConnectionInstanceOrder bounds the per-login-session sidebar layout.
+func ValidateConnectionInstanceOrder(order []string) error {
+	if len(order) > 256 {
+		return errors.New("connection instance order exceeds maximum size")
+	}
+	seen := make(map[string]struct{}, len(order))
+	for _, id := range order {
+		if !uuidPattern.MatchString(id) {
+			return errors.New("invalid connection instance order id")
+		}
+		if _, exists := seen[id]; exists {
+			return errors.New("duplicate connection instance order id")
+		}
+		seen[id] = struct{}{}
+	}
 	return nil
 }
 

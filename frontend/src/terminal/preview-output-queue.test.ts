@@ -7,7 +7,9 @@ describe('preview output queue', () => {
   it('renders the initial snapshot promptly and coalesces later output', () => {
     vi.useFakeTimers();
     const renders: Array<{ reset: boolean; data: string }> = [];
-    const queue = new PreviewOutputQueue((reset, data) => renders.push({ reset, data }));
+    const queue = new PreviewOutputQueue((reset, data) => {
+      renders.push({ reset, data });
+    });
 
     queue.push({ type: 'snapshot', data: 'prompt' });
     queue.push({ type: 'output', data: '\u001b[2Kone' });
@@ -28,7 +30,9 @@ describe('preview output queue', () => {
   it('makes a later snapshot authoritative over queued output', () => {
     vi.useFakeTimers();
     const renders: Array<{ reset: boolean; data: string }> = [];
-    const queue = new PreviewOutputQueue((reset, data) => renders.push({ reset, data }));
+    const queue = new PreviewOutputQueue((reset, data) => {
+      renders.push({ reset, data });
+    });
 
     queue.push({ type: 'output', data: 'old' });
     vi.runOnlyPendingTimers();
@@ -38,6 +42,33 @@ describe('preview output queue', () => {
     expect(renders).toEqual([
       { reset: false, data: 'old' },
       { reset: true, data: 'current' },
+    ]);
+  });
+
+  it('waits for an in-flight render before applying a replacement snapshot', async () => {
+    vi.useFakeTimers();
+    const renders: Array<{ reset: boolean; data: string }> = [];
+    const completions: Array<() => void> = [];
+    const queue = new PreviewOutputQueue((reset, data) => {
+      renders.push({ reset, data });
+      return new Promise<void>((resolve) => completions.push(resolve));
+    });
+
+    queue.push({ type: 'output', data: 'old-frame' });
+    vi.runOnlyPendingTimers();
+    expect(renders).toEqual([{ reset: false, data: 'old-frame' }]);
+
+    queue.push({ type: 'snapshot', data: 'current-frame' });
+    queue.push({ type: 'output', data: 'tail' });
+    vi.advanceTimersByTime(PREVIEW_RENDER_INTERVAL_MS * 2);
+    expect(renders).toHaveLength(1);
+
+    completions.shift()?.();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(PREVIEW_RENDER_INTERVAL_MS);
+    expect(renders).toEqual([
+      { reset: false, data: 'old-frame' },
+      { reset: true, data: 'current-frametail' },
     ]);
   });
 

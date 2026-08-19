@@ -30,10 +30,10 @@ type heartbeatResponse struct {
 	} `json:"runtime"`
 }
 
-func (s *Server) heartbeatGet(w http.ResponseWriter, _ *http.Request, _ string) {
-	writeJSON(w, 200, s.heartbeat())
+func (s *Server) heartbeatGet(w http.ResponseWriter, _ *http.Request, sessionID string) {
+	writeJSON(w, 200, s.heartbeat(sessionID))
 }
-func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, _ string) {
+func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, sessionID string) {
 	var body heartbeatUpdate
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
@@ -58,10 +58,10 @@ func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, _ string)
 			}
 		}
 	}
-	writeJSON(w, 200, s.heartbeat())
+	writeJSON(w, 200, s.heartbeat(sessionID))
 }
-func (s *Server) heartbeat() heartbeatResponse {
-	result := heartbeatResponse{ConnectionInstances: s.terms.Summaries(), System: s.monitor.Stats()}
+func (s *Server) heartbeat(sessionID string) heartbeatResponse {
+	result := heartbeatResponse{ConnectionInstances: s.orderedConnectionInstances(sessionID), System: s.monitor.Stats()}
 	result.Runtime.BootID = s.bootID
 	result.Runtime.PersistenceDegraded = s.terms.PersistenceDegraded()
 	result.Runtime.ScrollbackLines = s.cfg.ScrollbackLines

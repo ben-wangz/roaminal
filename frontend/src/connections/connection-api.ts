@@ -47,6 +47,14 @@ export async function startConnectionLaunch(connectionDefinitionId: string, reus
   return api('/api/connection-launches', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFromConnectionInstanceId || null }) });
 }
 
+export async function saveConnectionInstanceOrder(connectionInstanceIds: string[]): Promise<ConnectionInstanceSummary[]> {
+  const result = await api<{ connectionInstances: ConnectionInstanceSummary[] }>('/api/connection-instances/order', {
+    method: 'PUT',
+    body: JSON.stringify({ connectionInstanceIds }),
+  });
+  return result.connectionInstances;
+}
+
 // A page refresh can happen before the launch websocket completes its
 // handshake. Keep the cancellation request small and allow the browser to
 // finish it while the document is being unloaded.

@@ -1,3 +1,2 @@
 .terminal-preview-viewport .xterm-viewport { overflow: hidden !important; scrollbar-width: none; }
-.terminal-preview-viewport .xterm-screen { padding: 4px 6px; }
 .preview-status[data-connected='false'] { background: var(--red); }

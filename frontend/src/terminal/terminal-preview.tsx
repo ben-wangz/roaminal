@@ -1,13 +1,13 @@
-import type { FitAddon } from '@xterm/addon-fit';
 import type { Terminal } from '@xterm/xterm';
-import { parseServerMessage } from './terminal-protocol';
+import { parseServerMessage, type ServerMessage } from './terminal-protocol';
 import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
 import { PreviewOutputQueue } from './preview-output-queue';
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 
+type PreviewOutputMessage = Extract<ServerMessage, { type: 'snapshot' | 'output' }>;
+
 export class TerminalPreviewRuntime {
   terminal?: Terminal;
-  private fit?: FitAddon;
   private socket: WebSocket | null = null;
   private element: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -16,11 +16,15 @@ export class TerminalPreviewRuntime {
   private appearance: TerminalAppearance;
   private appearanceRevision = 0;
   private disposeFrame: number | null = null;
+  private dimensionsReady = false;
+  private readonly pendingOutput: PreviewOutputMessage[] = [];
   private readonly outputQueue = new PreviewOutputQueue((reset, data) => {
     const terminal = this.terminal;
     if (this.disposed || !terminal) return;
     if (reset) terminal.reset();
-    if (data) terminal.write(data);
+    if (!data) return;
+    // A reset must not overtake xterm's asynchronous write parser.
+    return new Promise<void>((resolve) => terminal.write(data, resolve));
   });
   private readonly ready: Promise<void>;
 
@@ -34,7 +38,7 @@ export class TerminalPreviewRuntime {
   }
 
   private async loadTerminal(): Promise<void> {
-    const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]);
+    const { Terminal } = await import('@xterm/xterm');
     if (this.disposed) return;
     this.terminal = new Terminal({
       convertEol: false,
@@ -51,7 +55,7 @@ export class TerminalPreviewRuntime {
         selectionBackground: 'transparent',
       },
     });
-    this.fit = new FitAddon();
+    this.terminal.onDimensionsChange(() => this.scaleTerminal());
     this.mount();
   }
 
@@ -71,7 +75,7 @@ export class TerminalPreviewRuntime {
       // A missing font must not prevent the preview from remaining usable.
     }
     if (this.disposed || revision !== this.appearanceRevision) return;
-    this.fitTerminal();
+    this.scaleTerminal();
   }
 
   attach(element: HTMLElement): void {
@@ -81,16 +85,15 @@ export class TerminalPreviewRuntime {
   }
 
   private mount(): void {
-    const { element, terminal, fit } = this;
-    if (this.disposed || !element || !terminal || !fit) return;
+    const { element, terminal } = this;
+    if (this.disposed || !element || !terminal) return;
     if (terminal.element) element.replaceChildren(terminal.element);
     else terminal.open(element);
-    terminal.loadAddon(fit);
-    this.fitTerminal();
+    this.scaleTerminal();
     this.connect();
     this.resizeObserver?.disconnect();
     this.resizeObserver = new ResizeObserver(() => {
-      this.fitTerminal();
+      this.scaleTerminal();
     });
     this.resizeObserver.observe(element);
   }
@@ -102,15 +105,20 @@ export class TerminalPreviewRuntime {
     const socket = createRoaminalWebSocket(this.connectionInstanceId, 'connection-instances', token);
     this.socket = socket;
     socket.onopen = () => {
-      if (this.disposed || this.socket !== socket || !this.fit) return;
+      if (this.disposed || this.socket !== socket) return;
       this.connected = true;
-      this.fitTerminal();
+      this.scaleTerminal();
     };
     socket.onmessage = (event) => {
       if (this.disposed || this.socket !== socket || !this.terminal) return;
       const message = parseServerMessage(String(event.data));
       if (!message) return;
-      if (message.type === 'snapshot' || message.type === 'output') this.outputQueue.push(message);
+      if (message.type === 'meta') {
+        this.setTerminalDimensions(message.cols, message.rows);
+      } else if (message.type === 'snapshot' || message.type === 'output') {
+        if (this.dimensionsReady) this.outputQueue.push(message);
+        else this.pendingOutput.push(message);
+      }
     };
     socket.onclose = () => {
       if (this.socket === socket) this.socket = null;
@@ -122,17 +130,34 @@ export class TerminalPreviewRuntime {
     return this.connected;
   }
 
-  private fitTerminal(): void {
+  private setTerminalDimensions(cols: number, rows: number): void {
     const terminal = this.terminal;
-    const fit = this.fit;
-    if (this.disposed || !this.element || !terminal || !fit || !terminal.element?.parentElement || !terminal.dimensions) return;
-    fit.fit();
+    if (this.disposed || !terminal || !Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || rows < 1) return;
+    if (terminal.cols !== cols || terminal.rows !== rows) terminal.resize(cols, rows);
+    this.dimensionsReady = true;
+    this.scaleTerminal();
+    while (this.pendingOutput.length) this.outputQueue.push(this.pendingOutput.shift()!);
+  }
+
+  private scaleTerminal(): void {
+    const terminal = this.terminal;
+    const element = this.element;
+    const screen = terminal?.screenElement;
+    const dimensions = terminal?.dimensions;
+    if (this.disposed || !element || !screen || !dimensions) return;
+    const { width, height } = dimensions.css.canvas;
+    if (!width || !height || !element.clientWidth || !element.clientHeight) return;
+    const scale = Math.min(element.clientWidth / width, element.clientHeight / height);
+    if (!Number.isFinite(scale) || scale <= 0) return;
+    screen.style.transform = `scale(${scale})`;
+    screen.style.transformOrigin = 'top left';
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.outputQueue.dispose();
+    this.pendingOutput.length = 0;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     const socket = this.socket;
@@ -151,14 +176,12 @@ export class TerminalPreviewRuntime {
     this.element = null;
     const terminal = this.terminal;
     this.terminal = undefined;
-    this.fit = undefined;
     if (terminal) {
       this.deferTerminalDispose(terminal);
     } else {
       void this.ready.then(() => {
         const loaded = this.terminal;
         this.terminal = undefined;
-        this.fit = undefined;
         if (loaded) this.deferTerminalDispose(loaded);
       });
     }

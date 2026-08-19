@@ -1,5 +1,5 @@
-import { memo, useEffect, useRef } from 'react';
-import { Bot, FolderOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { memo, useEffect, useRef, useState, type DragEvent } from 'react';
+import { Bot, FolderOpen, GripVertical, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import { ContextualKeyboard } from '../input/contextual-keyboard';
@@ -17,6 +17,7 @@ type Props = {
   previewRuntime: TerminalPreviewRuntime | null;
   onToggle: () => void;
   onSelect: (id: string) => void;
+  onReorder: (draggedID: string, targetID: string, placement: 'before' | 'after') => Promise<void>;
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
   onUnavailableExtension: (name: 'Agent' | 'Files') => void;
@@ -67,6 +68,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   previewRuntime,
   onToggle,
   onSelect,
+  onReorder,
   onPreviewStart,
   onPreviewEnd,
   onUnavailableExtension,
@@ -81,6 +83,9 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   const aside = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const mounted = useRef(false);
+  const [draggedConnectionInstanceId, setDraggedConnectionInstanceId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
+  const [reorderPending, setReorderPending] = useState(false);
   useEffect(() => {
     if (mounted.current && open) toggle.current?.focus();
     mounted.current = true;
@@ -117,6 +122,24 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
     return () => document.removeEventListener('keydown', handleKeyboard);
   }, [onToggle, open]);
 
+  const clearDrag = () => {
+    setDraggedConnectionInstanceId(null);
+    setDropTarget(null);
+  };
+  const placementFor = (event: DragEvent<HTMLElement>): 'before' | 'after' => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+  };
+  const submitReorder = (draggedID: string, targetID: string, placement: 'before' | 'after') => {
+    if (reorderPending || draggedID === targetID) return;
+    clearDrag();
+    setReorderPending(true);
+    void Promise.resolve()
+      .then(() => onReorder(draggedID, targetID, placement))
+      .catch(() => undefined)
+      .finally(() => setReorderPending(false));
+  };
+
   return (
     <>
       {open && <button className="sidebar-backdrop" type="button" aria-label="Close sidebar" onClick={onToggle} />}
@@ -150,17 +173,42 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
             const previewing = previewConnectionInstanceId === connection.connectionInstanceId && previewRuntime;
             const pathLabel = connectionPathLabel(connection);
             const startPreview = () => {
-              if (canPreview()) onPreviewStart(connection.connectionInstanceId);
+              if (!draggedConnectionInstanceId && !reorderPending && canPreview()) onPreviewStart(connection.connectionInstanceId);
             };
             const stopPreview = () => onPreviewEnd(connection.connectionInstanceId);
+            const dropPlacement = dropTarget?.id === connection.connectionInstanceId ? dropTarget.placement : null;
             return (
               <article
-                className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''}`}
+                className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''} ${draggedConnectionInstanceId === connection.connectionInstanceId ? 'dragging' : ''} ${dropPlacement ? `drop-${dropPlacement}` : ''}`}
                 data-connection-id={connection.connectionInstanceId}
                 key={connection.connectionInstanceId}
                 onMouseEnter={startPreview}
                 onMouseLeave={stopPreview}
                 onClick={() => onSelect(connection.connectionInstanceId)}
+                onDragOver={(event) => {
+                  if (!draggedConnectionInstanceId || draggedConnectionInstanceId === connection.connectionInstanceId) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  const placement = placementFor(event);
+                  setDropTarget((current) =>
+                    current?.id === connection.connectionInstanceId && current.placement === placement
+                      ? current
+                      : { id: connection.connectionInstanceId, placement },
+                  );
+                }}
+                onDragLeave={(event) => {
+                  if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                  setDropTarget((current) => (current?.id === connection.connectionInstanceId ? null : current));
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const draggedID = draggedConnectionInstanceId || event.dataTransfer.getData('text/plain');
+                  if (!draggedID) {
+                    clearDrag();
+                    return;
+                  }
+                  submitReorder(draggedID, connection.connectionInstanceId, placementFor(event));
+                }}
                 onFocus={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview();
                 }}
@@ -198,6 +246,40 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
                   </div>
                 </div>
                 <div className="connection-actions" aria-label="Connection extensions and actions">
+                  <button
+                    className="connection-drag-handle"
+                    type="button"
+                    draggable={!reorderPending}
+                    aria-label={`Reorder ${connection.title || 'connection'}`}
+                    title="Reorder connection"
+                    onClick={(event) => event.stopPropagation()}
+                    onDragStart={(event) => {
+                      if (reorderPending) {
+                        event.preventDefault();
+                        return;
+                      }
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', connection.connectionInstanceId);
+                      setDraggedConnectionInstanceId(connection.connectionInstanceId);
+                      setDropTarget(null);
+                      onPreviewEnd(connection.connectionInstanceId);
+                    }}
+                    onDragEnd={clearDrag}
+                    onKeyDown={(event) => {
+                      if (reorderPending || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+                      const currentIndex = connections.findIndex((item) => item.connectionInstanceId === connection.connectionInstanceId);
+                      const target = connections[currentIndex + (event.key === 'ArrowUp' ? -1 : 1)];
+                      if (!target) return;
+                      event.preventDefault();
+                      submitReorder(
+                        connection.connectionInstanceId,
+                        target.connectionInstanceId,
+                        event.key === 'ArrowUp' ? 'before' : 'after',
+                      );
+                    }}
+                  >
+                    <GripVertical aria-hidden="true" size={15} />
+                  </button>
                   <button
                     className="extension-button"
                     type="button"

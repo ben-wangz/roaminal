@@ -1,6 +1,44 @@
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 export type ConnectionView = { activeConnectionInstanceId: string | null };
+export type ConnectionOrderPlacement = 'before' | 'after';
+
+export function orderConnectionInstances(
+  instances: ConnectionInstanceSummary[],
+  order: string[],
+): ConnectionInstanceSummary[] {
+  if (instances.length < 2 || order.length === 0) return instances;
+  const byID = new Map(instances.map((instance) => [instance.connectionInstanceId, instance]));
+  const ordered: ConnectionInstanceSummary[] = [];
+  const seen = new Set<string>();
+  for (const id of order) {
+    const instance = byID.get(id);
+    if (instance) {
+      ordered.push(instance);
+      seen.add(id);
+    }
+  }
+  for (const instance of instances) {
+    if (!seen.has(instance.connectionInstanceId)) ordered.push(instance);
+  }
+  return ordered;
+}
+
+export function moveConnectionInstance(
+  instances: ConnectionInstanceSummary[],
+  draggedID: string,
+  targetID: string,
+  placement: ConnectionOrderPlacement,
+): ConnectionInstanceSummary[] {
+  if (draggedID === targetID) return instances;
+  const dragged = instances.find((instance) => instance.connectionInstanceId === draggedID);
+  if (!dragged) return instances;
+  const remaining = instances.filter((instance) => instance.connectionInstanceId !== draggedID);
+  const targetIndex = remaining.findIndex((instance) => instance.connectionInstanceId === targetID);
+  if (targetIndex < 0) return instances;
+  remaining.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, dragged);
+  return remaining;
+}
 
 export function reconcileConnections(
   instances: ConnectionInstanceSummary[],

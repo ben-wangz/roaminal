@@ -4,7 +4,7 @@ import type { AuthState } from '../auth/auth-storage';
 import { heartbeat, type Heartbeat } from '../status/heartbeat';
 import { startPollLoop } from '../status/poll-loop';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import { reconcileConnections, type ConnectionView } from './connection-view';
+import { orderConnectionInstances, reconcileConnections, type ConnectionView } from './connection-view';
 import type { AppPage } from './app-state';
 
 // Shallow per-item comparison so an unchanged heartbeat payload keeps the
@@ -43,6 +43,7 @@ type Params = {
   setHeartbeatConnected: Dispatch<SetStateAction<boolean>>;
   stateRevision: MutableRefObject<number>;
   connectionOrder: MutableRefObject<string[]>;
+  pendingConnectionOrder: MutableRefObject<string[] | null>;
   hydrated: MutableRefObject<boolean>;
   bootId: MutableRefObject<string | null>;
   syncing: MutableRefObject<boolean>;
@@ -69,6 +70,7 @@ export function useHeartbeat({
   setHeartbeatConnected,
   stateRevision,
   connectionOrder,
+  pendingConnectionOrder,
   hydrated,
   bootId,
   syncing,
@@ -91,7 +93,10 @@ export function useHeartbeat({
       }
       bootId.current = next.runtime.bootId;
       setHeartbeatState((previous) => (previous && sameHeartbeat(previous, next) ? previous : next));
-      const nextView = reconcileConnections(next.connectionInstances, viewRef.current, connectionOrder.current);
+      const orderedConnections = pendingConnectionOrder.current
+        ? orderConnectionInstances(next.connectionInstances, pendingConnectionOrder.current)
+        : next.connectionInstances;
+      const nextView = reconcileConnections(orderedConnections, viewRef.current, connectionOrder.current);
       setActiveView(nextView);
       if (!hydrated.current && !activeLaunchId) {
         hydrated.current = true;
@@ -99,9 +104,9 @@ export function useHeartbeat({
       } else if (!activeLaunchId && !nextView.activeConnectionInstanceId && page !== 'appearance') {
         setPage('connections');
       }
-      connectionOrder.current = next.connectionInstances.map((connection) => connection.connectionInstanceId);
+      connectionOrder.current = orderedConnections.map((connection) => connection.connectionInstanceId);
       setConnections((current) =>
-        sameConnectionSummaries(current, next.connectionInstances) ? current : next.connectionInstances,
+        sameConnectionSummaries(current, orderedConnections) ? current : orderedConnections,
       );
     } catch (err) {
       failures.current += 1;
@@ -115,6 +120,7 @@ export function useHeartbeat({
     bootId,
     connectionOrder,
     hydrated,
+    pendingConnectionOrder,
     page,
     setActiveView,
     setAuth,

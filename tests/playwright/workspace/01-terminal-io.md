@@ -27,6 +27,10 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
    mounted at a time.
 7. Verify browser paste of non-secret multiline text preserves bytes and does
    not trigger duplicate command submission.
+8. With a Chinese IME active, enter fullwidth punctuation such as `，。！？；：`
+   in the terminal. The resulting shell output preserves those exact characters
+   once, including when the textarea commits at keyup; normal ASCII punctuation
+   remains usable.
 
 ## Pass gate
 

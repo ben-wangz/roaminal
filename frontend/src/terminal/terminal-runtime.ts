@@ -6,6 +6,7 @@ import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocke
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 import { attachTerminalShortcutHandler } from './terminal-shortcuts';
 import { findTerminalMatch, type TerminalSearchOptions } from './terminal-search-guard';
+import { ImeInputFallbackAddon } from './terminal-ime-fallback';
 
 export class TerminalRuntime {
   terminal?: Terminal;
@@ -94,7 +95,10 @@ export class TerminalRuntime {
     const { element, terminal, fit, search } = this;
     if (this.disposed || !element || !terminal || !fit || !search) return;
     if (terminal.element) element.replaceChildren(terminal.element);
-    else terminal.open(element);
+    else {
+      terminal.open(element);
+      terminal.loadAddon(new ImeInputFallbackAddon());
+    }
     if (!this.addonsLoaded && !this.addonsLoading) {
       this.addonsLoading = true;
       void Promise.all([import('@xterm/addon-ligatures'), import('@xterm/addon-progress')]).then(

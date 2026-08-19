@@ -20,7 +20,9 @@ desktop, tablet portrait, and phone portrait.
    explicit; stale values never masquerade as fresh.
 5. Make a probe fail, exceed its timeout, and recover. Terminal input, SSH
    WebSocket, tmux resize, local Roaminal monitor, and other connections remain
-   usable throughout; the band reports failure and resumes polling.
+   usable throughout; the band reports failure and resumes polling. Hold one
+   monitor HTTP response open, then verify a later poll is issued after the
+   client timeout and a successful sample clears `probe unavailable`.
 6. Switch quickly between two transports and local. Abort/ignore late responses
    from the old ID, never flash old metrics under the new alias, and stop
    requests for inactive/local/exited instances and manager view.

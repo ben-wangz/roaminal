@@ -12,20 +12,28 @@ desktop for preview, tablet/phone for selection.
    name, main viewport `data-connection-instance-id`, footer metadata, keyboard
    mode, and REMOTE band all switch to the same instance. Highlight must never
    move independently of the displayed xterm.
-3. On a fine-pointer desktop, hover a non-active card for longer than the preview
+3. On desktop, drag the Reorder connection grip on the last card before the
+   first card. The visible order updates immediately and remains the same after
+   reload. A newly created instance appends after the saved order; an exited
+   instance is ignored. In a second login session, its sidebar order remains
+   independent.
+4. On a fine-pointer desktop, hover a non-active card for longer than the preview
    debounce. A single read-only preview runtime appears in that card while the
    main terminal remains unchanged. Preview does not claim terminal control or
    accept input.
-4. Leave the card, close the sidebar, and move rapidly across all cards at least
+5. Leave the card, close the sidebar, and move rapidly across all cards at least
    100 times. At most one preview exists, stale delayed previews never mount,
    sockets close cleanly, and the main terminal never disappears or auto-cycles.
    Feed a TUI-style stream of cursor movement and redraw sequences while a card
    is previewed. The preview must coalesce output and render at most twice per
    second after its initial snapshot; the changing bottom line must not visibly
-   flicker on every WebSocket message. The main terminal remains real-time.
-5. Click Agent and Files extension controls. Each reports its unavailable toast,
+   flicker on every WebSocket message. It must replay using the source terminal
+   grid, and after the stream settles its final visible line must match the main
+   terminal with no duplicated trailing segment or wrapped remainder. The main
+   terminal remains real-time.
+6. Click Agent and Files extension controls. Each reports its unavailable toast,
    does not select another card, and does not navigate or create a connection.
-6. On coarse-pointer or width `<=800`, no preview runtime is created by hover,
+7. On coarse-pointer or width `<=800`, no preview runtime is created by hover,
    focus, or touch. Selecting a card closes the overlay and opens that instance.
 
 ## Pass gate

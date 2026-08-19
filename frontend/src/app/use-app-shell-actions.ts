@@ -4,8 +4,15 @@ import type { AuthState } from '../auth/auth-storage';
 import type { Heartbeat } from '../status/heartbeat';
 import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
-import { startConnectionLaunch } from '../connections/connection-api';
-import { reconcileConnections, selectConnection, type ConnectionView } from './connection-view';
+import { saveConnectionInstanceOrder, startConnectionLaunch } from '../connections/connection-api';
+import {
+  moveConnectionInstance,
+  orderConnectionInstances,
+  reconcileConnections,
+  selectConnection,
+  type ConnectionOrderPlacement,
+  type ConnectionView,
+} from './connection-view';
 import { useHeartbeat } from './use-heartbeat';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
@@ -41,6 +48,7 @@ type Params = {
   setHeartbeatState: Dispatch<SetStateAction<Heartbeat | null>>;
   stateRevision: MutableRefObject<number>;
   connectionOrder: MutableRefObject<string[]>;
+  pendingConnectionOrder: MutableRefObject<string[] | null>;
   hydrated: MutableRefObject<boolean>;
   bootId: MutableRefObject<string | null>;
   syncing: MutableRefObject<boolean>;
@@ -76,6 +84,7 @@ export function useAppShellActions({
   setHeartbeatState,
   stateRevision,
   connectionOrder,
+  pendingConnectionOrder,
   hydrated,
   bootId,
   syncing,
@@ -143,6 +152,7 @@ export function useAppShellActions({
     setHeartbeatConnected,
     stateRevision,
     connectionOrder,
+    pendingConnectionOrder,
     hydrated,
     bootId,
     syncing,
@@ -192,6 +202,34 @@ export function useAppShellActions({
     setPreviewConnectionInstanceId(null);
     if (window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches) setSidebarOpen(false);
   }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setSidebarOpen, viewRef]);
+
+  const reorderConnectionInstances = useCallback(async (
+    draggedID: string,
+    targetID: string,
+    placement: ConnectionOrderPlacement,
+  ) => {
+    const next = moveConnectionInstance(connections, draggedID, targetID, placement);
+    if (next === connections) return;
+    const previousOrder = connections.map((connection) => connection.connectionInstanceId);
+    const nextOrder = next.map((connection) => connection.connectionInstanceId);
+    stateRevision.current += 1;
+    pendingConnectionOrder.current = nextOrder;
+    connectionOrder.current = nextOrder;
+    setConnections((current) => orderConnectionInstances(current, nextOrder));
+    try {
+      const persisted = await saveConnectionInstanceOrder(nextOrder);
+      stateRevision.current += 1;
+      pendingConnectionOrder.current = null;
+      connectionOrder.current = persisted.map((connection) => connection.connectionInstanceId);
+      setConnections(persisted);
+    } catch (err) {
+      stateRevision.current += 1;
+      pendingConnectionOrder.current = null;
+      connectionOrder.current = previousOrder;
+      setConnections((current) => orderConnectionInstances(current, previousOrder));
+      showToast((err as Error).message, 'error');
+    }
+  }, [connectionOrder, connections, pendingConnectionOrder, setConnections, showToast, stateRevision]);
 
   const updateTitle = useCallback(async (id: string, title: string | null) => {
     const updated = await api<ConnectionInstanceSummary>(`/api/connection-instances/${id}/title`, {
@@ -256,6 +294,7 @@ export function useAppShellActions({
     createConnection,
     acceptGenerated,
     selectConnectionInstance,
+    reorderConnectionInstances,
     toggleSidebar,
     updateTitle,
     resetTitle,

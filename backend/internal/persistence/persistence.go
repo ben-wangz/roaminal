@@ -64,14 +64,15 @@ func (meta ConnectionInstanceMeta) EffectiveTitle() string {
 func (meta *ConnectionInstanceMeta) SyncEffectiveTitle() { meta.Title = meta.EffectiveTitle() }
 
 type AuthSession struct {
-	ID                  string    `json:"id"`
-	PasswordFingerprint string    `json:"passwordFingerprint"`
-	RefreshTokenHash    string    `json:"refreshTokenHash"`
-	CreatedAt           time.Time `json:"createdAt"`
-	LastSeenAt          time.Time `json:"lastSeenAt"`
-	RefreshExpiresAt    time.Time `json:"refreshExpiresAt"`
-	RotatedAt           time.Time `json:"rotatedAt"`
-	UserAgent           string    `json:"userAgent"`
+	ID                      string    `json:"id"`
+	PasswordFingerprint     string    `json:"passwordFingerprint"`
+	RefreshTokenHash        string    `json:"refreshTokenHash"`
+	CreatedAt               time.Time `json:"createdAt"`
+	LastSeenAt              time.Time `json:"lastSeenAt"`
+	RefreshExpiresAt        time.Time `json:"refreshExpiresAt"`
+	RotatedAt               time.Time `json:"rotatedAt"`
+	UserAgent               string    `json:"userAgent"`
+	ConnectionInstanceOrder []string  `json:"connectionInstanceOrder,omitempty"`
 }
 type AuthFile struct {
 	FormatVersion int           `json:"formatVersion"`

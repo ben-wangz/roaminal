@@ -19,8 +19,8 @@ type createConnectionRequest struct {
 	ReuseFromConnectionInstanceID *string `json:"reuseFromConnectionInstanceId,omitempty"`
 }
 
-func (s *Server) listConnectionInstances(w http.ResponseWriter, _ *http.Request, _ string) {
-	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": s.terms.Summaries()})
+func (s *Server) listConnectionInstances(w http.ResponseWriter, _ *http.Request, sessionID string) {
+	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": s.orderedConnectionInstances(sessionID)})
 }
 
 func (s *Server) getConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {

@@ -105,7 +105,7 @@ describe('startPollLoop', () => {
   });
 
   it('keeps polling on task failure', async () => {
-    const { env, pendingTimerCount } = testEnvironment();
+    const { env, pendingTimerCount, fireNextTimer } = testEnvironment();
     let calls = 0;
     const stop = startPollLoop(
       () => {
@@ -118,6 +118,11 @@ describe('startPollLoop', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(calls).toBe(1);
+    expect(pendingTimerCount()).toBe(1);
+    fireNextTimer();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toBe(2);
     expect(pendingTimerCount()).toBe(1);
     stop();
   });
