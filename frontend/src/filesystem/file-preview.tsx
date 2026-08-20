@@ -76,7 +76,9 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
       anchor.download = entry.name;
       anchor.click();
       URL.revokeObjectURL(url);
-    } catch {
+    } catch (reason) {
+      const error = (reason instanceof Error ? reason : new Error('Unable to download file')) as FileSystemError;
+      if (error.code === 'filesystem_root_changed' && error.root) onRootChanged();
       onToast('Unable to download file.', 'error');
     }
   };
