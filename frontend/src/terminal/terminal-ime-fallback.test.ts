@@ -39,6 +39,28 @@ describe('IME input fallback', () => {
     expect(sent).toEqual(['；']);
   });
 
+  it('leaves composition candidates to xterm until composition ends', () => {
+    const textarea = { value: '' };
+    const sent: string[] = [];
+    const fallback = new ImeInputFallback(textarea, (data) => sent.push(data));
+    fallback.compositionStart();
+    fallback.keydown();
+    textarea.value = 'ni';
+    fallback.input();
+    textarea.value = '你';
+    fallback.input();
+    fallback.keyup();
+    expect(sent).toEqual([]);
+    fallback.compositionEnd();
+    expect(fallback.input('insertText')).toBe(true);
+    expect(sent).toEqual([]);
+    textarea.value = '';
+    fallback.keydown();
+    textarea.value = '，';
+    fallback.input();
+    expect(sent).toEqual(['，']);
+  });
+
   it('keeps the terminal edit aligned when the textarea replaces text', () => {
     expect(imeTextareaPayload('ab', 'ac')).toBe('\u007fc');
     expect(imeTextareaPayload('abc', 'a')).toBe('\u007f');

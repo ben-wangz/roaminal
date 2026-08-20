@@ -30,7 +30,9 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
 8. With a Chinese IME active, enter fullwidth punctuation such as `，。！？；：`
    in the terminal. The resulting shell output preserves those exact characters
    once, including when the textarea commits at keyup; normal ASCII punctuation
-   remains usable.
+   remains usable. While composing a Chinese word, intermediate candidate text
+   must remain in the IME composition view and must not be sent before the final
+   committed character.
 
 ## Pass gate
 

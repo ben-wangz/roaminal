@@ -20,6 +20,8 @@ export function imeTextareaPayload(before: string, after: string): string | null
 
 export class ImeInputFallback {
   private baseline: string | undefined;
+  private composing = false;
+  private suppressCommittedInput = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private timerFired = false;
   private keyupFired = false;
@@ -33,7 +35,20 @@ export class ImeInputFallback {
     return this.baseline !== undefined;
   }
 
+  compositionStart(): void {
+    this.clear();
+    this.composing = true;
+  }
+
+  compositionEnd(): void {
+    this.composing = false;
+    this.clearPending();
+    this.suppressCommittedInput = true;
+  }
+
   keydown(): void {
+    if (this.composing) return;
+    this.suppressCommittedInput = false;
     if (this.baseline === undefined) {
       this.baseline = this.textarea.value;
       this.keyupFired = false;
@@ -46,15 +61,29 @@ export class ImeInputFallback {
     }, 0);
   }
 
-  input(): void {
+  input(inputType?: string): boolean {
+    if (this.composing) return false;
+    if (this.suppressCommittedInput && inputType === 'insertText') {
+      this.suppressCommittedInput = false;
+      return true;
+    }
+    if (!this.pending()) return false;
     this.flush('input');
+    return true;
   }
 
   keyup(): void {
+    if (this.composing) return;
     this.flush('keyup');
   }
 
   clear(): void {
+    this.clearPending();
+    this.composing = false;
+    this.suppressCommittedInput = false;
+  }
+
+  private clearPending(): void {
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = undefined;
     this.baseline = undefined;
@@ -92,6 +121,7 @@ export class ImeInputFallbackAddon {
     root.addEventListener('keyup', this.onKeyUp, true);
     root.addEventListener('input', this.onInput, true);
     root.addEventListener('compositionstart', this.onCompositionStart, true);
+    root.addEventListener('compositionend', this.onCompositionEnd, true);
     root.addEventListener('blur', this.onBlur, true);
   }
 
@@ -100,6 +130,7 @@ export class ImeInputFallbackAddon {
     this.root?.removeEventListener('keyup', this.onKeyUp, true);
     this.root?.removeEventListener('input', this.onInput, true);
     this.root?.removeEventListener('compositionstart', this.onCompositionStart, true);
+    this.root?.removeEventListener('compositionend', this.onCompositionEnd, true);
     this.root?.removeEventListener('blur', this.onBlur, true);
     this.fallback?.clear();
     this.root = undefined;
@@ -122,14 +153,19 @@ export class ImeInputFallbackAddon {
   };
 
   private readonly onInput = (event: Event): void => {
-    if (!this.isTextareaEvent(event) || !this.fallback?.pending()) return;
-    event.stopImmediatePropagation();
-    this.fallback.input();
+    if (!this.isTextareaEvent(event) || !this.fallback) return;
+    const inputType = event instanceof InputEvent ? event.inputType : undefined;
+    if (this.fallback.input(inputType)) event.stopImmediatePropagation();
   };
 
   private readonly onCompositionStart = (event: Event): void => {
     if (!this.isTextareaEvent(event)) return;
-    this.fallback?.clear();
+    this.fallback?.compositionStart();
+  };
+
+  private readonly onCompositionEnd = (event: Event): void => {
+    if (!this.isTextareaEvent(event)) return;
+    this.fallback?.compositionEnd();
   };
 
   private readonly onBlur = (event: FocusEvent): void => {
