@@ -153,12 +153,12 @@ func TestEntriesRejectsRootRevisionChange(t *testing.T) {
 }
 
 func TestValidateRelativePath(t *testing.T) {
-	for _, value := range []string{"", ".", "src", "src//main.go", "中文/README.md"} {
+	for _, value := range []string{"", ".", "src", "中文/README.md", "line\nname.txt"} {
 		if _, err := ValidateRelativePath(value); err != nil {
 			t.Errorf("path %q rejected: %v", value, err)
 		}
 	}
-	for _, value := range []string{"/etc", "../etc", "src/../etc", "src\\main.go", "src\x00main"} {
+	for _, value := range []string{"/etc", "../etc", "src/../etc", "src//main.go", "src/./main.go", "src\\main.go", "src\x00main"} {
 		if _, err := ValidateRelativePath(value); err == nil {
 			t.Errorf("path %q should be rejected", value)
 		}

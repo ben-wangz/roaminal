@@ -13,10 +13,13 @@ func ValidateRelativePath(value string) (string, error) {
 	if !utf8.ValidString(value) || strings.HasPrefix(value, "/") {
 		return "", ErrInvalidPath
 	}
-	if strings.ContainsRune(value, '\\') || strings.ContainsRune(value, 0) || strings.ContainsRune(value, '\r') || strings.ContainsRune(value, '\n') {
+	if strings.ContainsRune(value, '\\') || strings.ContainsRune(value, 0) {
 		return "", ErrInvalidPath
 	}
 	for _, part := range strings.Split(value, "/") {
+		if part == "" || part == "." {
+			return "", ErrInvalidPath
+		}
 		if part == ".." {
 			return "", ErrPathOutsideRoot
 		}
