@@ -5,16 +5,48 @@ export type ViewerKind = 'text' | 'markdown' | 'image' | 'video' | 'pdf' | 'raw'
 const imageTypes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif']);
 const videoTypes = new Set(['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime']);
 
+export type ViewerDescriptor = {
+  id: string;
+  label: string;
+  kind: ViewerKind;
+  priority: number;
+  probe: (metadata: FileMetadata) => boolean;
+};
+
+const builtInViewers: ViewerDescriptor[] = [
+  { id: 'pdf', label: 'PDF', kind: 'pdf', priority: 100, probe: (metadata) => metadata.mimeType === 'application/pdf' || metadata.name.toLowerCase().endsWith('.pdf') },
+  { id: 'image', label: 'Image', kind: 'image', priority: 90, probe: (metadata) => imageTypes.has(metadata.mimeType) },
+  { id: 'video', label: 'Video', kind: 'video', priority: 90, probe: (metadata) => videoTypes.has(metadata.mimeType) },
+  { id: 'markdown', label: 'Markdown', kind: 'markdown', priority: 80, probe: (metadata) => metadata.mimeType === 'text/markdown' || /\.(md|markdown)$/i.test(metadata.name) },
+  { id: 'text', label: 'Text', kind: 'text', priority: 20, probe: (metadata) => metadata.mimeType.startsWith('text/') || metadata.mimeType === 'application/json' || metadata.mimeType === 'application/xml' || /\.(txt|log|json|yaml|yml|toml|go|ts|tsx|js|jsx|css|html|sh|py|rs|java|sql)$/i.test(metadata.name) },
+];
+
+const extensions: ViewerDescriptor[] = [];
+
+export function registerViewer(descriptor: ViewerDescriptor): () => void {
+  if (!descriptor.id || !descriptor.kind || !Number.isFinite(descriptor.priority)) throw new Error('Invalid viewer descriptor');
+  extensions.push(descriptor);
+  return () => {
+    const index = extensions.indexOf(descriptor);
+    if (index >= 0) extensions.splice(index, 1);
+  };
+}
+
+export function viewerDescriptors(): ViewerDescriptor[] {
+  return [...builtInViewers, ...extensions].sort((left, right) => right.priority - left.priority);
+}
+
 export function viewerFor(metadata: FileMetadata): ViewerKind {
-  const lower = metadata.name.toLowerCase();
-  if (metadata.mimeType === 'application/pdf' || lower.endsWith('.pdf')) return 'pdf';
-  if (imageTypes.has(metadata.mimeType)) return 'image';
-  if (videoTypes.has(metadata.mimeType)) return 'video';
-  if (metadata.mimeType === 'text/markdown' || lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown';
-  if (metadata.mimeType.startsWith('text/') || metadata.mimeType === 'application/json' || metadata.mimeType === 'application/xml' || /\.(txt|log|json|yaml|yml|toml|go|ts|tsx|js|jsx|css|html|sh|py|rs|java|sql)$/i.test(lower)) return 'text';
+  for (const descriptor of viewerDescriptors()) {
+    try {
+      if (descriptor.probe(metadata)) return descriptor.kind;
+    } catch {
+      // A viewer probe is optional; one broken extension must not block fallback.
+    }
+  }
   return 'raw';
 }
 
 export function viewerLabel(kind: ViewerKind): string {
-  return ({ text: 'Text', markdown: 'Markdown', image: 'Image', video: 'Video', pdf: 'PDF', raw: 'Binary' })[kind];
+  return viewerDescriptors().find((descriptor) => descriptor.kind === kind)?.label || (kind === 'raw' ? 'Binary' : kind);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { viewerFor } from './viewer-registry';
+import { registerViewer, viewerFor } from './viewer-registry';
 import type { FileMetadata } from './filesystem-types';
 
 function metadata(name: string, mimeType: string): FileMetadata {
@@ -30,5 +30,23 @@ describe('filesystem viewer registry', () => {
     expect(viewerFor(metadata('README.md', 'text/plain'))).toBe('markdown');
     expect(viewerFor(metadata('notes', 'text/plain'))).toBe('text');
     expect(viewerFor(metadata('archive.bin', 'application/octet-stream'))).toBe('raw');
+  });
+
+  it('allows an extension descriptor to override the built-in priority', () => {
+    const unregister = registerViewer({
+      id: 'fixture',
+      label: 'Fixture',
+      kind: 'text',
+      priority: 200,
+      probe: (value) => value.name === 'fixture.bin',
+    });
+    expect(viewerFor(metadata('fixture.bin', 'application/octet-stream'))).toBe('text');
+    unregister();
+  });
+
+  it('continues to the safe fallback when an extension probe throws', () => {
+    const unregister = registerViewer({ id: 'broken', label: 'Broken', kind: 'text', priority: 200, probe: () => { throw new Error('probe failed'); } });
+    expect(viewerFor(metadata('archive.bin', 'application/octet-stream'))).toBe('raw');
+    unregister();
   });
 });
