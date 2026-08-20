@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -72,13 +73,74 @@ func (m *Manager) startCommand(meta persistence.ConnectionInstanceMeta, cwd stri
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), append([]string{"TERM=xterm-256color", "ROAMINAL_TERMINAL_ID=" + meta.ID}, extraEnv...)...)
+	cmd.Env = terminalEnvironment(os.Environ(), append([]string{"TERM=xterm-256color", "ROAMINAL_TERMINAL_ID=" + meta.ID}, extraEnv...))
 	file, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)})
 	if err != nil {
 		return nil, fmt.Errorf("start bash: %w", err)
 	}
 	return &Session{manager: m, meta: meta, cmd: cmd, pty: file, clients: make(map[*Client]struct{}), command: argv[0], readDone: make(chan struct{})}, nil
 }
+
+func terminalEnvironment(base, overrides []string) []string {
+	environment := append([]string(nil), base...)
+	if !hasUTF8Locale(environment) {
+		environment = replaceEnvironment(environment, map[string]string{"LC_ALL": "", "LC_CTYPE": "C.UTF-8"})
+	}
+	values := make(map[string]string, len(overrides))
+	for _, entry := range overrides {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok && key != "" {
+			values[key] = value
+		}
+	}
+	return replaceEnvironment(environment, values)
+}
+
+func hasUTF8Locale(environment []string) bool {
+	for _, key := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
+		value := environmentValue(environment, key)
+		if value == "" {
+			continue
+		}
+		value = strings.ToLower(value)
+		return strings.Contains(value, "utf-8") || strings.Contains(value, "utf8")
+	}
+	return false
+}
+
+func environmentValue(environment []string, key string) string {
+	for _, entry := range environment {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok && name == key {
+			return value
+		}
+	}
+	return ""
+}
+
+func replaceEnvironment(environment []string, replacements map[string]string) []string {
+	result := make([]string, 0, len(environment)+len(replacements))
+	seen := make(map[string]bool, len(replacements))
+	for _, entry := range environment {
+		key, _, ok := strings.Cut(entry, "=")
+		value, replace := replacements[key]
+		if !ok || !replace {
+			result = append(result, entry)
+			continue
+		}
+		seen[key] = true
+		if value != "" {
+			result = append(result, key+"="+value)
+		}
+	}
+	for key, value := range replacements {
+		if value != "" && !seen[key] {
+			result = append(result, key+"="+value)
+		}
+	}
+	return result
+}
+
 func (m *Manager) startLoops(session *Session) { go session.readLoop(); go session.waitLoop() }
 func (m *Manager) abortSession(ctx context.Context, session *Session, workerReady bool) {
 	session.mu.Lock()
