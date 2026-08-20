@@ -1,0 +1,91 @@
+.workspace-mode-bar { display: flex; align-items: center; gap: 4px; min-height: 38px; padding: 4px 16px; border-bottom: 1px solid var(--border); background: var(--base1); }
+.workspace-mode-button { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid transparent; color: var(--muted); background: transparent; font-size: .75rem; }
+.workspace-mode-button:hover, .workspace-mode-button.active { color: var(--text-bright); border-color: var(--border); background: var(--hover-wash); }
+.workspace-mode-view { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.filesystem-instance-view { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.filesystem-workspace { min-height: 0; flex: 1; display: flex; flex-direction: column; position: relative; }
+.filesystem-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: .72rem; }
+.filesystem-breadcrumb { min-width: 0; display: flex; align-items: center; overflow: auto; white-space: nowrap; }
+.filesystem-breadcrumb > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.filesystem-breadcrumb button { max-width: 270px; overflow: hidden; text-overflow: ellipsis; border: 0; background: transparent; color: var(--text); padding: 3px 4px; }
+.filesystem-breadcrumb button:hover { color: var(--text-bright); background: var(--hover-wash); }
+.filesystem-root-status { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: var(--muted); }
+.filesystem-root-status[data-status='fallback'] { color: var(--warn-bright); }
+.filesystem-columns { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(240px, var(--filesystem-tree-width, 290px)) 6px minmax(0, 1fr); }
+.filesystem-tree-panel { min-width: 0; overflow: auto; background: color-mix(in oklab, var(--base1) 26%, transparent); }
+.filesystem-panel-heading { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 8px 0 12px; color: var(--text-bright); border-bottom: 1px solid var(--border-soft); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.filesystem-panel-actions { display: flex; align-items: center; }
+.filesystem-tree { padding: 5px 0 18px; min-height: 100%; }
+.filesystem-tree-root-row { display: flex; align-items: center; gap: 7px; min-height: 29px; padding: 0 8px 0 12px; color: var(--cyan); font-size: .75rem; }
+.filesystem-tree-root-row.selected { background: color-mix(in oklab, var(--cyan) 18%, transparent); box-shadow: inset 2px 0 var(--cyan); }
+.filesystem-tree-root-row span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filesystem-tree-row { display: flex; align-items: center; gap: 6px; min-height: 28px; padding-right: 8px; color: var(--text); font-size: .76rem; cursor: default; user-select: none; }
+.filesystem-tree-row:hover { background: var(--hover-wash); color: var(--text-bright); }
+.filesystem-tree-row.selected { color: var(--text-bright); background: color-mix(in oklab, var(--cyan) 18%, transparent); box-shadow: inset 2px 0 var(--cyan); }
+.filesystem-tree-chevron, .filesystem-tree-chevron-spacer { width: 16px; height: 22px; flex: 0 0 16px; display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--muted); padding: 0; }
+.filesystem-tree-chevron:hover { color: var(--text-bright); }
+.filesystem-entry-icon { flex: 0 0 auto; color: var(--muted); }
+.filesystem-entry-icon.directory { color: var(--yellow); }
+.filesystem-tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filesystem-tree-error { margin-left: auto; color: var(--red); font-weight: 700; }
+.filesystem-preview-panel { min-width: 0; min-height: 0; overflow: hidden; }
+.filesystem-resizer { cursor: col-resize; border-inline: 1px solid transparent; background: var(--border-soft); }
+.filesystem-resizer:hover, .filesystem-resizer:focus { border-color: var(--cyan); background: color-mix(in oklab, var(--cyan) 45%, var(--border-soft)); outline: none; }
+.filesystem-preview { width: 100%; height: 100%; display: flex; flex-direction: column; }
+.filesystem-preview-header { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border); }
+.filesystem-preview-heading { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.filesystem-preview-heading strong { color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filesystem-preview-heading small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .68rem; }
+.filesystem-preview-actions { display: flex; gap: 2px; flex: 0 0 auto; }
+.filesystem-preview-body { min-height: 0; flex: 1; overflow: auto; display: grid; place-items: center; padding: 18px; }
+.filesystem-text-viewer { width: 100%; height: 100%; margin: 0; padding: 4px; overflow: auto; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; line-height: 1.55; }
+.filesystem-markdown-viewer { align-self: start; width: min(900px, 100%); color: var(--text); line-height: 1.6; font-family: 'Source Code Pro', monospace; font-size: .82rem; }
+.filesystem-markdown-viewer h1, .filesystem-markdown-viewer h2, .filesystem-markdown-viewer h3 { color: var(--text-bright); line-height: 1.25; }
+.filesystem-image-viewer { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: auto; }
+.filesystem-video-viewer { max-width: 100%; max-height: 100%; }
+.filesystem-pdf-viewer { width: 100%; height: 100%; border: 0; background: white; }
+.filesystem-raw-viewer, .filesystem-preview-empty, .filesystem-loading, .filesystem-error, .filesystem-unavailable { display: inline-flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: .78rem; text-align: center; }
+.filesystem-preview-empty { height: 100%; flex-direction: column; }
+.filesystem-error { color: var(--danger-soft); }
+.filesystem-unavailable { min-height: 0; flex: 1; flex-direction: column; padding: 24px; }
+.filesystem-unavailable > div { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.filesystem-unavailable small { color: var(--muted); }
+.filesystem-unavailable button { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; }
+.filesystem-context-menu { position: fixed; z-index: 20; min-width: 218px; padding: 5px; border: 1px solid var(--border); background: var(--surface-1); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
+.filesystem-context-menu button { width: 100%; display: flex; align-items: center; gap: 9px; min-height: 31px; padding: 0 9px; border: 0; color: var(--text); background: transparent; text-align: left; font-size: .74rem; }
+.filesystem-context-menu button:hover { color: var(--text-bright); background: var(--hover-wash); }
+.upload-confirm-dialog { width: min(560px, 86vw); }
+.upload-confirm-dialog header { display: flex; justify-content: space-between; align-items: flex-start; }
+.upload-confirm-dialog h2 { margin: 2px 0 18px; }
+.upload-target { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-left: 2px solid var(--cyan); background: var(--surface-0); }
+.upload-target span { color: var(--text-bright); }
+.upload-target small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: .68rem; }
+.upload-source-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 24px 0; }
+.upload-source-actions p { flex-basis: 100%; margin: 4px 0 0; color: var(--muted); font-size: .7rem; }
+.upload-summary { display: flex; align-items: center; gap: 12px; margin-top: 18px; color: var(--text); }
+.upload-summary span { color: var(--muted); }
+.upload-summary .text-button { margin-left: auto; }
+.upload-file-list { max-height: 150px; overflow: auto; margin: 12px 0 18px; padding: 8px 10px; border: 1px solid var(--border-soft); color: var(--muted); font-size: .7rem; list-style: none; }
+.upload-file-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 0; }
+.upload-confirm-dialog label { display: flex; flex-direction: column; gap: 6px; color: var(--text); font-size: .74rem; }
+.upload-confirm-dialog select { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); }
+.upload-confirm-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.filesystem-upload-progress, .filesystem-upload-result { position: absolute; right: 14px; bottom: 14px; z-index: 8; display: flex; align-items: center; gap: 14px; max-width: min(520px, calc(100% - 28px)); padding: 9px 11px; border: 1px solid var(--border); background: var(--surface-1); box-shadow: 0 10px 25px rgba(0,0,0,.3); font-size: .72rem; }
+.filesystem-upload-progress > div { display: flex; align-items: center; gap: 8px; }
+.filesystem-upload-progress span { color: var(--muted); }
+.filesystem-upload-result { left: 14px; right: auto; }
+.filesystem-upload-result.error { color: var(--danger-soft); }
+.filesystem-upload-result span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.secondary { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--surface-0); color: var(--text); padding: 0 12px; }
+.secondary:hover { color: var(--text-bright); border-color: var(--cyan); }
+.spin { animation: filesystem-spin .8s linear infinite; }
+@keyframes filesystem-spin { to { transform: rotate(360deg); } }
+@media (max-width: 800px) {
+  .filesystem-toolbar { padding-inline: 8px; }
+  .filesystem-columns { grid-template-columns: 1fr; }
+  .filesystem-tree-panel { display: block; border-right: 0; }
+  .filesystem-resizer { display: none; }
+  .filesystem-preview-panel { display: none; }
+  .filesystem-workspace.previewing .filesystem-tree-panel { display: none; }
+  .filesystem-workspace.previewing .filesystem-preview-panel { display: block; }
+}

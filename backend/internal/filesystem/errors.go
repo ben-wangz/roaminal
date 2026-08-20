@@ -22,6 +22,7 @@ var (
 	ErrInvalidCursor      = errors.New("filesystem cursor invalid")
 	ErrContentTooLarge    = errors.New("filesystem content too large")
 	ErrContentUnavailable = errors.New("filesystem content unavailable")
+	ErrInvalidRange       = errors.New("filesystem content range invalid")
 	ErrUploadConflict     = errors.New("filesystem upload conflict")
 	ErrUploadFailed       = errors.New("filesystem upload failed")
 	ErrUploadNotFound     = errors.New("filesystem upload not found")

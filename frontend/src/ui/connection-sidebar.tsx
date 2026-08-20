@@ -21,7 +21,8 @@ type Props = {
   onReorder: (draggedID: string, targetID: string, placement: 'before' | 'after') => Promise<void>;
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
-  onUnavailableExtension: (name: 'Agent' | 'Files') => void;
+  onUnavailableExtension: (name: 'Agent') => void;
+  onOpenFileSystem: (id: string) => void;
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
@@ -73,6 +74,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   onPreviewStart,
   onPreviewEnd,
   onUnavailableExtension,
+  onOpenFileSystem,
   onRename,
   onAutomaticTitle,
   onTerminate,
@@ -238,11 +240,10 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
                     className="extension-button"
                     type="button"
                     aria-label="Files extension"
-                    aria-disabled="true"
-                    title="Files extension unavailable"
+                    title="Open FileSystem"
                     onClick={(event) => {
                       event.stopPropagation();
-                      onUnavailableExtension('Files');
+                      onOpenFileSystem(connection.connectionInstanceId);
                     }}
                   >
                     <FolderOpen aria-hidden="true" size={15} />

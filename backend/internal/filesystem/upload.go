@@ -201,6 +201,9 @@ func (s *Service) runUpload(ctx context.Context, id, conflictPolicy string, job 
 		if rsync, lookErr := exec.LookPath("rsync"); lookErr == nil {
 			job.setStatus(func(status *UploadStatus) { status.Transport = "rsync" })
 			err = runRsync(ctx, rsync, info, job, target, conflictPolicy)
+			if err != nil {
+				s.invalidateRsync(id)
+			}
 		} else {
 			job.setStatus(func(status *UploadStatus) { status.Transport = "scp" })
 			err = runScp(ctx, id, info, job, target, conflictPolicy, s)
@@ -269,6 +272,12 @@ func (s *Service) rsyncAvailable(ctx context.Context, id string) (bool, error) {
 	return value, nil
 }
 
+func (s *Service) invalidateRsync(id string) {
+	s.mu.Lock()
+	delete(s.transfers, id)
+	s.mu.Unlock()
+}
+
 type transferCapability struct {
 	Available bool
 	ExpiresAt time.Time
@@ -281,12 +290,52 @@ func runRsync(ctx context.Context, binary string, info connection.RemoteTransfer
 	}
 	args = append(args, filepath.Join(job.staging, "."), remoteSpec(info.Alias, target))
 	command := exec.CommandContext(ctx, binary, args...)
-	command.Stdout = io.Discard
+	command.Stdout = &rsyncProgressWriter{job: job}
 	command.Stderr = io.Discard
 	if err := command.Run(); err != nil {
 		return ErrUploadFailed
 	}
 	return nil
+}
+
+type rsyncProgressWriter struct {
+	job     *uploadJob
+	partial string
+}
+
+func (w *rsyncProgressWriter) Write(value []byte) (int, error) {
+	w.partial += string(value)
+	for {
+		index := strings.IndexAny(w.partial, "\r\n")
+		if index < 0 {
+			if len(w.partial) > 4096 {
+				w.partial = w.partial[len(w.partial)-4096:]
+			}
+			break
+		}
+		w.update(w.partial[:index])
+		w.partial = strings.TrimLeft(w.partial[index+1:], "\r\n")
+	}
+	return len(value), nil
+}
+
+func (w *rsyncProgressWriter) update(line string) {
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return
+	}
+	value, err := strconv.ParseInt(strings.ReplaceAll(fields[0], ",", ""), 10, 64)
+	if err != nil || value < 0 {
+		return
+	}
+	w.job.setStatus(func(status *UploadStatus) {
+		if value > status.BytesTotal {
+			value = status.BytesTotal
+		}
+		if value > status.BytesSent {
+			status.BytesSent = value
+		}
+	})
 }
 
 func runScp(ctx context.Context, id string, info connection.RemoteTransferInfo, job *uploadJob, target, conflictPolicy string, service *Service) error {

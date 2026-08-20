@@ -147,6 +147,16 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, onDraft,
             />
           </label>
           <small className="field-help">The name is used by OpenSSH to attach or create the remote tmux session.</small>
+          <label>
+            FileSystem fallback pwd
+            <input
+              required
+              value={draft.filesystemPwd}
+              onChange={(event) => set('filesystemPwd', event.target.value)}
+              placeholder="$HOME"
+            />
+          </label>
+          <small className="field-help">Used when the active tmux pane directory cannot be detected. The default is $HOME.</small>
         </details>
         {(draft.strictHostKeyChecking === 'no' || draft.userKnownHostsFile === '/dev/null') && (
           <div className="risk-warning" role="alert">

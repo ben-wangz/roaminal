@@ -15,7 +15,7 @@ import { AppearanceSettings } from '../appearance/appearance-settings';
 import type { AppPage } from './app-state';
 import type { TerminalAppearance } from '../appearance/appearance-model';
 import { ShellTopbar } from './shell-topbar';
-import { WorkspacePage } from './workspace-page';
+import { WorkspacePage, type WorkspaceMode } from './workspace-page';
 
 export type Dialog = { type: 'rename' | 'terminate'; connectionInstanceId: string } | { type: 'auth' } | null;
 
@@ -51,6 +51,7 @@ type Props = {
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
   onUnavailableExtension: (name: string) => void;
+  onOpenFileSystem: (id: string) => void;
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
@@ -72,6 +73,8 @@ type Props = {
   onRevokeAuthSession: (id: string) => void;
   onLogoutOtherAuthSessions: () => void;
   onCloseDialog: () => void;
+  workspaceMode: WorkspaceMode;
+  onWorkspaceModeChange: (mode: WorkspaceMode) => void;
 };
 
 export function AppShellView({
@@ -106,6 +109,7 @@ export function AppShellView({
   onPreviewStart,
   onPreviewEnd,
   onUnavailableExtension,
+  onOpenFileSystem,
   onRename,
   onAutomaticTitle,
   onTerminate,
@@ -127,6 +131,8 @@ export function AppShellView({
   onRevokeAuthSession,
   onLogoutOtherAuthSessions,
   onCloseDialog,
+  workspaceMode,
+  onWorkspaceModeChange,
 }: Props) {
   const workspaceOpen = page === 'workspace';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
@@ -147,6 +153,7 @@ export function AppShellView({
           onPreviewStart={onPreviewStart}
           onPreviewEnd={onPreviewEnd}
           onUnavailableExtension={onUnavailableExtension}
+          onOpenFileSystem={onOpenFileSystem}
           onRename={onRename}
           onAutomaticTitle={onAutomaticTitle}
           onTerminate={onTerminate}
@@ -176,6 +183,7 @@ export function AppShellView({
         />
         {page === 'workspace' ? (
           <WorkspacePage
+            connections={connections}
             activeInstance={activeInstance}
             activeRuntime={activeRuntime}
             currentConnection={currentConnection}
@@ -183,6 +191,9 @@ export function AppShellView({
             executionStatus={executionStatus}
             onCloseSearch={onCloseSearch}
             onOpenManager={onOpenManager}
+            mode={workspaceMode}
+            onModeChange={onWorkspaceModeChange}
+            onToast={onShowToast}
           />
         ) : page === 'connections' ? (
           <ConnectionManager

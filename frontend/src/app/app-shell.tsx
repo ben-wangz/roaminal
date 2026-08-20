@@ -14,6 +14,7 @@ import {
 import { useTerminalPreview } from './use-terminal-preview';
 import { usePendingLaunch } from './use-pending-launch';
 import { AppShellView, type Dialog } from './app-shell-view';
+import type { WorkspaceMode } from './workspace-page';
 import { useAppShellActions } from './use-app-shell-actions';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { browserAppearanceStorage, loadAppearance, saveAppearance, type TerminalAppearance } from '../appearance/appearance-model';
@@ -59,6 +60,8 @@ export function AppShell() {
   const sidebarOpenButton = useRef<HTMLButtonElement>(null);
   const toastTimer = useRef<number | null>(null);
   const contextualModes = useRef(new Map<string, ContextualMode>());
+  const workspaceModes = useRef(new Map<string, WorkspaceMode>());
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('terminal');
   useEffect(() => observeViewportHeight(), []);
   const showToast = useCallback((message: string, kind: ToastKind = 'info') => {
     setToast({ message, kind });
@@ -117,6 +120,10 @@ export function AppShell() {
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
+  useEffect(() => {
+    const id = view.activeConnectionInstanceId;
+    setWorkspaceMode(id ? workspaceModes.current.get(id) || 'terminal' : 'terminal');
+  }, [view.activeConnectionInstanceId]);
   useEffect(() => {
     if (!sidebarOpen) sidebarOpenButton.current?.focus();
   }, [sidebarOpen]);
@@ -203,6 +210,18 @@ export function AppShell() {
   const handleOpenWorkspace = useCallback(() => {
     if (viewRef.current.activeConnectionInstanceId) setPage('workspace');
   }, []);
+  const handleOpenFileSystem = useCallback((id: string) => {
+    workspaceModes.current.set(id, 'filesystem');
+    setWorkspaceMode('filesystem');
+    if (viewRef.current.activeConnectionInstanceId !== id) actions.selectConnectionInstance(id);
+    else setPage('workspace');
+  }, [actions, setPage]);
+  const handleWorkspaceModeChange = useCallback((mode: WorkspaceMode) => {
+    const id = viewRef.current.activeConnectionInstanceId;
+    if (!id) return;
+    workspaceModes.current.set(id, mode);
+    setWorkspaceMode(mode);
+  }, []);
   const handleSaveAppearance = useCallback(
     (next: TerminalAppearance) => {
       if (!saveAppearance(browserAppearanceStorage(), next)) {
@@ -253,6 +272,7 @@ export function AppShell() {
       onPreviewStart={handlePreviewStart}
       onPreviewEnd={handlePreviewEnd}
       onUnavailableExtension={handleUnavailableExtension}
+      onOpenFileSystem={handleOpenFileSystem}
       onRename={handleRename}
       onAutomaticTitle={actions.resetTitle}
       onTerminate={handleTerminate}
@@ -274,6 +294,8 @@ export function AppShell() {
       onRevokeAuthSession={(id) => void actions.revokeAuthSession(id)}
       onLogoutOtherAuthSessions={() => void actions.logoutOtherAuthSessions()}
       onCloseDialog={handleCloseDialog}
+      workspaceMode={workspaceMode}
+      onWorkspaceModeChange={handleWorkspaceModeChange}
     />
   );
 }

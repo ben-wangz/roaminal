@@ -20,6 +20,7 @@ export type ConnectionDefinition = {
   capabilities: Record<string, boolean>;
   hostVerificationAssessment: 'default' | 'weakened' | 'unknown';
   tmux?: { enabled: boolean; sessionName: string };
+  filesystem?: { pwd: string };
 };
 export type ConfigSource = { status: string; readable: boolean; writable: boolean; warnings?: Warning[]; blockers?: string[]; reason?: string };
 export type DefinitionCollection = { configSource: ConfigSource; tmuxOptionsSource?: ConfigSource; definitions: ConnectionDefinition[] };

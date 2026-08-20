@@ -13,6 +13,7 @@ export type ConnectionDraft = {
   serverAliveInterval: string;
   tmuxEnabled: boolean;
   tmuxSessionName: string;
+  filesystemPwd: string;
 };
 
 export type ConnectionEditor = { mode: 'create' | 'edit'; definition?: ConnectionDefinition } | null;
@@ -29,6 +30,7 @@ export const emptyDraft: ConnectionDraft = {
   serverAliveInterval: '15',
   tmuxEnabled: false,
   tmuxSessionName: '',
+  filesystemPwd: '$HOME',
 };
 
 export function draftFrom(definition?: ConnectionDefinition, keys: SSHKey[] = []): ConnectionDraft {
@@ -51,6 +53,7 @@ export function draftFrom(definition?: ConnectionDefinition, keys: SSHKey[] = []
     serverAliveInterval: definition.serverAliveInterval ? String(definition.serverAliveInterval) : '',
     tmuxEnabled: Boolean(definition.tmux?.enabled),
     tmuxSessionName: definition.tmux?.sessionName || '',
+    filesystemPwd: definition.filesystem?.pwd || '$HOME',
   };
 }
 
@@ -69,5 +72,6 @@ export function bodyFrom(draft: ConnectionDraft): Record<string, unknown> {
     tmux: draft.tmuxEnabled
       ? { enabled: true, sessionName: draft.tmuxSessionName }
       : { enabled: false, sessionName: '' },
+    filesystem: { pwd: draft.filesystemPwd.trim() || '$HOME' },
   };
 }

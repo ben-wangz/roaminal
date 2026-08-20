@@ -97,7 +97,11 @@ func (s *Server) filesystemContent(w http.ResponseWriter, r *http.Request, _ str
 	}
 	contentType := mimeTypeForEntry(entry.Name, entry.Type)
 	if r.Header.Get("Range") == "" {
-		length = contentWindowLength(contentType, *entry.Size)
+		if r.URL.Query().Get("download") == "1" {
+			length = *entry.Size
+		} else {
+			length = contentWindowLength(contentType, *entry.Size)
+		}
 		partial = length < *entry.Size
 	}
 	stream, err := s.filesystem.OpenContent(r.Context(), id, pathValue, root.Revision, start, length)
@@ -106,6 +110,10 @@ func (s *Server) filesystemContent(w http.ResponseWriter, r *http.Request, _ str
 		return
 	}
 	defer stream.Reader.Close()
+	if consistencyToken(stream.Entry) != consistencyToken(entry) {
+		writeFilesystemError(w, filesystem.ErrContentUnavailable)
+		return
+	}
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(stream.ContentLength, 10))
@@ -211,17 +219,17 @@ func contentRange(value string, size int64) (int64, int64, bool, error) {
 		return 0, size, false, nil
 	}
 	if !strings.HasPrefix(value, "bytes=") || strings.Contains(value[6:], ",") {
-		return 0, 0, false, filesystem.ErrContentUnavailable
+		return 0, 0, false, filesystem.ErrInvalidRange
 	}
 	value = strings.TrimSpace(strings.TrimPrefix(value, "bytes="))
 	parts := strings.Split(value, "-")
 	if len(parts) != 2 || size == 0 {
-		return 0, 0, false, filesystem.ErrContentUnavailable
+		return 0, 0, false, filesystem.ErrInvalidRange
 	}
 	if parts[0] == "" {
 		suffix, err := strconv.ParseInt(parts[1], 10, 64)
 		if err != nil || suffix <= 0 {
-			return 0, 0, false, filesystem.ErrContentUnavailable
+			return 0, 0, false, filesystem.ErrInvalidRange
 		}
 		if suffix > size {
 			suffix = size
@@ -230,13 +238,13 @@ func contentRange(value string, size int64) (int64, int64, bool, error) {
 	}
 	start, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil || start < 0 || start >= size {
-		return 0, 0, false, filesystem.ErrContentUnavailable
+		return 0, 0, false, filesystem.ErrInvalidRange
 	}
 	end := size - 1
 	if parts[1] != "" {
 		end, err = strconv.ParseInt(parts[1], 10, 64)
 		if err != nil || end < start {
-			return 0, 0, false, filesystem.ErrContentUnavailable
+			return 0, 0, false, filesystem.ErrInvalidRange
 		}
 		if end >= size {
 			end = size - 1
@@ -299,6 +307,8 @@ func writeFilesystemError(w http.ResponseWriter, err error) {
 		status, code = http.StatusRequestEntityTooLarge, "filesystem_content_too_large"
 	case errors.Is(err, filesystem.ErrContentUnavailable):
 		status, code = http.StatusConflict, "filesystem_content_unavailable"
+	case errors.Is(err, filesystem.ErrInvalidRange):
+		status, code = http.StatusRequestedRangeNotSatisfiable, "filesystem_range_invalid"
 	case errors.Is(err, filesystem.ErrUploadNotFound):
 		status, code = http.StatusNotFound, "filesystem_upload_not_found"
 	case errors.Is(err, filesystem.ErrUploadConflict):
