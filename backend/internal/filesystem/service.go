@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"path"
 	"sort"
 	"strings"
@@ -25,11 +26,14 @@ const (
 	directorySnapshotTTL  = 2 * time.Second
 	defaultDirectoryLimit = 200
 	maxDirectoryLimit     = 500
+	maxContentStream      = 512 << 20
 )
 
 type RemoteExecutor interface {
 	Summaries() []connection.Summary
 	RunRemote(context.Context, string, connection.RemoteCommand) (connection.RemoteResult, error)
+	OpenRemote(context.Context, string, connection.RemoteCommand) (io.ReadCloser, error)
+	RemoteTransferInfo(string) (connection.RemoteTransferInfo, error)
 }
 
 type Service struct {
@@ -40,6 +44,8 @@ type Service struct {
 	mu        sync.Mutex
 	failures  map[string]time.Time
 	snapshots map[string]DirectorySnapshot
+	uploads   map[string]*uploadJob
+	transfers map[string]transferCapability
 }
 
 func New(executor RemoteExecutor, options *connectionoptions.Store) *Service {
@@ -49,6 +55,8 @@ func New(executor RemoteExecutor, options *connectionoptions.Store) *Service {
 		now:       time.Now,
 		failures:  make(map[string]time.Time),
 		snapshots: make(map[string]DirectorySnapshot),
+		uploads:   make(map[string]*uploadJob),
+		transfers: make(map[string]transferCapability),
 	}
 }
 
@@ -201,6 +209,61 @@ func (s *Service) Stat(ctx context.Context, id, relative, revision string) (Entr
 		return Entry{}, RootContext{}, ErrProtocol
 	}
 	return makeEntry(root, clean, raw[0]), root, nil
+}
+
+func (s *Service) OpenContent(ctx context.Context, id, relative, revision string, start, length int64) (ContentStream, error) {
+	root, err := s.rootForRevision(ctx, id, revision)
+	if err != nil {
+		return ContentStream{}, err
+	}
+	clean, err := ValidateRelativePath(relative)
+	if err != nil {
+		return ContentStream{}, err
+	}
+	entry, err := s.statAtRoot(ctx, id, root, clean)
+	if err != nil {
+		return ContentStream{}, err
+	}
+	if entry.Type != "file" || entry.Symlink || entry.Size == nil {
+		return ContentStream{}, ErrContentUnavailable
+	}
+	total := *entry.Size
+	if start < 0 || length < 0 || start > total || length > total-start {
+		return ContentStream{}, ErrContentUnavailable
+	}
+	if length > maxContentStream {
+		return ContentStream{}, ErrContentTooLarge
+	}
+	reader, openErr := s.executor.OpenRemote(ctx, id, connection.RemoteCommand{
+		Script:  contentScript,
+		Args:    []string{root.AbsolutePath, clean, fmt.Sprintf("%d", start), fmt.Sprintf("%d", length)},
+		Timeout: 15 * time.Minute,
+	})
+	if openErr != nil {
+		return ContentStream{}, mapRemoteError(openErr)
+	}
+	end := start
+	if length > 0 {
+		end += length - 1
+	}
+	return ContentStream{Reader: reader, Entry: entry, Root: root, Start: start, End: end, TotalSize: total, ContentLength: length}, nil
+}
+
+func (s *Service) statAtRoot(ctx context.Context, id string, root RootContext, clean string) (Entry, error) {
+	result, runErr := s.executor.RunRemote(ctx, id, connection.RemoteCommand{
+		Script:      statScript,
+		Args:        []string{root.AbsolutePath, clean},
+		OutputLimit: 32 << 10,
+		Timeout:     5 * time.Second,
+	})
+	if runErr != nil {
+		return Entry{}, mapStatError(runErr)
+	}
+	raw, parseErr := parseDirectory(result.Output)
+	if parseErr != nil || len(raw) != 1 {
+		return Entry{}, ErrProtocol
+	}
+	return makeEntry(root, clean, raw[0]), nil
 }
 
 func (s *Service) rootForRevision(ctx context.Context, id, revision string) (RootContext, error) {

@@ -175,6 +175,14 @@ func (s *Server) newAPIRouter() http.Handler {
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/root", protected(http.MethodGet, s.filesystemRoot))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/entries", protected(http.MethodGet, s.filesystemEntries))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/stat", protected(http.MethodGet, s.filesystemStat))
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/content", protected(http.MethodGet, s.filesystemContent))
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/uploads", methodRoute{
+		http.MethodPost: s.authenticatedRoute(s.filesystemCreateUpload),
+	})
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/uploads/{uploadId}", methodRoute{
+		http.MethodGet:    s.authenticatedRoute(s.filesystemGetUpload),
+		http.MethodDelete: s.authenticatedRoute(s.filesystemCancelUpload),
+	})
 	mux.Handle("/api/connection-launches", protected(http.MethodPost, s.createConnectionLaunch))
 	mux.Handle("/api/connection-launches/{launchId}", protected(http.MethodDelete, s.deleteConnectionLaunch))
 	mux.Handle("/api/connection-definitions", methodRoute{

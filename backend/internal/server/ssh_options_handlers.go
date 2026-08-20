@@ -63,7 +63,29 @@ func (s *Server) saveConnectionOptions(alias string, tmux *sshconfig.TmuxOptions
 
 func (s *Server) saveTmuxOption(alias string, value *sshconfig.TmuxOptions) error {
 	if value == nil {
-		value = &sshconfig.TmuxOptions{Enabled: false}
+		if s.connectionOptions == nil {
+			return nil
+		}
+		repo, keys := s.sources()
+		if repo == nil {
+			return sshfs.ErrUnavailable
+		}
+		collection, err := repo.Collection(keys)
+		if err != nil {
+			return err
+		}
+		aliases := make(map[string]bool)
+		for _, definition := range collection.Definitions {
+			if definition.Type == "ssh" {
+				aliases[definition.HostAlias] = true
+			}
+		}
+		current, err := s.connectionOptions.Load(aliases)
+		if err != nil {
+			return err
+		}
+		delete(current.Options, alias)
+		return s.connectionOptions.Save(current.Options)
 	}
 	return s.saveConnectionOptions(alias, value, nil)
 }

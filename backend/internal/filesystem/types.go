@@ -1,6 +1,9 @@
 package filesystem
 
-import "time"
+import (
+	"io"
+	"time"
+)
 
 type RootContext struct {
 	ConnectionInstanceID string    `json:"connectionInstanceId"`
@@ -36,4 +39,45 @@ type DirectorySnapshot struct {
 	Key       string
 	Entries   []Entry
 	ExpiresAt time.Time
+}
+
+type ContentStream struct {
+	Reader        io.ReadCloser
+	Entry         Entry
+	Root          RootContext
+	Start         int64
+	End           int64
+	TotalSize     int64
+	ContentLength int64
+}
+
+type UploadManifest struct {
+	RootRevision   string               `json:"rootRevision"`
+	TargetPath     string               `json:"targetPath"`
+	ConflictPolicy string               `json:"conflictPolicy"`
+	Files          []UploadManifestFile `json:"files"`
+}
+
+type UploadManifestFile struct {
+	Part         string    `json:"part"`
+	RelativePath string    `json:"relativePath"`
+	Size         int64     `json:"size"`
+	ModifiedAt   time.Time `json:"modifiedAt"`
+}
+
+type UploadFailure struct {
+	Path  string `json:"path"`
+	Code  string `json:"code"`
+	Error string `json:"error,omitempty"`
+}
+
+type UploadStatus struct {
+	UploadID    string          `json:"uploadId"`
+	Status      string          `json:"status"`
+	Transport   string          `json:"transport"`
+	TargetPath  string          `json:"targetPath"`
+	BytesSent   int64           `json:"bytesSent"`
+	BytesTotal  int64           `json:"bytesTotal"`
+	CurrentPath string          `json:"currentPath"`
+	Failures    []UploadFailure `json:"failures"`
 }

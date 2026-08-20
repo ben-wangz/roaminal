@@ -47,6 +47,23 @@ type Transport struct {
 	stopRequested      bool
 }
 
+type RemoteTransferInfo struct {
+	Alias       string
+	ControlPath string
+	SSHPath     string
+}
+
+func (m *Manager) RemoteTransferInfo(id string) (RemoteTransferInfo, error) {
+	transport, err := m.remoteTransport(id)
+	if err != nil {
+		return RemoteTransferInfo{}, err
+	}
+	if m.sshPath == "" {
+		return RemoteTransferInfo{}, ErrTransportUnavailable
+	}
+	return RemoteTransferInfo{Alias: transport.Alias, ControlPath: transport.ControlPath, SSHPath: m.sshPath}, nil
+}
+
 func transportAcceptsReuse(transport *Transport) bool {
 	return transport != nil && transport.Channels > 0 && !transport.Draining
 }

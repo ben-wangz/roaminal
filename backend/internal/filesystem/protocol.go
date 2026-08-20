@@ -145,6 +145,28 @@ size=${1:--}; modified=${2:--}; mode=${3:--}
 case "$size" in ''|*[!0-9]*) size=-;; esac
 case "$modified" in ''|*[!0-9-]*) modified=-;; esac
 case "$mode" in ''|*[!0-9]*) mode=0;; esac
+printf '%s\0' 'ROAMINAL_FILESYSTEM_V1_BEGIN'
 printf '%s\0%s\0%s\0%s\0%s\0%s\0%s\0' "$name" "$type" "$size" "$modified" "$mode" "$symlink" ''
 printf '%s\0' 'ROAMINAL_FILESYSTEM_V1_END'
+`
+
+const contentScript = `set -eu
+root=$1
+relative=$2
+start=$3
+length=$4
+root_real=$(cd -- "$root" && pwd -P)
+target=$root_real
+if [ "$relative" != "." ]; then target=$root_real/$relative; fi
+if [ -L "$target" ] || [ ! -f "$target" ]; then exit 24; fi
+parent=$(dirname -- "$target")
+parent_real=$(cd -- "$parent" && pwd -P)
+case "$parent_real" in
+  "$root_real"|"$root_real"/*) ;;
+  *) exit 23 ;;
+esac
+target=$parent_real/${target##*/}
+if [ "$length" -gt 0 ]; then
+  dd if="$target" bs=1 skip="$start" count="$length" 2>/dev/null
+fi
 `
