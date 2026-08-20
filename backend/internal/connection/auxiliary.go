@@ -113,14 +113,16 @@ func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteComma
 	if err != nil {
 		return nil, err
 	}
-	var cancel context.CancelFunc
+	cancel := func() {}
 	if command.Timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, command.Timeout)
 	}
 	if command.Script == "" {
+		cancel()
 		return nil, errors.New("remote script is empty")
 	}
 	if !m.reserveAuxiliary(transport) {
+		cancel()
 		return nil, ErrTransportUnavailable
 	}
 	args := m.auxiliarySSHArgs(transport)
@@ -140,12 +142,14 @@ func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteComma
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		m.releaseAuxiliary(transport)
+		cancel()
 		return nil, err
 	}
 	cmd.Stderr = &cappedBuffer{limit: auxiliaryOutputLimit}
 	if err := cmd.Start(); err != nil {
 		_ = stdout.Close()
 		m.releaseAuxiliary(transport)
+		cancel()
 		return nil, err
 	}
 	return &auxiliaryReader{manager: m, transport: transport, stdout: stdout, cmd: cmd, cancel: cancel, done: make(chan struct{})}, nil
