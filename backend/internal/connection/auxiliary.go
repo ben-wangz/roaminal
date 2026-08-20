@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -57,6 +59,149 @@ func (m *Manager) releaseAuxiliary(transport *Transport) {
 
 func (m *Manager) runAuxiliary(ctx context.Context, transport *Transport, remoteArgs ...string) ([]byte, error) {
 	return m.runAuxiliaryInput(ctx, transport, nil, remoteArgs...)
+}
+
+type RemoteCommand struct {
+	Script      string
+	Args        []string
+	Stdin       io.Reader
+	OutputLimit int64
+	Timeout     time.Duration
+}
+
+type RemoteResult struct {
+	Output []byte
+}
+
+type auxiliaryReader struct {
+	manager   *Manager
+	transport *Transport
+	stdout    io.ReadCloser
+	cmd       *exec.Cmd
+	mu        sync.Mutex
+	finished  bool
+	waitErr   error
+	cancel    context.CancelFunc
+	done      chan struct{}
+}
+
+func (m *Manager) RunRemote(ctx context.Context, id string, command RemoteCommand) (RemoteResult, error) {
+	reader, err := m.OpenRemote(ctx, id, command)
+	if err != nil {
+		return RemoteResult{}, err
+	}
+	defer reader.Close()
+	limit := command.OutputLimit
+	if limit <= 0 {
+		limit = auxiliaryOutputLimit
+	}
+	data, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return RemoteResult{}, err
+	}
+	if int64(len(data)) > limit {
+		return RemoteResult{}, errors.New("remote output exceeded limit")
+	}
+	return RemoteResult{Output: data}, nil
+}
+
+func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteCommand) (io.ReadCloser, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	transport, err := m.remoteTransport(id)
+	if err != nil {
+		return nil, err
+	}
+	var cancel context.CancelFunc
+	if command.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, command.Timeout)
+	}
+	if command.Script == "" {
+		return nil, errors.New("remote script is empty")
+	}
+	if !m.reserveAuxiliary(transport) {
+		return nil, ErrTransportUnavailable
+	}
+	args := m.auxiliarySSHArgs(transport)
+	if command.Stdin == nil {
+		args = append(args, "sh", "-s", "--")
+		args = append(args, command.Args...)
+	} else {
+		args = append(args, "sh", "-c", command.Script, "--")
+		args = append(args, command.Args...)
+	}
+	cmd := exec.CommandContext(ctx, m.sshPath, args...)
+	if command.Stdin == nil {
+		cmd.Stdin = strings.NewReader(command.Script)
+	} else {
+		cmd.Stdin = command.Stdin
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		m.releaseAuxiliary(transport)
+		return nil, err
+	}
+	cmd.Stderr = &cappedBuffer{limit: auxiliaryOutputLimit}
+	if err := cmd.Start(); err != nil {
+		_ = stdout.Close()
+		m.releaseAuxiliary(transport)
+		return nil, err
+	}
+	return &auxiliaryReader{manager: m, transport: transport, stdout: stdout, cmd: cmd, cancel: cancel, done: make(chan struct{})}, nil
+}
+
+func (m *Manager) auxiliarySSHArgs(transport *Transport) []string {
+	return []string{"-T", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", "-o", "PermitLocalCommand=no", "-o", "RemoteCommand=none", "--", transport.Alias}
+}
+
+func (r *auxiliaryReader) Read(p []byte) (int, error) {
+	n, err := r.stdout.Read(p)
+	if err != nil {
+		r.finish()
+	}
+	return n, err
+}
+
+func (r *auxiliaryReader) Close() error {
+	if !r.finishedState() {
+		_ = r.stdout.Close()
+		if r.cmd.Process != nil {
+			_ = r.cmd.Process.Kill()
+		}
+	}
+	r.finish()
+	r.mu.Lock()
+	err := r.waitErr
+	r.mu.Unlock()
+	return err
+}
+
+func (r *auxiliaryReader) finishedState() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.finished
+}
+
+func (r *auxiliaryReader) finish() {
+	r.mu.Lock()
+	if r.finished {
+		done := r.done
+		r.mu.Unlock()
+		<-done
+		return
+	}
+	r.finished = true
+	r.mu.Unlock()
+	err := r.cmd.Wait()
+	if r.cancel != nil {
+		r.cancel()
+	}
+	r.manager.releaseAuxiliary(r.transport)
+	r.mu.Lock()
+	r.waitErr = err
+	close(r.done)
+	r.mu.Unlock()
 }
 
 func (m *Manager) runAuxiliaryInput(ctx context.Context, transport *Transport, input io.Reader, remoteArgs ...string) ([]byte, error) {

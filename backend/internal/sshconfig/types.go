@@ -53,23 +53,24 @@ type Capability struct {
 }
 
 type Definition struct {
-	ConnectionDefinitionID     string          `json:"connectionDefinitionId"`
-	Type                       string          `json:"type"`
-	HostAlias                  string          `json:"hostAlias,omitempty"`
-	HostName                   *string         `json:"hostName"`
-	User                       *string         `json:"user"`
-	Port                       *uint16         `json:"port"`
-	IdentityFileNames          []string        `json:"identityFileNames"`
-	IdentitiesOnly             *string         `json:"identitiesOnly"`
-	StrictHostKeyChecking      *string         `json:"strictHostKeyChecking"`
-	UserKnownHostsFile         *string         `json:"userKnownHostsFile"`
-	ServerAliveInterval        *uint32         `json:"serverAliveInterval"`
-	AdvancedDirectiveCount     int             `json:"advancedDirectiveCount"`
-	UnmanagedIdentityCount     int             `json:"unmanagedIdentityCount"`
-	Warnings                   []Warning       `json:"warnings"`
-	Capabilities               map[string]bool `json:"capabilities"`
-	HostVerificationAssessment string          `json:"hostVerificationAssessment"`
-	Tmux                       *TmuxOptions    `json:"tmux,omitempty"`
+	ConnectionDefinitionID     string             `json:"connectionDefinitionId"`
+	Type                       string             `json:"type"`
+	HostAlias                  string             `json:"hostAlias,omitempty"`
+	HostName                   *string            `json:"hostName"`
+	User                       *string            `json:"user"`
+	Port                       *uint16            `json:"port"`
+	IdentityFileNames          []string           `json:"identityFileNames"`
+	IdentitiesOnly             *string            `json:"identitiesOnly"`
+	StrictHostKeyChecking      *string            `json:"strictHostKeyChecking"`
+	UserKnownHostsFile         *string            `json:"userKnownHostsFile"`
+	ServerAliveInterval        *uint32            `json:"serverAliveInterval"`
+	AdvancedDirectiveCount     int                `json:"advancedDirectiveCount"`
+	UnmanagedIdentityCount     int                `json:"unmanagedIdentityCount"`
+	Warnings                   []Warning          `json:"warnings"`
+	Capabilities               map[string]bool    `json:"capabilities"`
+	HostVerificationAssessment string             `json:"hostVerificationAssessment"`
+	Tmux                       *TmuxOptions       `json:"tmux,omitempty"`
+	FileSystem                 *FileSystemOptions `json:"filesystem,omitempty"`
 }
 
 // TmuxOptions is an Roaminal-owned add-on. SSH facts remain exclusively in
@@ -77,4 +78,8 @@ type Definition struct {
 type TmuxOptions struct {
 	Enabled     bool   `json:"enabled"`
 	SessionName string `json:"sessionName"`
+}
+
+type FileSystemOptions struct {
+	Pwd string `json:"pwd"`
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
+	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
@@ -32,6 +33,7 @@ type Server struct {
 	sshConfig         *sshconfig.Repository
 	sshKeys           *sshkey.Inventory
 	connectionOptions *connectionoptions.Store
+	filesystem        *filesystem.Service
 	diagnostics       *clientdiag.Sink
 }
 
@@ -41,6 +43,9 @@ func New(cfg config.Config, version, bootID string, authManager *auth.Manager, t
 
 func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler) *Server {
 	s := &Server{cfg: cfg, version: version, bootID: bootID, auth: authManager, terms: terms, monitor: monitorService, worker: terminalWorker, started: time.Now(), static: static}
+	if terms != nil {
+		s.filesystem = filesystem.New(terms, nil)
+	}
 	s.api = s.newAPIRouter()
 	s.handler = http.HandlerFunc(s.serve)
 	return s
@@ -53,6 +58,9 @@ func NewWithSources(cfg config.Config, version, bootID string, authManager *auth
 func NewWithSourcesAndDiagnostics(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store, diagnostics *clientdiag.Sink) *Server {
 	s := NewWithStatic(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, static)
 	s.sshConfig, s.sshKeys, s.connectionOptions, s.diagnostics = configRepo, keys, options, diagnostics
+	if terms != nil {
+		s.filesystem = filesystem.New(terms, options)
+	}
 	s.api = s.newAPIRouter()
 	return s
 }
@@ -164,6 +172,9 @@ func (s *Server) newAPIRouter() http.Handler {
 	mux.Handle("/api/connection-instances/order", protected(http.MethodPut, s.reorderConnectionInstances))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/remote-monitor", protected(http.MethodGet, s.remoteMonitor))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/title", protected(http.MethodPatch, s.updateConnectionTitle))
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/root", protected(http.MethodGet, s.filesystemRoot))
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/entries", protected(http.MethodGet, s.filesystemEntries))
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/stat", protected(http.MethodGet, s.filesystemStat))
 	mux.Handle("/api/connection-launches", protected(http.MethodPost, s.createConnectionLaunch))
 	mux.Handle("/api/connection-launches/{launchId}", protected(http.MethodDelete, s.deleteConnectionLaunch))
 	mux.Handle("/api/connection-definitions", methodRoute{

@@ -19,6 +19,19 @@ func TestSessionNameValidation(t *testing.T) {
 	}
 }
 
+func TestPwdValidation(t *testing.T) {
+	for _, value := range []string{"$HOME", "~", "$HOME/projects", "~/projects", "/srv/work"} {
+		if !ValidPwd(value) {
+			t.Fatalf("pwd %q should be valid", value)
+		}
+	}
+	for _, value := range []string{"", "relative", "../work", "$HOME\nwork", "/tmp\x00work", "/tmp\twork"} {
+		if ValidPwd(value) {
+			t.Fatalf("pwd %q should be invalid", value)
+		}
+	}
+}
+
 func TestStoreRoundTripAndAliasCleanup(t *testing.T) {
 	store := New(t.TempDir())
 	if err := store.Save(map[string]Tmux{"alpha": {Enabled: true, SessionName: "t"}, "stale": {Enabled: true, SessionName: "old"}}); err != nil {
@@ -55,5 +68,37 @@ func TestStoreRejectsUnknownAndDuplicateFields(t *testing.T) {
 		if _, err := store.Load(map[string]bool{"alpha": true}); !errors.Is(err, ErrInvalidFormat) {
 			t.Fatalf("%s: expected invalid format, got %v", name, err)
 		}
+	}
+}
+
+func TestStoreLoadsV1WithDefaultPwd(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	data := "formatVersion: 1\nconnections:\n  alpha:\n    tmux:\n      enabled: true\n      sessionName: t\n"
+	if err := os.WriteFile(store.Path(), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	collection, err := store.Load(map[string]bool{"alpha": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	option := collection.Options["alpha"]
+	if !option.Enabled || option.SessionName != "t" || option.Pwd != DefaultPwd {
+		t.Fatalf("unexpected v1 option: %#v", option)
+	}
+}
+
+func TestStoreRoundTripsFilesystemOnlyOption(t *testing.T) {
+	store := New(t.TempDir())
+	if err := store.Save(map[string]Tmux{"alpha": {Pwd: "~/workspace"}}); err != nil {
+		t.Fatal(err)
+	}
+	collection, err := store.Load(map[string]bool{"alpha": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	option := collection.Options["alpha"]
+	if option.Enabled || option.Pwd != "~/workspace" {
+		t.Fatalf("unexpected filesystem option: %#v", option)
 	}
 }

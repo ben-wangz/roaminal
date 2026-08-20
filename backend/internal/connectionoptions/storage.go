@@ -32,8 +32,14 @@ func (s *Store) saveLocked(options map[string]Tmux) error {
 		return nil
 	}
 	for alias, value := range options {
-		if alias == "" || !value.Enabled || !ValidSessionName(value.SessionName) {
+		if alias == "" || (!value.Enabled && value.Pwd == "") || (value.Enabled && !ValidSessionName(value.SessionName)) {
 			return ErrInvalidSessionName
+		}
+		if value.Pwd == "" {
+			value.Pwd = DefaultPwd
+		}
+		if !ValidPwd(value.Pwd) {
+			return ErrInvalidPwd
 		}
 	}
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
@@ -59,7 +65,11 @@ func (s *Store) saveLocked(options map[string]Tmux) error {
 	value := file{FormatVersion: FormatVersion, Connections: make(map[string]connectionSettings, len(options))}
 	for _, alias := range aliases {
 		option := options[alias]
-		value.Connections[alias] = connectionSettings{Tmux: &tmuxSettings{Enabled: true, SessionName: option.SessionName}}
+		settings := connectionSettings{FileSystem: &filesystemSettings{Pwd: option.Pwd}}
+		if option.Enabled {
+			settings.Tmux = &tmuxSettings{Enabled: true, SessionName: option.SessionName}
+		}
+		value.Connections[alias] = settings
 	}
 	data, err := yaml.Marshal(value)
 	if err != nil {

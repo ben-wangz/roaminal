@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	FormatVersion = 1
+	FormatVersion = 2
 	MaxBytes      = 64 << 10
+	DefaultPwd    = "$HOME"
 )
 
 var sessionNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
@@ -24,6 +25,7 @@ var sessionNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
 var (
 	ErrInvalidFormat      = errors.New("invalid SSH connection options format")
 	ErrInvalidSessionName = errors.New("invalid tmux session name")
+	ErrInvalidPwd         = errors.New("invalid FileSystem pwd")
 	ErrOptionsNotWritable = errors.New("SSH connection options are not writable")
 	ErrOptionsSymlink     = errors.New("SSH connection options must not be a symlink")
 )
@@ -31,6 +33,7 @@ var (
 type Tmux struct {
 	Enabled     bool   `json:"enabled" yaml:"enabled"`
 	SessionName string `json:"sessionName" yaml:"sessionName"`
+	Pwd         string `json:"pwd" yaml:"pwd"`
 }
 
 type Source struct {
@@ -57,12 +60,17 @@ type file struct {
 }
 
 type connectionSettings struct {
-	Tmux *tmuxSettings `yaml:"tmux"`
+	Tmux       *tmuxSettings       `yaml:"tmux"`
+	FileSystem *filesystemSettings `yaml:"filesystem"`
 }
 
 type tmuxSettings struct {
 	Enabled     bool   `yaml:"enabled"`
 	SessionName string `yaml:"sessionName"`
+}
+
+type filesystemSettings struct {
+	Pwd string `yaml:"pwd"`
 }
 
 func New(stateDir string) *Store {
@@ -72,6 +80,21 @@ func New(stateDir string) *Store {
 func (s *Store) Path() string { return s.path }
 
 func ValidSessionName(name string) bool { return sessionNamePattern.MatchString(name) }
+
+func ValidPwd(value string) bool {
+	if value == "" || len(value) > 4096 || strings.ContainsAny(value, "\x00\r\n") {
+		return false
+	}
+	for _, char := range value {
+		if char < 0x20 || char == 0x7f {
+			return false
+		}
+	}
+	if value == "$HOME" || value == "~" || strings.HasPrefix(value, "$HOME/") || strings.HasPrefix(value, "~/") {
+		return true
+	}
+	return strings.HasPrefix(value, "/")
+}
 
 // Load reads the optional add-on without ever replacing an invalid file. The
 // caller supplies the successfully parsed SSH aliases so stale entries can be
@@ -121,20 +144,41 @@ func (s *Store) Load(aliases map[string]bool) (Collection, error) {
 		result.Source = Source{Status: "invalid", Reason: "options file contains multiple documents"}
 		return result, ErrInvalidFormat
 	}
-	if decoded.FormatVersion != FormatVersion || decoded.Connections == nil {
+	if (decoded.FormatVersion != 1 && decoded.FormatVersion != FormatVersion) || decoded.Connections == nil {
 		result.Source = Source{Status: "invalid", Reason: "unsupported options format"}
 		return result, ErrInvalidFormat
 	}
 	reconcile := aliases != nil
 	for alias, settings := range decoded.Connections {
-		if alias == "" || settings.Tmux == nil || !settings.Tmux.Enabled || !ValidSessionName(settings.Tmux.SessionName) {
+		if alias == "" {
 			result.Source = Source{Status: "invalid", Reason: "invalid connection tmux settings"}
 			return result, ErrInvalidFormat
+		}
+		enabled := settings.Tmux != nil && settings.Tmux.Enabled
+		if settings.Tmux != nil && enabled && !ValidSessionName(settings.Tmux.SessionName) {
+			result.Source = Source{Status: "invalid", Reason: "invalid connection tmux settings"}
+			return result, ErrInvalidFormat
+		}
+		pwd := DefaultPwd
+		if settings.FileSystem != nil && settings.FileSystem.Pwd != "" {
+			pwd = settings.FileSystem.Pwd
+		}
+		if !ValidPwd(pwd) {
+			result.Source = Source{Status: "invalid", Reason: "invalid FileSystem pwd"}
+			return result, ErrInvalidPwd
+		}
+		if !enabled && settings.FileSystem == nil {
+			continue
 		}
 		if reconcile && !aliases[alias] {
 			continue
 		}
-		result.Options[alias] = Tmux{Enabled: true, SessionName: settings.Tmux.SessionName}
+		option := Tmux{Pwd: pwd}
+		if settings.Tmux != nil {
+			option.Enabled = settings.Tmux.Enabled
+			option.SessionName = settings.Tmux.SessionName
+		}
+		result.Options[alias] = option
 	}
 	result.Source = Source{Status: "available", Readable: true}
 	if writable, reason := s.canWrite(info); writable {

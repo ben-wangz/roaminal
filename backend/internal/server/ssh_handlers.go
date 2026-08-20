@@ -67,23 +67,29 @@ func (s *Server) enrichConnectionOptions(collection *sshconfig.Collection) {
 	for index := range collection.Definitions {
 		definition := &collection.Definitions[index]
 		if option, ok := loaded.Options[definition.HostAlias]; ok && definition.Type == "ssh" {
-			definition.Tmux = &sshconfig.TmuxOptions{Enabled: option.Enabled, SessionName: option.SessionName}
+			if option.Enabled {
+				definition.Tmux = &sshconfig.TmuxOptions{Enabled: true, SessionName: option.SessionName}
+			}
+			definition.FileSystem = &sshconfig.FileSystemOptions{Pwd: option.Pwd}
+		} else if definition.Type == "ssh" {
+			definition.FileSystem = &sshconfig.FileSystemOptions{Pwd: connectionoptions.DefaultPwd}
 		}
 	}
 }
 
 type definitionBody struct {
-	Type                  string                 `json:"type"`
-	HostAlias             string                 `json:"hostAlias"`
-	HostName              *string                `json:"hostName"`
-	User                  *string                `json:"user"`
-	Port                  *uint16                `json:"port"`
-	IdentityFileNames     []string               `json:"identityFileNames"`
-	IdentitiesOnly        *string                `json:"identitiesOnly"`
-	StrictHostKeyChecking *string                `json:"strictHostKeyChecking"`
-	UserKnownHostsFile    *string                `json:"userKnownHostsFile"`
-	ServerAliveInterval   *uint32                `json:"serverAliveInterval"`
-	Tmux                  *sshconfig.TmuxOptions `json:"tmux"`
+	Type                  string                       `json:"type"`
+	HostAlias             string                       `json:"hostAlias"`
+	HostName              *string                      `json:"hostName"`
+	User                  *string                      `json:"user"`
+	Port                  *uint16                      `json:"port"`
+	IdentityFileNames     []string                     `json:"identityFileNames"`
+	IdentitiesOnly        *string                      `json:"identitiesOnly"`
+	StrictHostKeyChecking *string                      `json:"strictHostKeyChecking"`
+	UserKnownHostsFile    *string                      `json:"userKnownHostsFile"`
+	ServerAliveInterval   *uint32                      `json:"serverAliveInterval"`
+	Tmux                  *sshconfig.TmuxOptions       `json:"tmux"`
+	FileSystem            *sshconfig.FileSystemOptions `json:"filesystem"`
 }
 
 func editFromBody(body definitionBody) sshconfig.Edit {
@@ -133,8 +139,8 @@ func (s *Server) createConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		s.definitionError(w, err)
 		return
 	}
-	if body.Tmux != nil {
-		if err := s.saveTmuxOption(body.HostAlias, body.Tmux); err != nil {
+	if body.Tmux != nil || body.FileSystem != nil {
+		if err := s.saveConnectionOptions(body.HostAlias, body.Tmux, body.FileSystem); err != nil {
 			s.definitionError(w, err)
 			return
 		}
@@ -167,8 +173,8 @@ func (s *Server) updateConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		s.definitionError(w, err)
 		return
 	}
-	if body.Tmux != nil {
-		if err := s.saveTmuxOption(alias, body.Tmux); err != nil {
+	if body.Tmux != nil || body.FileSystem != nil {
+		if err := s.saveConnectionOptions(alias, body.Tmux, body.FileSystem); err != nil {
 			s.definitionError(w, err)
 			return
 		}

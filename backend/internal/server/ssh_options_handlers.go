@@ -11,7 +11,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 )
 
-func (s *Server) saveTmuxOption(alias string, value *sshconfig.TmuxOptions) error {
+func (s *Server) saveConnectionOptions(alias string, tmux *sshconfig.TmuxOptions, filesystem *sshconfig.FileSystemOptions) error {
 	if s.connectionOptions == nil {
 		return nil
 	}
@@ -37,12 +37,35 @@ func (s *Server) saveTmuxOption(alias string, value *sshconfig.TmuxOptions) erro
 		return err
 	}
 	options := current.Options
-	if value == nil || !value.Enabled {
+	currentOption := options[alias]
+	if tmux != nil {
+		if !tmux.Enabled {
+			currentOption.Enabled = false
+			currentOption.SessionName = ""
+		} else {
+			currentOption.Enabled = true
+			currentOption.SessionName = tmux.SessionName
+		}
+	}
+	if filesystem != nil {
+		currentOption.Pwd = filesystem.Pwd
+	}
+	if !currentOption.Enabled && currentOption.Pwd == "" {
 		delete(options, alias)
 	} else {
-		options[alias] = connectionoptions.Tmux{Enabled: true, SessionName: value.SessionName}
+		if currentOption.Pwd == "" {
+			currentOption.Pwd = connectionoptions.DefaultPwd
+		}
+		options[alias] = currentOption
 	}
 	return s.connectionOptions.Save(options)
+}
+
+func (s *Server) saveTmuxOption(alias string, value *sshconfig.TmuxOptions) error {
+	if value == nil {
+		value = &sshconfig.TmuxOptions{Enabled: false}
+	}
+	return s.saveConnectionOptions(alias, value, nil)
 }
 
 func (s *Server) definitionError(w http.ResponseWriter, err error) {
@@ -56,9 +79,9 @@ func (s *Server) definitionError(w http.ResponseWriter, err error) {
 	case errors.Is(err, os.ErrNotExist):
 		writeError(w, http.StatusNotFound, "definition not found")
 	case errors.Is(err, connectionoptions.ErrOptionsSymlink), errors.Is(err, connectionoptions.ErrOptionsNotWritable):
-		writeError(w, http.StatusConflict, err.Error(), "tmux_options")
-	case errors.Is(err, connectionoptions.ErrInvalidFormat), errors.Is(err, connectionoptions.ErrInvalidSessionName):
-		writeError(w, http.StatusBadRequest, err.Error(), "tmux_options")
+		writeError(w, http.StatusConflict, err.Error(), "connection_options")
+	case errors.Is(err, connectionoptions.ErrInvalidFormat), errors.Is(err, connectionoptions.ErrInvalidSessionName), errors.Is(err, connectionoptions.ErrInvalidPwd):
+		writeError(w, http.StatusBadRequest, err.Error(), "connection_options")
 	default:
 		writeError(w, http.StatusBadRequest, err.Error())
 	}
