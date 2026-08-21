@@ -75,7 +75,6 @@ type Props = {
   onLogoutOtherAuthSessions: () => void;
   onCloseDialog: () => void;
   workspaceMode: WorkspaceMode;
-  onWorkspaceModeChange: (mode: WorkspaceMode) => void;
 };
 
 export function AppShellView({
@@ -133,7 +132,6 @@ export function AppShellView({
   onLogoutOtherAuthSessions,
   onCloseDialog,
   workspaceMode,
-  onWorkspaceModeChange,
 }: Props) {
   const workspaceOpen = page === 'workspace';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
@@ -155,6 +153,7 @@ export function AppShellView({
           onPreviewEnd={onPreviewEnd}
           onAgent={onAgent}
           onOpenFileSystem={onOpenFileSystem}
+          workspaceMode={workspaceMode}
           onRename={onRename}
           onAutomaticTitle={onAutomaticTitle}
           onTerminate={onTerminate}
@@ -193,7 +192,6 @@ export function AppShellView({
             onCloseSearch={onCloseSearch}
             onOpenManager={onOpenManager}
             mode={workspaceMode}
-            onModeChange={onWorkspaceModeChange}
             onToast={onShowToast}
           />
         ) : page === 'connections' ? (

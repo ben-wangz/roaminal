@@ -19,22 +19,15 @@ export function useWorkspaceMode({ view, viewRef, selectConnection, setPage }: P
     setWorkspaceMode(id ? modes.current.get(id) || 'terminal' : 'terminal');
   }, [view.activeConnectionInstanceId]);
 
-  const onOpenFileSystem = useCallback(
-    (id: string) => {
-      modes.current.set(id, 'filesystem');
-      setWorkspaceMode('filesystem');
-      if (viewRef.current.activeConnectionInstanceId !== id) selectConnection(id);
-      else setPage('workspace');
-    },
-    [selectConnection, setPage, viewRef],
-  );
-
-  const onWorkspaceModeChange = useCallback((mode: WorkspaceMode) => {
-    const id = viewRef.current.activeConnectionInstanceId;
-    if (!id) return;
+  const openMode = useCallback((id: string, mode: WorkspaceMode) => {
     modes.current.set(id, mode);
     setWorkspaceMode(mode);
-  }, [viewRef]);
+    if (viewRef.current.activeConnectionInstanceId !== id) selectConnection(id);
+    else setPage('workspace');
+  }, [selectConnection, setPage, viewRef]);
 
-  return { workspaceMode, onOpenFileSystem, onWorkspaceModeChange };
+  const onOpenFileSystem = useCallback((id: string) => openMode(id, 'filesystem'), [openMode]);
+  const onOpenTerminal = useCallback((id: string) => openMode(id, 'terminal'), [openMode]);
+
+  return { workspaceMode, onOpenFileSystem, onOpenTerminal };
 }

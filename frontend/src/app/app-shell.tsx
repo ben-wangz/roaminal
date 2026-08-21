@@ -112,7 +112,7 @@ export function AppShell() {
     setDialog,
     showToast,
   });
-  const { workspaceMode, onOpenFileSystem, onWorkspaceModeChange } = useWorkspaceMode({
+  const { workspaceMode, onOpenFileSystem, onOpenTerminal } = useWorkspaceMode({
     view,
     viewRef,
     selectConnection: actions.selectConnectionInstance,
@@ -187,7 +187,13 @@ export function AppShell() {
     (id: string) => setPreviewConnectionInstanceId((current) => (current === id ? null : current)),
     [],
   );
-  const handleAgent = useCallback((id: string) => setDialog({ type: 'agent', connectionInstanceId: id }), []);
+  const handleAgent = useCallback((id: string) => {
+    if (workspaceMode === 'filesystem') {
+      onOpenTerminal(id);
+      return;
+    }
+    setDialog({ type: 'agent', connectionInstanceId: id });
+  }, [onOpenTerminal, setDialog, workspaceMode]);
   const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), []);
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), []);
   const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
@@ -280,7 +286,6 @@ export function AppShell() {
       onLogoutOtherAuthSessions={() => void actions.logoutOtherAuthSessions()}
       onCloseDialog={handleCloseDialog}
       workspaceMode={workspaceMode}
-      onWorkspaceModeChange={onWorkspaceModeChange}
     />
   );
 }

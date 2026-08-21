@@ -1,8 +1,3 @@
-.workspace-mode-bar { display: flex; align-items: center; gap: 4px; min-height: 38px; padding: 4px 16px; border-bottom: 1px solid var(--border); background: var(--base1); }
-.workspace-mode-button { display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid transparent; color: var(--muted); background: transparent; font-size: .75rem; }
-.workspace-mode-button:hover, .workspace-mode-button.active { color: var(--text-bright); border-color: var(--border); background: var(--hover-wash); }
-.workspace-mode-view { min-height: 0; flex: 1; display: flex; flex-direction: column; }
-.filesystem-instance-view { min-height: 0; flex: 1; display: flex; flex-direction: column; }
 .filesystem-workspace { min-height: 0; flex: 1; display: flex; flex-direction: column; position: relative; }
 .filesystem-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: .72rem; }
 .filesystem-breadcrumb { min-width: 0; display: flex; align-items: center; overflow: auto; white-space: nowrap; }

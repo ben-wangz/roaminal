@@ -31,9 +31,11 @@ desktop for preview, tablet/phone for selection.
    grid, and after the stream settles its final visible line must match the main
    terminal with no duplicated trailing segment or wrapped remainder. The main
    terminal remains real-time.
-6. Click Agent and Files extension controls. Agent opens its status or
-   initialization dialog without selecting another card; Files preserves its
-   existing behavior. Neither control navigates or creates a connection.
+6. In Terminal mode, click Agent and verify its status or initialization dialog
+   opens without selecting another card. In FileSystem mode, click the Agent
+   control to return to Terminal; the same control must not lose access to the
+   Agent dialog, which remains available from Terminal mode. Click Files and
+   verify it enters FileSystem for that card without creating a connection.
 7. On coarse-pointer or width `<=800`, no preview runtime is created by hover,
    focus, or touch. Selecting a card closes the overlay and opens that instance.
 

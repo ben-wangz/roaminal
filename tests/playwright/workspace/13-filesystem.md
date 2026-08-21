@@ -9,9 +9,10 @@ or credentials.
 ## Procedure and assertions
 
 1. Open the fixture SSH connection instance and click its folder extension. The
-   main area switches to FileSystem beside the existing Terminal mode; no new
-   window, browser fullscreen request, command action, or terminal action is
-   created. The root shows `Active pane` when tmux probing succeeds.
+   main workspace body is replaced by FileSystem; no Terminal/FileSystem tab
+   bar is rendered, and no new window, browser fullscreen request, command
+   action, or terminal action is created. The root shows `Active pane` when
+   tmux probing succeeds.
 2. Verify the root directory loads only its first level, directories appear
    before files, hidden files are visible by default, and the fallback status is
    explicit when tmux probing is unavailable. Toggle hidden files and verify only
@@ -39,10 +40,11 @@ or credentials.
    upload; verify a 202 upload ID, non-blocking progress, observable `rsync` or
    `scp` transport, cancel behavior, partial-failure paths, and refresh of only
    the target directory after completion.
-9. Switch between Terminal and FileSystem and between two connection instances.
-   Verify each instance keeps its own root, expanded paths, selection, preview,
-   and upload status; no file data or root path from one instance appears in the
-   other.
+9. Use the sidebar Agent control to return to Terminal, then the folder control
+   to enter FileSystem again. Repeat between two connection instances. Verify
+   only the selected mode occupies the main workspace body, each instance keeps
+   its own root, expanded paths, selection, preview, and upload status, and no
+   file data or root path from one instance appears in the other.
 10. Move the active tmux pane to another directory and trigger a tree/content
     request with the old root revision. Verify the UI clears the old tree,
     reloads the returned root, and shows a concise root-changed notice. Make a

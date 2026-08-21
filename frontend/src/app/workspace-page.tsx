@@ -4,7 +4,6 @@ import { TerminalViewport } from '../terminal/terminal-viewport';
 import { TerminalSearch } from '../terminal/terminal-search';
 import { TouchKeyboard } from '../input/touch-keyboard';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import { TerminalSquare, FolderTree } from 'lucide-react';
 import { FileSystemWorkspace } from '../filesystem/filesystem-workspace';
 
 export type WorkspaceMode = 'terminal' | 'filesystem';
@@ -19,7 +18,6 @@ type Props = {
   onCloseSearch: () => void;
   onOpenManager: () => void;
   mode: WorkspaceMode;
-  onModeChange: (mode: WorkspaceMode) => void;
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
 };
 
@@ -33,22 +31,28 @@ export function WorkspacePage({
   onCloseSearch,
   onOpenManager,
   mode,
-  onModeChange,
   onToast,
 }: Props) {
+  const filesystemInstance = connections.find(
+    (connection) => connection.connectionInstanceId === activeInstance?.connectionInstanceId,
+  ) || null;
   return (
     <>
       <RemoteMonitorBand instance={activeInstance} />
-      <nav className="workspace-mode-bar" aria-label="Workspace mode">
-        <button className={`workspace-mode-button ${mode === 'terminal' ? 'active' : ''}`} type="button" aria-pressed={mode === 'terminal'} onClick={() => onModeChange('terminal')}><TerminalSquare size={15} aria-hidden="true" /> Terminal</button>
-        <button className={`workspace-mode-button ${mode === 'filesystem' ? 'active' : ''}`} type="button" aria-pressed={mode === 'filesystem'} onClick={() => onModeChange('filesystem')}><FolderTree size={15} aria-hidden="true" /> FileSystem</button>
-      </nav>
-      <div className="workspace-mode-view terminal-mode-view" hidden={mode !== 'terminal'}>
-        <>
+      <div className="workspace-body">
+        <div
+          className={`workspace-mode-view terminal-mode-view ${mode === 'terminal' ? 'active' : 'inactive'}`}
+          aria-hidden={mode !== 'terminal'}
+          inert={mode !== 'terminal' || undefined}
+        >
           {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={onCloseSearch} />}
           <section className="terminal-stage">
             {activeRuntime ? (
-              <TerminalViewport key={activeRuntime.connectionInstanceId} runtime={activeRuntime} />
+              <TerminalViewport
+                key={activeRuntime.connectionInstanceId}
+                runtime={activeRuntime}
+                active={mode === 'terminal'}
+              />
             ) : (
               <div className="empty-state">
                 <div className="brand-mark">
@@ -67,18 +71,19 @@ export function WorkspacePage({
               {executionStatus || (currentConnection ? `${currentConnection.cols}x${currentConnection.rows}` : '')}
             </span>
           </footer>
-        </>
-      </div>
-      <div className="workspace-mode-view filesystem-mode-view" hidden={mode !== 'filesystem'}>
-        {connections.some((connection) => connection.connectionInstanceId === activeInstance?.connectionInstanceId) ? connections.map((connection) => (
-          <div className="filesystem-instance-view" hidden={connection.connectionInstanceId !== activeInstance?.connectionInstanceId} key={connection.connectionInstanceId}>
-            <FileSystemWorkspace
-              instance={connection}
-              active={mode === 'filesystem' && connection.connectionInstanceId === activeInstance?.connectionInstanceId}
-              onToast={onToast}
-            />
-          </div>
-        )) : <FileSystemWorkspace instance={null} active onToast={onToast} />}
+        </div>
+        <div
+          className={`workspace-mode-view filesystem-mode-view ${mode === 'filesystem' ? 'active' : 'inactive'}`}
+          aria-hidden={mode !== 'filesystem'}
+          inert={mode !== 'filesystem' || undefined}
+        >
+          <FileSystemWorkspace
+            key={filesystemInstance?.connectionInstanceId || 'no-connection'}
+            instance={filesystemInstance}
+            active={mode === 'filesystem'}
+            onToast={onToast}
+          />
+        </div>
       </div>
     </>
   );

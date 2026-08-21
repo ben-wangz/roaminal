@@ -9,6 +9,7 @@ import { ConnectionActions } from './connection-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import { useConnectionReorder } from './use-connection-reorder';
 import { agentSummary, agentTitle } from '../agent/agent-api';
+import type { WorkspaceMode } from '../app/workspace-page';
 
 type Props = {
   id: string;
@@ -24,6 +25,7 @@ type Props = {
   onPreviewEnd: (id: string) => void;
   onAgent: (id: string) => void;
   onOpenFileSystem: (id: string) => void;
+  workspaceMode: WorkspaceMode;
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
@@ -76,6 +78,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   onPreviewEnd,
   onAgent,
   onOpenFileSystem,
+  workspaceMode,
   onRename,
   onAutomaticTitle,
   onTerminate,
@@ -164,8 +167,9 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
             const stopPreview = () => onPreviewEnd(connection.connectionInstanceId);
             const dropPlacement = dropTarget?.id === connection.connectionInstanceId ? dropTarget.placement : null;
             const agent = agentSummary(connection);
-            const agentDisabled = agent.support !== 'supported' || agent.component === 'initializing';
-            const agentLabel = agentTitle(agent);
+            const terminalNavigation = workspaceMode === 'filesystem';
+            const agentDisabled = !terminalNavigation && (agent.support !== 'supported' || agent.component === 'initializing');
+            const agentLabel = terminalNavigation ? 'Open Terminal' : agentTitle(agent);
             return (
               <article
                 className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''} ${draggedConnectionInstanceId === connection.connectionInstanceId ? 'dragging' : ''} ${dropPlacement ? `drop-${dropPlacement}` : ''}`}
