@@ -5,8 +5,8 @@ const rootBeginMarker = "ROAMINAL_FILESYSTEM_ROOT_V1"
 const tmuxRootScript = `set -eu
 session_name=$1
 if ! command -v tmux >/dev/null 2>&1; then exit 20; fi
-tmux has-session -t "=$session_name"
-path=$(tmux display-message -p -t "=$session_name" '#{pane_current_path}')
+tmux has-session -t "=$session_name:"
+path=$(tmux display-message -p -t "=$session_name:" '#{pane_current_path}')
 case "$path" in /*) ;; *) exit 21;; esac
 path=$(cd -- "$path" && pwd -P)
 test -d "$path"

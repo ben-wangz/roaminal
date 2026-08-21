@@ -72,8 +72,7 @@ func (s *Service) targetPreflight(ctx context.Context, id, session string) (stri
 	if s.terms == nil {
 		return "", 0, errors.New("connection manager unavailable")
 	}
-	result, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: `set -eu
-tmux display-message -p -t "=$1" '#{session_name}\t#{session_id}\t#{session_created}'`, Args: []string{session}, Timeout: 5 * time.Second, OutputLimit: 4096})
+	result, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: tmuxTargetPreflightScript, Args: []string{session}, Timeout: 5 * time.Second, OutputLimit: 4096})
 	if err != nil {
 		return "", 0, err
 	}
@@ -87,3 +86,6 @@ tmux display-message -p -t "=$1" '#{session_name}\t#{session_id}\t#{session_crea
 	}
 	return parts[1], created, nil
 }
+
+const tmuxTargetPreflightScript = `set -eu
+tmux display-message -p -t "=$1:" '#{session_name}\t#{session_id}\t#{session_created}'`
