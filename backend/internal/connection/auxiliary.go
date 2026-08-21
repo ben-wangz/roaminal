@@ -1,7 +1,6 @@
 package connection
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -12,24 +11,6 @@ import (
 )
 
 const auxiliaryOutputLimit = 8 * 1024
-
-type cappedBuffer struct {
-	data     bytes.Buffer
-	limit    int
-	overflow bool
-}
-
-func (b *cappedBuffer) Write(value []byte) (int, error) {
-	if b.data.Len()+len(value) > b.limit {
-		remaining := b.limit - b.data.Len()
-		if remaining > 0 {
-			_, _ = b.data.Write(value[:remaining])
-		}
-		b.overflow = true
-		return len(value), nil
-	}
-	return b.data.Write(value)
-}
 
 func (m *Manager) reserveAuxiliary(transport *Transport) bool {
 	m.transportMu.Lock()
@@ -251,5 +232,3 @@ func withAuxiliaryTimeout(parent context.Context) (context.Context, context.Canc
 	}
 	return context.WithTimeout(parent, 2*time.Second)
 }
-
-var _ io.Writer = (*cappedBuffer)(nil)

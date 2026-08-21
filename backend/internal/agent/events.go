@@ -2,16 +2,10 @@ package agent
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"strconv"
-	"strings"
 	"time"
-	"unicode"
 )
 
 type webhookEvent struct {
@@ -78,10 +72,7 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 	if !metadataValid {
 		return false, errf("agent_event_invalid", 400, "The Agent event is invalid.", nil)
 	}
-	if len(event.Tmux.SocketFingerprint) != 16 {
-		return false, errf("agent_event_invalid", 400, "The Agent event is invalid.", nil)
-	}
-	if _, err := hex.DecodeString(event.Tmux.SocketFingerprint); err != nil {
+	if !validSocketFingerprint(event.Tmux.SocketFingerprint) {
 		return false, errf("agent_event_invalid", 400, "The Agent event is invalid.", nil)
 	}
 	if event.Tmux.PaneID == "" {
@@ -204,126 +195,4 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 		}
 	}
 	return false, nil
-}
-
-func (s *Service) rememberEventLocked(endpointKey, eventID string, now time.Time) bool {
-	items := s.eventIDs[endpointKey]
-	if items == nil {
-		items = map[string]time.Time{}
-		s.eventIDs[endpointKey] = items
-	}
-	for id, seenAt := range items {
-		if now.Sub(seenAt) > 24*time.Hour {
-			delete(items, id)
-		}
-	}
-	if _, exists := items[eventID]; exists {
-		return true
-	}
-	if len(items) >= 2048 {
-		oldestID := ""
-		var oldest time.Time
-		for id, seenAt := range items {
-			if oldestID == "" || seenAt.Before(oldest) {
-				oldestID, oldest = id, seenAt
-			}
-		}
-		if oldestID != "" {
-			delete(items, oldestID)
-		}
-	}
-	items[eventID] = now
-	return false
-}
-
-func (s *Service) markComponentReady(endpointKey, sessionName, sessionID string, sessionCreated int64, version string) error {
-	return s.store.Update(endpointKey, func(record *EndpointRecord) error {
-		record.InstallationState = "ready"
-		if record.ComponentVersion == "" {
-			record.ComponentVersion = version
-		}
-		state := record.Targets[sessionName]
-		state.SessionName = sessionName
-		state.SessionID, state.SessionCreated = sessionID, sessionCreated
-		state.Component = "ready"
-		if state.ComponentVersion == "" {
-			state.ComponentVersion = version
-		}
-		state.Activity = "unknown"
-		state.ErrorCode, state.ErrorMessage, state.InitializationID = "", "", ""
-		record.Targets[sessionName] = state
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		return nil
-	})
-}
-
-func expectedActivity(event, source string) string {
-	switch event {
-	case "PermissionRequest":
-		return "waiting"
-	case "Stop":
-		return "completed"
-	case "SessionStart":
-		if source == "compact" {
-			return "running"
-		}
-		return "idle"
-	case "SessionEnd":
-		return "idle"
-	default:
-		return "running"
-	}
-}
-
-func knownEvent(value string) bool {
-	switch value {
-	case "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PreCompact", "PostCompact", "Stop":
-		return true
-	default:
-		return false
-	}
-}
-
-func validEventMetadata(event webhookEvent) bool {
-	switch event.EventName {
-	case "SessionStart":
-		return (event.Event.Source == "startup" || event.Event.Source == "resume" || event.Event.Source == "clear" || event.Event.Source == "compact") && event.Codex.TurnID == "" && event.Codex.ToolUseID == ""
-	case "SessionEnd":
-		return event.Event.Reason == "other" && event.Codex.TurnID == "" && event.Codex.ToolUseID == ""
-	case "PreToolUse", "PermissionRequest", "PostToolUse":
-		return true
-	case "UserPromptSubmit", "PreCompact", "PostCompact", "Stop":
-		return event.Codex.ToolUseID == ""
-	default:
-		return false
-	}
-}
-
-func eventID(event webhookEvent, endpointKey string) string {
-	hash := sha256.New()
-	writeString := func(value string) {
-		var length [8]byte
-		binary.BigEndian.PutUint64(length[:], uint64(len(value)))
-		_, _ = hash.Write(length[:])
-		_, _ = hash.Write([]byte(value))
-	}
-	writeString("roaminal-agent-event-v1")
-	writeString(endpointKey)
-	writeString(event.Tmux.SessionID)
-	var number [8]byte
-	binary.BigEndian.PutUint64(number[:], uint64(event.Tmux.SessionCreated))
-	_, _ = hash.Write(number[:])
-	binary.BigEndian.PutUint64(number[:], event.Sequence)
-	_, _ = hash.Write(number[:])
-	return base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
-}
-
-func validOpaque(value string, maxBytes int) bool {
-	if value == "" {
-		return true
-	}
-	if len(value) > maxBytes {
-		return false
-	}
-	return !strings.ContainsFunc(value, func(r rune) bool { return unicode.IsControl(r) })
 }
