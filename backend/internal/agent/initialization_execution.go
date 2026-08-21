@@ -102,7 +102,7 @@ func (s *Service) executeInitialization(operationID, id string, summary connecti
 	}
 	request := installRequest{
 		SchemaVersion:                   1,
-		Endpoint:                        Endpoint{Key: endpoint.Key, User: endpoint.User, Host: endpoint.Host, Port: endpoint.Port},
+		Endpoint:                        installEndpointFor(endpoint),
 		WebhookURL:                      webhookURL,
 		ExpectedCurrentTokenFingerprint: remoteFingerprint,
 		ReplacementToken:                token,
@@ -148,7 +148,7 @@ func (s *Service) executeInitialization(operationID, id string, summary connecti
 func (s *Service) repairExisting(ctx context.Context, id string, target Target, endpoint Endpoint, webhookURL, fingerprint, version, checksum, webhookOrigin string, binary []byte) error {
 	request := installRequest{
 		SchemaVersion:                   1,
-		Endpoint:                        Endpoint{Key: endpoint.Key, User: endpoint.User, Host: endpoint.Host, Port: endpoint.Port},
+		Endpoint:                        installEndpointFor(endpoint),
 		WebhookURL:                      webhookURL,
 		ExpectedCurrentTokenFingerprint: fingerprint,
 		ComponentVersion:                version,
