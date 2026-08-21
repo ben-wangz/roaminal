@@ -76,7 +76,7 @@ func (s *Service) targetPreflight(ctx context.Context, id, session string) (stri
 	if err != nil {
 		return "", 0, err
 	}
-	parts := strings.Split(strings.TrimSpace(string(result.Output)), "\t")
+	parts := strings.Split(strings.TrimSpace(string(result.Output)), "|")
 	if len(parts) != 3 || parts[0] != session {
 		return "", 0, errors.New("tmux session not found")
 	}
@@ -88,4 +88,4 @@ func (s *Service) targetPreflight(ctx context.Context, id, session string) (stri
 }
 
 const tmuxTargetPreflightScript = `set -eu
-tmux display-message -p -t "=$1:" '#{session_name}\t#{session_id}\t#{session_created}'`
+tmux display-message -p -t "=$1:" '#{session_name}|#{session_id}|#{session_created}'`

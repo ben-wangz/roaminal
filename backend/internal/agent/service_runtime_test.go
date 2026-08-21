@@ -6,7 +6,7 @@ import (
 )
 
 func TestTargetPreflightUsesExactTmuxSessionTarget(t *testing.T) {
-	if !strings.Contains(tmuxTargetPreflightScript, `-t "=$1:"`) {
+	if !strings.Contains(tmuxTargetPreflightScript, `-t "=$1:"`) || !strings.Contains(tmuxTargetPreflightScript, "#{session_name}|#{session_id}|#{session_created}") {
 		t.Fatalf("target preflight must address an exact tmux session: %s", tmuxTargetPreflightScript)
 	}
 	if strings.Contains(tmuxTargetPreflightScript, `-t "=$1" '#{session_name}`) {
