@@ -116,13 +116,7 @@ func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteComma
 		return nil, ErrTransportUnavailable
 	}
 	args := m.auxiliarySSHArgs(transport)
-	if command.Stdin == nil {
-		args = append(args, "sh", "-s", "--")
-		args = append(args, command.Args...)
-	} else {
-		args = append(args, "sh", "-c", command.Script, "--")
-		args = append(args, command.Args...)
-	}
+	args = append(args, remoteCommandInvocation(command)...)
 	cmd := exec.CommandContext(ctx, m.sshPath, args...)
 	if command.Stdin == nil {
 		cmd.Stdin = strings.NewReader(command.Script)
@@ -144,6 +138,19 @@ func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteComma
 		return nil, err
 	}
 	return &auxiliaryReader{manager: m, transport: transport, stdout: stdout, stderr: stderr, cmd: cmd, cancel: cancel, done: make(chan struct{})}, nil
+}
+
+func remoteCommandInvocation(command RemoteCommand) []string {
+	args := []string{"sh"}
+	if command.Stdin == nil {
+		args = append(args, "-s", "--")
+	} else {
+		args = append(args, "-c", shellQuote(command.Script), "--")
+	}
+	for _, value := range command.Args {
+		args = append(args, shellQuote(value))
+	}
+	return args
 }
 
 func (m *Manager) auxiliarySSHArgs(transport *Transport) []string {
