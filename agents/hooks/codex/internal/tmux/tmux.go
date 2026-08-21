@@ -129,14 +129,16 @@ func (c *Client) withLock(ctx context.Context, info Info, fn func() error) error
 }
 
 func (c *Client) option(ctx context.Context, info Info, name string) (string, bool) {
-	value, err := c.run(ctx, "show-options", "-t", "="+info.SessionName, "-v", name)
+	value, err := c.run(ctx, "show-options", "-t", sessionTarget(info), "-v", name)
 	return value, err == nil
 }
 
 func (c *Client) setOption(ctx context.Context, info Info, name, value string) error {
-	_, err := c.run(ctx, "set-option", "-q", "-t", "="+info.SessionName, name, value)
+	_, err := c.run(ctx, "set-option", "-q", "-t", sessionTarget(info), name, value)
 	return err
 }
+
+func sessionTarget(info Info) string { return "=" + info.SessionName + ":" }
 
 func (c *Client) Claim(ctx context.Context, info Info, codexSessionID string) (bool, error) {
 	if strings.TrimSpace(codexSessionID) == "" {
@@ -191,7 +193,7 @@ func (c *Client) Release(ctx context.Context, info Info, codexSessionID string) 
 		if !exists || !strings.HasPrefix(owner, codexSessionID+"|") {
 			return nil
 		}
-		_, err := c.run(ctx, "set-option", "-q", "-u", "-t", "="+info.SessionName, "@roaminal_agent_owner_v1")
+		_, err := c.run(ctx, "set-option", "-q", "-u", "-t", sessionTarget(info), "@roaminal_agent_owner_v1")
 		return err
 	})
 }

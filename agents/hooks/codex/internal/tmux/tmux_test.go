@@ -24,6 +24,12 @@ func TestParseInfoRejectsUnsafeValues(t *testing.T) {
 	}
 }
 
+func TestSessionTargetUsesExactSessionTarget(t *testing.T) {
+	if got := sessionTarget(Info{SessionName: "roaminal-e2e"}); got != "=roaminal-e2e:" {
+		t.Fatalf("unexpected tmux session target: %q", got)
+	}
+}
+
 func TestAgentProcessIDIsOpaqueAndStable(t *testing.T) {
 	first := AgentProcessID("codex-session")
 	second := AgentProcessID("codex-session")
