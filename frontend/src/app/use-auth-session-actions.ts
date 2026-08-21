@@ -13,7 +13,7 @@ type Params = {
   previewRuntimeRef: MutableRefObject<{ dispose(): void } | null>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<
-    SetStateAction<{ type: 'rename' | 'terminate'; connectionInstanceId: string } | { type: 'auth' } | null>
+    SetStateAction<{ type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null>
   >;
   showToast: (message: string, kind?: ToastKind) => void;
 };

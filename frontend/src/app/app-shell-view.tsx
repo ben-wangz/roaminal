@@ -6,7 +6,7 @@ import { ConnectionSidebar } from '../ui/connection-sidebar';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
-import { RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialogs';
+import { AgentDialog, RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialogs';
 import { ConnectionManager } from '../connections/connection-manager';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { Heartbeat } from '../status/heartbeat';
@@ -17,7 +17,7 @@ import type { TerminalAppearance } from '../appearance/appearance-model';
 import { ShellTopbar } from './shell-topbar';
 import { WorkspacePage, type WorkspaceMode } from './workspace-page';
 
-export type Dialog = { type: 'rename' | 'terminate'; connectionInstanceId: string } | { type: 'auth' } | null;
+export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null;
 
 type Props = {
   page: AppPage;
@@ -50,7 +50,7 @@ type Props = {
   onReorderConnection: (draggedID: string, targetID: string, placement: 'before' | 'after') => Promise<void>;
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
-  onUnavailableExtension: (name: string) => void;
+  onAgent: (id: string) => void;
   onOpenFileSystem: (id: string) => void;
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
@@ -108,7 +108,7 @@ export function AppShellView({
   onReorderConnection,
   onPreviewStart,
   onPreviewEnd,
-  onUnavailableExtension,
+  onAgent,
   onOpenFileSystem,
   onRename,
   onAutomaticTitle,
@@ -152,7 +152,7 @@ export function AppShellView({
           onReorder={onReorderConnection}
           onPreviewStart={onPreviewStart}
           onPreviewEnd={onPreviewEnd}
-          onUnavailableExtension={onUnavailableExtension}
+          onAgent={onAgent}
           onOpenFileSystem={onOpenFileSystem}
           onRename={onRename}
           onAutomaticTitle={onAutomaticTitle}
@@ -237,6 +237,13 @@ export function AppShellView({
           onRevoke={onRevokeAuthSession}
           onLogoutOthers={onLogoutOtherAuthSessions}
           onClose={onCloseDialog}
+        />
+      )}
+      {dialog?.type === 'agent' && dialogConnection && (
+        <AgentDialog
+          connection={dialogConnection}
+          onClose={onCloseDialog}
+          onShowToast={onShowToast}
         />
       )}
     </div>

@@ -8,6 +8,7 @@ import type { ContextualMode } from '../input/contextual-keyboard-model';
 import { ConnectionActions } from './connection-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import { useConnectionReorder } from './use-connection-reorder';
+import { agentSummary, agentTitle } from '../agent/agent-api';
 
 type Props = {
   id: string;
@@ -21,7 +22,7 @@ type Props = {
   onReorder: (draggedID: string, targetID: string, placement: 'before' | 'after') => Promise<void>;
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
-  onUnavailableExtension: (name: 'Agent') => void;
+  onAgent: (id: string) => void;
   onOpenFileSystem: (id: string) => void;
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
@@ -73,7 +74,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   onReorder,
   onPreviewStart,
   onPreviewEnd,
-  onUnavailableExtension,
+  onAgent,
   onOpenFileSystem,
   onRename,
   onAutomaticTitle,
@@ -162,6 +163,9 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
             };
             const stopPreview = () => onPreviewEnd(connection.connectionInstanceId);
             const dropPlacement = dropTarget?.id === connection.connectionInstanceId ? dropTarget.placement : null;
+            const agent = agentSummary(connection);
+            const agentDisabled = agent.support !== 'supported' || agent.component === 'initializing';
+            const agentLabel = agentTitle(agent);
             return (
               <article
                 className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''} ${draggedConnectionInstanceId === connection.connectionInstanceId ? 'dragging' : ''} ${dropPlacement ? `drop-${dropPlacement}` : ''}`}
@@ -224,14 +228,16 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
                     <GripVertical aria-hidden="true" size={15} />
                   </button>
                   <button
-                    className="extension-button"
+                    className={`extension-button agent-extension agent-status-${agent.component} agent-activity-${agent.activity}`}
                     type="button"
-                    aria-label="Agent extension"
-                    aria-disabled="true"
-                    title="Agent extension unavailable"
+                    aria-label={agentLabel}
+                    aria-disabled={agentDisabled}
+                    disabled={agentDisabled}
+                    data-agent-state={agent.component}
+                    title={agentLabel}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onUnavailableExtension('Agent');
+                      onAgent(connection.connectionInstanceId);
                     }}
                   >
                     <Bot aria-hidden="true" size={15} />

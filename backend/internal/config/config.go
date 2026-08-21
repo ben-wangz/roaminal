@@ -18,14 +18,14 @@ func defaults() Config {
 		ScrollbackLines: DefaultScrollback, MaxConnectionInstances: DefaultMaxConnectionInstances,
 		MaxClientsPerConnectionInstance: DefaultMaxClientsPerConnectionInstance,
 		AuthAccessTTL:                   DefaultAuthAccessTTL, AuthRefreshTTL: DefaultAuthRefreshTTL,
-		AuthMaxAttempts: DefaultAuthMaxAttempts, ClientDiagnosticsEnabled: true,
+		AuthMaxAttempts: DefaultAuthMaxAttempts, ClientDiagnosticsEnabled: true, AgentHooksDir: DefaultAgentHooksDir,
 	}
 }
 
 func Load(args []string) (Config, error) {
 	for _, arg := range args {
 		if arg == "--help" || arg == "-help" {
-			fmt.Fprintln(os.Stdout, "Roaminal - connection platform\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-connection-instances --max-clients-per-connection-instance --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --client-diagnostics --debug/-d --accept-terms/-y")
+			fmt.Fprintln(os.Stdout, "Roaminal - connection platform\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-connection-instances --max-clients-per-connection-instance --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --client-diagnostics --agent-webhook-base-url --agent-allow-insecure-webhook --agent-hooks-dir --debug/-d --accept-terms/-y")
 			return Config{}, ErrHelp
 		}
 	}

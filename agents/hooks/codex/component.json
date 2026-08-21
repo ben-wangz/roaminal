@@ -1,0 +1,6 @@
+{
+  "bundleSchemaVersion": 1,
+  "componentVersion": "1",
+  "binaryName": "roaminal-agent-hook",
+  "hooksConfigPath": "config/hooks.json"
+}

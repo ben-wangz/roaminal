@@ -20,6 +20,22 @@ export type ConnectionInstanceSummary = {
   tmuxSessionName?: string;
   tmuxPrefixKey?: string;
   tmuxPrefixSource?: 'runtime' | 'fallback' | 'unsupported';
+  agent?: AgentSummary;
+};
+
+export type AgentSummary = {
+  agentType: 'codex' | string;
+  support: 'supported' | 'unsupported' | string;
+  supportReason: string;
+  component: 'uninitialized' | 'initializing' | 'needs_trust' | 'ready' | 'error' | string;
+  componentVersion: string;
+  activity: 'unknown' | 'idle' | 'running' | 'waiting' | 'completed' | 'failed' | 'stale' | string;
+  activityLabel: string;
+  lastEventName: string;
+  lastEventAt: string;
+  initializationId: string;
+  errorCode: string;
+  errorMessage: string;
 };
 
 export type ServerMessage =

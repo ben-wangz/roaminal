@@ -22,6 +22,19 @@
 .connection-action-menu button:hover, .connection-action-menu button:focus-visible { background: var(--hover-wash-strong); color: var(--text-bright); outline: 0; }
 .connection-action-menu .destructive { color: var(--danger-soft); }
 .dialog-form { display: grid; min-width: min(360px, calc(100vw - 48px)); gap: 12px; }
+.agent-dialog { width: min(460px, calc(100vw - 48px)); }
+.agent-dialog-heading { display: flex; align-items: center; gap: 10px; }
+.agent-dialog-heading h2 { margin: 0; }
+.agent-dialog-indicator { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: var(--muted); }
+.agent-dialog-indicator.agent-status-initializing { background: var(--cyan); }
+.agent-dialog-indicator.agent-status-needs_trust { background: var(--yellow); }
+.agent-dialog-indicator.agent-status-ready { background: var(--ok); }
+.agent-dialog-indicator.agent-status-error { background: var(--red); }
+.agent-detail-list { display: grid; gap: 8px; margin: 0; padding: 12px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.agent-detail-list div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; font-size: .75rem; }
+.agent-detail-list dt { color: var(--muted); }
+.agent-detail-list dd { min-width: 0; margin: 0; overflow: hidden; color: var(--text-bright); text-overflow: ellipsis; white-space: nowrap; }
+.agent-confirm-copy code, .agent-trust-copy code { color: var(--cyan); }
 .dialog-form h2 { margin: 0; color: var(--text-bright); font-size: 1.05rem; }
 .dialog-form label { color: var(--muted); font-size: .75rem; }
 .dialog-form input { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; }

@@ -31,6 +31,9 @@ func (s *Server) getConnectionInstance(w http.ResponseWriter, r *http.Request, _
 	}
 	for _, item := range s.terms.Summaries() {
 		if item.ID == id {
+			if s.agent != nil {
+				item.Agent = s.agent.Summary(item)
+			}
 			writeJSON(w, http.StatusOK, item)
 			return
 		}
@@ -65,6 +68,9 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, err.Error(), "connection")
 		}
 		return
+	}
+	if s.agent != nil {
+		result.Agent = s.agent.Summary(result)
 	}
 	writeJSON(w, http.StatusCreated, result)
 }
@@ -176,6 +182,9 @@ func (s *Server) updateConnectionTitle(w http.ResponseWriter, r *http.Request, _
 			writeError(w, http.StatusInternalServerError, "internal error")
 		}
 		return
+	}
+	if s.agent != nil {
+		result.Agent = s.agent.Summary(result)
 	}
 	writeJSON(w, http.StatusOK, result)
 }

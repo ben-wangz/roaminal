@@ -16,6 +16,25 @@ COPY terminal-worker/package.json terminal-worker/package-lock.json ./
 RUN npm ci --omit=dev
 COPY terminal-worker/src ./src
 
+FROM docker.io/library/golang:1.26.5-bookworm@sha256:db25d241820546be7b96953eea8d3e6bd15d413d59d00a75b68b74dfb5e2ecd2 AS codex-hook-builder
+ARG ROAMINAL_AGENT_COMPONENT_VERSION=1
+WORKDIR /src/agents/hooks/codex
+COPY agents/hooks/codex/go.* ./
+RUN go mod download
+COPY agents/hooks/codex/ ./
+RUN set -eu; \
+    mkdir -p /out/agents/hooks/codex/config; \
+    cp component.json /out/agents/hooks/codex/component.json; \
+    cp config/hooks.json /out/agents/hooks/codex/config/hooks.json; \
+    for target in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do \
+      os="${target%-*}"; arch="${target#*-}"; \
+      mkdir -p "/out/agents/hooks/codex/${target}"; \
+      CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath \
+        -ldflags="-s -w -X github.com/ben-wangz/roaminal/agents/hooks/codex/internal/buildinfo.Version=${ROAMINAL_AGENT_COMPONENT_VERSION}" \
+        -o "/out/agents/hooks/codex/${target}/roaminal-agent-hook" ./cmd/roaminal-agent-hook; \
+    done; \
+    go run ./cmd/bundle-manifest -root /out/agents/hooks/codex -output /out/agents/hooks/codex/manifest.json
+
 FROM docker.io/library/golang:1.26.5-bookworm@sha256:db25d241820546be7b96953eea8d3e6bd15d413d59d00a75b68b74dfb5e2ecd2 AS backend-builder
 ARG ROAMINAL_VERSION=dev
 WORKDIR /src/backend
@@ -36,22 +55,28 @@ RUN apt-get update \
     && usermod --login roaminal --home /home/roaminal --move-home node \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/yarn \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
-    && mkdir -p /opt/roaminal/terminal-worker /home/roaminal/.roaminal /home/roaminal/.ssh /workspace \
+    && mkdir -p /opt/roaminal/terminal-worker /opt/roaminal/agents/hooks /home/roaminal/.roaminal /home/roaminal/.ssh /workspace \
     && chmod 0700 /home/roaminal/.ssh \
     && chown -R roaminal:roaminal /opt/roaminal /home/roaminal /workspace
 COPY --from=backend-builder /out/roaminal /usr/local/bin/roaminal
 COPY --from=frontend-runtime /src/frontend/dist /opt/roaminal/frontend
 COPY --from=worker-deps --chown=roaminal:roaminal /opt/roaminal/terminal-worker /opt/roaminal/terminal-worker
+COPY --from=codex-hook-builder --chown=roaminal:roaminal /out/agents/hooks/codex /opt/roaminal/agents/hooks/codex
 COPY --chown=roaminal:roaminal backend/shell /opt/roaminal/shell
 COPY LICENSE THIRD_PARTY_NOTICES.md docs/licensing.md /usr/share/licenses/roaminal/
 COPY LICENSES /usr/share/licenses/roaminal/LICENSES/
-RUN chmod 0755 /usr/local/bin/roaminal && chmod 0755 /opt/roaminal/shell/roaminal-bashrc
+RUN chmod 0755 /usr/local/bin/roaminal \
+    && chmod 0755 /opt/roaminal/shell/roaminal-bashrc \
+    && find /opt/roaminal/agents/hooks -type d -exec chmod 0555 {} + \
+    && find /opt/roaminal/agents/hooks -type f -name '*.json' -exec chmod 0444 {} + \
+    && find /opt/roaminal/agents/hooks -type f -name 'roaminal-agent-hook' -exec chmod 0555 {} +
 ENV HOME=/home/roaminal \
     ROAMINAL_HOST=0.0.0.0 \
     ROAMINAL_PORT=9846 \
     ROAMINAL_CWD=/workspace \
     ROAMINAL_ACCEPT_TERMS=true \
     ROAMINAL_FRONTEND_DIR=/opt/roaminal/frontend \
+    ROAMINAL_AGENT_HOOKS_DIR=/opt/roaminal/agents/hooks \
     ROAMINAL_WORKER_PATH=/opt/roaminal/terminal-worker/src/index.mjs \
     ROAMINAL_SHELL_RC=/opt/roaminal/shell/roaminal-bashrc
 EXPOSE 9846

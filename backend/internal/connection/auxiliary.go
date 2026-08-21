@@ -70,13 +70,15 @@ type RemoteCommand struct {
 }
 
 type RemoteResult struct {
-	Output []byte
+	Output      []byte
+	ErrorOutput []byte
 }
 
 type auxiliaryReader struct {
 	manager   *Manager
 	transport *Transport
 	stdout    io.ReadCloser
+	stderr    *cappedBuffer
 	cmd       *exec.Cmd
 	mu        sync.Mutex
 	finished  bool
@@ -90,19 +92,26 @@ func (m *Manager) RunRemote(ctx context.Context, id string, command RemoteComman
 	if err != nil {
 		return RemoteResult{}, err
 	}
-	defer reader.Close()
 	limit := command.OutputLimit
 	if limit <= 0 {
 		limit = auxiliaryOutputLimit
 	}
 	data, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	closeErr := reader.Close()
+	result := RemoteResult{Output: data}
+	if auxiliary, ok := reader.(*auxiliaryReader); ok {
+		result.ErrorOutput = auxiliary.errorOutput()
+	}
 	if err != nil {
-		return RemoteResult{}, err
+		return result, err
 	}
 	if int64(len(data)) > limit {
-		return RemoteResult{}, errors.New("remote output exceeded limit")
+		return result, errors.New("remote output exceeded limit")
 	}
-	return RemoteResult{Output: data}, nil
+	if closeErr != nil {
+		return result, closeErr
+	}
+	return result, nil
 }
 
 func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteCommand) (io.ReadCloser, error) {
@@ -145,14 +154,15 @@ func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteComma
 		cancel()
 		return nil, err
 	}
-	cmd.Stderr = &cappedBuffer{limit: auxiliaryOutputLimit}
+	stderr := &cappedBuffer{limit: auxiliaryOutputLimit}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		_ = stdout.Close()
 		m.releaseAuxiliary(transport)
 		cancel()
 		return nil, err
 	}
-	return &auxiliaryReader{manager: m, transport: transport, stdout: stdout, cmd: cmd, cancel: cancel, done: make(chan struct{})}, nil
+	return &auxiliaryReader{manager: m, transport: transport, stdout: stdout, stderr: stderr, cmd: cmd, cancel: cancel, done: make(chan struct{})}, nil
 }
 
 func (m *Manager) auxiliarySSHArgs(transport *Transport) []string {
@@ -185,6 +195,13 @@ func (r *auxiliaryReader) finishedState() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.finished
+}
+
+func (r *auxiliaryReader) errorOutput() []byte {
+	if r.stderr == nil {
+		return nil
+	}
+	return append([]byte(nil), r.stderr.data.Bytes()...)
 }
 
 func (r *auxiliaryReader) finish() {

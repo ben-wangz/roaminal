@@ -60,5 +60,11 @@ func (c Config) Validate() error {
 	if c.StateDir == "" {
 		return errors.New("state directory must not be empty")
 	}
+	if strings.TrimSpace(c.AgentHooksDir) == "" {
+		return errors.New("agent hooks directory must not be empty")
+	}
+	if c.AgentWebhookBaseURL != "" && !strings.HasPrefix(c.AgentWebhookBaseURL, "http://") && !strings.HasPrefix(c.AgentWebhookBaseURL, "https://") {
+		return errors.New("agentWebhookBaseURL must use http or https")
+	}
 	return nil
 }

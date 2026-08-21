@@ -31,8 +31,9 @@ desktop for preview, tablet/phone for selection.
    grid, and after the stream settles its final visible line must match the main
    terminal with no duplicated trailing segment or wrapped remainder. The main
    terminal remains real-time.
-6. Click Agent and Files extension controls. Each reports its unavailable toast,
-   does not select another card, and does not navigate or create a connection.
+6. Click Agent and Files extension controls. Agent opens its status or
+   initialization dialog without selecting another card; Files preserves its
+   existing behavior. Neither control navigates or creates a connection.
 7. On coarse-pointer or width `<=800`, no preview runtime is created by hover,
    focus, or touch. Selecting a card closes the overlay and opens that instance.
 

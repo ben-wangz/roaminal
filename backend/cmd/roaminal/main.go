@@ -106,6 +106,7 @@ func run(cfg config.Config) error {
 		return err
 	}
 	service := server.NewWithSourcesAndDiagnostics(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory, connectionOptions, diagnostics)
+	service.SetAgentStoreRoot(store.Root)
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {
 		_ = terminalWorker.Shutdown(context.Background())

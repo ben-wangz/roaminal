@@ -32,11 +32,24 @@ func (s *Server) reorderConnectionInstances(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": orderConnectionInstances(instances, order)})
+	ordered := orderConnectionInstances(instances, order)
+	if s.agent != nil {
+		for index := range ordered {
+			ordered[index].Agent = s.agent.Summary(ordered[index])
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": ordered})
 }
 
 func (s *Server) orderedConnectionInstances(sessionID string) []connection.Summary {
-	return orderConnectionInstances(s.terms.Summaries(), s.auth.ConnectionInstanceOrder(sessionID))
+	instances := orderConnectionInstances(s.terms.Summaries(), s.auth.ConnectionInstanceOrder(sessionID))
+	if s.agent == nil {
+		return instances
+	}
+	for index := range instances {
+		instances[index].Agent = s.agent.Summary(instances[index])
+	}
+	return instances
 }
 
 func normalizeConnectionInstanceOrder(order []string, instances []connection.Summary) ([]string, error) {

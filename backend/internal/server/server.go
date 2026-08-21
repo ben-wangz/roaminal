@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ben-wangz/roaminal/backend/internal/agent"
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
@@ -35,6 +36,7 @@ type Server struct {
 	connectionOptions *connectionoptions.Store
 	filesystem        *filesystem.Service
 	diagnostics       *clientdiag.Sink
+	agent             *agent.Service
 }
 
 func New(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client) *Server {
@@ -42,7 +44,7 @@ func New(cfg config.Config, version, bootID string, authManager *auth.Manager, t
 }
 
 func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler) *Server {
-	s := &Server{cfg: cfg, version: version, bootID: bootID, auth: authManager, terms: terms, monitor: monitorService, worker: terminalWorker, started: time.Now(), static: static}
+	s := &Server{cfg: cfg, version: version, bootID: bootID, auth: authManager, terms: terms, monitor: monitorService, worker: terminalWorker, started: time.Now(), static: static, agent: agent.New(cfg, cfg.StateDir, terms)}
 	if terms != nil {
 		s.filesystem = filesystem.New(terms, nil)
 	}
@@ -66,6 +68,11 @@ func NewWithSourcesAndDiagnostics(cfg config.Config, version, bootID string, aut
 }
 
 func (s *Server) Handler() http.Handler { return s.handler }
+
+func (s *Server) SetAgentStoreRoot(root string) {
+	s.agent = agent.New(s.cfg, root, s.terms)
+	s.api = s.newAPIRouter()
+}
 
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/ws/") {
@@ -169,6 +176,12 @@ func (s *Server) newAPIRouter() http.Handler {
 		http.MethodGet:    s.authenticatedRoute(s.getConnectionInstance),
 		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionInstance),
 	})
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/agent", protected(http.MethodGet, s.agentSummary))
+	mux.Handle("/api/connection-instances/{connectionInstanceId}/agent/initializations", methodRoute{
+		http.MethodPost: s.authenticatedRoute(s.startAgentInitialization),
+	})
+	mux.Handle("/api/agent/initializations/{initializationId}", protected(http.MethodGet, s.getAgentInitialization))
+	mux.Handle("/api/agent/events", plain(http.MethodPost, s.agentEvent))
 	mux.Handle("/api/connection-instances/order", protected(http.MethodPut, s.reorderConnectionInstances))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/remote-monitor", protected(http.MethodGet, s.remoteMonitor))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/title", protected(http.MethodPatch, s.updateConnectionTitle))

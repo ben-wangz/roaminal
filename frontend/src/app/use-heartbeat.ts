@@ -19,6 +19,10 @@ export function sameConnectionSummaries(
     const a = left[index] as unknown as Record<string, unknown>;
     const b = right[index] as unknown as Record<string, unknown>;
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (key === 'agent') {
+        if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) return false;
+        continue;
+      }
       if (a[key] !== b[key]) return false;
     }
   }

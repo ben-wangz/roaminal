@@ -33,4 +33,13 @@ describe('sameConnectionSummaries', () => {
   it('detects keys present on only one side', () => {
     expect(sameConnectionSummaries([instance('a')], [instance('a', { lifecycle: 'live' })])).toBe(false);
   });
+
+  it('compares Agent status fields without requiring object identity', () => {
+    const agent = {
+      agentType: 'codex', support: 'supported', supportReason: '', component: 'ready', componentVersion: '1',
+      activity: 'running', activityLabel: 'Codex running', lastEventName: '', lastEventAt: '', initializationId: '', errorCode: '', errorMessage: '',
+    } as NonNullable<ConnectionInstanceSummary['agent']>;
+    expect(sameConnectionSummaries([instance('a', { agent })], [instance('a', { agent: { ...agent } })])).toBe(true);
+    expect(sameConnectionSummaries([instance('a', { agent })], [instance('a', { agent: { ...agent, activity: 'waiting' } })])).toBe(false);
+  });
 });

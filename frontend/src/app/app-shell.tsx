@@ -187,10 +187,7 @@ export function AppShell() {
     (id: string) => setPreviewConnectionInstanceId((current) => (current === id ? null : current)),
     [],
   );
-  const handleUnavailableExtension = useCallback(
-    (name: string) => showToast(`${name} extension unavailable`),
-    [showToast],
-  );
+  const handleAgent = useCallback((id: string) => setDialog({ type: 'agent', connectionInstanceId: id }), []);
   const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), []);
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), []);
   const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
@@ -259,7 +256,7 @@ export function AppShell() {
       onReorderConnection={actions.reorderConnectionInstances}
       onPreviewStart={handlePreviewStart}
       onPreviewEnd={handlePreviewEnd}
-      onUnavailableExtension={handleUnavailableExtension}
+      onAgent={handleAgent}
       onOpenFileSystem={onOpenFileSystem}
       onRename={handleRename}
       onAutomaticTitle={actions.resetTitle}

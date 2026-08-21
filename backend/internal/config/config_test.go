@@ -102,3 +102,33 @@ func TestCanonicalConfigRejectsUnknownFields(t *testing.T) {
 		t.Fatal("expected unknown field error")
 	}
 }
+
+func TestAgentOptionsLoadFromEnvironmentAndArguments(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROAMINAL_CWD", t.TempDir())
+	t.Setenv("ROAMINAL_ACCEPT_TERMS", "true")
+	t.Setenv("ROAMINAL_PASSWORD", "secret")
+	t.Setenv("ROAMINAL_AGENT_WEBHOOK_BASE_URL", "https://agents.example.test/base")
+	t.Setenv("ROAMINAL_AGENT_ALLOW_INSECURE_WEBHOOK", "true")
+	t.Setenv("ROAMINAL_AGENT_HOOKS_DIR", "/tmp/agent-bundle")
+	c, err := Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AgentWebhookBaseURL != "https://agents.example.test/base" || !c.AgentAllowInsecureWebhook || c.AgentHooksDir != "/tmp/agent-bundle" {
+		t.Fatalf("unexpected agent config: %+v", c)
+	}
+	if err := os.Unsetenv("ROAMINAL_AGENT_WEBHOOK_BASE_URL"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Unsetenv("ROAMINAL_AGENT_ALLOW_INSECURE_WEBHOOK"); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load([]string{"--agent-webhook-base-url=https://override.example.test", "--agent-allow-insecure-webhook=false"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AgentWebhookBaseURL != "https://override.example.test" || c.AgentAllowInsecureWebhook {
+		t.Fatalf("unexpected CLI agent config: %+v", c)
+	}
+}

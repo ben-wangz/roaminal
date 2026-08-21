@@ -35,7 +35,38 @@ commands:
     cmd: "sh"
     args:
       - "-c"
-      - "test -z \"$(find backend -type f -name '*.go' -print0 | xargs -0 gofmt -l)\""
+      - "test -z \"$(find backend agents/hooks/codex -type f -name '*.go' -print0 | xargs -0 gofmt -l)\""
+
+  - name: "Codex hook unit tests"
+    cmd: "go"
+    args: ["-C", "agents/hooks/codex", "test", "./..."]
+
+  - name: "Codex hook vet"
+    cmd: "go"
+    args: ["-C", "agents/hooks/codex", "vet", "./..."]
+
+  - name: "Codex hook bundle"
+    cmd: "sh"
+    args:
+      - "-c"
+      - >-
+        set -eu;
+        cd agents/hooks/codex;
+        bundle_tmp=$(mktemp -d);
+        trap 'rm -rf "$bundle_tmp"' EXIT;
+        cp component.json "$bundle_tmp/component.json";
+        mkdir -p "$bundle_tmp/config";
+        cp config/hooks.json "$bundle_tmp/config/hooks.json";
+        for target in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+        target_os=${target%-*}; target_arch=${target#*-};
+        mkdir -p "$bundle_tmp/$target";
+        CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch"
+        go build -trimpath -ldflags="-s -w -X github.com/ben-wangz/roaminal/agents/hooks/codex/internal/buildinfo.Version=1"
+        -o "$bundle_tmp/$target/roaminal-agent-hook" ./cmd/roaminal-agent-hook;
+        done;
+        go run ./cmd/bundle-manifest -root "$bundle_tmp"
+        -output "$bundle_tmp/manifest.json";
+        test -s "$bundle_tmp/manifest.json"
 
   - name: "Backend unit tests"
     cmd: "go"
