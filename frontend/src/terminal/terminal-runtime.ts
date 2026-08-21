@@ -242,9 +242,7 @@ export class TerminalRuntime {
     return this.closed;
   }
 
-  fitToContainer(): void {
-    this.fitTerminal();
-  }
+  fitToContainer(): void { this.fitTerminal(); }
 
   focus(): void {
     this.terminal?.focus();
