@@ -246,14 +246,3 @@ func (s *Server) withAuth(w http.ResponseWriter, r *http.Request, fn authenticat
 	}
 	fn(w, r, sessionID)
 }
-func (s *Server) currentSession(w http.ResponseWriter, _ *http.Request, sessionID string) {
-	result, err := s.auth.Current(sessionID)
-	if err != nil {
-		writeError(w, 401, "unauthorized")
-		return
-	}
-	writeJSON(w, 200, result)
-}
-func (s *Server) authSessions(w http.ResponseWriter, _ *http.Request, sessionID string) {
-	writeJSON(w, 200, map[string]any{"sessions": s.auth.List(sessionID)})
-}
