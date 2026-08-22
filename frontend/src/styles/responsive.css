@@ -15,6 +15,17 @@
   .appearance-header { align-items: flex-start; }
 }
 @media (min-width: 801px) { .main-panel.expanded { width: 100%; } .sidebar-backdrop { display: none; } }
+html[data-roaminal-mobile-input="true"] .mobile-terminal-composer { display: grid; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+html[data-roaminal-keyboard="open"] .topbar,
+html[data-roaminal-keyboard="open"] .remote-monitor-band,
+html[data-roaminal-keyboard="open"] .touch-keyboard,
+html[data-roaminal-keyboard="open"] .statusbar { display: none; }
+html[data-roaminal-keyboard="open"] .terminal-stage { padding: 0; }
+html[data-roaminal-keyboard="open"] .mobile-terminal-composer { gap: 4px; padding: 4px; }
+html[data-roaminal-keyboard="open"] .mobile-terminal-composer textarea,
+html[data-roaminal-keyboard="open"] .mobile-terminal-send { min-height: 40px; }
+html[data-roaminal-keyboard="open"] .mobile-terminal-composer textarea { padding: 5px 7px; }
+html[data-roaminal-keyboard="open"] .mobile-terminal-send { width: 40px; }
 @media (max-width: 440px) {
   .topbar { padding-inline: 8px; }
   .terminal-stage { min-height: 0; }

@@ -3,6 +3,7 @@ import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import { SIDEBAR_BREAKPOINT_QUERY } from './viewport';
 
 const KEYBOARD_THRESHOLD = 80;
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
 type VirtualKeyboardLike = EventTarget & {
   boundingRect: DOMRectReadOnly;
@@ -19,6 +20,14 @@ export type MobileKeyboardMetrics = {
   viewportHeight: number;
 };
 
+export function mobileInputModeFromEnvironment(
+  narrowViewport: boolean,
+  coarsePointer: boolean,
+  maxTouchPoints: number,
+): boolean {
+  return narrowViewport || coarsePointer || maxTouchPoints > 0;
+}
+
 export function keyboardHeightFromViewport(
   layoutHeight: number,
   visualHeight: number,
@@ -34,31 +43,49 @@ export function keyboardHeightFromViewport(
 function isRuntimeInputFocused(runtime: TerminalRuntime | null): boolean {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement)) return false;
-  if (active.classList.contains('mobile-terminal-input')) return true;
+  if (active.classList.contains('mobile-terminal-input') || active.closest('.mobile-terminal-composer')) return true;
   return Boolean(runtime?.terminal?.element?.contains(active));
+}
+
+function detectMobileInputMode(): boolean {
+  return mobileInputModeFromEnvironment(
+    window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches,
+    window.matchMedia(COARSE_POINTER_QUERY).matches,
+    navigator.maxTouchPoints,
+  );
 }
 
 export function useMobileKeyboard(
   runtime: TerminalRuntime | null,
   enabled: boolean,
 ): MobileKeyboardMetrics {
-  const [isMobileMode, setIsMobileMode] = useState(() => window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches);
+  const [isMobileMode, setIsMobileMode] = useState(detectMobileInputMode);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(() => window.visualViewport?.height || window.innerHeight);
   const baselineVisualHeight = useRef(viewportHeight);
 
   useEffect(() => {
-    const media = window.matchMedia(SIDEBAR_BREAKPOINT_QUERY);
-    const updateMode = () => setIsMobileMode(media.matches);
+    const mediaQueries = [window.matchMedia(SIDEBAR_BREAKPOINT_QUERY), window.matchMedia(COARSE_POINTER_QUERY)];
+    const updateMode = () => setIsMobileMode(detectMobileInputMode());
     updateMode();
-    media.addEventListener('change', updateMode);
-    return () => media.removeEventListener('change', updateMode);
+    mediaQueries.forEach((media) => media.addEventListener('change', updateMode));
+    return () => {
+      mediaQueries.forEach((media) => media.removeEventListener('change', updateMode));
+    };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.roaminalMobileInput = isMobileMode ? 'true' : 'false';
+    return () => {
+      delete document.documentElement.dataset.roaminalMobileInput;
+    };
+  }, [isMobileMode]);
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
     const virtualKeyboard = (navigator as NavigatorWithVirtualKeyboard).virtualKeyboard;
+    let focusOutFrame: number | null = null;
     const update = () => {
       const visualHeight = visualViewport?.height || window.innerHeight;
       const offsetTop = visualViewport?.offsetTop || 0;
@@ -82,19 +109,27 @@ export function useMobileKeyboard(
       document.documentElement.style.setProperty('--roaminal-keyboard-height', `${height}px`);
       document.documentElement.dataset.roaminalKeyboard = open ? 'open' : 'closed';
     };
+    const scheduleFocusUpdate = () => {
+      if (focusOutFrame !== null) window.cancelAnimationFrame(focusOutFrame);
+      focusOutFrame = window.requestAnimationFrame(() => {
+        focusOutFrame = null;
+        update();
+      });
+    };
     update();
     visualViewport?.addEventListener('resize', update);
     visualViewport?.addEventListener('scroll', update);
     window.addEventListener('resize', update);
     document.addEventListener('focusin', update);
-    document.addEventListener('focusout', update);
+    document.addEventListener('focusout', scheduleFocusUpdate);
     virtualKeyboard?.addEventListener('geometrychange', update);
     return () => {
       visualViewport?.removeEventListener('resize', update);
       visualViewport?.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
       document.removeEventListener('focusin', update);
-      document.removeEventListener('focusout', update);
+      document.removeEventListener('focusout', scheduleFocusUpdate);
+      if (focusOutFrame !== null) window.cancelAnimationFrame(focusOutFrame);
       virtualKeyboard?.removeEventListener('geometrychange', update);
       document.documentElement.style.setProperty('--roaminal-keyboard-height', '0px');
       delete document.documentElement.dataset.roaminalKeyboard;
