@@ -183,6 +183,15 @@ func (s *Server) newAPIRouter() http.Handler {
 	mux.Handle("/api/agent/initializations/{initializationId}", protected(http.MethodGet, s.getAgentInitialization))
 	mux.Handle("/api/agent/events", plain(http.MethodPost, s.agentEvent))
 	mux.Handle("/api/connection-instances/order", protected(http.MethodPut, s.reorderConnectionInstances))
+	mux.Handle("/api/connection-instance-groups", methodRoute{
+		http.MethodGet:  s.authenticatedRoute(s.listConnectionInstanceGroups),
+		http.MethodPost: s.authenticatedRoute(s.createConnectionInstanceGroup),
+	})
+	mux.Handle("/api/connection-instance-groups/layout", protected(http.MethodPut, s.replaceConnectionInstanceLayout))
+	mux.Handle("/api/connection-instance-groups/{groupId}", methodRoute{
+		http.MethodPatch:  s.authenticatedRoute(s.renameConnectionInstanceGroup),
+		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionInstanceGroup),
+	})
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/remote-monitor", protected(http.MethodGet, s.remoteMonitor))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/title", protected(http.MethodPatch, s.updateConnectionTitle))
 	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/root", protected(http.MethodGet, s.filesystemRoot))

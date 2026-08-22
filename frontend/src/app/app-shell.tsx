@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadAuth } from '../auth/auth-client';
 import { AuthSessionUI } from '../auth/auth-session-ui';
 import { type Heartbeat } from '../status/heartbeat';
@@ -16,6 +16,7 @@ import { usePendingLaunch } from './use-pending-launch';
 import { AppShellView, type Dialog } from './app-shell-view';
 import { useAppShellActions } from './use-app-shell-actions';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
+import { normalizeConnectionInstanceLayout, type ConnectionInstanceLayout } from '../connections/connection-instance-groups';
 import { browserAppearanceStorage, loadAppearance, saveAppearance, type TerminalAppearance } from '../appearance/appearance-model';
 import { useAppearanceStorage } from '../appearance/use-appearance-storage';
 import type { AppPage } from './app-state';
@@ -27,6 +28,7 @@ import { useWorkspaceMode } from './use-workspace-mode';
 export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
   const [connections, setConnections] = useState<ConnectionInstanceSummary[]>([]);
+  const [connectionInstanceLayout, setConnectionInstanceLayout] = useState<ConnectionInstanceLayout | null>(null);
   const [view, setView] = useState<ConnectionView>(() => loadStoredConnection(typeof window === 'undefined' ? null : window.localStorage));
   const [page, setPage] = useState<AppPage>('connections');
   const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
@@ -46,6 +48,8 @@ export function AppShell() {
   const [previewConnectionInstanceId, setPreviewConnectionInstanceId] = useState<string | null>(null);
   const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, sidebarOpen, appearance);
   const connectionOrder = useRef<string[]>([]);
+  const connectionInstanceLayoutRef = useRef<ConnectionInstanceLayout | null>(null);
+  const pendingConnectionInstanceLayout = useRef<ConnectionInstanceLayout | null>(null);
   const pendingConnectionOrder = useRef<string[] | null>(null);
   const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(
     auth,
@@ -95,6 +99,9 @@ export function AppShell() {
     setActiveView,
     connections,
     setConnections,
+    setConnectionInstanceLayout,
+    connectionInstanceLayoutRef,
+    pendingConnectionInstanceLayout,
     setCurrentRuntime,
     setPage,
     setSidebarOpen,
@@ -124,6 +131,15 @@ export function AppShell() {
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
+  useEffect(() => {
+    connectionInstanceLayoutRef.current = connectionInstanceLayout;
+  }, [connectionInstanceLayout]);
+  useEffect(() => {
+    if (auth) return;
+    pendingConnectionInstanceLayout.current = null;
+    connectionInstanceLayoutRef.current = null;
+    setConnectionInstanceLayout(null);
+  }, [auth]);
   useEffect(() => {
     if (!sidebarOpen) sidebarOpenButton.current?.focus();
   }, [sidebarOpen]);
@@ -171,6 +187,7 @@ export function AppShell() {
   const activeRuntimeId = activeLaunchId || view.activeConnectionInstanceId;
   const activeInstance =
     connections.find((connection) => connection.connectionInstanceId === view.activeConnectionInstanceId) || null;
+  const sidebarLayout = useMemo(() => normalizeConnectionInstanceLayout(connectionInstanceLayout, connections), [connectionInstanceLayout, connections]);
   const contextualMode = activeInstance
     ? contextualModes.current.get(activeInstance.connectionInstanceId) || defaultContextualMode(activeInstance)
     : 'codex';
@@ -194,6 +211,10 @@ export function AppShell() {
     }
     setDialog({ type: 'agent', connectionInstanceId: id });
   }, [onOpenTerminal, setDialog, workspaceMode]);
+  const handleOpenFileSystem = useCallback((id: string) => {
+    setPreviewConnectionInstanceId(null);
+    onOpenFileSystem(id);
+  }, [onOpenFileSystem]);
   const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), []);
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), []);
   const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
@@ -237,6 +258,8 @@ export function AppShell() {
       sidebarOpen={sidebarOpen}
       sidebarOpenButton={sidebarOpenButton}
       connections={connections}
+      connectionInstanceLayout={sidebarLayout}
+      loginSessionId={actions.currentAuthSessionId}
       view={view}
       heartbeatState={heartbeatState}
       heartbeatLatency={heartbeatLatency}
@@ -259,11 +282,16 @@ export function AppShell() {
       onToggleSidebar={actions.toggleSidebar}
       onOpenSidebar={handleOpenSidebar}
       onSelectConnection={actions.selectConnectionInstance}
-      onReorderConnection={actions.reorderConnectionInstances}
+      onMoveConnectionInstance={actions.moveConnectionInstanceToGroup}
+      onReorderConnectionGroup={actions.reorderConnectionInstanceGroup}
+      onCreateConnectionGroup={actions.createConnectionInstanceGroup}
+      onRenameConnectionGroup={actions.renameConnectionInstanceGroup}
+      onDeleteConnectionGroup={actions.deleteConnectionInstanceGroup}
+      onMoveConnectionGroupMembers={actions.moveGroupMembersToUngrouped}
       onPreviewStart={handlePreviewStart}
       onPreviewEnd={handlePreviewEnd}
       onAgent={handleAgent}
-      onOpenFileSystem={onOpenFileSystem}
+      onOpenFileSystem={handleOpenFileSystem}
       onRename={handleRename}
       onAutomaticTitle={actions.resetTitle}
       onTerminate={handleTerminate}

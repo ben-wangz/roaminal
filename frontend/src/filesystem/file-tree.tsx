@@ -14,10 +14,9 @@ type Props = {
   onOpen: (entry: FileEntry) => void;
   onContextMenu: (event: React.MouseEvent, entry: FileEntry) => void;
   onRootContextMenu: (event: React.MouseEvent, entry: FileEntry) => void;
-  onRefresh: (path: string) => void;
 };
 
-export function FileTree({ rootEntry, entries, showHidden, expanded, selected, loading, errorPaths, onToggle, onSelect, onOpen, onContextMenu, onRootContextMenu, onRefresh }: Props) {
+export function FileTree({ rootEntry, entries, showHidden, expanded, selected, loading, errorPaths, onToggle, onSelect, onOpen, onContextMenu, onRootContextMenu }: Props) {
   const renderEntries = (parent: string, depth: number): React.ReactNode => (
     (entries.get(parent) || []).filter((entry) => showHidden || !entry.name.startsWith('.')).map((entry) => {
       const isExpanded = expanded.has(entry.relativePath);
@@ -60,7 +59,6 @@ export function FileTree({ rootEntry, entries, showHidden, expanded, selected, l
       <div className={`filesystem-tree-root-row ${selected === '.' ? 'selected' : ''}`} role="treeitem" tabIndex={0} aria-selected={selected === '.'} onClick={() => onSelect(rootEntry)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(rootEntry); } }} onContextMenu={(event) => onRootContextMenu(event, rootEntry)}>
         <Folder size={15} aria-hidden="true" />
         <span>Root</span>
-        <button className="icon-button" type="button" onClick={() => onRefresh('.')} title="Refresh root" aria-label="Refresh root"><RefreshCw size={14} aria-hidden="true" /></button>
       </div>
       {renderEntries('.', 0)}
     </div>

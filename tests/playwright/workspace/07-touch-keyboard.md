@@ -7,7 +7,9 @@ and phone landscape.
 
 1. Open a live local terminal. The touch keyboard is visible only at width
    `<=800`; it does not overlap xterm, status bar, or browser-safe viewport
-   height when the software keyboard changes visual viewport size.
+   height when the software keyboard changes visual viewport size. Tap the
+   terminal stage and verify the xterm helper textarea becomes the focused
+   element so the browser's native software keyboard opens for command input.
 2. Through a byte-capture command, verify ESC, TAB, and arrow buttons emit exact
    terminal sequences.
 3. Toggle SHIFT, CTRL, ALT, and SYM. `aria-pressed` and visual state follow the

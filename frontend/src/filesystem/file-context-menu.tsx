@@ -37,7 +37,7 @@ export function FileContextMenu({ entry, x, y, onClose, onUpload, onRefresh, onT
       <button type="button" role="menuitem" onClick={() => void copy(entry.absolutePath, 'Absolute path')}><Copy size={14} aria-hidden="true" /> Copy absolute path</button>
       <button type="button" role="menuitem" onClick={() => void copy(entry.relativePath, 'Relative path')}><Copy size={14} aria-hidden="true" /> Copy relative path</button>
       {entry.type === 'directory' && <button type="button" role="menuitem" onClick={() => { onUpload(entry); onClose(); }}><Upload size={14} aria-hidden="true" /> Upload to this directory...</button>}
-      <button type="button" role="menuitem" onClick={() => { onRefresh(entry.type === 'directory' ? entry.relativePath : '.'); onClose(); }}><RefreshCw size={14} aria-hidden="true" /> Refresh</button>
+      {entry.type === 'directory' && <button type="button" role="menuitem" onClick={() => { onRefresh(entry.relativePath); onClose(); }}><RefreshCw size={14} aria-hidden="true" /> Refresh</button>}
     </div>
   );
 }

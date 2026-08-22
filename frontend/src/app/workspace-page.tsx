@@ -77,12 +77,14 @@ export function WorkspacePage({
           aria-hidden={mode !== 'filesystem'}
           inert={mode !== 'filesystem' || undefined}
         >
-          <FileSystemWorkspace
-            key={filesystemInstance?.connectionInstanceId || 'no-connection'}
-            instance={filesystemInstance}
-            active={mode === 'filesystem'}
-            onToast={onToast}
-          />
+          {connections.length > 0 ? connections.map((connection) => (
+            <FileSystemWorkspace
+              key={connection.connectionInstanceId}
+              instance={connection}
+              active={mode === 'filesystem' && connection.connectionInstanceId === filesystemInstance?.connectionInstanceId}
+              onToast={onToast}
+            />
+          )) : <FileSystemWorkspace instance={null} active={mode === 'filesystem'} onToast={onToast} />}
         </div>
       </div>
     </>

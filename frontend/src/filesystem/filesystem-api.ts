@@ -23,7 +23,7 @@ async function requestResponse(path: string, init: RequestInit = {}, retried = f
   const auth = loadAuth();
   if (auth?.accessToken) headers.set('Authorization', `Bearer ${auth.accessToken}`);
   if (!(init.body instanceof FormData) && init.body !== undefined) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, { ...init, headers });
+  const response = await fetch(path, { ...init, headers, cache: init.cache || 'no-store' });
   if (response.status === 401 && !retried && await refresh()) return requestResponse(path, init, true);
   if (!response.ok) throw await responseError(response);
   return response;
@@ -37,16 +37,16 @@ function query(instanceId: string, endpoint: string, pathValue: string, revision
   return `/api/connection-instances/${encodeURIComponent(instanceId)}/filesystem/${endpoint}?${params.toString()}`;
 }
 
-export async function loadRoot(instanceId: string): Promise<RootContext> {
-  const response = await requestResponse(`/api/connection-instances/${encodeURIComponent(instanceId)}/filesystem/root`);
+export async function loadRoot(instanceId: string, signal?: AbortSignal): Promise<RootContext> {
+  const response = await requestResponse(`/api/connection-instances/${encodeURIComponent(instanceId)}/filesystem/root`, { signal });
   const body = await response.json() as { root: RootContext };
   return body.root;
 }
 
-export async function loadEntries(instanceId: string, pathValue: string, revision: string, cursor?: string): Promise<DirectoryResult> {
+export async function loadEntries(instanceId: string, pathValue: string, revision: string, cursor?: string, signal?: AbortSignal): Promise<DirectoryResult> {
   const params = new URLSearchParams({ path: pathValue || '.', rootRevision: revision, limit: '200' });
   if (cursor) params.set('cursor', cursor);
-  const response = await requestResponse(`/api/connection-instances/${encodeURIComponent(instanceId)}/filesystem/entries?${params.toString()}`);
+  const response = await requestResponse(`/api/connection-instances/${encodeURIComponent(instanceId)}/filesystem/entries?${params.toString()}`, { signal });
   return await response.json() as DirectoryResult;
 }
 

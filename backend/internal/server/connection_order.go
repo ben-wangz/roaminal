@@ -18,13 +18,23 @@ func (s *Server) reorderConnectionInstances(w http.ResponseWriter, r *http.Reque
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	instances := s.terms.Summaries()
+	instances := s.connectionInstanceSummaries()
 	order, err := normalizeConnectionInstanceOrder(body.ConnectionInstanceIDs, instances)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid connection instance order", "connectionInstanceIds")
 		return
 	}
-	if err := s.auth.SetConnectionInstanceOrder(sessionID, order); err != nil {
+	layout := s.connectionInstanceLayout(sessionID)
+	if hasUserConnectionInstanceGroups(layout) {
+		writeError(w, http.StatusConflict, "connection instance groups own the sidebar layout", "layout")
+		return
+	}
+	layout.UngroupedConnectionInstanceIDs = order
+	layout.Revision++
+	if layout.Revision == 0 {
+		layout.Revision = 1
+	}
+	if err := s.auth.SetConnectionInstanceLayout(sessionID, layout); err != nil {
 		if errors.Is(err, auth.ErrNotFound) {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 		} else {
@@ -38,11 +48,13 @@ func (s *Server) reorderConnectionInstances(w http.ResponseWriter, r *http.Reque
 			ordered[index].Agent = s.agent.Summary(ordered[index])
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": ordered})
+	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": ordered, "connectionInstanceLayout": layout})
 }
 
 func (s *Server) orderedConnectionInstances(sessionID string) []connection.Summary {
-	instances := orderConnectionInstances(s.terms.Summaries(), s.auth.ConnectionInstanceOrder(sessionID))
+	instances := s.connectionInstanceSummaries()
+	layout := s.connectionInstanceLayout(sessionID)
+	instances = orderConnectionInstances(instances, flattenConnectionInstanceLayout(layout))
 	if s.agent == nil {
 		return instances
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
+	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 )
 
 type heartbeatUpdate struct {
@@ -21,9 +22,10 @@ type heartbeatUpdate struct {
 	} `json:"updates"`
 }
 type heartbeatResponse struct {
-	ConnectionInstances []connection.Summary `json:"connectionInstances"`
-	System              monitor.SystemStats  `json:"system"`
-	Runtime             struct {
+	ConnectionInstances      []connection.Summary                 `json:"connectionInstances"`
+	ConnectionInstanceLayout persistence.ConnectionInstanceLayout `json:"connectionInstanceLayout"`
+	System                   monitor.SystemStats                  `json:"system"`
+	Runtime                  struct {
 		BootID              string `json:"bootId"`
 		PersistenceDegraded bool   `json:"persistenceDegraded"`
 		ScrollbackLines     int    `json:"scrollbackLines"`
@@ -61,7 +63,7 @@ func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, sessionID
 	writeJSON(w, 200, s.heartbeat(sessionID))
 }
 func (s *Server) heartbeat(sessionID string) heartbeatResponse {
-	result := heartbeatResponse{ConnectionInstances: s.orderedConnectionInstances(sessionID), System: s.monitor.Stats()}
+	result := heartbeatResponse{ConnectionInstances: s.orderedConnectionInstances(sessionID), System: s.monitor.Stats(), ConnectionInstanceLayout: s.connectionInstanceLayout(sessionID)}
 	result.Runtime.BootID = s.bootID
 	result.Runtime.PersistenceDegraded = s.terms.PersistenceDegraded()
 	result.Runtime.ScrollbackLines = s.cfg.ScrollbackLines

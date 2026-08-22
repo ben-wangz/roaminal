@@ -5,6 +5,40 @@
 .sidebar-toggle { margin-left: auto; }
 .connection-list { flex: 1; min-height: 0; overflow: auto; padding: 10px 10px 12px; }
 .sidebar .connection-list { align-self: stretch; width: auto; max-width: none; margin-inline: 0; box-sizing: border-box; }
+.connection-sidebar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px 6px; color: var(--text-bright); font-size: .72rem; }
+.connection-sidebar-toolbar strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-sidebar-toolbar strong span { color: var(--muted); font-weight: 400; }
+.connection-sidebar-search { display: flex; align-items: center; gap: 7px; margin: 0 10px 7px; padding: 0 8px; min-height: 30px; border: 1px solid var(--border); color: var(--muted); }
+.connection-sidebar-search:focus-within { border-color: var(--cyan); color: var(--text-bright); }
+.connection-sidebar-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-bright); font: inherit; font-size: .7rem; }
+.connection-sidebar-search input::placeholder { color: var(--muted); }
+.connection-group-create { display: flex; align-items: center; gap: 2px; margin: 0 10px 7px; border: 1px solid var(--cyan); padding-left: 8px; }
+.connection-group-create input, .connection-group-edit input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-bright); font: inherit; font-size: .7rem; }
+.connection-group-create .icon-button, .connection-group-edit .icon-button { width: 26px; height: 26px; flex: 0 0 auto; }
+.connection-group-list { padding-top: 3px; }
+.connection-group { min-width: 0; margin-bottom: 7px; }
+.connection-group.drop-before { border-top: 1px solid var(--cyan); }
+.connection-group.drop-after { border-bottom: 1px solid var(--cyan); }
+.connection-group.drop-blocked { cursor: not-allowed; border-color: var(--danger-soft); }
+.connection-group-header { min-width: 0; min-height: 31px; display: flex; align-items: center; gap: 3px; padding: 0 2px 0 0; color: var(--muted); }
+.connection-group-toggle, .connection-group-name { min-height: 28px; border: 0; background: transparent; color: inherit; }
+.connection-group-toggle { width: 23px; display: inline-grid; flex: 0 0 23px; place-items: center; padding: 0; }
+.connection-group-toggle:hover, .connection-group-name:hover { color: var(--text-bright); }
+.connection-group-name { min-width: 0; overflow: hidden; padding: 0 4px; text-align: left; text-overflow: ellipsis; white-space: nowrap; font-size: .71rem; }
+.connection-group-count { flex: 0 0 auto; color: var(--muted); font-size: .65rem; }
+.connection-group-drag-handle { width: 25px; height: 25px; display: inline-grid; flex: 0 0 auto; place-items: center; margin-left: auto; border: 0; background: transparent; color: var(--muted); cursor: grab; }
+.connection-group-drag-handle:active { cursor: grabbing; }
+.connection-group-drag-handle:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
+.connection-group-edit { min-width: 0; display: flex; align-items: center; flex: 1; border: 1px solid var(--cyan); padding-left: 4px; }
+.connection-group-actions { position: relative; flex: 0 0 auto; }
+.connection-group-menu { position: absolute; z-index: 8; top: calc(100% + 2px); right: 0; min-width: 174px; padding: 4px; border: 1px solid var(--border); background: var(--surface-1); box-shadow: 0 10px 24px rgba(0,0,0,.35); }
+.connection-group-menu button { width: 100%; min-height: 29px; border: 0; background: transparent; color: var(--text); padding: 0 8px; text-align: left; font-size: .69rem; }
+.connection-group-menu button:hover:not(:disabled) { background: var(--hover-wash); color: var(--text-bright); }
+.connection-group-menu button:disabled { cursor: not-allowed; color: var(--muted); opacity: .55; }
+.connection-group-members { display: grid; gap: 8px; min-width: 0; }
+.connection-group-members .connection-card + .connection-card { margin-top: 0; }
+.connection-group-empty { padding: 8px 8px 10px 26px; color: var(--muted); font-size: .67rem; }
+.connection-group-capacity-hint { padding: 3px 8px 7px 26px; color: var(--danger-soft); font-size: .64rem; }
 .connection-card { width: 100%; min-width: 0; min-height: 126px; flex: 0 0 auto; position: relative; overflow: hidden; isolation: isolate; border: 1px solid transparent; border-left: 2px solid transparent; background: var(--shade-3); transition: border-color var(--dur-base) var(--ease-out); }
 .connection-card:hover, .connection-card:focus-within { border-color: var(--border); }
 .connection-card.dragging { opacity: .5; }

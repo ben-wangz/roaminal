@@ -24,6 +24,9 @@ func validateAuthSession(session AuthSession) error {
 	if err := ValidateConnectionInstanceOrder(session.ConnectionInstanceOrder); err != nil {
 		return err
 	}
+	if err := ValidateConnectionInstanceLayout(session.ConnectionInstanceLayout); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -41,6 +44,98 @@ func ValidateConnectionInstanceOrder(order []string) error {
 			return errors.New("duplicate connection instance order id")
 		}
 		seen[id] = struct{}{}
+	}
+	return nil
+}
+
+// ValidateConnectionInstanceLayout bounds and validates a per-login-session
+// grouped sidebar layout. A nil layout is accepted for legacy auth files.
+func ValidateConnectionInstanceLayout(layout *ConnectionInstanceLayout) error {
+	if layout == nil {
+		return nil
+	}
+	if len(layout.Groups) > 256 || len(layout.GroupOrder) > 257 {
+		return errors.New("connection instance layout exceeds maximum size")
+	}
+	groupIDs := make(map[string]struct{}, len(layout.Groups))
+	groupNames := make(map[string]struct{}, len(layout.Groups))
+	for _, group := range layout.Groups {
+		if !uuidPattern.MatchString(group.GroupID) {
+			return errors.New("invalid connection instance group id")
+		}
+		if _, exists := groupIDs[group.GroupID]; exists {
+			return errors.New("duplicate connection instance group id")
+		}
+		groupIDs[group.GroupID] = struct{}{}
+		if err := validateConnectionInstanceGroupName(group.Name); err != nil {
+			return err
+		}
+		nameKey := strings.ToLower(group.Name)
+		if _, exists := groupNames[nameKey]; exists {
+			return errors.New("duplicate connection instance group name")
+		}
+		groupNames[nameKey] = struct{}{}
+		if len(group.ConnectionInstanceIDs) > 10 {
+			return errors.New("connection instance group exceeds maximum size")
+		}
+	}
+	orderSeen := make(map[string]struct{}, len(layout.GroupOrder))
+	ungroupedInOrder := false
+	for _, groupID := range layout.GroupOrder {
+		if groupID == UngroupedConnectionInstanceGroupID {
+			if ungroupedInOrder {
+				return errors.New("duplicate ungrouped group order entry")
+			}
+			ungroupedInOrder = true
+		} else if _, exists := groupIDs[groupID]; !exists {
+			return errors.New("group order references unknown group")
+		}
+		if _, exists := orderSeen[groupID]; exists {
+			return errors.New("duplicate group order entry")
+		}
+		orderSeen[groupID] = struct{}{}
+	}
+	if !ungroupedInOrder || len(orderSeen) != len(groupIDs)+1 {
+		return errors.New("group order must contain every group and ungrouped")
+	}
+	instanceIDs := make(map[string]struct{})
+	for _, group := range layout.Groups {
+		for _, id := range group.ConnectionInstanceIDs {
+			if !uuidPattern.MatchString(id) {
+				return errors.New("invalid connection instance group member id")
+			}
+			if _, exists := instanceIDs[id]; exists {
+				return errors.New("duplicate connection instance group member id")
+			}
+			instanceIDs[id] = struct{}{}
+		}
+	}
+	for _, id := range layout.UngroupedConnectionInstanceIDs {
+		if !uuidPattern.MatchString(id) {
+			return errors.New("invalid ungrouped connection instance id")
+		}
+		if _, exists := instanceIDs[id]; exists {
+			return errors.New("duplicate connection instance group member id")
+		}
+		instanceIDs[id] = struct{}{}
+	}
+	if len(instanceIDs) > 256 {
+		return errors.New("connection instance layout contains too many instances")
+	}
+	return nil
+}
+
+func validateConnectionInstanceGroupName(value string) error {
+	if value == "" || value != strings.TrimSpace(value) || strings.EqualFold(value, "ungrouped") || !utf8.ValidString(value) {
+		return errors.New("invalid connection instance group name")
+	}
+	if len([]rune(value)) > 64 {
+		return errors.New("connection instance group name exceeds 64 characters")
+	}
+	for _, r := range value {
+		if unicode.IsControl(r) || r == 0x7f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+			return errors.New("connection instance group name contains a prohibited control character")
+		}
 	}
 	return nil
 }

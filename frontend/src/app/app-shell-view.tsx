@@ -10,6 +10,7 @@ import { RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialo
 import { AgentDialog } from '../ui/agent-dialog';
 import { ConnectionManager } from '../connections/connection-manager';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceLayout, InstanceMovePlacement } from '../connections/connection-instance-groups';
 import type { Heartbeat } from '../status/heartbeat';
 import type { ConnectionView } from './connection-view';
 import { AppearanceSettings } from '../appearance/appearance-settings';
@@ -26,6 +27,8 @@ type Props = {
   sidebarOpen: boolean;
   sidebarOpenButton: RefObject<HTMLButtonElement | null>;
   connections: ConnectionInstanceSummary[];
+  connectionInstanceLayout: ConnectionInstanceLayout;
+  loginSessionId: string;
   view: ConnectionView;
   heartbeatState: Heartbeat | null;
   heartbeatLatency: number | null;
@@ -48,7 +51,12 @@ type Props = {
   onToggleSidebar: () => void;
   onOpenSidebar: () => void;
   onSelectConnection: (id: string) => void;
-  onReorderConnection: (draggedID: string, targetID: string, placement: 'before' | 'after') => Promise<void>;
+  onMoveConnectionInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
+  onReorderConnectionGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
+  onCreateConnectionGroup: (name: string) => Promise<boolean>;
+  onRenameConnectionGroup: (id: string, name: string) => Promise<boolean>;
+  onDeleteConnectionGroup: (id: string) => Promise<boolean>;
+  onMoveConnectionGroupMembers: (id: string) => Promise<void>;
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
   onAgent: (id: string) => void;
@@ -83,6 +91,8 @@ export function AppShellView({
   sidebarOpen,
   sidebarOpenButton,
   connections,
+  connectionInstanceLayout,
+  loginSessionId,
   view,
   heartbeatState,
   heartbeatLatency,
@@ -105,7 +115,12 @@ export function AppShellView({
   onToggleSidebar,
   onOpenSidebar,
   onSelectConnection,
-  onReorderConnection,
+  onMoveConnectionInstance,
+  onReorderConnectionGroup,
+  onCreateConnectionGroup,
+  onRenameConnectionGroup,
+  onDeleteConnectionGroup,
+  onMoveConnectionGroupMembers,
   onPreviewStart,
   onPreviewEnd,
   onAgent,
@@ -142,13 +157,20 @@ export function AppShellView({
         <ConnectionSidebar
           id="connection-sidebar"
           connections={connections}
+          layout={connectionInstanceLayout}
+          loginSessionId={loginSessionId}
           active={view.activeConnectionInstanceId}
           open={sidebarOpen}
           previewConnectionInstanceId={previewConnectionInstanceId}
           previewRuntime={previewRuntime?.connectionInstanceId === previewConnectionInstanceId ? previewRuntime : null}
           onToggle={onToggleSidebar}
           onSelect={onSelectConnection}
-          onReorder={onReorderConnection}
+          onMoveInstance={onMoveConnectionInstance}
+          onReorderGroup={onReorderConnectionGroup}
+          onCreateGroup={onCreateConnectionGroup}
+          onRenameGroup={onRenameConnectionGroup}
+          onDeleteGroup={onDeleteConnectionGroup}
+          onMoveGroupMembers={onMoveConnectionGroupMembers}
           onPreviewStart={onPreviewStart}
           onPreviewEnd={onPreviewEnd}
           onAgent={onAgent}

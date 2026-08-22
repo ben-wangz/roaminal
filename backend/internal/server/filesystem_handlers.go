@@ -21,6 +21,7 @@ func (s *Server) filesystemRoot(w http.ResponseWriter, r *http.Request, _ string
 		writeFilesystemError(w, err)
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"connectionInstanceId": root.ConnectionInstanceID, "root": root})
 }
 
@@ -43,6 +44,7 @@ func (s *Server) filesystemEntries(w http.ResponseWriter, r *http.Request, _ str
 		writeFilesystemError(w, err)
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -68,6 +70,7 @@ func (s *Server) filesystemStat(w http.ResponseWriter, r *http.Request, _ string
 }
 
 func writeFilesystemError(w http.ResponseWriter, err error) {
+	w.Header().Set("Cache-Control", "no-store")
 	status := http.StatusInternalServerError
 	code := "filesystem_internal_error"
 	var rootChanged *filesystem.RootChangedError

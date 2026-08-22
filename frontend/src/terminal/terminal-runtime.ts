@@ -27,7 +27,13 @@ export class TerminalRuntime {
   private appearanceRevision = 0;
   private disposeFrame: number | null = null;
   private readonly ready: Promise<void>;
-  private readonly activate = () => this.claim();
+  // A touch does not consistently reach xterm's mouse activation path on
+  // mobile browsers. Focus the hidden input during the user gesture so the
+  // native software keyboard can open before claiming terminal control.
+  private readonly activate = () => {
+    this.focus();
+    this.claim();
+  };
 
   constructor(
     readonly connectionInstanceId: string,

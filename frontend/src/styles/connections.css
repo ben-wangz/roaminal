@@ -29,7 +29,7 @@
 .manager-tabs button { min-height: 38px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 0 12px; }
 .manager-tabs button.active { border-bottom-color: var(--yellow); color: var(--text-bright); }
 .manager-tabs span { color: var(--cyan); font-size: .7rem; }
-.source-band, .manager-toolbar, .connection-list, .keys-panel { max-width: 1120px; margin-inline: auto; }
+.source-band, .manager-toolbar, .connection-manager .connection-list, .keys-panel { max-width: 1120px; margin-inline: auto; }
 .source-band { display: grid; grid-template-columns: 1fr auto; gap: 5px 16px; margin-top: 18px; padding: 12px 14px; border-left: 3px solid var(--yellow); background: var(--base1); }
 .source-band.writable { border-left-color: var(--green); }
 .source-band > div:first-child { display: flex; gap: 10px; align-items: baseline; }
@@ -41,7 +41,7 @@
 .manager-toolbar { justify-content: space-between; gap: 12px; margin-top: 18px; }
 .manager-search { display: flex; align-items: center; gap: 8px; min-width: min(380px, 100%); color: var(--muted); font-size: .72rem; }
 .manager-search input { min-width: 0; width: 100%; min-height: 36px; border: 1px solid var(--border); background: var(--base1); color: var(--text-bright); padding: 0 10px; }
-.connection-list { display: grid; gap: 8px; margin-top: 10px; }
+.connection-manager .connection-list { display: grid; gap: 8px; margin-top: 10px; }
 .connection-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; min-height: 76px; padding: 12px 14px; border: 1px solid var(--border); background: var(--surface-0); }
 .connection-row:hover, .connection-row:focus-within { border-color: var(--cyan); }
 .connection-row-main { display: flex; align-items: center; gap: 12px; min-width: 0; }

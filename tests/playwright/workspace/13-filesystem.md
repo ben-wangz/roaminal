@@ -22,8 +22,13 @@ or credentials.
    pane opens with the correct viewer, source/rendered Markdown switching is
    safe, and file content is never interpreted as executable HTML or a command.
 4. Double-click a directory to enter it. Verify lazy loading, expand/collapse,
-   breadcrumb navigation, keyboard Enter activation, and a directory refresh.
-   Confirm that a broken symlink is listed but cannot be read as file content.
+   breadcrumb navigation, keyboard Enter activation, and the directory context
+   menu's Refresh action. The Root row has no duplicate refresh button. A
+   reopened directory shows cached children immediately and then refreshes in
+   the background; a failed refresh keeps the stale children visible. If a
+   directory was removed remotely, its cached descendants, expansion state,
+   selection, and preview are pruned. Confirm that a broken symlink is listed
+   but cannot be read as file content.
 5. Resize the tree/preview divider with pointer and arrow-key input on desktop.
    Verify it stays within the documented bounds. On phone portrait, verify the
    page switches between tree and preview views inside the page and does not
@@ -40,12 +45,25 @@ or credentials.
    upload; verify a 202 upload ID, non-blocking progress, observable `rsync` or
    `scp` transport, cancel behavior, partial-failure paths, and refresh of only
    the target directory after completion.
-9. Use the sidebar Agent control to return to Terminal, then the folder control
+9. Click the single Refresh control in the `FILES` heading. Verify it
+   re-probes the tmux PWD, refreshes the root and every currently expanded
+   directory with at most three concurrent listing requests, preserves
+   expansion/selection/preview when the root revision is unchanged, and clears
+   the tree with a root-changed notice when the revision changes. The refresh
+   request uses `cache: no-store` and successful root/entries responses carry
+   `Cache-Control: no-store`.
+10. Open the auto-refresh menu beside the global Refresh control. Verify the
+    browser-wide preference offers Off, 30 seconds, 60 seconds, 2 minutes, and
+    5 minutes, defaults to 60 seconds, persists after reload, pauses while the
+    FileSystem workspace is inactive or the document is hidden, and performs
+    one overdue refresh on visibility resume without overlapping a manual
+    refresh. Directory refreshes and preview reads do not reset the interval.
+11. Use the sidebar Agent control to return to Terminal, then the folder control
    to enter FileSystem again. Repeat between two connection instances. Verify
    only the selected mode occupies the main workspace body, each instance keeps
    its own root, expanded paths, selection, preview, and upload status, and no
    file data or root path from one instance appears in the other.
-10. Move the active tmux pane to another directory and trigger a tree/content
+12. Move the active tmux pane to another directory and trigger a tree/content
     request with the old root revision. Verify the UI clears the old tree,
     reloads the returned root, and shows a concise root-changed notice. Make a
     failed tmux probe and verify a later request retries after the short failure

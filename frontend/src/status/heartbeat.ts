@@ -1,8 +1,10 @@
 import { api } from '../auth/auth-client';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceLayout } from '../connections/connection-instance-groups';
 
 export type Heartbeat = {
   connectionInstances: ConnectionInstanceSummary[];
+  connectionInstanceLayout: ConnectionInstanceLayout;
   system: {
     hostname: string;
     kernel: string;

@@ -20,7 +20,7 @@ type createConnectionRequest struct {
 }
 
 func (s *Server) listConnectionInstances(w http.ResponseWriter, _ *http.Request, sessionID string) {
-	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": s.orderedConnectionInstances(sessionID)})
+	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": s.orderedConnectionInstances(sessionID), "connectionInstanceLayout": s.connectionInstanceLayout(sessionID)})
 }
 
 func (s *Server) getConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {

@@ -6,6 +6,7 @@ import { startPollLoop } from '../status/poll-loop';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { orderConnectionInstances, reconcileConnections, type ConnectionView } from './connection-view';
 import type { AppPage } from './app-state';
+import { flattenConnectionInstanceLayout, normalizeConnectionInstanceLayout, type ConnectionInstanceLayout } from '../connections/connection-instance-groups';
 
 // Shallow per-item comparison so an unchanged heartbeat payload keeps the
 // previous array identity and memoized consumers skip re-rendering.
@@ -42,6 +43,8 @@ type Params = {
   viewRef: MutableRefObject<ConnectionView>;
   setActiveView: (next: ConnectionView) => void;
   setConnections: Dispatch<SetStateAction<ConnectionInstanceSummary[]>>;
+  setConnectionInstanceLayout: Dispatch<SetStateAction<ConnectionInstanceLayout | null>>;
+  pendingConnectionInstanceLayout: MutableRefObject<ConnectionInstanceLayout | null>;
   setHeartbeatLatency: Dispatch<SetStateAction<number | null>>;
   setHeartbeatState: Dispatch<SetStateAction<Heartbeat | null>>;
   setHeartbeatConnected: Dispatch<SetStateAction<boolean>>;
@@ -69,6 +72,8 @@ export function useHeartbeat({
   viewRef,
   setActiveView,
   setConnections,
+  setConnectionInstanceLayout,
+  pendingConnectionInstanceLayout,
   setHeartbeatLatency,
   setHeartbeatState,
   setHeartbeatConnected,
@@ -97,9 +102,16 @@ export function useHeartbeat({
       }
       bootId.current = next.runtime.bootId;
       setHeartbeatState((previous) => (previous && sameHeartbeat(previous, next) ? previous : next));
+      const nextLayout = normalizeConnectionInstanceLayout(next.connectionInstanceLayout, next.connectionInstances);
+      const pendingLayout = pendingConnectionInstanceLayout.current;
+      const layoutForState = pendingLayout ? normalizeConnectionInstanceLayout(pendingLayout, next.connectionInstances) : nextLayout;
+      if (!pendingLayout) {
+        setConnectionInstanceLayout((previous) => (JSON.stringify(previous) === JSON.stringify(nextLayout) ? previous : nextLayout));
+      }
+      const layoutConnections = flattenConnectionInstanceLayout(layoutForState, next.connectionInstances);
       const orderedConnections = pendingConnectionOrder.current
-        ? orderConnectionInstances(next.connectionInstances, pendingConnectionOrder.current)
-        : next.connectionInstances;
+        ? orderConnectionInstances(layoutConnections, pendingConnectionOrder.current)
+        : layoutConnections;
       const nextView = reconcileConnections(orderedConnections, viewRef.current, connectionOrder.current);
       setActiveView(nextView);
       if (!hydrated.current && !activeLaunchId) {
@@ -129,6 +141,8 @@ export function useHeartbeat({
     setActiveView,
     setAuth,
     setConnections,
+    setConnectionInstanceLayout,
+    pendingConnectionInstanceLayout,
     setHeartbeatConnected,
     setHeartbeatLatency,
     setHeartbeatState,

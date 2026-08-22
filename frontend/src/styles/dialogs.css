@@ -21,6 +21,11 @@
 .connection-action-menu button { min-height: 34px; border: 0; background: transparent; color: var(--text); padding: 6px 10px; text-align: left; white-space: nowrap; }
 .connection-action-menu button:hover, .connection-action-menu button:focus-visible { background: var(--hover-wash-strong); color: var(--text-bright); outline: 0; }
 .connection-action-menu .destructive { color: var(--danger-soft); }
+.connection-action-menu [aria-haspopup='menu'] { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.connection-action-submenu { display: grid; margin: 2px 0 4px 8px; border-left: 1px solid var(--border); }
+.connection-action-submenu button { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; padding-left: 14px; font-size: .72rem; }
+.connection-action-submenu small { color: var(--muted); font-size: .64rem; }
+.connection-action-submenu button:disabled { color: var(--muted); cursor: not-allowed; opacity: .55; }
 .dialog-form { display: grid; min-width: min(360px, calc(100vw - 48px)); gap: 12px; }
 .agent-dialog { width: min(460px, calc(100vw - 48px)); }
 .agent-dialog-heading { display: flex; align-items: center; gap: 10px; }

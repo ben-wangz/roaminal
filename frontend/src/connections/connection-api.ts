@@ -1,5 +1,6 @@
 import { api, apiWithMeta } from '../auth/auth-client';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
+import type { ConnectionInstanceLayout } from './connection-instance-groups';
 
 export type Warning = { directive: string; line: number; class: string };
 export type ConnectionDefinition = {
@@ -54,6 +55,43 @@ export async function saveConnectionInstanceOrder(connectionInstanceIds: string[
     body: JSON.stringify({ connectionInstanceIds }),
   });
   return result.connectionInstances;
+}
+
+export async function loadConnectionInstanceLayout(): Promise<ConnectionInstanceLayout> {
+  const result = await api<{ layout: ConnectionInstanceLayout }>('/api/connection-instance-groups');
+  return result.layout;
+}
+
+export async function createConnectionInstanceGroup(name: string, revision: number): Promise<ConnectionInstanceLayout> {
+  const result = await api<{ layout: ConnectionInstanceLayout }>('/api/connection-instance-groups', {
+    method: 'POST',
+    body: JSON.stringify({ name, revision }),
+  });
+  return result.layout;
+}
+
+export async function renameConnectionInstanceGroup(groupId: string, name: string, revision: number): Promise<ConnectionInstanceLayout> {
+  const result = await api<{ layout: ConnectionInstanceLayout }>(`/api/connection-instance-groups/${encodeURIComponent(groupId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name, revision }),
+  });
+  return result.layout;
+}
+
+export async function deleteConnectionInstanceGroup(groupId: string, revision: number): Promise<ConnectionInstanceLayout> {
+  const result = await api<{ layout: ConnectionInstanceLayout }>(`/api/connection-instance-groups/${encodeURIComponent(groupId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ revision }),
+  });
+  return result.layout;
+}
+
+export async function saveConnectionInstanceLayout(layout: ConnectionInstanceLayout): Promise<ConnectionInstanceLayout> {
+  const result = await api<{ layout: ConnectionInstanceLayout }>('/api/connection-instance-groups/layout', {
+    method: 'PUT',
+    body: JSON.stringify(layout),
+  });
+  return result.layout;
 }
 
 // A page refresh can happen before the launch websocket completes its

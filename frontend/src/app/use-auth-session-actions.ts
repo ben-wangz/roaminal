@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useEffect, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { api, clearAuth } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
 import type { AuthSessionSummary } from '../auth/auth-session-ui';
@@ -31,6 +31,18 @@ export function useAuthSessionActions({
   const [authSessions, setAuthSessions] = useState<AuthSessionSummary[]>([]);
   const [currentAuthSessionId, setCurrentAuthSessionId] = useState('');
   const [authSessionBusy, setAuthSessionBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!auth) {
+      setCurrentAuthSessionId('');
+      return undefined;
+    }
+    let active = true;
+    void api<{ sessionId: string }>('/api/auth/session', {}, auth).then((current) => {
+      if (active) setCurrentAuthSessionId(current.sessionId);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [auth]);
 
   function signOut() {
     if (!auth) return;

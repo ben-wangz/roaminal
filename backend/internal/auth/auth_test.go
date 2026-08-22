@@ -111,6 +111,53 @@ func TestConnectionInstanceOrderPersistsWithLoginSession(t *testing.T) {
 	}
 }
 
+func TestConnectionInstanceLayoutPersistsWithLoginSession(t *testing.T) {
+	cfg, store := testConfig(t)
+	manager, err := New(cfg, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	challenge, err := manager.Challenge()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := manager.Login(challenge.ChallengeID, Proof(cfg.Password, challenge), "browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	layout := persistence.ConnectionInstanceLayout{
+		Revision:   4,
+		GroupOrder: []string{"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", persistence.UngroupedConnectionInstanceGroupID},
+		Groups: []persistence.ConnectionInstanceGroup{{
+			GroupID:               "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+			Name:                  "Production",
+			ConnectionInstanceIDs: []string{"11111111-1111-4111-8111-111111111111"},
+		}},
+		UngroupedConnectionInstanceIDs: []string{"22222222-2222-4222-8222-222222222222"},
+	}
+	if err := manager.SetConnectionInstanceLayout(tokens.SessionID, layout); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := manager.ConnectionInstanceLayout(tokens.SessionID)
+	if !ok || !reflect.DeepEqual(got, layout) {
+		t.Fatalf("layout = %#v, exists = %v", got, ok)
+	}
+	refreshed, err := manager.Refresh(tokens.RefreshToken, "browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := manager.ConnectionInstanceLayout(refreshed.SessionID); !ok || !reflect.DeepEqual(got, layout) {
+		t.Fatalf("layout after refresh = %#v, exists = %v", got, ok)
+	}
+	restarted, err := New(cfg, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := restarted.ConnectionInstanceLayout(tokens.SessionID); !ok || !reflect.DeepEqual(got, layout) {
+		t.Fatalf("persisted layout = %#v, exists = %v", got, ok)
+	}
+}
+
 func TestLockoutConsumesChallenges(t *testing.T) {
 	cfg, store := testConfig(t)
 	manager, err := New(cfg, store)

@@ -84,7 +84,7 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
   };
 
   if (!entry) {
-    return <div className="filesystem-preview-empty"><FileQuestion size={25} aria-hidden="true" /><span>Select a file and double-click to preview.</span></div>;
+    return <div className="filesystem-preview filesystem-preview-empty-state"><div className="filesystem-preview-body"><div className="filesystem-preview-empty"><FileQuestion size={25} aria-hidden="true" /><span>Select a file and double-click to preview.</span></div></div></div>;
   }
   return (
     <section className="filesystem-preview" aria-label="File preview">
