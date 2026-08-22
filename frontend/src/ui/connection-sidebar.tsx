@@ -13,6 +13,7 @@ import { useConnectionGroupReorder } from './use-connection-group-reorder';
 import { agentSummary, agentTitle } from '../agent/agent-api';
 import type { WorkspaceMode } from '../app/workspace-page';
 import { ConnectionGroupActions } from './connection-group-actions';
+import { loadCollapsed, saveCollapsed } from './connection-sidebar-storage';
 
 type Props = {
   id: string;
@@ -80,19 +81,6 @@ function matchesSearch(connection: ConnectionInstanceSummary, groupName: string,
   return value.includes(query);
 }
 
-function collapseStorageKey(loginSessionId: string): string {
-  return `roaminal.connection-instance-groups.${loginSessionId || 'unknown'}`;
-}
-
-function loadCollapsed(loginSessionId: string): Set<string> {
-  try {
-    const value = JSON.parse(window.localStorage.getItem(collapseStorageKey(loginSessionId)) || '[]') as unknown;
-    return Array.isArray(value) ? new Set(value.filter((item): item is string => typeof item === 'string')) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
 export const ConnectionSidebar = memo(function ConnectionSidebar({
   id,
   connections,
@@ -149,7 +137,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
     const valid = new Set(groups.map(({ group }) => group.groupId));
     setCollapsed((current) => {
       const next = new Set([...current].filter((groupId) => valid.has(groupId)));
-      if (next.size !== current.size) window.localStorage.setItem(collapseStorageKey(loginSessionId), JSON.stringify([...next]));
+      if (next.size !== current.size) saveCollapsed(loginSessionId, next);
       return next.size === current.size ? current : next;
     });
   }, [groups, loginSessionId]);
@@ -205,7 +193,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
     if (next.has(groupId)) next.delete(groupId);
     else next.add(groupId);
     setCollapsed(next);
-    window.localStorage.setItem(collapseStorageKey(loginSessionId), JSON.stringify([...next]));
+    saveCollapsed(loginSessionId, next);
   };
   const submitNewGroup = async () => {
     const value = newGroupName.trim();

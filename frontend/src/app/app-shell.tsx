@@ -15,16 +15,16 @@ import { useTerminalPreview } from './use-terminal-preview';
 import { usePendingLaunch } from './use-pending-launch';
 import { AppShellView, type Dialog } from './app-shell-view';
 import { useAppShellActions } from './use-app-shell-actions';
+import { useAppShellViewActions } from './use-app-shell-view-actions';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { normalizeConnectionInstanceLayout, type ConnectionInstanceLayout } from '../connections/connection-instance-groups';
-import { browserAppearanceStorage, loadAppearance, saveAppearance, type TerminalAppearance } from '../appearance/appearance-model';
+import { browserAppearanceStorage, loadAppearance, type TerminalAppearance } from '../appearance/appearance-model';
 import { useAppearanceStorage } from '../appearance/use-appearance-storage';
 import type { AppPage } from './app-state';
 import { useMainTerminalRuntime } from './use-main-terminal-runtime';
 import { useRuntimeMessages } from './use-runtime-messages';
 import type { ToastKind, ToastState } from '../ui/toast';
 import { useWorkspaceMode } from './use-workspace-mode';
-
 export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
   const [connections, setConnections] = useState<ConnectionInstanceSummary[]>([]);
@@ -181,9 +181,6 @@ export function AppShell() {
     setExecutionStatus,
     showToast,
   });
-  const currentConnection = connections.find(
-    (connection) => connection.connectionInstanceId === view.activeConnectionInstanceId,
-  );
   const activeRuntimeId = activeLaunchId || view.activeConnectionInstanceId;
   const activeInstance =
     connections.find((connection) => connection.connectionInstanceId === view.activeConnectionInstanceId) || null;
@@ -199,53 +196,35 @@ export function AppShell() {
     },
     [activeInstance],
   );
-  const handlePreviewStart = useCallback((id: string) => setPreviewConnectionInstanceId(id), []);
-  const handlePreviewEnd = useCallback(
-    (id: string) => setPreviewConnectionInstanceId((current) => (current === id ? null : current)),
-    [],
-  );
-  const handleAgent = useCallback((id: string) => {
-    if (workspaceMode === 'filesystem') {
-      onOpenTerminal(id);
-      return;
-    }
-    setDialog({ type: 'agent', connectionInstanceId: id });
-  }, [onOpenTerminal, setDialog, workspaceMode]);
-  const handleOpenFileSystem = useCallback((id: string) => {
-    setPreviewConnectionInstanceId(null);
-    onOpenFileSystem(id);
-  }, [onOpenFileSystem]);
-  const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), []);
-  const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), []);
-  const handleOpenSidebar = useCallback(() => setSidebarOpen(true), []);
-  const handleToggleSearch = useCallback(() => setSearch((value) => !value), []);
-  const handleCloseSearch = useCallback(() => setSearch(false), []);
-  const handleOpenConnections = useCallback(() => {
-    cancelLaunch();
-    setPreviewConnectionInstanceId(null);
-    setSearch(false);
-    setPage('connections');
-  }, [cancelLaunch, setSearch]);
-  const handleOpenAppearance = useCallback(() => {
-    setPreviewConnectionInstanceId(null);
-    setSearch(false);
-    setPage('appearance');
-  }, [setSearch]);
-  const handleOpenWorkspace = useCallback(() => {
-    if (viewRef.current.activeConnectionInstanceId) setPage('workspace');
-  }, []);
-  const handleSaveAppearance = useCallback(
-    (next: TerminalAppearance) => {
-      if (!saveAppearance(browserAppearanceStorage(), next)) {
-        showToast('Unable to save appearance in this browser.', 'error');
-        return;
-      }
-      setAppearance(next);
-      showToast('Appearance saved.', 'success');
-    },
-    [showToast],
-  );
-  const handleCloseDialog = useCallback(() => setDialog(null), []);
+  const {
+    handlePreviewStart,
+    handlePreviewEnd,
+    handleAgent,
+    handleOpenFileSystem,
+    handleRename,
+    handleTerminate,
+    handleOpenSidebar,
+    handleToggleSearch,
+    handleCloseSearch,
+    handleOpenConnections,
+    handleOpenAppearance,
+    handleOpenWorkspace,
+    handleSaveAppearance,
+    handleCloseDialog,
+  } = useAppShellViewActions({
+    workspaceMode,
+    onOpenTerminal,
+    onOpenFileSystem,
+    setPreviewConnectionInstanceId,
+    setDialog,
+    setSidebarOpen,
+    setSearch,
+    setPage,
+    cancelLaunch,
+    viewRef,
+    showToast,
+    setAppearance,
+  });
   if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
   const dialogConnection =
     dialog && 'connectionInstanceId' in dialog
@@ -264,7 +243,7 @@ export function AppShell() {
       heartbeatState={heartbeatState}
       heartbeatLatency={heartbeatLatency}
       heartbeatConnected={heartbeatConnected}
-      currentConnection={currentConnection}
+      currentConnection={connections.find((connection) => connection.connectionInstanceId === view.activeConnectionInstanceId)}
       activeInstance={activeInstance}
       currentRuntime={currentRuntime}
       activeRuntimeId={activeRuntimeId}

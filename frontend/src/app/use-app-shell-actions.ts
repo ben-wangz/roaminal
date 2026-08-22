@@ -1,18 +1,20 @@
 import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
-import { api, login } from '../auth/auth-client';
+import { api } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
 import type { Heartbeat } from '../status/heartbeat';
 import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
-import { createConnectionInstanceGroup as createConnectionInstanceGroupRequest, deleteConnectionInstanceGroup as deleteConnectionInstanceGroupRequest, loadConnectionInstanceLayout, renameConnectionInstanceGroup as renameConnectionInstanceGroupRequest, saveConnectionInstanceLayout, saveConnectionInstanceOrder, startConnectionLaunch } from '../connections/connection-api';
-import { flattenConnectionInstanceLayout, moveGroupMembersToUngrouped as moveGroupMembersToUngroupedModel, moveConnectionInstance as moveGroupedConnectionInstance, normalizeConnectionInstanceLayout, reorderConnectionGroup, type ConnectionInstanceLayout, type InstanceMovePlacement } from '../connections/connection-instance-groups';
-import { moveConnectionInstance as moveFlatConnectionInstance, orderConnectionInstances, reconcileConnections, selectConnection, type ConnectionOrderPlacement, type ConnectionView } from './connection-view';
+import { saveConnectionInstanceOrder, startConnectionLaunch } from '../connections/connection-api';
+import type { ConnectionInstanceLayout } from '../connections/connection-instance-groups';
+import { moveConnectionInstance as moveFlatConnectionInstance, orderConnectionInstances, selectConnection, type ConnectionOrderPlacement, type ConnectionView } from './connection-view';
 import { useHeartbeat } from './use-heartbeat';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { useAuthSessionActions } from './use-auth-session-actions';
 import type { AppPage } from './app-state';
 import type { ToastKind } from '../ui/toast';
+import { useConnectionInstanceLayoutActions } from './use-connection-instance-layout-actions';
+import { useConnectionLifecycleActions } from './use-connection-lifecycle-actions';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -160,6 +162,32 @@ export function useAppShellActions({
     syncing,
   });
 
+  const layoutActions = useConnectionInstanceLayoutActions({
+    connections,
+    setConnections,
+    setConnectionInstanceLayout,
+    connectionInstanceLayoutRef,
+    pendingConnectionInstanceLayout,
+    connectionOrder,
+    stateRevision,
+    showToast,
+  });
+  const lifecycleActions = useConnectionLifecycleActions({
+    setAuth,
+    setError,
+    setConnections,
+    setCurrentRuntime,
+    setActiveView,
+    setDialog,
+    setPreviewConnectionInstanceId,
+    setSearch,
+    mainRuntime,
+    previewRuntimeRef,
+    stateRevision,
+    viewRef,
+    showToast,
+  });
+
   const toggleSidebar = useCallback(() => {
     setSidebarOpen((value) => {
       if (value) setPreviewConnectionInstanceId(null);
@@ -233,193 +261,14 @@ export function useAppShellActions({
     }
   }, [connectionOrder, connections, pendingConnectionOrder, setConnections, showToast, stateRevision]);
 
-  const acceptConnectionInstanceLayout = useCallback((next: ConnectionInstanceLayout) => {
-    connectionInstanceLayoutRef.current = next;
-    setConnectionInstanceLayout(next);
-    setConnections((current) => {
-      const ordered = flattenConnectionInstanceLayout(next, current);
-      connectionOrder.current = ordered.map((connection) => connection.connectionInstanceId);
-      return ordered;
-    });
-  }, [connectionInstanceLayoutRef, connectionOrder, setConnectionInstanceLayout, setConnections]);
-
-  const persistConnectionInstanceLayout = useCallback(async (next: ConnectionInstanceLayout, previous: ConnectionInstanceLayout) => {
-    stateRevision.current += 1;
-    pendingConnectionInstanceLayout.current = next;
-    acceptConnectionInstanceLayout(next);
-    try {
-      const persisted = await saveConnectionInstanceLayout(next);
-      stateRevision.current += 1;
-      pendingConnectionInstanceLayout.current = null;
-      acceptConnectionInstanceLayout(persisted);
-    } catch (err) {
-      stateRevision.current += 1;
-      pendingConnectionInstanceLayout.current = null;
-      acceptConnectionInstanceLayout(previous);
-      showToast((err as Error).message, 'error');
-    }
-  }, [acceptConnectionInstanceLayout, pendingConnectionInstanceLayout, showToast, stateRevision]);
-
-  const currentConnectionInstanceLayout = useCallback(() => normalizeConnectionInstanceLayout(connectionInstanceLayoutRef.current, connections), [connectionInstanceLayoutRef, connections]);
-
-  const moveConnectionInstanceToGroup = useCallback(async (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => {
-    const previous = currentConnectionInstanceLayout();
-    const next = moveGroupedConnectionInstance(previous, id, groupId, targetId, placement);
-    if (!next) {
-      showToast('Group limit reached (10 connections).', 'error');
-      return;
-    }
-    await persistConnectionInstanceLayout(next, previous);
-  }, [currentConnectionInstanceLayout, persistConnectionInstanceLayout, showToast]);
-
-  const reorderConnectionInstanceGroup = useCallback(async (id: string, targetId: string, placement: InstanceMovePlacement) => {
-    const previous = currentConnectionInstanceLayout();
-    const next = reorderConnectionGroup(previous, id, targetId, placement);
-    if (next) await persistConnectionInstanceLayout(next, previous);
-  }, [currentConnectionInstanceLayout, persistConnectionInstanceLayout]);
-
-  const createConnectionInstanceGroup = useCallback(async (name: string): Promise<boolean> => {
-    const current = currentConnectionInstanceLayout();
-    stateRevision.current += 1;
-    try {
-      const next = await createConnectionInstanceGroupRequest(name, current.revision);
-      stateRevision.current += 1;
-      acceptConnectionInstanceLayout(next);
-      return true;
-    } catch (err) {
-      stateRevision.current += 1;
-      showToast((err as Error).message, 'error');
-      return false;
-    }
-  }, [acceptConnectionInstanceLayout, currentConnectionInstanceLayout, showToast, stateRevision]);
-
-  const renameConnectionInstanceGroup = useCallback(async (id: string, name: string): Promise<boolean> => {
-    const current = currentConnectionInstanceLayout();
-    stateRevision.current += 1;
-    try {
-      const next = await renameConnectionInstanceGroupRequest(id, name, current.revision);
-      stateRevision.current += 1;
-      acceptConnectionInstanceLayout(next);
-      return true;
-    } catch (err) {
-      stateRevision.current += 1;
-      showToast((err as Error).message, 'error');
-      return false;
-    }
-  }, [acceptConnectionInstanceLayout, currentConnectionInstanceLayout, showToast, stateRevision]);
-
-  const deleteConnectionInstanceGroup = useCallback(async (id: string): Promise<boolean> => {
-    const current = currentConnectionInstanceLayout();
-    stateRevision.current += 1;
-    try {
-      const next = await deleteConnectionInstanceGroupRequest(id, current.revision);
-      stateRevision.current += 1;
-      acceptConnectionInstanceLayout(next);
-      return true;
-    } catch (err) {
-      // A heartbeat can append a newly created instance between the render and
-      // this request. Retry only after reloading the layout and only when the
-      // group is still empty; membership conflicts must remain visible.
-      if ((err as Error).message === 'connection instance layout changed') {
-        try {
-          const latest = await loadConnectionInstanceLayout();
-          const group = latest.groups.find((item) => item.groupId === id);
-          if (group && group.connectionInstanceIds.length === 0) {
-            const retried = await deleteConnectionInstanceGroupRequest(id, latest.revision);
-            stateRevision.current += 1;
-            acceptConnectionInstanceLayout(retried);
-            return true;
-          }
-        } catch {
-          // Fall through to the normal error toast when the retry cannot run.
-        }
-      }
-      stateRevision.current += 1;
-      showToast((err as Error).message, 'error');
-      return false;
-    }
-  }, [acceptConnectionInstanceLayout, currentConnectionInstanceLayout, showToast, stateRevision]);
-
-  const moveGroupMembersToUngrouped = useCallback(async (id: string) => {
-    const previous = currentConnectionInstanceLayout();
-    const next = moveGroupMembersToUngroupedModel(previous, id);
-    if (next) await persistConnectionInstanceLayout(next, previous);
-  }, [currentConnectionInstanceLayout, persistConnectionInstanceLayout]);
-
-  const updateTitle = useCallback(async (id: string, title: string | null) => {
-    const updated = await api<ConnectionInstanceSummary>(`/api/connection-instances/${id}/title`, {
-      method: 'PATCH',
-      body: JSON.stringify({ title }),
-    });
-    setConnections((current) =>
-      current.map((connection) => (connection.connectionInstanceId === id ? updated : connection)),
-    );
-    setDialog(null);
-  }, [setConnections, setDialog]);
-
-  const resetTitle = useCallback(async (id: string) => {
-    try {
-      await updateTitle(id, null);
-    } catch (err) {
-      showToast((err as Error).message, 'error');
-    }
-  }, [showToast, updateTitle]);
-
-  const terminateConnection = useCallback(async (id: string) => {
-    try {
-      stateRevision.current += 1;
-      if (mainRuntime.current?.connectionInstanceId === id) {
-        mainRuntime.current.dispose();
-        mainRuntime.current = null;
-        setCurrentRuntime(null);
-      }
-      previewRuntimeRef.current?.dispose();
-      previewRuntimeRef.current = null;
-      setPreviewConnectionInstanceId(null);
-      await api(`/api/connection-instances/${id}`, { method: 'DELETE' });
-      setConnections((current) => {
-        const next = current.filter((connection) => connection.connectionInstanceId !== id);
-        const nextView = reconcileConnections(
-          next,
-          viewRef.current,
-          current.map((connection) => connection.connectionInstanceId),
-        );
-        setActiveView(nextView);
-        return next;
-      });
-      setDialog(null);
-      setSearch(false);
-      setPreviewConnectionInstanceId(null);
-    } catch (err) {
-      showToast((err as Error).message, 'error');
-    }
-  }, [mainRuntime, previewRuntimeRef, setActiveView, setConnections, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setSearch, showToast, stateRevision, viewRef]);
-
-  const onLogin = useCallback(async (password: string) => {
-    try {
-      setAuth(await login(password));
-      setError('');
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }, [setAuth, setError]);
-
   return {
     ...authActions,
     createConnection,
     acceptGenerated,
     selectConnectionInstance,
     reorderConnectionInstances,
-    moveConnectionInstanceToGroup,
-    reorderConnectionInstanceGroup,
-    createConnectionInstanceGroup,
-    renameConnectionInstanceGroup,
-    deleteConnectionInstanceGroup,
-    moveGroupMembersToUngrouped,
+    ...layoutActions,
     toggleSidebar,
-    updateTitle,
-    resetTitle,
-    terminateConnection,
-    onLogin,
+    ...lifecycleActions,
   };
 }

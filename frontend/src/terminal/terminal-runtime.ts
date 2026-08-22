@@ -25,7 +25,6 @@ export class TerminalRuntime {
   private addonsLoading = false;
   private appearance: TerminalAppearance;
   private appearanceRevision = 0;
-  private disposeFrame: number | null = null;
   private readonly ready: Promise<void>;
   // A touch does not consistently reach xterm's mouse activation path on
   // mobile browsers. Focus the hidden input during the user gesture so the
@@ -250,9 +249,7 @@ export class TerminalRuntime {
 
   fitToContainer(): void { this.fitTerminal(); }
 
-  focus(): void {
-    this.terminal?.focus();
-  }
+  focus(): void { this.terminal?.focus(); }
 
   input(data: string): void {
     if (this.disposed || this.closed || !data) return;
@@ -288,12 +285,9 @@ export class TerminalRuntime {
       return;
     }
     const finish = () => {
-      this.disposeFrame = null;
       window.setTimeout(() => terminal.dispose(), 0);
     };
-    this.disposeFrame = window.requestAnimationFrame(() => {
-      this.disposeFrame = window.requestAnimationFrame(finish);
-    });
+    window.requestAnimationFrame(() => window.requestAnimationFrame(finish));
   }
   private claim(): void {
     if (!this.closed) this.send({ type: 'claim_terminal_control' });
