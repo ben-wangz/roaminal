@@ -1,6 +1,6 @@
-html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+html, body, #root { width: 100%; height: var(--roaminal-viewport-height, 100%); min-height: 0; margin: 0; overflow: hidden; }
 body { background: var(--base); }
-.app-shell { display: flex; width: 100%; height: 100%; }
+.app-shell { display: flex; width: 100%; height: var(--roaminal-viewport-height, 100%); min-height: 0; }
 .sidebar-header, .topbar, .statusbar { display: flex; align-items: center; }
 .brand-mark { width: 58px; height: 58px; border: 1px solid var(--cyan); display: grid; place-items: center; color: var(--cyan); font-size: 2rem; line-height: 1; }
 .brand-mark span { color: var(--yellow); animation: brand-cursor-blink 1.4s steps(1, end) infinite; }
@@ -17,8 +17,8 @@ body { background: var(--base); }
 .topbar { position: relative; justify-content: space-between; min-height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .top-actions { display: flex; gap: 5px; align-items: center; }
 .text-button { min-height: 34px; padding: 8px; font-size: .78rem; }
-.terminal-stage { min-height: 0; flex: 1; position: relative; padding: 12px 16px 0; }
-.terminal-viewport { width: 100%; height: 100%; }
+.terminal-stage { min-height: 0; flex: 1; display: flex; flex-direction: column; position: relative; padding: 12px 16px 0; }
+.terminal-viewport { width: 100%; height: auto; min-height: 0; flex: 1 1 auto; }
 .xterm { height: 100%; }
 .empty-state { height: 100%; display: grid; place-items: center; align-content: center; gap: 24px; }
 .statusbar { justify-content: space-between; min-height: 26px; padding: 0 16px; color: var(--muted); font-size: .7rem; border-top: 1px solid var(--border); }
@@ -35,4 +35,9 @@ body { background: var(--base); }
 .workspace-body { min-width: 0; min-height: 0; overflow: hidden; position: relative; flex: 1 1 auto; display: flex; flex-direction: column; }
 .workspace-mode-view { min-width: 0; min-height: 0; overflow: hidden; flex: 1 1 auto; display: flex; flex-direction: column; }
 .workspace-mode-view.inactive { display: none; }
+.mobile-terminal-composer { display: none; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; padding: 8px; border-top: 1px solid var(--cyan); background: var(--base1); }
+.mobile-terminal-composer textarea { min-width: 0; min-height: 48px; max-height: 132px; resize: vertical; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 9px 10px; outline: none; line-height: 1.35; }
+.mobile-terminal-composer textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+.mobile-terminal-send { width: 44px; min-height: 48px; display: inline-grid; place-items: center; border: 1px solid var(--yellow); background: var(--yellow); color: var(--base); }
+.mobile-terminal-send:disabled { opacity: .45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .brand-mark span { animation: none; } }

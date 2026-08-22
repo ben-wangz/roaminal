@@ -3,6 +3,8 @@ import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { TerminalViewport } from '../terminal/terminal-viewport';
 import { TerminalSearch } from '../terminal/terminal-search';
 import { TouchKeyboard } from '../input/touch-keyboard';
+import { MobileTerminalComposer } from '../input/mobile-terminal-composer';
+import { useMobileKeyboard } from '../input/use-mobile-keyboard';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { FileSystemWorkspace } from '../filesystem/filesystem-workspace';
 
@@ -36,6 +38,7 @@ export function WorkspacePage({
   const filesystemInstance = connections.find(
     (connection) => connection.connectionInstanceId === activeInstance?.connectionInstanceId,
   ) || null;
+  const mobileKeyboard = useMobileKeyboard(activeRuntime, mode === 'terminal' && Boolean(activeRuntime));
   return (
     <>
       <RemoteMonitorBand instance={activeInstance} />
@@ -63,6 +66,7 @@ export function WorkspacePage({
                 </button>
               </div>
             )}
+            {activeRuntime && <MobileTerminalComposer runtime={activeRuntime} active={mode === 'terminal'} keyboardOpen={mobileKeyboard.keyboardOpen} />}
           </section>
           {activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.input(value)} />}
           <footer className="statusbar">

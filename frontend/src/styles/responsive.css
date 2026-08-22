@@ -7,6 +7,7 @@
   .sidebar-backdrop { position: fixed; inset: 0; z-index: 2; display: block; border: 0; background: rgba(0,43,54,.58); }
   .main-panel { width: 100%; }
   .touch-keyboard { display: flex; }
+  .mobile-terminal-composer { display: grid; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
   .terminal-stage { padding: 8px 8px 0; }
   .connection-card:hover .connection-card-overlay, .connection-card:focus-within .connection-card-overlay { transform: none; }
   .connection-card-preview { display: none; }

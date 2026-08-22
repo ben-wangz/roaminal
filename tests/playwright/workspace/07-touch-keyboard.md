@@ -10,6 +10,10 @@ and phone landscape.
    height when the software keyboard changes visual viewport size. Tap the
    terminal stage and verify the xterm helper textarea becomes the focused
    element so the browser's native software keyboard opens for command input.
+   When the native keyboard is open, a visible mobile terminal composer stays
+   above it, remains focused, and accepts editable text without being covered.
+   Pressing Enter or the send button sends the draft once with a trailing
+   carriage return; dismissing the native keyboard removes the composer.
 2. Through a byte-capture command, verify ESC, TAB, and arrow buttons emit exact
    terminal sequences.
 3. Toggle SHIFT, CTRL, ALT, and SYM. `aria-pressed` and visual state follow the
