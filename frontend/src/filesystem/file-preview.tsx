@@ -1,5 +1,5 @@
 import { Download, FileQuestion, LoaderCircle, Search, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadMetadata, readContent } from './filesystem-api';
 import type { FileEntry, FileMetadata, FileSystemError, RootContext } from './filesystem-types';
 import { viewerFor, viewerLabel } from './viewer-registry';
@@ -20,6 +20,10 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
   const [error, setError] = useState('');
   const [source, setSource] = useState<string | null>(null);
   const [markdownSource, setMarkdownSource] = useState(false);
+  const onRootChangedRef = useRef(onRootChanged);
+  onRootChangedRef.current = onRootChanged;
+  const entryPath = entry?.type === 'file' ? entry.relativePath : null;
+  const rootRevision = root.revision;
 
   useEffect(() => {
     let active = true;
@@ -29,27 +33,30 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
     setSource(null);
     setError('');
     setMarkdownSource(false);
-    if (!entry || entry.type !== 'file') return undefined;
+    if (!entryPath) {
+      setLoading(false);
+      return undefined;
+    }
     setLoading(true);
     void (async () => {
       try {
-        const next = await loadMetadata(instanceId, entry.relativePath, root.revision, controller.signal);
+        const next = await loadMetadata(instanceId, entryPath, rootRevision, controller.signal);
         if (!active) return;
         setMetadata(next);
         const kind = viewerFor(next);
         if (kind === 'image' || kind === 'video' || kind === 'pdf') {
-          const result = await readContent(instanceId, entry.relativePath, root.revision, undefined, true, controller.signal);
+          const result = await readContent(instanceId, entryPath, rootRevision, undefined, true, controller.signal);
           if (!active) return;
           setSource(URL.createObjectURL(new Blob([result.data], { type: next.mimeType })));
         } else {
-          const result = await readContent(instanceId, entry.relativePath, root.revision, undefined, false, controller.signal);
+          const result = await readContent(instanceId, entryPath, rootRevision, undefined, false, controller.signal);
           if (!active) return;
           setData(result.data);
         }
       } catch (reason) {
         const error = (reason instanceof Error ? reason : new Error('Unable to read file')) as FileSystemError;
         if (active) {
-          if (error.code === 'filesystem_root_changed' && error.root) onRootChanged();
+          if (error.code === 'filesystem_root_changed' && error.root) onRootChangedRef.current();
           setError(error.message);
         }
       } finally {
@@ -60,7 +67,7 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
       active = false;
       controller.abort();
     };
-  }, [entry, instanceId, onRootChanged, root.revision]);
+  }, [entryPath, instanceId, rootRevision]);
 
   useEffect(() => () => { if (source) URL.revokeObjectURL(source); }, [source]);
 

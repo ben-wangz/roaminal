@@ -1,12 +1,16 @@
 import { memo, type RefObject } from 'react';
-import { PanelLeftOpen, Search, Settings, ShieldCheck } from 'lucide-react';
+import { Keyboard, PanelLeftOpen, Search, Settings, ShieldCheck } from 'lucide-react';
 import { SystemStatus } from '../status/system-status';
 import type { Heartbeat } from '../status/heartbeat';
+import type { WorkspaceMode } from './workspace-page';
 
 type Props = {
   workspaceOpen: boolean;
   sidebarOpen: boolean;
   sidebarOpenButton: RefObject<HTMLButtonElement | null>;
+  virtualKeyboardOpen: boolean;
+  virtualKeyboardOpenButton: RefObject<HTMLButtonElement | null>;
+  workspaceMode: WorkspaceMode;
   connected: boolean;
   connectionName: string;
   system: Heartbeat['system'] | null;
@@ -14,6 +18,7 @@ type Props = {
   latencyMs: number | null;
   persistenceDegraded: boolean;
   onOpenSidebar: () => void;
+  onToggleVirtualKeyboard: () => void;
   onToggleSearch: () => void;
   onOpenConnections: () => void;
   onOpenAppearance: () => void;
@@ -25,6 +30,9 @@ export const ShellTopbar = memo(function ShellTopbar({
   workspaceOpen,
   sidebarOpen,
   sidebarOpenButton,
+  virtualKeyboardOpen,
+  virtualKeyboardOpenButton,
+  workspaceMode,
   connected,
   connectionName,
   system,
@@ -32,6 +40,7 @@ export const ShellTopbar = memo(function ShellTopbar({
   latencyMs,
   persistenceDegraded,
   onOpenSidebar,
+  onToggleVirtualKeyboard,
   onToggleSearch,
   onOpenConnections,
   onOpenAppearance,
@@ -65,6 +74,20 @@ export const ShellTopbar = memo(function ShellTopbar({
       <div className="top-actions">
         {workspaceOpen && (
           <>
+            {workspaceMode === 'terminal' && (
+              <button
+                ref={virtualKeyboardOpenButton}
+                className="icon-button"
+                type="button"
+                onClick={onToggleVirtualKeyboard}
+                aria-label={virtualKeyboardOpen ? 'Collapse virtual keyboard' : 'Expand virtual keyboard'}
+                title={virtualKeyboardOpen ? 'Collapse virtual keyboard' : 'Expand virtual keyboard'}
+                aria-expanded={virtualKeyboardOpen}
+                data-testid="virtual-keyboard-toggle"
+              >
+                <Keyboard aria-hidden="true" size={17} />
+              </button>
+            )}
             <button
               className="icon-button"
               onClick={onToggleSearch}

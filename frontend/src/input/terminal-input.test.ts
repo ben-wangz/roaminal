@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { controlKey, escape, literal, pageDown, pageUp, tmuxCommand, tmuxCopyMode } from './terminal-input';
+import { commonKeyboardKeys } from './common-keyboard-model';
 import { contextualKeys, defaultContextualMode } from './contextual-keyboard-model';
 
 const instance = (extra: Record<string, unknown> = {}) => ({
@@ -24,7 +25,7 @@ describe('terminal input model', () => {
     expect(tmux[0].label).toBe('Ctrl+K');
     expect(tmux[0].value).toBe('\u000b');
     expect(tmux[1].value).toBe('\u000b[');
-    expect(tmux.find((key) => key.id === 'tmux-escape')?.value).toBe('\u001b');
+    expect(tmux.find((key) => key.id === 'tmux-escape')).toBeUndefined();
     expect(tmux.find((key) => key.id === 'tmux-next-pane')?.label).toBe('Ctrl+K o');
     expect(tmux.find((key) => key.id === 'tmux-next-pane')?.value).toBe('\u000bo');
     expect(tmux.find((key) => key.id === 'tmux-detach')?.label).toBe('Ctrl+K d');
@@ -32,9 +33,11 @@ describe('terminal input model', () => {
     expect(tmux.find((key) => key.id === 'tmux-split-window')?.label).toBe('Ctrl+K "');
     expect(tmux.find((key) => key.id === 'tmux-split-window')?.value).toBe('\u000b"');
     const codex = contextualKeys(instance(), 'codex');
-    expect(codex.at(-1)?.value).toBe('commit and push');
-    expect(codex.at(-1)?.value.includes('\n')).toBe(false);
-    expect(codex.at(-1)?.kind).toBe('text');
+    expect(codex.find((key) => key.id === 'commit-and-push')?.value).toBe('commit and push');
+    expect(codex.find((key) => key.id === 'model')?.value).toBe('/model');
+    expect(codex.find((key) => key.id === 'compact')?.value).toBe('/compact');
+    expect(codex.every((key) => !key.value.includes('\n'))).toBe(true);
+    expect(codex.find((key) => key.id === 'compact')?.kind).toBe('text');
   });
 
   it('uses safe defaults and disables unsupported tmux prefixes', () => {
@@ -54,7 +57,13 @@ describe('terminal input model', () => {
     expect(unsupported.find((key) => key.id === 'tmux-next-pane')?.disabled).toBe(true);
     expect(unsupported.find((key) => key.id === 'tmux-detach')?.disabled).toBe(true);
     expect(unsupported.find((key) => key.id === 'tmux-split-window')?.disabled).toBe(true);
-    expect(unsupported.find((key) => key.id === 'tmux-escape')?.disabled).toBeFalsy();
     expect(unsupported.find((key) => key.id === 'page-up')?.disabled).toBeFalsy();
+  });
+
+  it('keeps common keys in one shared key set', () => {
+    expect(commonKeyboardKeys().map((key) => key.id)).toEqual([
+      'escape', 'tab', 'enter', 'control-c', 'pipe', 'tilde', 'slash',
+      'arrow-up', 'arrow-down', 'arrow-left', 'arrow-right',
+    ]);
   });
 });

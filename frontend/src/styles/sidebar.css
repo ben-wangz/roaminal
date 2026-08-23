@@ -87,17 +87,4 @@
 .agent-extension.agent-status-error { color: var(--red); }
 @keyframes agent-spin { to { transform: rotate(360deg); } }
 .sidebar-footer { padding: 14px 16px; color: var(--muted); font-size: .7rem; border-top: 1px solid var(--border); }
-.contextual-keyboard { flex: 0 0 auto; display: grid; gap: 8px; padding: 10px; border-top: 1px solid var(--border); background: var(--shade-2); }
-.contextual-keyboard-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-bright); font-size: .72rem; }
-.contextual-mode { display: inline-flex; gap: 2px; }
-.contextual-mode button { min-height: 26px; border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 3px 8px; font-size: .66rem; }
-.contextual-mode button.active { border-color: var(--cyan); color: var(--text-bright); background: rgba(42,161,152,.16); }
-.contextual-keyboard-status { color: var(--muted); font-size: .62rem; }
-.contextual-key-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-.contextual-key-grid button { min-width: 0; min-height: 32px; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); background: var(--base1); color: var(--text); padding: 3px 4px; overflow: hidden; }
-.contextual-key-grid button:hover:not(:disabled), .contextual-key-grid button:focus-visible { border-color: var(--cyan); color: var(--text-bright); outline: 0; }
-.contextual-key-grid button:disabled { cursor: not-allowed; opacity: .42; }
-.contextual-key-grid button svg { flex: 0 0 auto; }
-.contextual-key-grid kbd { min-width: 0; overflow: hidden; font: inherit; text-overflow: ellipsis; white-space: nowrap; }
-.contextual-key-grid.mode-codex button:last-child { grid-column: 1 / -1; }
 @media (prefers-reduced-motion: reduce) { .sidebar, .connection-card-overlay, .connection-card { transition: none; } .connection-card.attention .connection-indicator, .agent-status-initializing { animation: none; } }

@@ -1,31 +1,35 @@
-# PW-WORK-007: Mobile touch keyboard
+# PW-WORK-007: Mobile native input and Virtual Keyboard
 
 Priority: P1. Capabilities: core. Viewports: tablet portrait, phone portrait,
 and phone landscape.
 
 ## Procedure and assertions
 
-1. Open a live local terminal. The touch keyboard is visible only at width
-   `<=800`; it does not overlap xterm, status bar, or browser-safe viewport
-   height when the software keyboard changes visual viewport size. Tap the
-   terminal stage and verify the xterm helper textarea becomes the focused
-   element so the browser's native software keyboard opens for command input.
-   When the native keyboard is open, a visible mobile terminal composer stays
-   above it, remains focused, and accepts editable text without being covered.
-   Pressing Enter or the send button sends the draft once with a trailing
-   carriage return; dismissing the native keyboard removes the composer.
-2. Through a byte-capture command, verify ESC, TAB, and arrow buttons emit exact
-   terminal sequences.
-3. Toggle SHIFT, CTRL, ALT, and SYM. `aria-pressed` and visual state follow the
-   toggle. SHIFT uppercases a single character, CTRL maps one ASCII letter to
-   its control byte, and ALT prefixes Escape.
-4. After a non-modifier key, all active modifiers reset. Toggling a modifier off
-   before a key sends the unmodified value.
+1. Open a live local terminal at phone portrait width. The removed legacy
+   TouchKeyboard is absent. Tap the terminal stage and verify the xterm helper
+   textarea becomes focused so the browser's native software keyboard opens.
+   A visible mobile terminal composer stays above it, remains focused, and
+   accepts editable text without being covered. Dismissing the native keyboard
+   removes the composer.
+2. Type a unique draft and tap Send. Capture runtime input frames and verify
+   exactly one frame containing the draft followed by one carriage return. The
+   draft clears, the composer remains stable, and focus returns to the textarea.
+   Repeat after a visual viewport resize, while a focusout event is pending, and
+   with an IME composition route. A delayed Enter event never creates an empty
+   or duplicate frame; an intentional new draft still sends normally.
+3. Close the native keyboard and open the Virtual Keyboard from the topbar.
+   The dock is visible above the terminal and contains Common keys Esc, Tab,
+   Enter, Ctrl+C, `|`, `~`, `/`, and Up/Down/Left/Right. Verify those buttons
+   emit exact terminal sequences and the dock does not overlap the terminal or
+   safe-area inset.
+4. When the native keyboard is open again, the Virtual Keyboard key content
+   and remote monitor are hidden while the composer remains visible. The saved
+   Virtual Keyboard preference is restored after dismissal.
 5. Switch connection, open/close the sidebar, rotate portrait/landscape, and
    resize the visual viewport. Input always reaches only the active runtime and
    no control shifts terminal geometry unexpectedly.
-6. Close/exit the connection and verify the keyboard is removed with the
-   workspace rather than sending into a disposed runtime.
+6. Close/exit the connection and verify all custom input controls are removed
+   with the workspace rather than sending into a disposed runtime.
 
 ## Pass gate
 

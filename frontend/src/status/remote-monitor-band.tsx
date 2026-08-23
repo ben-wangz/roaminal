@@ -3,72 +3,79 @@ import { formatAge, formatBytes, formatDuration, formatLoad, formatPercent } fro
 import { metricLevel, type MetricLevel } from './metric-history';
 import { Sparkline } from './sparkline';
 import { useRemoteMonitor } from './use-remote-monitor';
+import { displayStatusLabel, remoteMonitorDisplayStatus } from './remote-monitor-display';
 
 type Props = { instance: ConnectionInstanceSummary | null };
 
 export function RemoteMonitorBand({ instance }: Props) {
-  const { snapshot, degraded, history } = useRemoteMonitor(instance);
+  const { snapshot, degraded, history, requesting } = useRemoteMonitor(instance);
   if (!instance || instance.type !== 'ssh' || instance.lifecycle !== 'live') return null;
   const metrics = snapshot?.metrics;
-  const status = snapshot?.status || 'warming';
+  const status = remoteMonitorDisplayStatus(snapshot, degraded, requesting);
+  const host = instance.sourceHostAlias || instance.title || 'connection';
   return (
     <section
       className="remote-monitor-band"
-      aria-label={`Remote monitor ${instance.sourceHostAlias || instance.title || 'connection'}`}
+      aria-label={`Remote monitor ${host}`}
       data-testid="remote-monitor-band"
+      data-display-status={status}
     >
-      <div className="remote-monitor-heading">
-        <strong>REMOTE {instance.sourceHostAlias || instance.title || 'connection'}</strong>
-        <span className={`remote-monitor-status status-${status}`}>
+      <header className="remote-monitor-header">
+        <div className="remote-monitor-identity">
+          <span className="remote-monitor-eyebrow">REMOTE</span>
+          <strong title={host}>{host}</strong>
+          <span className={`remote-monitor-status status-${status}`} role="status">
           <span className="status-pulse" aria-hidden="true" />
-          {status}
-        </span>
-        {degraded && <span className="remote-monitor-error">probe unavailable</span>}
-      </div>
-      <div className={`remote-monitor-grid${degraded && snapshot ? ' stale' : ''}`}>
-        <RemoteMetric
-          label="CPU"
-          value={formatPercent(metrics?.cpu.percent)}
-          detail={scopeLabel(metrics?.cpu.scope)}
-          level={metricLevel(metrics?.cpu.percent)}
-          history={history.cpu}
-          historyMax={100}
-        />
-        <RemoteMetric
-          label="MEM"
-          value={formatPercent(metrics?.memory.percent)}
-          detail={`${scopeLabel(metrics?.memory.scope)} ${formatBytes(metrics?.memory.workingSetBytes)} / ${formatBytes(metrics?.memory.limitBytes)}`}
-          level={metricLevel(metrics?.memory.percent)}
-          history={history.memory}
-          historyMax={100}
-        />
-        <RemoteMetric label="UP" value={formatDuration(metrics?.uptime.seconds)} detail="PID1" />
-        <RemoteMetric label="LOAD" value={formatLoad(metrics?.load)} detail="SYSTEM 1/5/15" />
-        <RemoteMetric
-          label="DISK"
-          value={formatPercent(metrics?.disk.percent)}
-          detail={`ROOTFS ${formatBytes(metrics?.disk.usedBytes)} / ${formatBytes(metrics?.disk.totalBytes)}`}
-          level={metricLevel(metrics?.disk.percent)}
-        />
-        <RemoteMetric
-          label="AGE"
-          value={formatAge(snapshot?.ageMs)}
-          detail={degraded && snapshot ? 'stale' : snapshot?.sampledAt ? 'freshness' : 'waiting'}
-        />
-        <RemoteMetric
-          label="RTT"
-          value={snapshot?.probeRttMs == null ? 'N/A' : `${snapshot.probeRttMs}ms`}
-          detail="probe"
-          history={history.rtt}
-        />
+            {displayStatusLabel(status)}
+          </span>
+        </div>
+        <div className="remote-monitor-header-meta">
+          <SecondaryMetric label="AGE" value={formatAge(snapshot?.ageMs)} detail={degraded && snapshot ? 'stale' : snapshot?.sampledAt ? 'freshness' : 'waiting'} />
+          <SecondaryMetric label="RTT" value={snapshot?.probeRttMs == null ? 'N/A' : `${snapshot.probeRttMs}ms`} detail="probe" history={history.rtt} />
+          {degraded && <span className="remote-monitor-error" role="status" aria-live="polite">probe unavailable</span>}
+        </div>
+      </header>
+      <div className="remote-monitor-content">
+        <div className={`remote-monitor-resources${degraded && snapshot ? ' stale' : ''}`}>
+          <ResourceMetric
+            label="CPU"
+            value={formatPercent(metrics?.cpu.percent)}
+            percent={metrics?.cpu.percent}
+            detail={scopeLabel(metrics?.cpu.scope)}
+            level={metricLevel(metrics?.cpu.percent)}
+            history={history.cpu}
+            historyMax={100}
+          />
+          <ResourceMetric
+            label="MEM"
+            value={formatPercent(metrics?.memory.percent)}
+            percent={metrics?.memory.percent}
+            detail={`${scopeLabel(metrics?.memory.scope)} ${formatBytes(metrics?.memory.workingSetBytes)} / ${metrics?.memory.limitBytes == null ? 'unlimited' : formatBytes(metrics?.memory.limitBytes)}`}
+            level={metricLevel(metrics?.memory.percent)}
+            history={history.memory}
+            historyMax={100}
+          />
+          <ResourceMetric
+            label="DISK"
+            value={formatPercent(metrics?.disk.percent)}
+            percent={metrics?.disk.percent}
+            detail={`${(metrics?.disk.mount || '/').toUpperCase()} ${formatBytes(metrics?.disk.usedBytes)} / ${formatBytes(metrics?.disk.totalBytes)}`}
+            level={metricLevel(metrics?.disk.percent)}
+          />
+        </div>
+        <div className="remote-monitor-secondary">
+          <SecondaryMetric label="UP" value={formatDuration(metrics?.uptime.seconds)} detail="PID1" />
+          <SecondaryMetric label="LOAD" value={formatLoad(metrics?.load)} detail="SYSTEM 1/5/15" />
+        </div>
       </div>
     </section>
   );
 }
 
-function RemoteMetric({
+function ResourceMetric({
   label,
   value,
+  percent,
   detail,
   level,
   history,
@@ -76,18 +83,49 @@ function RemoteMetric({
 }: {
   label: string;
   value: string;
+  percent: number | null | undefined;
   detail: string;
   level?: MetricLevel;
   history?: Array<number | null>;
   historyMax?: number;
 }) {
+  const completeLabel = `${label}: ${value} (${detail})`;
+  const normalizedPercent = percent != null && Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : null;
   return (
-    <span className="remote-monitor-metric" data-level={level} title={`${label}: ${value} (${detail})`}>
-      <b>{label}</b>
-      <strong>{value}</strong>
+    <article className="remote-resource-metric" data-level={level} title={completeLabel} aria-label={completeLabel}>
+      <div className="remote-resource-heading"><b>{label}</b><strong>{value}</strong></div>
+      <div
+        className="remote-resource-meter"
+        role="progressbar"
+        aria-label={`${label} usage`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        {...(normalizedPercent != null ? { 'aria-valuenow': normalizedPercent } : {})}
+      >
+        <span style={{ width: normalizedPercent == null ? '0%' : `${normalizedPercent}%` }} />
+      </div>
       {history && <Sparkline values={history} max={historyMax} />}
+      <small title={detail}>{detail}</small>
+    </article>
+  );
+}
+
+function SecondaryMetric({
+  label,
+  value,
+  detail,
+  history,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  history?: Array<number | null>;
+}) {
+  return (
+    <article className="remote-secondary-metric" title={`${label}: ${value} (${detail})`}>
+      <div><b>{label}</b><strong>{value}</strong>{history && <Sparkline values={history} />}</div>
       <small>{detail}</small>
-    </span>
+    </article>
   );
 }
 

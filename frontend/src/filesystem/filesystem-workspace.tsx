@@ -1,4 +1,5 @@
 import { AlertTriangle, ChevronRight, Eye, EyeOff, LoaderCircle, RefreshCw, Upload } from 'lucide-react';
+import { useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { AutoRefreshMenu } from './auto-refresh-menu';
@@ -24,6 +25,9 @@ export function FileSystemWorkspace({ instance, active, onToast }: Props) {
     reloadRoot, refreshFileTree, refreshDirectory, toggle, openEntry, navigate, confirmUpload, cancelCurrentUpload,
     openMenu, changeAutoRefresh,
   } = workspace;
+  const handlePreviewRootChanged = useCallback(() => {
+    void reloadRoot();
+  }, [reloadRoot]);
 
   if (!active) return null;
   if (!instance) return <div className="filesystem-unavailable"><AlertTriangle size={20} aria-hidden="true" /><span>Select an SSH connection instance to browse files.</span></div>;
@@ -52,7 +56,7 @@ export function FileSystemWorkspace({ instance, active, onToast }: Props) {
         </aside>
         <div className="filesystem-resizer" role="separator" aria-label="Resize file tree" aria-orientation="vertical" aria-valuemin={240} aria-valuemax={420} aria-valuenow={treeWidth} tabIndex={0} onPointerDown={(event) => { resizeStart.current = { x: event.clientX, width: treeWidth }; document.body.style.cursor = 'col-resize'; }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setTreeWidth((value) => Math.min(420, Math.max(240, value + (event.key === 'ArrowRight' ? 16 : -16)))); } }} />
         <div className="filesystem-preview-panel">
-          <FilePreview instanceId={instanceId} root={root} entry={previewEntry} onClose={() => setPreviewEntry(null)} onToast={onToast} onRootChanged={() => void reloadRoot()} />
+          <FilePreview instanceId={instanceId} root={root} entry={previewEntry} onClose={() => setPreviewEntry(null)} onToast={onToast} onRootChanged={handlePreviewRootChanged} />
         </div>
       </div>
       {menu && <FileContextMenu entry={menu.entry} x={menu.x} y={menu.y} onClose={() => setMenu(null)} onUpload={setUploadTarget} onRefresh={(pathValue) => void refreshDirectory(pathValue)} onToast={onToast} />}

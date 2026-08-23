@@ -8,6 +8,12 @@ export function controlKey(letter: string): string {
 export const pageUp = '\u001b[5~';
 export const pageDown = '\u001b[6~';
 export const escape = '\u001b';
+export const tab = '\t';
+export const enter = '\r';
+export const arrowUp = '\u001b[A';
+export const arrowDown = '\u001b[B';
+export const arrowLeft = '\u001b[D';
+export const arrowRight = '\u001b[C';
 
 export function literal(value: string): string { return value; }
 

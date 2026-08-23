@@ -7,7 +7,6 @@ import { observeViewportHeight, SIDEBAR_BREAKPOINT_QUERY } from '../input/viewpo
 import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
 import {
   loadStoredConnection,
-  saveStoredConnection,
   selectConnection,
   type ConnectionView,
 } from './connection-view';
@@ -25,6 +24,8 @@ import { useMainTerminalRuntime } from './use-main-terminal-runtime';
 import { useRuntimeMessages } from './use-runtime-messages';
 import type { ToastKind, ToastState } from '../ui/toast';
 import { useWorkspaceMode } from './use-workspace-mode';
+import { useVirtualKeyboardState } from './use-virtual-keyboard-state';
+import { useAppShellLifecycle } from './use-app-shell-lifecycle';
 export function AppShell() {
   const [auth, setAuth] = useState(loadAuth());
   const [connections, setConnections] = useState<ConnectionInstanceSummary[]>([]);
@@ -35,6 +36,7 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window === 'undefined' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches,
   );
+  const [virtualKeyboardOpen, setVirtualKeyboardOpen] = useState(false);
   const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
   const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
   const [heartbeatConnected, setHeartbeatConnected] = useState(true);
@@ -105,6 +107,7 @@ export function AppShell() {
     setCurrentRuntime,
     setPage,
     setSidebarOpen,
+    setVirtualKeyboardOpen,
     setSearch,
     setPreviewConnectionInstanceId,
     setHeartbeatLatency,
@@ -125,33 +128,30 @@ export function AppShell() {
     selectConnection: actions.selectConnectionInstance,
     setPage,
   });
-  useEffect(() => {
-    saveStoredConnection(window.localStorage, view);
-  }, [view]);
-  useEffect(() => {
-    viewRef.current = view;
-  }, [view]);
-  useEffect(() => {
-    connectionInstanceLayoutRef.current = connectionInstanceLayout;
-  }, [connectionInstanceLayout]);
-  useEffect(() => {
-    if (auth) return;
-    pendingConnectionInstanceLayout.current = null;
-    connectionInstanceLayoutRef.current = null;
-    setConnectionInstanceLayout(null);
-  }, [auth]);
-  useEffect(() => {
-    if (!sidebarOpen) sidebarOpenButton.current?.focus();
-  }, [sidebarOpen]);
-  useEffect(
-    () => () => {
-      mainRuntime.current?.dispose();
-      mainRuntime.current = null;
-      previewRuntimeRef.current?.dispose();
-      previewRuntimeRef.current = null;
-    },
-    [previewRuntimeRef],
-  );
+  const { virtualKeyboardOpenButton, toggleVirtualKeyboard } = useVirtualKeyboardState({
+    loginSessionId: actions.currentAuthSessionId,
+    page,
+    workspaceMode,
+    sidebarOpen,
+    virtualKeyboardOpen,
+    setVirtualKeyboardOpen,
+    setSidebarOpen,
+    setPreviewConnectionInstanceId,
+  });
+  useAppShellLifecycle({
+    auth,
+    view,
+    viewRef,
+    connectionInstanceLayout,
+    connectionInstanceLayoutRef,
+    pendingConnectionInstanceLayout,
+    setConnectionInstanceLayout,
+    sidebarOpen,
+    virtualKeyboardOpen,
+    sidebarOpenButton,
+    mainRuntime,
+    previewRuntimeRef,
+  });
   useMainTerminalRuntime({
     auth,
     page,
@@ -224,18 +224,18 @@ export function AppShell() {
     viewRef,
     showToast,
     setAppearance,
+    setVirtualKeyboardOpen,
   });
   if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
-  const dialogConnection =
-    dialog && 'connectionInstanceId' in dialog
-      ? connections.find((connection) => connection.connectionInstanceId === dialog.connectionInstanceId)
-      : undefined;
+  const dialogConnection = dialog && 'connectionInstanceId' in dialog ? connections.find((connection) => connection.connectionInstanceId === dialog.connectionInstanceId) : undefined;
   return (
     <AppShellView
       page={page}
       appearance={appearance}
       sidebarOpen={sidebarOpen}
       sidebarOpenButton={sidebarOpenButton}
+      virtualKeyboardOpen={virtualKeyboardOpen}
+      virtualKeyboardOpenButton={virtualKeyboardOpenButton}
       connections={connections}
       connectionInstanceLayout={sidebarLayout}
       loginSessionId={actions.currentAuthSessionId}
@@ -260,6 +260,7 @@ export function AppShell() {
       authSessionBusy={actions.authSessionBusy}
       onToggleSidebar={actions.toggleSidebar}
       onOpenSidebar={handleOpenSidebar}
+      onToggleVirtualKeyboard={toggleVirtualKeyboard}
       onSelectConnection={actions.selectConnectionInstance}
       onMoveConnectionInstance={actions.moveConnectionInstanceToGroup}
       onReorderConnectionGroup={actions.reorderConnectionInstanceGroup}

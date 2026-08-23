@@ -5,7 +5,7 @@ import { Toast, type ToastKind, type ToastState } from '../ui/toast';
 import { ConnectionSidebar } from '../ui/connection-sidebar';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { TerminalPreviewRuntime } from '../terminal/terminal-preview';
-import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
+import type { ContextualMode } from '../input/contextual-keyboard-model';
 import { RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialogs';
 import { AgentDialog } from '../ui/agent-dialog';
 import { ConnectionManager } from '../connections/connection-manager';
@@ -26,6 +26,8 @@ type Props = {
   appearance: TerminalAppearance;
   sidebarOpen: boolean;
   sidebarOpenButton: RefObject<HTMLButtonElement | null>;
+  virtualKeyboardOpen: boolean;
+  virtualKeyboardOpenButton: RefObject<HTMLButtonElement | null>;
   connections: ConnectionInstanceSummary[];
   connectionInstanceLayout: ConnectionInstanceLayout;
   loginSessionId: string;
@@ -50,6 +52,7 @@ type Props = {
   authSessionBusy: string | null;
   onToggleSidebar: () => void;
   onOpenSidebar: () => void;
+  onToggleVirtualKeyboard: () => void;
   onSelectConnection: (id: string) => void;
   onMoveConnectionInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
   onReorderConnectionGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
@@ -90,6 +93,8 @@ export function AppShellView({
   appearance,
   sidebarOpen,
   sidebarOpenButton,
+  virtualKeyboardOpen,
+  virtualKeyboardOpenButton,
   connections,
   connectionInstanceLayout,
   loginSessionId,
@@ -114,6 +119,7 @@ export function AppShellView({
   authSessionBusy,
   onToggleSidebar,
   onOpenSidebar,
+  onToggleVirtualKeyboard,
   onSelectConnection,
   onMoveConnectionInstance,
   onReorderConnectionGroup,
@@ -150,7 +156,6 @@ export function AppShellView({
 }: Props) {
   const workspaceOpen = page === 'workspace';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
-  const contextual = activeInstance ? contextualMode || defaultContextualMode(activeInstance) : 'codex';
   return (
     <div className="app-shell">
       {workspaceOpen && (
@@ -179,10 +184,6 @@ export function AppShellView({
           onRename={onRename}
           onAutomaticTitle={onAutomaticTitle}
           onTerminate={onTerminate}
-          activeInstance={activeInstance}
-          activeRuntime={activeRuntime}
-          contextualMode={contextual}
-          onContextualModeChange={onContextualModeChange}
         />
       )}
       <main className={`main-panel ${workspaceOpen && !sidebarOpen ? 'expanded' : ''}`}>
@@ -190,6 +191,9 @@ export function AppShellView({
           workspaceOpen={workspaceOpen}
           sidebarOpen={sidebarOpen}
           sidebarOpenButton={sidebarOpenButton}
+          virtualKeyboardOpen={virtualKeyboardOpen}
+          virtualKeyboardOpenButton={virtualKeyboardOpenButton}
+          workspaceMode={workspaceMode}
           connected={heartbeatConnected && Boolean(heartbeatState)}
           connectionName={connectionDisplayName(currentConnection || null, connections)}
           system={heartbeatState?.system || null}
@@ -197,6 +201,7 @@ export function AppShellView({
           latencyMs={heartbeatLatency}
           persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
           onOpenSidebar={onOpenSidebar}
+          onToggleVirtualKeyboard={onToggleVirtualKeyboard}
           onToggleSearch={onToggleSearch}
           onOpenConnections={onOpenConnections}
           onOpenAppearance={onOpenAppearance}
@@ -215,6 +220,10 @@ export function AppShellView({
             onOpenManager={onOpenManager}
             mode={workspaceMode}
             onToast={onShowToast}
+            virtualKeyboardOpen={virtualKeyboardOpen}
+            contextualMode={contextualMode}
+            onToggleVirtualKeyboard={onToggleVirtualKeyboard}
+            onContextualModeChange={onContextualModeChange}
           />
         ) : page === 'connections' ? (
           <ConnectionManager

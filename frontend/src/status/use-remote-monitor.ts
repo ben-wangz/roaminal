@@ -20,6 +20,7 @@ const historyCache = new Map<string, RemoteMonitorHistory>();
 
 export type RemoteMonitorState = {
   snapshot: RemoteMonitorSnapshot | null;
+  requesting: boolean;
   // True after a failed probe fetch; the current snapshot may be outdated.
   degraded: boolean;
   history: RemoteMonitorHistory;
@@ -31,6 +32,7 @@ export function useRemoteMonitor(instance: ConnectionInstanceSummary | null): Re
   const pollId = instance?.type === 'ssh' && lifecycle === 'live' ? instanceId : null;
   const [state, setState] = useState<RemoteMonitorState>(() => ({
     snapshot: pollId ? (snapshotCache.get(pollId) ?? null) : null,
+    requesting: Boolean(pollId),
     degraded: false,
     history: (pollId && historyCache.get(pollId)) || emptyHistory,
   }));
@@ -42,16 +44,18 @@ export function useRemoteMonitor(instance: ConnectionInstanceSummary | null): Re
   }, [instanceId, lifecycle]);
   useEffect(() => {
     if (!pollId) {
-      setState({ snapshot: null, degraded: false, history: emptyHistory });
+      setState({ snapshot: null, requesting: false, degraded: false, history: emptyHistory });
       return;
     }
     setState({
       snapshot: snapshotCache.get(pollId) ?? null,
+      requesting: true,
       degraded: false,
       history: historyCache.get(pollId) || emptyHistory,
     });
     return startPollLoop(
       async (signal) => {
+        setState((current) => ({ ...current, requesting: true }));
         try {
           const next = await remoteMonitor(pollId, signal);
           snapshotCache.set(pollId, next);
@@ -62,9 +66,9 @@ export function useRemoteMonitor(instance: ConnectionInstanceSummary | null): Re
             rtt: appendMetricSample(previous.rtt, next.probeRttMs),
           };
           historyCache.set(pollId, history);
-          setState({ snapshot: next, degraded: false, history });
+          setState({ snapshot: next, requesting: false, degraded: false, history });
         } catch (cause) {
-          if ((cause as Error).name !== 'AbortError') setState((current) => ({ ...current, degraded: true }));
+          if ((cause as Error).name !== 'AbortError') setState((current) => ({ ...current, requesting: false, degraded: true }));
         }
       },
       { intervalMs: 5000, jitterMs: 450, pauseWhenHidden: true },

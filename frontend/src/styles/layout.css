@@ -27,9 +27,6 @@ body { background: var(--base); }
 .search-bar > input { background: var(--base); border: 1px solid var(--border); color: var(--text-bright); padding: 6px 8px; }
 .search-bar label { color: var(--muted); white-space: nowrap; font-size: .72rem; }
 .search-bar button { border: 0; background: transparent; color: var(--text); font-size: 1.1rem; }
-.touch-keyboard { display: none; gap: 6px; padding: 8px; border-top: 1px solid var(--border); }
-.touch-keyboard button { flex: 1; min-height: 34px; border: 1px solid var(--border); color: var(--text); background: var(--base1); font-size: .72rem; }
-.touch-keyboard button.active { border-color: var(--yellow); color: var(--text-bright); background: rgba(181,137,0,.18); }
 .terminal-viewport .xterm-viewport { scrollbar-color: var(--base2) var(--base); }
 .terminal-viewport .xterm-screen { padding-bottom: 8px; }
 .workspace-body { min-width: 0; min-height: 0; overflow: hidden; position: relative; flex: 1 1 auto; display: flex; flex-direction: column; }

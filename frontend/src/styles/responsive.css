@@ -6,7 +6,6 @@
   .sidebar.closed { width: min(300px, 88vw); flex-basis: min(300px, 88vw); overflow: visible; border-right: 1px solid var(--border); pointer-events: none; }
   .sidebar-backdrop { position: fixed; inset: 0; z-index: 2; display: block; border: 0; background: rgba(0,43,54,.58); }
   .main-panel { width: 100%; }
-  .touch-keyboard { display: flex; }
   .mobile-terminal-composer { display: grid; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
   .terminal-stage { padding: 8px 8px 0; }
   .connection-card:hover .connection-card-overlay, .connection-card:focus-within .connection-card-overlay { transform: none; }
@@ -18,7 +17,7 @@
 html[data-roaminal-mobile-input="true"] .mobile-terminal-composer { display: grid; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 html[data-roaminal-keyboard="open"] .topbar,
 html[data-roaminal-keyboard="open"] .remote-monitor-band,
-html[data-roaminal-keyboard="open"] .touch-keyboard,
+html[data-roaminal-keyboard="open"] .virtual-keyboard-dock,
 html[data-roaminal-keyboard="open"] .statusbar { display: none; }
 html[data-roaminal-keyboard="open"] .terminal-stage { padding: 0; }
 html[data-roaminal-keyboard="open"] .mobile-terminal-composer { gap: 4px; padding: 4px; }
@@ -29,7 +28,6 @@ html[data-roaminal-keyboard="open"] .mobile-terminal-send { width: 40px; }
 @media (max-width: 440px) {
   .topbar { padding-inline: 8px; }
   .terminal-stage { min-height: 0; }
-  .touch-keyboard button { font-size: .63rem; padding: 0 2px; }
   .auth-modal { padding: 22px; }
   .connection-list { padding-inline: 8px; }
   .connection-card { min-height: 120px; }

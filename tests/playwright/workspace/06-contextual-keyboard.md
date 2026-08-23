@@ -7,30 +7,42 @@ desktop. Run serially for byte-capture fixtures.
 
 1. A normal local/SSH instance defaults to Codex; a `tmuxEnabled=true` instance
    defaults to Tmux. Manual mode choices are isolated per instance for the page
-   lifetime and reset to defaults after reload.
-2. Use a terminal byte-capture command/fixture and press Codex keys. Assert exact
-   bytes: Ctrl+T `0x14`, PageUp `ESC [ 5 ~`, PageDown `ESC [ 6 ~`, Esc `0x1b`,
-   and `q`. No key appends Enter.
-3. Press `commit and push`. It has a visible text icon, enters exactly that
-   literal ASCII text with no newline/Enter, and performs no Git, shell-command,
-   or external API action until the user explicitly submits it.
+   lifetime and reset to defaults after reload. The Virtual Keyboard is opened
+   from the main topbar and renders as a bottom dock, never inside the
+   connection sidebar.
+2. Open the Common section and use a terminal byte-capture command/fixture.
+   Assert exact bytes for Esc `0x1b`, Tab `0x09`, Enter `0x0d`, Ctrl+C `0x03`,
+   `|`, `~`, `/`, and the four arrow sequences. The Common section is rendered
+   exactly once and is shared by Tmux and Codex.
+3. Press Codex-specific keys and assert exact bytes: Ctrl+T `0x14`, PageUp
+   `ESC [ 5 ~`, PageDown `ESC [ 6 ~`, and `q`. Press `commit and push`, `/model`,
+   and `/compact`; each enters literal ASCII text with no newline/Enter and
+   performs no Git, shell-command, or external API action until the user
+   explicitly submits it. Codex contains no duplicate Escape or Enter key.
 4. For a remote effective prefix `C-k` (configured in the remote
    `~/.tmux.conf`), Tmux buttons display `Ctrl+K` and `Ctrl+K [` and send
    `0x0b` and `0x0b 0x5b`. Repeat native `C-b` and no-config fallback `C-b`
    metadata; both send `0x02` and `0x02 0x5b`. Label and bytes must always come
    from the same model.
-5. Tmux mode also provides Esc (`0x1b`), prefix+`o` (next pane), prefix+`d`
-   (detach), and prefix+`"` (horizontal split). With effective `C-k`, the
+5. Tmux mode also provides prefix+`o` (next pane), prefix+`d` (detach), and
+   prefix+`"` (horizontal split). With effective `C-k`, the
    latter buttons display `Ctrl+K o`, `Ctrl+K d`, and `Ctrl+K "` and send
    `0x0b 0x6f`, `0x0b 0x64`, and `0x0b 0x22`; native/fallback `C-b` uses the
    same suffixes after `0x02`.
 6. With `tmuxPrefixSource=unsupported`, prefix-dependent buttons (prefix,
-   copy-mode, `o`, `d`, and `"`) are disabled with an explanatory tooltip; Esc,
-   PageUp, PageDown, and q remain usable.
-7. During a pending launch, before WebSocket connection, after disconnection,
+   copy-mode, `o`, `d`, and `"`) are disabled with an explanatory tooltip;
+   Common keys, PageUp, PageDown, and q remain usable.
+7. Opening Connections closes the Virtual Keyboard, and opening the Virtual
+   Keyboard closes Connections without changing the active connection. They
+   are never simultaneously expanded. Collapse/expand state follows the
+   login-scoped browser preference; switching to FileSystem hides the dock.
+8. When the native mobile keyboard is open, the Virtual Keyboard key content is
+   hidden and the composer is the only custom text-entry surface. Closing the
+   native keyboard restores the saved Virtual Keyboard preference.
+9. During a pending launch, before WebSocket connection, after disconnection,
    and after exit, every applicable key is disabled and sends no frames to an
    old runtime. Reconnection enables them only for the current live instance.
-8. Every click returns focus to the active xterm without switching cards or
+10. Every click returns focus to the active xterm without switching cards or
    resizing the layout.
 
 ## Pass gate

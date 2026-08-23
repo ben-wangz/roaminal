@@ -40,6 +40,7 @@ type Params = {
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
+  setVirtualKeyboardOpen: Dispatch<SetStateAction<boolean>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setHeartbeatLatency: Dispatch<SetStateAction<number | null>>;
@@ -79,6 +80,7 @@ export function useAppShellActions({
   setCurrentRuntime,
   setPage,
   setSidebarOpen,
+  setVirtualKeyboardOpen,
   setSearch,
   setPreviewConnectionInstanceId,
   setHeartbeatLatency,
@@ -193,7 +195,8 @@ export function useAppShellActions({
       if (value) setPreviewConnectionInstanceId(null);
       return !value;
     });
-  }, [setPreviewConnectionInstanceId, setSidebarOpen]);
+    setVirtualKeyboardOpen(false);
+  }, [setPreviewConnectionInstanceId, setSidebarOpen, setVirtualKeyboardOpen]);
 
   useEffect(() => {
     const activeConnection = connections.find(
@@ -231,7 +234,8 @@ export function useAppShellActions({
     setSearch(false);
     setPreviewConnectionInstanceId(null);
     if (window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches) setSidebarOpen(false);
-  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setSidebarOpen, viewRef]);
+    setVirtualKeyboardOpen(false);
+  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setSidebarOpen, setVirtualKeyboardOpen, viewRef]);
 
   const reorderConnectionInstances = useCallback(async (
     draggedID: string,

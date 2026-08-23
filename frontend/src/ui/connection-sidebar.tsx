@@ -3,10 +3,7 @@ import { Bot, Check, ChevronDown, ChevronRight, FolderOpen, FolderPlus, GripVert
 import type { ConnectionInstanceLayout, InstanceMovePlacement } from '../connections/connection-instance-groups';
 import { groupedConnectionInstances, UNGROUPED_GROUP_ID } from '../connections/connection-instance-groups';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import type { TerminalRuntime } from '../terminal/terminal-runtime';
-import { ContextualKeyboard } from '../input/contextual-keyboard';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
-import type { ContextualMode } from '../input/contextual-keyboard-model';
 import { ConnectionActions, type ConnectionGroupMoveTarget } from './connection-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import { useConnectionGroupReorder } from './use-connection-group-reorder';
@@ -40,10 +37,6 @@ type Props = {
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
-  activeInstance: ConnectionInstanceSummary | null;
-  activeRuntime: TerminalRuntime | null;
-  contextualMode: ContextualMode;
-  onContextualModeChange: (mode: ContextualMode) => void;
 };
 
 export function shortConnectionId(id: string): string {
@@ -106,10 +99,6 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   onRename,
   onAutomaticTitle,
   onTerminate,
-  activeInstance,
-  activeRuntime,
-  contextualMode,
-  onContextualModeChange,
 }: Props) {
   const aside = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -258,7 +247,6 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
           })}
           {!groups.some(({ group, connections: groupConnections }) => !query || group.name.toLowerCase().includes(query) || groupConnections.some((connection) => matchesSearch(connection, group.name, query))) && <div className="connection-group-empty">No matching connections</div>}
         </div>
-        <ContextualKeyboard instance={activeInstance} runtime={activeRuntime} mode={contextualMode} onModeChange={onContextualModeChange} />
         <div className="sidebar-footer">Connection workspace</div>
       </aside>
     </>

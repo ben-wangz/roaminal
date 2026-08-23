@@ -12,6 +12,7 @@ type Params = {
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<SetStateAction<Dialog>>;
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
+  setVirtualKeyboardOpen: Dispatch<SetStateAction<boolean>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
   cancelLaunch: () => void;
@@ -27,6 +28,7 @@ export function useAppShellViewActions({
   setPreviewConnectionInstanceId,
   setDialog,
   setSidebarOpen,
+  setVirtualKeyboardOpen,
   setSearch,
   setPage,
   cancelLaunch,
@@ -48,24 +50,30 @@ export function useAppShellViewActions({
   }, [onOpenTerminal, setDialog, workspaceMode]);
   const handleOpenFileSystem = useCallback((id: string) => {
     setPreviewConnectionInstanceId(null);
+    setVirtualKeyboardOpen(false);
     onOpenFileSystem(id);
-  }, [onOpenFileSystem, setPreviewConnectionInstanceId]);
+  }, [onOpenFileSystem, setPreviewConnectionInstanceId, setVirtualKeyboardOpen]);
   const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), [setDialog]);
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), [setDialog]);
-  const handleOpenSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
+  const handleOpenSidebar = useCallback(() => {
+    setVirtualKeyboardOpen(false);
+    setSidebarOpen(true);
+  }, [setSidebarOpen, setVirtualKeyboardOpen]);
   const handleToggleSearch = useCallback(() => setSearch((value) => !value), [setSearch]);
   const handleCloseSearch = useCallback(() => setSearch(false), [setSearch]);
   const handleOpenConnections = useCallback(() => {
     cancelLaunch();
     setPreviewConnectionInstanceId(null);
+    setVirtualKeyboardOpen(false);
     setSearch(false);
     setPage('connections');
-  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSearch]);
+  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSearch, setVirtualKeyboardOpen]);
   const handleOpenAppearance = useCallback(() => {
     setPreviewConnectionInstanceId(null);
+    setVirtualKeyboardOpen(false);
     setSearch(false);
     setPage('appearance');
-  }, [setPage, setPreviewConnectionInstanceId, setSearch]);
+  }, [setPage, setPreviewConnectionInstanceId, setSearch, setVirtualKeyboardOpen]);
   const handleOpenWorkspace = useCallback(() => {
     if (viewRef.current.activeConnectionInstanceId) setPage('workspace');
   }, [setPage, viewRef]);

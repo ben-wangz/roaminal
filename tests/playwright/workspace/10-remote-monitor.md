@@ -9,15 +9,21 @@ desktop, tablet portrait, and phone portrait.
 1. Local connection and Connection manager show no REMOTE band and issue no
    remote-monitor requests. Selecting a live SSH instance adds a separate
    `REMOTE <host-alias>` band below the top row and polls only that instance.
-2. Observe warming then a later sample. Validate CPU, MEM, PID1 uptime, SYSTEM
-   load 1/5/15, ROOTFS disk used/total/percent, freshness AGE, and probe RTT
-   against the endpoint payload and fixture tolerances.
+2. Observe warming then a later sample. Validate the header status and the
+   separate primary-resource group for CPU, MEM, and DISK. Each primary metric
+   has a readable value, complete detail, a semantic progressbar when a
+   percentage exists, and CPU/MEM trend lines after two samples. Validate PID1
+   uptime, SYSTEM load 1/5/15, ROOTFS disk used/total/percent, freshness AGE,
+   and probe RTT against the endpoint payload and fixture tolerances.
 3. Verify CPU/MEM scope displays `CGROUP 1`, `CGROUP 2`, `HOST`, or unavailable
    exactly as returned. Uptime, load, and disk retain their independent PID1,
    SYSTEM, and ROOTFS labels; no unproven Pod/Container label appears.
-4. Exercise available, partial, stale, and unavailable responses. Nullable
-   metrics show N/A while reliable metrics remain. The previous sample's age is
-   explicit; stale values never masquerade as fresh.
+4. Exercise available, partial, stale, and unavailable responses. The header
+   combines backend status with client request state: warming before the first
+   response, unavailable after a failed request without a sample, and stale
+   with `probe unavailable` when a cached sample exists. Nullable metrics show
+   N/A while reliable metrics remain. The previous sample's age is explicit;
+   stale values never masquerade as fresh.
 5. Make a probe fail, exceed its timeout, and recover. Terminal input, SSH
    WebSocket, tmux resize, local Roaminal monitor, and other connections remain
    usable throughout; the band reports failure and resumes polling. Hold one

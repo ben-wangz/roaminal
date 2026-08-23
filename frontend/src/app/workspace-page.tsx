@@ -2,9 +2,10 @@ import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { TerminalViewport } from '../terminal/terminal-viewport';
 import { TerminalSearch } from '../terminal/terminal-search';
-import { TouchKeyboard } from '../input/touch-keyboard';
 import { MobileTerminalComposer } from '../input/mobile-terminal-composer';
 import { useMobileKeyboard } from '../input/use-mobile-keyboard';
+import { VirtualKeyboardDock } from '../input/virtual-keyboard-dock';
+import type { ContextualMode } from '../input/contextual-keyboard-model';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { FileSystemWorkspace } from '../filesystem/filesystem-workspace';
 
@@ -21,6 +22,10 @@ type Props = {
   onOpenManager: () => void;
   mode: WorkspaceMode;
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
+  virtualKeyboardOpen: boolean;
+  contextualMode: ContextualMode;
+  onToggleVirtualKeyboard: () => void;
+  onContextualModeChange: (mode: ContextualMode) => void;
 };
 
 export function WorkspacePage({
@@ -34,6 +39,10 @@ export function WorkspacePage({
   onOpenManager,
   mode,
   onToast,
+  virtualKeyboardOpen,
+  contextualMode,
+  onToggleVirtualKeyboard,
+  onContextualModeChange,
 }: Props) {
   const filesystemInstance = connections.find(
     (connection) => connection.connectionInstanceId === activeInstance?.connectionInstanceId,
@@ -68,7 +77,6 @@ export function WorkspacePage({
             )}
             {activeRuntime && <MobileTerminalComposer runtime={activeRuntime} active={mode === 'terminal'} keyboardOpen={mobileKeyboard.keyboardOpen} />}
           </section>
-          {activeRuntime && <TouchKeyboard onInput={(value) => activeRuntime.input(value)} />}
           <footer className="statusbar">
             <span>{currentConnection?.cwd || 'No connection'}</span>
             <span className="execution-status" aria-live="polite">
@@ -91,6 +99,15 @@ export function WorkspacePage({
           )) : <FileSystemWorkspace instance={null} active={mode === 'filesystem'} onToast={onToast} />}
         </div>
       </div>
+      {mode === 'terminal' && <VirtualKeyboardDock
+        open={virtualKeyboardOpen}
+        instance={activeInstance}
+        runtime={activeRuntime}
+        mode={contextualMode}
+        nativeKeyboardOpen={mobileKeyboard.keyboardOpen}
+        onToggle={onToggleVirtualKeyboard}
+        onModeChange={onContextualModeChange}
+      />}
     </>
   );
 }

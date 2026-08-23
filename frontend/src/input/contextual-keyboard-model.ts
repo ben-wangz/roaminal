@@ -1,5 +1,5 @@
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import { controlKey, escape, literal, pageDown, pageUp, tmuxCommand, tmuxCopyMode, tmuxPrefix } from './terminal-input';
+import { controlKey, literal, pageDown, pageUp, tmuxCommand, tmuxCopyMode, tmuxPrefix } from './terminal-input';
 
 export type ContextualMode = 'tmux' | 'codex';
 export type ContextualKey = { id: string; label: string; ariaLabel: string; value: string; disabled?: boolean; kind?: 'text' };
@@ -29,7 +29,6 @@ export function contextualKeys(instance: ConnectionInstanceSummary | null, mode:
     return [
       { id: 'tmux-prefix', label, ariaLabel: `Send ${label}`, value: tmuxPrefix(key), disabled: unsupported },
       { id: 'tmux-copy', label: `${label} [`, ariaLabel: `Send ${label} then left bracket`, value: tmuxCopyMode(key), disabled: unsupported },
-      { id: 'tmux-escape', label: 'Esc', ariaLabel: 'Send Escape', value: escape },
       { id: 'page-up', label: 'PageUp', ariaLabel: 'Send PageUp', value: pageUp },
       { id: 'page-down', label: 'PageDown', ariaLabel: 'Send PageDown', value: pageDown },
       { id: 'tmux-next-pane', label: `${label} o`, ariaLabel: `Send ${label} then o`, value: tmuxCommand(key, 'o'), disabled: unsupported },
@@ -42,8 +41,9 @@ export function contextualKeys(instance: ConnectionInstanceSummary | null, mode:
     { id: 'ctrl-t', label: 'Ctrl+T', ariaLabel: 'Send Ctrl+T', value: controlKey('t') },
     { id: 'page-up', label: 'PageUp', ariaLabel: 'Send PageUp', value: pageUp },
     { id: 'page-down', label: 'PageDown', ariaLabel: 'Send PageDown', value: pageDown },
-    { id: 'escape', label: 'Esc', ariaLabel: 'Send Escape', value: escape },
     { id: 'quit', label: 'q', ariaLabel: 'Send q', value: literal('q') },
-    { id: 'commit-and-push', label: 'commit and push', ariaLabel: 'Type commit and push', value: literal('commit and push'), kind: 'text' }
+    { id: 'commit-and-push', label: 'commit and push', ariaLabel: 'Type commit and push', value: literal('commit and push'), kind: 'text' },
+    { id: 'model', label: '/model', ariaLabel: 'Type slash model', value: literal('/model'), kind: 'text' },
+    { id: 'compact', label: '/compact', ariaLabel: 'Type slash compact', value: literal('/compact'), kind: 'text' },
   ];
 }
