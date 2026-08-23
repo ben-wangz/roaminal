@@ -18,7 +18,7 @@ type Params = {
   setLoading: Dispatch<SetStateAction<Set<string>>>;
   setRootError: Dispatch<SetStateAction<FileSystemError | null>>;
   updateRoot: (root: RootContext | null) => void;
-  resetTree: (clearRoot: boolean) => void;
+  resetTree: (clearRoot: boolean, preservePreview?: boolean) => void;
   reportError: (reason: unknown, pathValue?: string) => void;
   loadRootEntries: (root: RootContext, signal?: AbortSignal) => Promise<boolean>;
   loadDirectory: (path: string, revision: string, signal?: AbortSignal) => Promise<boolean>;
@@ -58,11 +58,11 @@ export function useFilesystemRefresh({
   }, [autoRefreshDegraded, onToast]);
   const clearAutoRefreshFailure = useCallback(() => setAutoRefreshDegraded(false), []);
 
-  const reloadRoot = useCallback(async (): Promise<boolean> => {
+  const reloadRoot = useCallback(async (preservePreview = false): Promise<boolean> => {
     if (!instanceId) return false;
     globalController.current?.abort();
     setRootError(null);
-    resetTree(true);
+    resetTree(!preservePreview, preservePreview);
     try {
       const nextRoot = await loadRootContext(instanceId);
       updateRoot(nextRoot);

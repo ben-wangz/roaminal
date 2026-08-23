@@ -49,9 +49,14 @@ or credentials.
    re-probes the tmux PWD, refreshes the root and every currently expanded
    directory with at most three concurrent listing requests, preserves
    expansion/selection/preview when the root revision is unchanged, and clears
-   the tree with a root-changed notice when the revision changes. The refresh
-   request uses `cache: no-store` and successful root/entries responses carry
-   `Cache-Control: no-store`.
+   the tree with a root-changed notice when the revision changes. With a long
+   Markdown file open, scroll both rendered Markdown and Markdown source to a
+   non-zero position before the refresh; the preview remains open and restores
+   both scroll offsets after the tree and content requests finish. Repeat with
+   one automatic refresh and with a deliberately changed active-pane root: a
+   transient root recovery must not discard the open preview or reset its
+   reading position. The refresh request uses `cache: no-store` and successful
+   root/entries responses carry `Cache-Control: no-store`.
 10. Open the auto-refresh menu beside the global Refresh control. Verify the
     browser-wide preference offers Off, 30 seconds, 60 seconds, 2 minutes, and
     5 minutes, defaults to 60 seconds, persists after reload, pauses while the

@@ -26,7 +26,7 @@ export function FileSystemWorkspace({ instance, active, onToast }: Props) {
     openMenu, changeAutoRefresh,
   } = workspace;
   const handlePreviewRootChanged = useCallback(() => {
-    void reloadRoot();
+    void reloadRoot(true);
   }, [reloadRoot]);
 
   if (!active) return null;

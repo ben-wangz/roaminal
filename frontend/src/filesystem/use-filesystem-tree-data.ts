@@ -112,7 +112,7 @@ export function useFilesystemTreeData({
     }
   }, [previewEntry, selected, setPreviewEntry, setSelected, updateEntries, updateExpanded]);
 
-  const resetTree = useCallback((clearRoot: boolean) => {
+  const resetTree = useCallback((clearRoot: boolean, preservePreview = false) => {
     const nextEntries = new Map<string, FileEntry[]>();
     const nextExpanded = new Set<string>();
     entriesRef.current = nextEntries;
@@ -122,9 +122,9 @@ export function useFilesystemTreeData({
     setLoading(new Set());
     setErrorPaths(new Set());
     setSelected(null);
-    setPreviewEntry(null);
+    if (!preservePreview) setPreviewEntry(null);
     setCurrentPath('.');
-    if (clearRoot) updateRoot(null);
+    if (clearRoot && !preservePreview) updateRoot(null);
   }, [setCurrentPath, setPreviewEntry, setSelected, updateRoot]);
 
   const beginDirectoryRequest = (pathValue: string) => {
@@ -175,7 +175,7 @@ export function useFilesystemTreeData({
 
   const recoverRoot = useCallback(async (nextRoot: RootContext, signal?: AbortSignal) => {
     updateRoot(nextRoot);
-    resetTree(false);
+    resetTree(false, true);
     setRootError(null);
     onToast('Root changed. The file tree was refreshed.', 'info');
     await loadRootEntries(nextRoot, signal);
