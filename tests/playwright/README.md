@@ -173,6 +173,13 @@ without explaining the originating request and expiry condition.
    instances created by the case. Never delete pre-existing data.
 8. At the end, run the diagnostics gate, confirm cleanup, and write a result with
    `PASS`, `FAIL`, or `SKIPPED` plus evidence paths.
+9. Treat fixture-backed labels and counts as dynamic data. Select an SSH start
+   action using `ROAMINAL_E2E_SSH_ALIAS` and its accessible name; never hard-code
+   a host alias such as `codespace` or `codespace-e2e`. Select the key inventory
+   through the `Keys` role and derive its row count from the rendered rows; never
+   assume a fixed numeric badge. A smoke case that only probes key inventory may
+   report `SKIPPED` when no controlled key fixture is provisioned. The dedicated
+   key cases remain `BLOCKED` until their fixture matrix is available.
 
 ## Coverage index
 
