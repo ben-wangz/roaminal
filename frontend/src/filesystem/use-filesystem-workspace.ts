@@ -136,15 +136,20 @@ export function useFilesystemWorkspace({ instanceId, active, onToast }: Params) 
     mode: 0,
     symlink: false,
   } : null, [tree.root]);
-  const openMenu = useCallback((event: MouseEvent, entry: FileEntry) => {
-    event.preventDefault();
+  const openMenuAt = useCallback((entry: FileEntry, x: number, y: number) => {
+    const viewportWidth = window.visualViewport?.width || window.innerWidth;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
     setSelected(entry.relativePath);
     setMenu({
       entry,
-      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 258)),
-      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 218)),
+      x: Math.max(8, Math.min(x, viewportWidth - 258)),
+      y: Math.max(8, Math.min(y, viewportHeight - 218)),
     });
   }, []);
+  const openMenu = useCallback((event: MouseEvent, entry: FileEntry) => {
+    event.preventDefault();
+    openMenuAt(entry, event.clientX, event.clientY);
+  }, [openMenuAt]);
 
   return {
     ...tree,
@@ -170,5 +175,6 @@ export function useFilesystemWorkspace({ instanceId, active, onToast }: Params) 
     confirmUpload,
     cancelCurrentUpload,
     openMenu,
+    openMenuAt,
   };
 }

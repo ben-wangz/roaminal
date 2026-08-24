@@ -16,9 +16,9 @@ export function commonKeyboardKeys(): CommonKeyboardKey[] {
     { id: 'pipe', label: '|', ariaLabel: 'Send pipe', value: literal('|') },
     { id: 'tilde', label: '~', ariaLabel: 'Send tilde', value: literal('~') },
     { id: 'slash', label: '/', ariaLabel: 'Send slash', value: literal('/') },
-    { id: 'arrow-up', label: 'Up', ariaLabel: 'Send Arrow Up', value: arrowUp },
-    { id: 'arrow-down', label: 'Down', ariaLabel: 'Send Arrow Down', value: arrowDown },
-    { id: 'arrow-left', label: 'Left', ariaLabel: 'Send Arrow Left', value: arrowLeft },
-    { id: 'arrow-right', label: 'Right', ariaLabel: 'Send Arrow Right', value: arrowRight },
+    { id: 'arrow-up', label: '↑', ariaLabel: 'Send Arrow Up', value: arrowUp },
+    { id: 'arrow-down', label: '↓', ariaLabel: 'Send Arrow Down', value: arrowDown },
+    { id: 'arrow-left', label: '←', ariaLabel: 'Send Arrow Left', value: arrowLeft },
+    { id: 'arrow-right', label: '→', ariaLabel: 'Send Arrow Right', value: arrowRight },
   ];
 }

@@ -19,7 +19,7 @@ export function ContextualKeyGrid({ instance, mode, enabled, onSend }: Props) {
           type="button"
           disabled={!enabled || key.disabled}
           aria-label={key.ariaLabel}
-          title={key.disabled ? 'Tmux prefix is not supported' : undefined}
+          title={key.disabled ? 'Tmux prefix is not supported' : key.label}
           onClick={() => onSend(key.value)}
         >
           {key.kind === 'text' && <Type size={13} aria-hidden="true" />}

@@ -61,9 +61,14 @@ describe('terminal input model', () => {
   });
 
   it('keeps common keys in one shared key set', () => {
-    expect(commonKeyboardKeys().map((key) => key.id)).toEqual([
+    const keys = commonKeyboardKeys();
+    expect(keys.map((key) => key.id)).toEqual([
       'escape', 'tab', 'enter', 'control-c', 'pipe', 'tilde', 'slash',
       'arrow-up', 'arrow-down', 'arrow-left', 'arrow-right',
+    ]);
+    expect(keys.slice(-4).map((key) => key.label)).toEqual(['↑', '↓', '←', '→']);
+    expect(keys.slice(-4).map((key) => key.ariaLabel)).toEqual([
+      'Send Arrow Up', 'Send Arrow Down', 'Send Arrow Left', 'Send Arrow Right',
     ]);
   });
 });

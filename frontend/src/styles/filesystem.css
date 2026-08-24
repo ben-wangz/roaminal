@@ -21,8 +21,11 @@
 .filesystem-tree-chevron:hover { color: var(--text-bright); }
 .filesystem-entry-icon { flex: 0 0 auto; color: var(--muted); }
 .filesystem-entry-icon.directory { color: var(--yellow); }
-.filesystem-tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filesystem-tree-name { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .filesystem-tree-error { margin-left: auto; color: var(--red); font-weight: 700; }
+.filesystem-tree-more-actions { display: inline-grid; flex: 0 0 24px; place-items: center; width: 24px; height: 24px; margin-left: auto; padding: 0; border: 1px solid transparent; background: transparent; color: var(--muted); opacity: 0; pointer-events: none; }
+.filesystem-tree-more-actions:hover, .filesystem-tree-more-actions:focus-visible { border-color: var(--cyan); color: var(--text-bright); }
+.filesystem-tree-row:focus-within .filesystem-tree-more-actions, .filesystem-tree-row.selected .filesystem-tree-more-actions, .filesystem-tree-root-row:focus-within .filesystem-tree-more-actions, .filesystem-tree-root-row.selected .filesystem-tree-more-actions { opacity: 1; pointer-events: auto; }
 .filesystem-preview-panel { min-width: 0; min-height: 0; overflow: hidden; }
 .filesystem-resizer { cursor: col-resize; border-inline: 1px solid transparent; background: var(--border-soft); }
 .filesystem-resizer:hover, .filesystem-resizer:focus { border-color: var(--cyan); background: color-mix(in oklab, var(--cyan) 45%, var(--border-soft)); outline: none; }
@@ -91,4 +94,7 @@
   .filesystem-preview-panel { display: none; }
   .filesystem-workspace.previewing .filesystem-tree-panel { display: none; }
   .filesystem-workspace.previewing .filesystem-preview-panel { display: block; }
+}
+@media (pointer: coarse), (max-width: 800px) {
+  .filesystem-tree-more-actions { opacity: 1; pointer-events: auto; }
 }

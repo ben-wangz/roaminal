@@ -1,14 +1,17 @@
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { formatAge, formatBytes, formatDuration, formatLoad, formatPercent } from './format';
 import { metricLevel, type MetricLevel } from './metric-history';
 import { Sparkline } from './sparkline';
 import { useRemoteMonitor } from './use-remote-monitor';
 import { displayStatusLabel, remoteMonitorDisplayStatus } from './remote-monitor-display';
+import { useMonitorDisclosure } from './use-monitor-disclosure';
 
 type Props = { instance: ConnectionInstanceSummary | null };
 
 export function RemoteMonitorBand({ instance }: Props) {
   const { snapshot, degraded, history, requesting } = useRemoteMonitor(instance);
+  const { expanded, setExpanded } = useMonitorDisclosure(instance?.connectionInstanceId || null);
   if (!instance || instance.type !== 'ssh' || instance.lifecycle !== 'live') return null;
   const metrics = snapshot?.metrics;
   const status = remoteMonitorDisplayStatus(snapshot, degraded, requesting);
@@ -19,6 +22,7 @@ export function RemoteMonitorBand({ instance }: Props) {
       aria-label={`Remote monitor ${host}`}
       data-testid="remote-monitor-band"
       data-display-status={status}
+      data-expanded={expanded}
     >
       <header className="remote-monitor-header">
         <div className="remote-monitor-identity">
@@ -29,13 +33,28 @@ export function RemoteMonitorBand({ instance }: Props) {
             {displayStatusLabel(status)}
           </span>
         </div>
-        <div className="remote-monitor-header-meta">
-          <SecondaryMetric label="AGE" value={formatAge(snapshot?.ageMs)} detail={degraded && snapshot ? 'stale' : snapshot?.sampledAt ? 'freshness' : 'waiting'} />
-          <SecondaryMetric label="RTT" value={snapshot?.probeRttMs == null ? 'N/A' : `${snapshot.probeRttMs}ms`} detail="probe" history={history.rtt} />
-          {degraded && <span className="remote-monitor-error" role="status" aria-live="polite">probe unavailable</span>}
+        <div className="remote-monitor-header-actions">
+          {expanded && (
+            <div className="remote-monitor-header-meta">
+              <SecondaryMetric label="AGE" value={formatAge(snapshot?.ageMs)} detail={degraded && snapshot ? 'stale' : snapshot?.sampledAt ? 'freshness' : 'waiting'} />
+              <SecondaryMetric label="RTT" value={snapshot?.probeRttMs == null ? 'N/A' : `${snapshot.probeRttMs}ms`} detail="probe" history={history.rtt} />
+              {degraded && <span className="remote-monitor-error" role="status" aria-live="polite">probe unavailable</span>}
+            </div>
+          )}
+          <button
+            className="monitor-disclosure remote-monitor-toggle"
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            aria-label={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
+            title={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
+            aria-expanded={expanded}
+            aria-controls="remote-monitor-metrics"
+          >
+            {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+          </button>
         </div>
       </header>
-      <div className="remote-monitor-content">
+      {expanded && <div className="remote-monitor-content" id="remote-monitor-metrics">
         <div className={`remote-monitor-resources${degraded && snapshot ? ' stale' : ''}`}>
           <ResourceMetric
             label="CPU"
@@ -67,7 +86,7 @@ export function RemoteMonitorBand({ instance }: Props) {
           <SecondaryMetric label="UP" value={formatDuration(metrics?.uptime.seconds)} detail="PID1" />
           <SecondaryMetric label="LOAD" value={formatLoad(metrics?.load)} detail="SYSTEM 1/5/15" />
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

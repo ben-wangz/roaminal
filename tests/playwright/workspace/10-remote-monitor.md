@@ -9,6 +9,9 @@ desktop, tablet portrait, and phone portrait.
 1. Local connection and Connection manager show no REMOTE band and issue no
    remote-monitor requests. Selecting a live SSH instance adds a separate
    `REMOTE <host-alias>` band below the top row and polls only that instance.
+   It is expanded by default on desktop and collapsed by default on tablet and
+   phone; the collapsed band still exposes REMOTE, host alias, status, and a
+   keyboard-reachable disclosure button.
 2. Observe warming then a later sample. Validate the header status and the
    separate primary-resource group for CPU, MEM, and DISK. Each primary metric
    has a readable value, complete detail, a semantic progressbar when a
@@ -42,6 +45,11 @@ desktop, tablet portrait, and phone portrait.
    `200` with `warming`, `partial`, or `available`; a full probe pool must
    queue work and must not make later connections report `status: unavailable`
    solely because they arrived after the first four.
+9. Expand and collapse the remote monitor independently of the system monitor.
+   Verify collapsed content is conditionally absent from the accessibility tree,
+   the last sample remains available, polling continues without an extra burst,
+   and switching to another SSH instance applies that instance's mobile
+   collapsed default.
 
 ## Pass gate
 

@@ -1,5 +1,8 @@
 .system-status { display: flex; flex: 1 1 auto; align-items: center; gap: 9px; min-width: 0; color: var(--text-bright); font-size: .72rem; }
-.status-monitor { display: flex; position: absolute; top: 50%; left: 50%; align-items: center; gap: 9px; min-width: 0; margin: 0; pointer-events: none; transform: translate(-50%, -50%); }
+.status-monitor-shell { position: absolute; top: 50%; left: 50%; display: flex; align-items: center; gap: 4px; min-width: 0; pointer-events: none; transform: translate(-50%, -50%); }
+.status-monitor { display: flex; align-items: center; gap: 9px; min-width: 0; margin: 0; pointer-events: none; }
+.monitor-disclosure { display: inline-grid; flex: 0 0 auto; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+.monitor-disclosure:hover, .monitor-disclosure:focus-visible { border-color: var(--cyan); color: var(--text-bright); }
 .connection-dot.offline { background: var(--red); }
 .status-host { max-width: 150px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .status-metric { display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 5px; min-width: 86px; }
@@ -17,7 +20,7 @@
 .remote-monitor-band { flex: 0 0 auto; display: grid; gap: 9px; min-width: 0; padding: 9px 16px 10px; border-bottom: 1px solid var(--border); background: var(--shade-1); container-type: inline-size; opacity: 1; translate: 0 0; transition: opacity var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-out); }
 @starting-style { .remote-monitor-band { opacity: 0; translate: 0 -4px; } }
 .remote-monitor-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
-.remote-monitor-identity, .remote-monitor-header-meta { display: flex; align-items: center; min-width: 0; gap: 8px; }
+.remote-monitor-identity, .remote-monitor-header-meta, .remote-monitor-header-actions { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .remote-monitor-identity { flex: 1 1 auto; color: var(--text-bright); font-size: .72rem; }
 .remote-monitor-eyebrow { color: var(--muted); font-size: .61rem; letter-spacing: .04em; }
 .remote-monitor-identity strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -29,6 +32,8 @@
 .remote-monitor-status.status-partial, .remote-monitor-status.status-warming, .remote-monitor-status.status-stale { color: var(--yellow); }
 .remote-monitor-status.status-unavailable, .remote-monitor-error { color: var(--danger-soft); }
 .remote-monitor-header-meta { flex: 0 0 auto; color: var(--muted); }
+.remote-monitor-header-actions { flex: 0 0 auto; }
+.remote-monitor-toggle { width: 26px; height: 26px; }
 .remote-monitor-error { font-size: .62rem; white-space: nowrap; }
 .remote-monitor-content { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(240px, .9fr); gap: 14px; min-width: 0; }
 .remote-monitor-resources, .remote-monitor-secondary { display: grid; min-width: 0; gap: 8px; }

@@ -36,7 +36,12 @@ or credentials.
 6. Right-click the root, a directory, and a file. The menu contains only copy
    absolute path, copy root-relative path, refresh, and for directories the one
    unified upload action. Clipboard values contain plain paths without quotes,
-   shell prefixes, or commands. Escape and outside click close the menu.
+   shell prefixes, or commands. On phone/tablet, every row including Root has a
+   visible `More actions` button with the same menu, and a 550ms long press with
+   less than 10px movement opens that same menu without opening a preview,
+   toggling a directory, scrolling cancellation, or a duplicate browser menu.
+   The Context Menu key and Shift+F10 open the same menu from a focused row.
+   Escape and outside pointer down close the menu.
 7. Use the unified upload action, choose local files and a local directory, and
    verify the confirmation dialog shows target relative/absolute paths, counts,
    names, total size, default refuse policy, and automatic transport selection.

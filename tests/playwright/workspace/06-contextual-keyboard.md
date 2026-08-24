@@ -11,9 +11,12 @@ desktop. Run serially for byte-capture fixtures.
    from the main topbar and renders as a bottom dock, never inside the
    connection sidebar.
 2. Open the Common section and use a terminal byte-capture command/fixture.
-   Assert exact bytes for Esc `0x1b`, Tab `0x09`, Enter `0x0d`, Ctrl+C `0x03`,
-   `|`, `~`, `/`, and the four arrow sequences. The Common section is rendered
-   exactly once and is shared by Tmux and Codex.
+  Assert exact bytes for Esc `0x1b`, Tab `0x09`, Enter `0x0d`, Ctrl+C `0x03`,
+   `|`, `~`, `/`, and the four arrow sequences. The four visible direction
+   labels are `↑`, `↓`, `←`, and `→`; their accessible names remain descriptive.
+   The Common section is rendered exactly once and is shared by Tmux and Codex.
+   Measure the computed height of every Common/contextual button and verify it
+   is `12px` or less, with no horizontal overflow at 320px.
 3. Press Codex-specific keys and assert exact bytes: Ctrl+T `0x14`, PageUp
    `ESC [ 5 ~`, PageDown `ESC [ 6 ~`, and `q`. Press `commit and push`, `/model`,
    and `/compact`; each enters literal ASCII text with no newline/Enter and
@@ -49,4 +52,4 @@ desktop. Run serially for byte-capture fixtures.
 
 Record hex byte assertions, not secret terminal content. Run the global
 diagnostics gate and fail any cross-instance input or unintended command
-execution.
+execution. Capture the computed key dimensions and the visible arrow labels.

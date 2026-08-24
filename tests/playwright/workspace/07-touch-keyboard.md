@@ -19,12 +19,13 @@ and phone landscape.
    or duplicate frame; an intentional new draft still sends normally.
 3. Close the native keyboard and open the Virtual Keyboard from the topbar.
    The dock is visible above the terminal and contains Common keys Esc, Tab,
-   Enter, Ctrl+C, `|`, `~`, `/`, and Up/Down/Left/Right. Verify those buttons
-   emit exact terminal sequences and the dock does not overlap the terminal or
-   safe-area inset.
+   Enter, Ctrl+C, `|`, `~`, `/`, and `↑`/`↓`/`←`/`→`. Verify those buttons emit
+   exact terminal sequences, every key is at most 12px tall, and the dock does
+   not overlap the terminal or safe-area inset.
 4. When the native keyboard is open again, the Virtual Keyboard key content
    and remote monitor are hidden while the composer remains visible. The saved
-   Virtual Keyboard preference is restored after dismissal.
+   Virtual Keyboard preference and monitor disclosure state are restored after
+   dismissal.
 5. Switch connection, open/close the sidebar, rotate portrait/landscape, and
    resize the visual viewport. Input always reaches only the active runtime and
    no control shifts terminal geometry unexpectedly.

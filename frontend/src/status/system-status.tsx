@@ -1,7 +1,9 @@
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo } from 'react';
 import { formatBytes, formatDuration, formatPercent } from './format';
 import { metricLevel } from './metric-history';
 import type { Heartbeat } from './heartbeat';
+import { useMonitorDisclosure } from './use-monitor-disclosure';
 
 type Props = {
   connected: boolean;
@@ -10,6 +12,7 @@ type Props = {
   connectionCount: number;
   latencyMs: number | null;
   persistenceDegraded: boolean;
+  resetKey: string | null;
 };
 
 export const SystemStatus = memo(function SystemStatus({
@@ -19,7 +22,9 @@ export const SystemStatus = memo(function SystemStatus({
   connectionCount,
   latencyMs,
   persistenceDegraded,
+  resetKey,
 }: Props) {
+  const { expanded, setExpanded } = useMonitorDisclosure(resetKey);
   const cpu = system?.cpu.usagePercent ?? null;
   const memory = system?.memory.usagePercent ?? null;
   const cpuCapacity = system?.cpu.capacityCores;
@@ -32,30 +37,45 @@ export const SystemStatus = memo(function SystemStatus({
       <span className="status-host" title={connectionName}>
         {connectionName}
       </span>
-      <span className="status-monitor">
-        <Metric
-          label="CPU"
-          value={formatPercent(cpu)}
-          progress={cpu}
-          detail={
-            cpuCapacity === null || cpuCapacity === undefined ? 'capacity N/A' : `${cpuCapacity.toFixed(2)} cores`
-          }
-        />
-        <Metric
-          label="MEM"
-          value={formatPercent(memory)}
-          progress={memory}
-          detail={formatMemory(memoryWorkingSet, memoryLimit)}
-        />
-        <span className="status-detail uptime">UP {formatDuration(system?.processUptimeSeconds ?? 0)}</span>
-        <span className="status-detail terminals">CONN {connectionCount}</span>
-        <span className="status-detail rtt">RTT {latencyMs === null ? 'N/A' : `${latencyMs}ms`}</span>
-        {persistenceDegraded && (
-          <span className="status-warning" role="status">
-            Persistence degraded
+      <button
+        className="monitor-disclosure status-monitor-toggle"
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-label={expanded ? 'Collapse system monitor' : 'Expand system monitor'}
+        title={expanded ? 'Collapse system monitor' : 'Expand system monitor'}
+        aria-expanded={expanded}
+        aria-controls="system-monitor-metrics"
+      >
+        {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+      </button>
+      <div className="status-monitor-shell">
+        {expanded && (
+          <span className="status-monitor" id="system-monitor-metrics">
+            <Metric
+              label="CPU"
+              value={formatPercent(cpu)}
+              progress={cpu}
+              detail={
+                cpuCapacity === null || cpuCapacity === undefined ? 'capacity N/A' : `${cpuCapacity.toFixed(2)} cores`
+              }
+            />
+            <Metric
+              label="MEM"
+              value={formatPercent(memory)}
+              progress={memory}
+              detail={formatMemory(memoryWorkingSet, memoryLimit)}
+            />
+            <span className="status-detail uptime">UP {formatDuration(system?.processUptimeSeconds ?? 0)}</span>
+            <span className="status-detail terminals">CONN {connectionCount}</span>
+            <span className="status-detail rtt">RTT {latencyMs === null ? 'N/A' : `${latencyMs}ms`}</span>
+            {persistenceDegraded && (
+              <span className="status-warning" role="status">
+                Persistence degraded
+              </span>
+            )}
           </span>
         )}
-      </span>
+      </div>
     </div>
   );
 });

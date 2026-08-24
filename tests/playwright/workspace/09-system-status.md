@@ -24,6 +24,13 @@ standard projects.
 6. At every viewport, the local monitor remains on the first row, is visually
    separated/centered relative to `Connected <name>`, and does not overlap the
    connection label or top actions. REMOTE, when present, stays on its own band.
+7. On desktop, the system monitor starts expanded. On tablet and phone, it
+   starts collapsed with only the connection state/name and a real disclosure
+   button visible. Toggle it with pointer and keyboard input; verify
+   `aria-expanded`, focus behavior, and that collapsed metric content is absent
+   from the accessibility tree. Switching connections on a mobile viewport
+   returns the system monitor to its collapsed default without changing the
+   heartbeat or polling behavior.
 
 ## Pass gate
 

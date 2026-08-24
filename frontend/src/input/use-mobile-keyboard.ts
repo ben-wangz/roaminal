@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
-import { SIDEBAR_BREAKPOINT_QUERY } from './viewport';
+import { useMobileMode } from './mobile-mode';
 
 const KEYBOARD_THRESHOLD = 80;
-const COARSE_POINTER_QUERY = '(pointer: coarse)';
-
 type VirtualKeyboardLike = EventTarget & {
   boundingRect: DOMRectReadOnly;
 };
@@ -20,13 +18,7 @@ export type MobileKeyboardMetrics = {
   viewportHeight: number;
 };
 
-export function mobileInputModeFromEnvironment(
-  narrowViewport: boolean,
-  coarsePointer: boolean,
-  maxTouchPoints: number,
-): boolean {
-  return narrowViewport || coarsePointer || maxTouchPoints > 0;
-}
+export { mobileModeFromEnvironment as mobileInputModeFromEnvironment } from './mobile-mode';
 
 export function keyboardHeightFromViewport(
   layoutHeight: number,
@@ -47,33 +39,15 @@ function isRuntimeInputFocused(runtime: TerminalRuntime | null): boolean {
   return Boolean(runtime?.terminal?.element?.contains(active));
 }
 
-function detectMobileInputMode(): boolean {
-  return mobileInputModeFromEnvironment(
-    window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches,
-    window.matchMedia(COARSE_POINTER_QUERY).matches,
-    navigator.maxTouchPoints,
-  );
-}
-
 export function useMobileKeyboard(
   runtime: TerminalRuntime | null,
   enabled: boolean,
 ): MobileKeyboardMetrics {
-  const [isMobileMode, setIsMobileMode] = useState(detectMobileInputMode);
+  const isMobileMode = useMobileMode();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(() => window.visualViewport?.height || window.innerHeight);
   const baselineVisualHeight = useRef(viewportHeight);
-
-  useEffect(() => {
-    const mediaQueries = [window.matchMedia(SIDEBAR_BREAKPOINT_QUERY), window.matchMedia(COARSE_POINTER_QUERY)];
-    const updateMode = () => setIsMobileMode(detectMobileInputMode());
-    updateMode();
-    mediaQueries.forEach((media) => media.addEventListener('change', updateMode));
-    return () => {
-      mediaQueries.forEach((media) => media.removeEventListener('change', updateMode));
-    };
-  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.roaminalMobileInput = isMobileMode ? 'true' : 'false';

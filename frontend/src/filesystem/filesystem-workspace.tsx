@@ -23,7 +23,7 @@ export function FileSystemWorkspace({ instance, active, onToast }: Props) {
     showHidden, treeWidth, refreshing, autoRefreshDegraded, autoRefreshSeconds, resizeStart, rootEntry, breadcrumb,
     setSelected, setPreviewEntry, setMenu, setUploadTarget, setUploadStatus, setShowHidden, setTreeWidth,
     reloadRoot, refreshFileTree, refreshDirectory, toggle, openEntry, navigate, confirmUpload, cancelCurrentUpload,
-    openMenu, changeAutoRefresh,
+    openMenu, openMenuAt, changeAutoRefresh,
   } = workspace;
   const handlePreviewRootChanged = useCallback(() => {
     void reloadRoot(true);
@@ -52,7 +52,7 @@ export function FileSystemWorkspace({ instance, active, onToast }: Props) {
               <AutoRefreshMenu value={autoRefreshSeconds} degraded={autoRefreshDegraded} disabled={refreshing} onChange={changeAutoRefresh} />
             </div>
           </div>
-          {rootEntry && <FileTree rootEntry={rootEntry} entries={entries} showHidden={showHidden} expanded={expanded} selected={selected} loading={loading} errorPaths={errorPaths} onToggle={(entry) => void toggle(entry)} onSelect={(entry) => setSelected(entry.relativePath)} onOpen={(entry) => void openEntry(entry)} onContextMenu={openMenu} onRootContextMenu={openMenu} />}
+          {rootEntry && <FileTree rootEntry={rootEntry} entries={entries} showHidden={showHidden} expanded={expanded} selected={selected} loading={loading} errorPaths={errorPaths} onToggle={(entry) => void toggle(entry)} onSelect={(entry) => setSelected(entry.relativePath)} onOpen={(entry) => void openEntry(entry)} onContextMenu={openMenu} onRootContextMenu={openMenu} onOpenMenuAt={openMenuAt} />}
         </aside>
         <div className="filesystem-resizer" role="separator" aria-label="Resize file tree" aria-orientation="vertical" aria-valuemin={240} aria-valuemax={420} aria-valuenow={treeWidth} tabIndex={0} onPointerDown={(event) => { resizeStart.current = { x: event.clientX, width: treeWidth }; document.body.style.cursor = 'col-resize'; }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setTreeWidth((value) => Math.min(420, Math.max(240, value + (event.key === 'ArrowRight' ? 16 : -16)))); } }} />
         <div className="filesystem-preview-panel">

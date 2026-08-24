@@ -20,8 +20,15 @@ export function FileContextMenu({ entry, x, y, onClose, onUpload, onRefresh, onT
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); onClose(); }
     };
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!menu.current?.contains(event.target as Node)) onClose();
+    };
     document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+    };
   }, [onClose]);
   const copy = async (value: string, label: string) => {
     try {
@@ -33,7 +40,7 @@ export function FileContextMenu({ entry, x, y, onClose, onUpload, onRefresh, onT
     onClose();
   };
   return (
-    <div ref={menu} className="filesystem-context-menu" style={{ left: x, top: y }} role="menu" onMouseDown={(event) => event.stopPropagation()}>
+    <div ref={menu} className="filesystem-context-menu" style={{ left: x, top: y }} role="menu" onPointerDown={(event) => event.stopPropagation()}>
       <button type="button" role="menuitem" onClick={() => void copy(entry.absolutePath, 'Absolute path')}><Copy size={14} aria-hidden="true" /> Copy absolute path</button>
       <button type="button" role="menuitem" onClick={() => void copy(entry.relativePath, 'Relative path')}><Copy size={14} aria-hidden="true" /> Copy relative path</button>
       {entry.type === 'directory' && <button type="button" role="menuitem" onClick={() => { onUpload(entry); onClose(); }}><Upload size={14} aria-hidden="true" /> Upload to this directory...</button>}

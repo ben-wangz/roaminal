@@ -41,7 +41,7 @@ html[data-roaminal-keyboard="open"] .mobile-terminal-send { width: 40px; }
    label or top actions. */
 @container main-panel (max-width: 1130px) {
   .topbar { min-height: 82px; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
-  .status-monitor { top: 61px; }
+  .status-monitor-shell { top: 61px; }
   .metric-detail { display: none; }
 }
 @container main-panel (max-width: 640px) {

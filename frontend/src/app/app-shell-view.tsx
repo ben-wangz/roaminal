@@ -196,6 +196,7 @@ export function AppShellView({
           workspaceMode={workspaceMode}
           connected={heartbeatConnected && Boolean(heartbeatState)}
           connectionName={connectionDisplayName(currentConnection || null, connections)}
+          connectionInstanceId={activeInstance?.connectionInstanceId || null}
           system={heartbeatState?.system || null}
           connectionCount={connections.length}
           latencyMs={heartbeatLatency}

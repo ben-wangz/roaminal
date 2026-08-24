@@ -13,6 +13,7 @@ type Props = {
   workspaceMode: WorkspaceMode;
   connected: boolean;
   connectionName: string;
+  connectionInstanceId: string | null;
   system: Heartbeat['system'] | null;
   connectionCount: number;
   latencyMs: number | null;
@@ -35,6 +36,7 @@ export const ShellTopbar = memo(function ShellTopbar({
   workspaceMode,
   connected,
   connectionName,
+  connectionInstanceId,
   system,
   connectionCount,
   latencyMs,
@@ -70,6 +72,7 @@ export const ShellTopbar = memo(function ShellTopbar({
         connectionCount={connectionCount}
         latencyMs={latencyMs}
         persistenceDegraded={persistenceDegraded}
+        resetKey={workspaceOpen ? connectionInstanceId : 'manager'}
       />
       <div className="top-actions">
         {workspaceOpen && (
