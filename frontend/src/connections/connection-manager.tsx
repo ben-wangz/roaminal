@@ -23,6 +23,7 @@ import {
   type ConnectionDraft,
   type ConnectionEditor,
 } from './connection-definition-model';
+import { filterDefinitions, preserveLastOptions } from './connection-manager-state';
 import { ConnectionDefinitionRow, LocalConnectionRow, SourceBand } from './connection-manager-rows';
 import { SSHKeyGenerationDialog } from './ssh-key-generation-dialog';
 import { SSHKeysPanel } from './ssh-keys-panel';
@@ -68,16 +69,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
     void refreshSources();
   }, [refreshSources]);
 
-  const visible = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return (definitions?.definitions || []).filter(
-      (definition) =>
-        !normalized ||
-        `${definition.hostAlias || ''} ${definition.hostName || ''} ${definition.user || ''}`
-          .toLowerCase()
-          .includes(normalized),
-    );
-  }, [definitions, query]);
+  const visible = useMemo(() => filterDefinitions(definitions, query), [definitions, query]);
 
   const optionsAvailable = !definitions?.tmuxOptionsSource || definitions.tmuxOptionsSource.status === 'missing' || definitions.tmuxOptionsSource.status === 'available';
 
@@ -298,18 +290,4 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       )}
     </section>
   );
-}
-
-function preserveLastOptions(previous: DefinitionCollection | null, next: DefinitionCollection): DefinitionCollection {
-  const sourceStatus = next.tmuxOptionsSource?.status;
-  if (!previous || !sourceStatus || sourceStatus === 'available' || sourceStatus === 'missing') return next;
-  const previousByAlias = new Map(previous.definitions.filter((item) => item.hostAlias).map((item) => [item.hostAlias as string, item]));
-  return {
-    ...next,
-    definitions: next.definitions.map((definition) => {
-      const old = definition.hostAlias ? previousByAlias.get(definition.hostAlias) : undefined;
-      if (!old) return definition;
-      return { ...definition, tmux: old.tmux, filesystem: old.filesystem };
-    }),
-  };
 }
