@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -10,14 +9,14 @@ import (
 )
 
 func (s *Server) agentSummary(w http.ResponseWriter, r *http.Request, _ string) {
-	if s.agent == nil || s.terms == nil {
+	if s.agentProvisioning == nil || s.terms == nil {
 		writeAgentError(w, &agent.Error{Code: "agent_store_unavailable", Status: 503, Message: "Agent state storage is unavailable."})
 		return
 	}
 	id := r.PathValue("connectionInstanceId")
 	for _, summary := range s.terms.Summaries() {
 		if summary.ID == id {
-			writeJSON(w, http.StatusOK, s.agent.Details(r.Context(), summary, strings.TrimSpace(r.Header.Get("Origin"))))
+			writeJSON(w, http.StatusOK, s.agentProvisioning.Details(r.Context(), agentConnectionInstanceView(summary), strings.TrimSpace(r.Header.Get("Origin"))))
 			return
 		}
 	}
@@ -25,19 +24,19 @@ func (s *Server) agentSummary(w http.ResponseWriter, r *http.Request, _ string) 
 }
 
 func (s *Server) startAgentInitialization(w http.ResponseWriter, r *http.Request, _ string) {
-	var body map[string]json.RawMessage
+	var body *struct{}
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	if body == nil || len(body) != 0 {
+	if body == nil {
 		writeAgentError(w, &agent.Error{Code: "agent_event_invalid", Status: 400, Message: "Initialization accepts an empty JSON object."})
 		return
 	}
-	if s.agent == nil {
+	if s.agentProvisioning == nil {
 		writeAgentError(w, &agent.Error{Code: "agent_store_unavailable", Status: 503, Message: "Agent state storage is unavailable."})
 		return
 	}
-	result, err := s.agent.StartInitialization(r.Context(), r.PathValue("connectionInstanceId"), strings.TrimSpace(r.Header.Get("Origin")))
+	result, err := s.agentProvisioning.StartInitialization(r.Context(), r.PathValue("connectionInstanceId"), strings.TrimSpace(r.Header.Get("Origin")))
 	if err != nil {
 		writeAgentError(w, err)
 		return
@@ -50,11 +49,11 @@ func (s *Server) startAgentInitialization(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) getAgentInitialization(w http.ResponseWriter, r *http.Request, _ string) {
-	if s.agent == nil {
+	if s.agentProvisioning == nil {
 		writeAgentError(w, &agent.Error{Code: "agent_store_unavailable", Status: 503, Message: "Agent state storage is unavailable."})
 		return
 	}
-	result, ok := s.agent.GetInitialization(r.PathValue("initializationId"))
+	result, ok := s.agentProvisioning.GetInitialization(r.PathValue("initializationId"))
 	if !ok {
 		writeAgentError(w, &agent.Error{Code: "agent_instance_not_found", Status: 404, Message: "The initialization operation was not found."})
 		return
@@ -63,7 +62,7 @@ func (s *Server) getAgentInitialization(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) agentEvent(w http.ResponseWriter, r *http.Request) {
-	if s.agent == nil {
+	if s.agentTelemetry == nil {
 		writeAgentError(w, &agent.Error{Code: "agent_store_unavailable", Status: 503, Message: "Agent state storage is unavailable."})
 		return
 	}
@@ -76,16 +75,16 @@ func (s *Server) agentEvent(w http.ResponseWriter, r *http.Request) {
 		writeAgentError(w, &agent.Error{Code: "agent_event_invalid", Status: 400, Message: "The Agent event could not be read."})
 		return
 	}
-	duplicate, err := s.agent.AcceptEvent(agentBearer(r), body)
+	duplicate, err := s.agentTelemetry.AcceptEvent(agentBearer(r), body)
 	if err != nil {
 		writeAgentError(w, err)
 		return
 	}
 	if duplicate {
-		writeJSON(w, http.StatusOK, map[string]string{"result": "duplicate"})
+		writeJSON(w, http.StatusOK, agentEventResponse{Result: "duplicate"})
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"result": "accepted"})
+	writeJSON(w, http.StatusAccepted, agentEventResponse{Result: "accepted"})
 }
 
 func agentBearer(r *http.Request) string {
@@ -101,7 +100,7 @@ func writeAgentError(w http.ResponseWriter, value error) {
 		if typed.Code == "agent_event_rate_limited" {
 			w.Header().Set("Retry-After", "60")
 		}
-		writeJSON(w, typed.Status, map[string]string{"error": typed.Message, "code": typed.Code})
+		writeCodedError(w, typed.Status, typed.Message, typed.Code, nil)
 		return
 	}
 	writeError(w, http.StatusInternalServerError, "internal error")

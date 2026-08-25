@@ -1,13 +1,14 @@
-package connection
+package monitor
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func parseRemoteCollector(output []byte, nonce string) (remoteRawSample, error) {
@@ -146,10 +147,12 @@ func parseFixedDecimal(value string) (float64, error) {
 	return parsed, nil
 }
 
-func monitorNonce() string {
+func monitorNonce(source ports.RandomSource, now time.Time) string {
 	var data [16]byte
-	if _, err := rand.Read(data[:]); err != nil {
-		return strconv.FormatInt(time.Now().UnixNano(), 16)
+	if source != nil {
+		if _, err := source.Read(data[:]); err == nil {
+			return hex.EncodeToString(data[:])
+		}
 	}
-	return hex.EncodeToString(data[:])
+	return strconv.FormatInt(now.UnixNano(), 16)
 }

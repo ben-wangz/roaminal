@@ -1,71 +1,45 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadAuth } from '../auth/auth-client';
 import { AuthSessionUI } from '../auth/auth-session-ui';
-import { type Heartbeat } from '../status/heartbeat';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
-import { observeViewportHeight, SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
-import { defaultContextualMode, type ContextualMode } from '../input/contextual-keyboard-model';
-import {
-  loadStoredConnection,
-  selectConnection,
-  type ConnectionView,
-} from './connection-view';
+import { observeViewportHeight } from '../input/viewport';
 import { useTerminalPreview } from './use-terminal-preview';
 import { usePendingLaunch } from './use-pending-launch';
-import { AppShellView, type Dialog } from './app-shell-view';
+import { AppShellView } from './app-shell-view';
 import { useAppShellActions } from './use-app-shell-actions';
 import { useAppShellViewActions } from './use-app-shell-view-actions';
-import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import { normalizeConnectionInstanceLayout, type ConnectionInstanceLayout } from '../connections/connection-instance-groups';
+import { normalizeConnectionInstanceLayout } from '../connections/connection-instance-groups';
 import { browserAppearanceStorage, loadAppearance, type TerminalAppearance } from '../appearance/appearance-model';
 import { useAppearanceStorage } from '../appearance/use-appearance-storage';
-import type { AppPage } from './app-state';
 import { useMainTerminalRuntime } from './use-main-terminal-runtime';
 import { useRuntimeMessages } from './use-runtime-messages';
 import type { ToastKind, ToastState } from '../ui/toast';
 import { useWorkspaceMode } from './use-workspace-mode';
 import { useVirtualKeyboardState } from './use-virtual-keyboard-state';
 import { useAppShellLifecycle } from './use-app-shell-lifecycle';
+import { useAppController } from './app-controller';
+import { useConnectionInstanceController } from '../connections/connection-instance-controller';
 export function AppShell() {
+  const appController = useAppController();
+  const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
+  const { state: appState, viewRef, setActiveView, setView, setPage, setSidebarOpen, setVirtualKeyboardOpen, setPreviewConnectionInstanceId, setSearch, setDialog } = appController;
+  const { view, page, sidebarOpen, virtualKeyboardOpen, previewConnectionInstanceId, search, dialog } = appState;
   const [auth, setAuth] = useState(loadAuth());
-  const [connections, setConnections] = useState<ConnectionInstanceSummary[]>([]);
-  const [connectionInstanceLayout, setConnectionInstanceLayout] = useState<ConnectionInstanceLayout | null>(null);
-  const [view, setView] = useState<ConnectionView>(() => loadStoredConnection(typeof window === 'undefined' ? null : window.localStorage));
-  const [page, setPage] = useState<AppPage>('connections');
+  const { connections, layout: connectionInstanceLayout, heartbeat: heartbeatState, heartbeatLatency, heartbeatConnected } = connectionState;
   const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window === 'undefined' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches,
-  );
-  const [virtualKeyboardOpen, setVirtualKeyboardOpen] = useState(false);
-  const [heartbeatState, setHeartbeatState] = useState<Heartbeat | null>(null);
-  const [heartbeatLatency, setHeartbeatLatency] = useState<number | null>(null);
-  const [heartbeatConnected, setHeartbeatConnected] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
-  const [search, setSearch] = useState(false);
-  const [dialog, setDialog] = useState<Dialog>(null);
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
-  const [previewConnectionInstanceId, setPreviewConnectionInstanceId] = useState<string | null>(null);
   const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, sidebarOpen, appearance);
-  const connectionOrder = useRef<string[]>([]);
-  const connectionInstanceLayoutRef = useRef<ConnectionInstanceLayout | null>(null);
-  const pendingConnectionInstanceLayout = useRef<ConnectionInstanceLayout | null>(null);
-  const pendingConnectionOrder = useRef<string[] | null>(null);
   const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(
     auth,
     mainRuntime,
     previewRuntimeRef,
   );
-  const viewRef = useRef(view);
-  const hydrated = useRef(false);
-  const bootId = useRef<string | null>(null);
-  const syncing = useRef(false);
-  const stateRevision = useRef(0);
   const sidebarOpenButton = useRef<HTMLButtonElement>(null);
   const toastTimer = useRef<number | null>(null);
-  const contextualModes = useRef(new Map<string, ContextualMode>());
   useEffect(() => observeViewportHeight(), []);
   const showToast = useCallback((message: string, kind: ToastKind = 'info') => {
     setToast({ message, kind });
@@ -75,16 +49,6 @@ export function AppShell() {
       toastTimer.current = null;
     }, 4500);
   }, []);
-  const setActiveView = useCallback((next: ConnectionView) => {
-    viewRef.current = next;
-    setView(next);
-  }, []);
-  const activateConnection = useCallback(
-    (id: string) => {
-      setActiveView(selectConnection(viewRef.current, id));
-    },
-    [setActiveView],
-  );
   const actions = useAppShellActions({
     auth,
     setAuth,
@@ -100,25 +64,13 @@ export function AppShell() {
     viewRef,
     setActiveView,
     connections,
-    setConnections,
-    setConnectionInstanceLayout,
-    connectionInstanceLayoutRef,
-    pendingConnectionInstanceLayout,
+    controller: connectionController,
     setCurrentRuntime,
     setPage,
     setSidebarOpen,
     setVirtualKeyboardOpen,
     setSearch,
     setPreviewConnectionInstanceId,
-    setHeartbeatLatency,
-    setHeartbeatConnected,
-    setHeartbeatState,
-    stateRevision,
-    connectionOrder,
-    pendingConnectionOrder,
-    hydrated,
-    bootId,
-    syncing,
     setDialog,
     showToast,
   });
@@ -142,10 +94,7 @@ export function AppShell() {
     auth,
     view,
     viewRef,
-    connectionInstanceLayout,
-    connectionInstanceLayoutRef,
-    pendingConnectionInstanceLayout,
-    setConnectionInstanceLayout,
+    controller: connectionController,
     sidebarOpen,
     virtualKeyboardOpen,
     sidebarOpenButton,
@@ -167,13 +116,11 @@ export function AppShell() {
   useRuntimeMessages({
     currentRuntime,
     activeLaunchId,
+    controller: connectionController,
+    executionStatus,
     viewActiveConnectionInstanceId: view.activeConnectionInstanceId,
     viewRef,
-    connectionOrder,
-    stateRevision,
-    activateConnection,
     clearLaunch,
-    setConnections,
     setCurrentRuntime,
     setView,
     setPage,
@@ -185,17 +132,10 @@ export function AppShell() {
   const activeInstance =
     connections.find((connection) => connection.connectionInstanceId === view.activeConnectionInstanceId) || null;
   const sidebarLayout = useMemo(() => normalizeConnectionInstanceLayout(connectionInstanceLayout, connections), [connectionInstanceLayout, connections]);
-  const contextualMode = activeInstance
-    ? contextualModes.current.get(activeInstance.connectionInstanceId) || defaultContextualMode(activeInstance)
-    : 'codex';
-  const setContextualMode = useCallback(
-    (mode: ContextualMode) => {
-      if (!activeInstance) return;
-      contextualModes.current.set(activeInstance.connectionInstanceId, mode);
-      setConnections((current) => [...current]);
-    },
-    [activeInstance],
-  );
+  const contextualMode = connectionController.contextualMode(activeInstance);
+  const setContextualMode = useCallback((mode: Parameters<typeof connectionController.setContextualMode>[1]) => {
+    connectionController.setContextualMode(activeInstance, mode);
+  }, [activeInstance, connectionController]);
   const {
     handlePreviewStart,
     handlePreviewEnd,

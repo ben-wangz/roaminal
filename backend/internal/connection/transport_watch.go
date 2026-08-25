@@ -2,7 +2,6 @@ package connection
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 )
 
@@ -44,9 +44,9 @@ func (m *Manager) refreshSources() {
 		}
 	}
 	configUnavailable := !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing"
-	m.transportMu.Lock()
-	transports := make([]*Transport, 0, len(m.transports))
-	for _, transport := range m.transports {
+	m.transportPool.mu.Lock()
+	transports := make([]*Transport, 0, len(m.transportPool.transports))
+	for _, transport := range m.transportPool.transports {
 		transports = append(transports, transport)
 		shouldDrain := false
 		revision := transport.SourceRevision
@@ -58,17 +58,17 @@ func (m *Manager) refreshSources() {
 		}
 		transport.stopRequested = transport.stopRequested || shouldDrain
 	}
-	m.transportMu.Unlock()
+	m.transportPool.mu.Unlock()
 	for _, transport := range transports {
-		m.transportMu.Lock()
+		m.transportPool.mu.Lock()
 		draining := transport.Draining
 		stopRequested := transport.stopRequested
-		m.transportMu.Unlock()
+		m.transportPool.mu.Unlock()
 		if draining && stopRequested {
 			m.drainTransport(transport)
-			m.transportMu.Lock()
+			m.transportPool.mu.Lock()
 			transport.stopRequested = false
-			m.transportMu.Unlock()
+			m.transportPool.mu.Unlock()
 		}
 		state := transportSourceState(transport, collection.ETag, configUnavailable, current)
 		if state == "" {
@@ -76,7 +76,7 @@ func (m *Manager) refreshSources() {
 		}
 		for _, summary := range m.Summaries() {
 			if summary.SourceHostAlias != nil && *summary.SourceHostAlias == transport.Alias {
-				_ = m.Manager.MarkSourceState(summary.ID, state)
+				_ = m.instances.MarkSourceState(summary.ID, state)
 			}
 		}
 	}
@@ -131,12 +131,12 @@ func (m *Manager) validControlPath(path string) bool {
 	return ownedByCurrentUID(info)
 }
 
-func prepareRuntimeDir(id string) (string, error) {
+func (m *Manager) prepareRuntimeDir(id string) (string, error) {
 	if strings.ContainsAny(id, `/\\`) {
 		id = ""
 	}
 	if id == "" {
-		id = randomToken()
+		id = m.randomToken()
 	}
 	root := "/tmp/roaminal-mux"
 	if _, err := os.Lstat(root); errors.Is(err, os.ErrNotExist) {
@@ -178,7 +178,7 @@ func prepareRuntimeDir(id string) (string, error) {
 func shortPathToken(id string) string {
 	token := strings.NewReplacer("-", "", "/", "", "\\", "").Replace(id)
 	if token == "" {
-		token = randomToken()
+		token = "runtime"
 	}
 	if len(token) > 12 {
 		token = token[:12]
@@ -202,17 +202,21 @@ func discover(name string) string {
 	}
 	return path
 }
-func randomToken() string {
+func (m *Manager) randomToken() string {
 	var raw [8]byte
-	_, _ = rand.Read(raw[:])
-	return fmt.Sprintf("%x", raw[:])
+	if m.random != nil {
+		if _, err := m.random.Read(raw[:]); err == nil {
+			return fmt.Sprintf("%x", raw[:])
+		}
+	}
+	return fmt.Sprintf("%x", m.clock.Now().UnixNano())
 }
-func terminalID() string {
-	var raw [16]byte
-	_, _ = rand.Read(raw[:])
-	raw[6] = (raw[6] & 0x0f) | 0x40
-	raw[8] = (raw[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:])
+
+func (m *Manager) newID() (string, error) {
+	if m.ids == nil {
+		return "", ports.ErrIDUnavailable
+	}
+	return m.ids.NewID()
 }
 func aliasFromDefinitionID(id string) (string, error) {
 	if !strings.HasPrefix(id, "ssh.") {

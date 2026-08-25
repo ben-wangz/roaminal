@@ -5,7 +5,7 @@ contexts and never print tokens.
 
 ## Procedure and assertions
 
-1. Without auth, verify `/healthz`, `/api/version`, and login challenge endpoints
+1. Without auth, verify `/healthz`, `/api/v2/version`, and login challenge endpoints
    have their documented public behavior. Protected heartbeat, instance,
    definition, key, monitor, and auth-session endpoints return `401` JSON errors.
 2. From a page with a mismatched/null Origin and through requests with a wrong
@@ -14,8 +14,8 @@ contexts and never print tokens.
 3. Login and verify protected HTTP requests use Bearer auth. Tokens are never
    query parameters. After token rotation, the prior access and refresh tokens
    are rejected while current tokens work.
-4. Open an instance WebSocket with both `roaminal.v1` and
-   `roaminal.auth.<current-token>`. The server selects only `roaminal.v1` and
+4. Open an instance WebSocket with both `roaminal.v2` and
+   `roaminal.auth.<current-token>`. The server selects only `roaminal.v2` and
    never echoes the auth-bearing subprotocol. Missing, malformed, old, or revoked
    auth is rejected before attach.
 5. On a disposable raw browser WebSocket, send malformed JSON, an unknown field,

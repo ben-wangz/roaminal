@@ -46,12 +46,6 @@ func newStore(root string) (*Store, error) {
 			return nil, fmt.Errorf("prepare private state directory: %w", err)
 		}
 	}
-	sessionsDir := filepath.Join(stateRoot, "sessions")
-	if entries, err := os.ReadDir(sessionsDir); err == nil && len(entries) > 0 {
-		return nil, ErrLegacySessions
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("inspect legacy sessions directory: %w", err)
-	}
 	connectionsDir := filepath.Join(stateRoot, "connection-instances")
 	auditDir := filepath.Join(stateRoot, "audit")
 	diagnosticsDir := filepath.Join(stateRoot, "diagnostics")
@@ -70,7 +64,11 @@ func newStore(root string) (*Store, error) {
 	if err := ensurePrivateDirectory(filepath.Join(auditDir, "connection-instances")); err != nil {
 		return nil, fmt.Errorf("prepare audit connection directory: %w", err)
 	}
-	return &Store{Root: stateRoot, ConnectionsDir: connectionsDir, AuditDir: auditDir, DiagnosticsDir: diagnosticsDir, Layout: layout, degradedIDs: make(map[string]struct{})}, nil
+	store := &Store{Root: stateRoot, ConnectionsDir: connectionsDir, AuditDir: auditDir, DiagnosticsDir: diagnosticsDir, Layout: layout, degradedIDs: make(map[string]struct{})}
+	if err := store.migrateLegacySessions(); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 func stateRootHasData(root string) (bool, error) {
@@ -85,6 +83,11 @@ func stateRootHasData(root string) (bool, error) {
 		return false, errors.New("state root is not a directory")
 	}
 	if _, err := os.Stat(filepath.Join(root, "auth-sessions.json")); err == nil {
+		return true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if _, err := os.Stat(filepath.Join(root, "workspace-layouts.json")); err == nil {
 		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, err

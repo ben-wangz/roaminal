@@ -17,7 +17,7 @@ explicitly listed.
    URL, and metadata-only privacy boundary. Verify no initialization request or
    remote write occurs before confirmation.
 4. Confirm initialization. Correlate the authenticated POST to
-   `/api/connection-instances/<id>/agent/initializations` with `{}`. Poll the
+   `/api/v2/connection-instances/<id>/agent/initializations` with `{}`. Poll the
    operation resource and verify the sidebar progresses through `initializing`
    to `needs_trust`.
 5. On the fixture, verify the canonical helper exists at

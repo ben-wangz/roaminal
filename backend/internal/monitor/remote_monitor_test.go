@@ -1,11 +1,14 @@
-package connection
+package monitor
 
 import (
 	"context"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func TestParseRemoteCollectorAllowsBannerAndRejectsDuplicate(t *testing.T) {
@@ -57,15 +60,16 @@ func TestRemoteMetricCalculations(t *testing.T) {
 }
 
 func TestRemoteProbePoolQueuesInsteadOfReturningUnavailable(t *testing.T) {
-	m := &Manager{remoteSem: make(chan struct{}, 1)}
-	if !m.acquireRemoteProbe(context.Background()) {
+	m := NewRemoteMonitorService(nil)
+	m.sem = make(chan struct{}, 1)
+	if !m.acquire(context.Background()) {
 		t.Fatal("first probe did not acquire the pool")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	acquired := make(chan bool, 1)
-	go func() { acquired <- m.acquireRemoteProbe(ctx) }()
+	go func() { acquired <- m.acquire(ctx) }()
 
 	select {
 	case <-acquired:
@@ -73,7 +77,7 @@ func TestRemoteProbePoolQueuesInsteadOfReturningUnavailable(t *testing.T) {
 	case <-time.After(25 * time.Millisecond):
 	}
 
-	m.releaseRemoteProbe()
+	m.release()
 	select {
 	case ok := <-acquired:
 		if !ok {
@@ -82,20 +86,55 @@ func TestRemoteProbePoolQueuesInsteadOfReturningUnavailable(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("queued probe remained blocked after capacity was released")
 	}
-	m.releaseRemoteProbe()
+	m.release()
 }
 
 func TestRemoteProbePoolHonorsContextWhileWaiting(t *testing.T) {
-	m := &Manager{remoteSem: make(chan struct{}, 1)}
-	if !m.acquireRemoteProbe(context.Background()) {
+	m := NewRemoteMonitorService(nil)
+	m.sem = make(chan struct{}, 1)
+	if !m.acquire(context.Background()) {
 		t.Fatal("first probe did not acquire the pool")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
 	defer cancel()
-	if m.acquireRemoteProbe(ctx) {
+	if m.acquire(ctx) {
 		t.Fatal("probe acquired a slot after its context expired")
 	}
-	m.releaseRemoteProbe()
+	m.release()
+}
+
+type retryingMonitorProbe struct {
+	calls atomic.Int32
+}
+
+func (p *retryingMonitorProbe) Target(context.Context, string) (ports.MonitorTarget, error) {
+	return ports.MonitorTarget{OwnerID: "owner"}, nil
+}
+
+func (p *retryingMonitorProbe) Probe(_ context.Context, _ ports.MonitorTarget, request ports.MonitorProbeRequest) (ports.MonitorProbeResult, error) {
+	if p.calls.Add(1) == 1 {
+		return ports.MonitorProbeResult{}, context.DeadlineExceeded
+	}
+	return ports.MonitorProbeResult{Output: []byte("ROAMINAL_MONITOR_V1_BEGIN_" + request.Nonce + "\nscope=unknown\nROAMINAL_MONITOR_V1_END_" + request.Nonce + "\n")}, nil
+}
+
+func TestRemoteMonitorRetriesAfterUnavailableProbe(t *testing.T) {
+	probe := &retryingMonitorProbe{}
+	service := NewRemoteMonitorService(probe)
+	first, err := service.RemoteMonitor(context.Background(), "instance")
+	if err != nil || first.Status != "unavailable" {
+		t.Fatalf("first probe = %#v, %v", first, err)
+	}
+	second, err := service.RemoteMonitor(context.Background(), "instance")
+	if err != nil {
+		t.Fatalf("retry probe: %v", err)
+	}
+	if probe.calls.Load() != 2 {
+		t.Fatalf("probe calls = %d, want 2", probe.calls.Load())
+	}
+	if second.SampledAt == nil {
+		t.Fatalf("retry did not publish a sampled result: %#v", second)
+	}
 }
 
 func pointerUint64(value uint64) *uint64 { return &value }

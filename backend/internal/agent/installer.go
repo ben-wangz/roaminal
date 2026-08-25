@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type assetManifest struct {
@@ -94,33 +94,48 @@ func (s *Service) remotePlatform(ctx context.Context, id string) (string, string
 		"printf 'arch=%s\\n' \"$(uname -m)\"\n" +
 		"if command -v tmux >/dev/null 2>&1; then printf 'tmux=1\\n'; else printf 'tmux=0\\n'; fi\n" +
 		"if command -v codex >/dev/null 2>&1; then printf 'codex=1\\n'; else printf 'codex=0\\n'; fi\n"
-	result, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: script, Timeout: 8 * time.Second, OutputLimit: 4096})
+	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: script, Timeout: 8 * time.Second, OutputLimit: 4096})
 	if err != nil {
 		return "", "", errf("agent_remote_probe_failed", 502, "The remote Agent probe failed.", err)
 	}
-	values := map[string]string{}
-	for _, line := range strings.Split(string(result.Output), "\n") {
-		parts := strings.SplitN(strings.TrimSpace(line), "=", 2)
-		if len(parts) == 2 {
-			values[parts[0]] = parts[1]
-		}
-	}
-	if values["tmux"] != "1" {
+	values := parseRemotePlatform(result.Output)
+	if !values.Tmux {
 		return "", "", errf("agent_tmux_unavailable", 409, "tmux is unavailable on the remote connection.", nil)
 	}
-	if values["codex"] != "1" {
+	if !values.Codex {
 		return "", "", errf("agent_codex_unavailable", 409, "Codex is unavailable on the remote connection.", nil)
 	}
-	if values["arch"] == "x86_64" {
-		values["arch"] = "amd64"
+	if values.Arch == "x86_64" {
+		values.Arch = "amd64"
 	}
-	if values["arch"] == "aarch64" {
-		values["arch"] = "arm64"
+	if values.Arch == "aarch64" {
+		values.Arch = "arm64"
 	}
-	if !validTargetOSArch(values["os"], values["arch"]) {
+	if !validTargetOSArch(values.OS, values.Arch) {
 		return "", "", errf("agent_remote_platform_unsupported", 409, "The remote platform is not supported.", nil)
 	}
-	return values["os"], values["arch"], nil
+	return values.OS, values.Arch, nil
+}
+
+func parseRemotePlatform(data []byte) remotePlatformInfo {
+	var result remotePlatformInfo
+	for _, line := range strings.Split(string(data), "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "os":
+			result.OS = value
+		case "arch":
+			result.Arch = value
+		case "tmux":
+			result.Tmux = value == "1"
+		case "codex":
+			result.Codex = value == "1"
+		}
+	}
+	return result
 }
 
 func (s *Service) existingProbe(ctx context.Context, id string) (remoteProbe, error) {
@@ -130,7 +145,7 @@ func (s *Service) existingProbe(ctx context.Context, id string) (remoteProbe, er
 		"elif [ -f \"$HOME/.roaminal/agent.json\" ]; then\n" +
 		"  printf '__configured__\\n'\n" +
 		"fi\n"
-	result, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: script, Timeout: 5 * time.Second, OutputLimit: 4096})
+	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: script, Timeout: 5 * time.Second, OutputLimit: 4096})
 	if err != nil {
 		return remoteProbe{}, errf("agent_remote_probe_failed", 502, "The remote Agent probe failed.", err)
 	}
@@ -151,7 +166,7 @@ func (s *Service) installRemote(ctx context.Context, id string, binary []byte, r
 		"mkdir -p \"$HOME/.roaminal\"\n" +
 		"tmp=\"$HOME/.roaminal/.upload-$1\"\n" +
 		"umask 077\ncat > \"$tmp\"\nchmod 0700 \"$tmp\"\nprintf '%s\\n' \"$tmp\"\n"
-	upload, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: uploadScript, Args: []string{suffix}, Stdin: bytes.NewReader(binary), Timeout: 10 * time.Second, OutputLimit: 4096})
+	upload, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: uploadScript, Args: []string{suffix}, Stdin: bytes.NewReader(binary), Timeout: 10 * time.Second, OutputLimit: 4096})
 	if err != nil || strings.TrimSpace(string(upload.Output)) == "" {
 		s.cleanupRemote(ctx, id, suffix)
 		return errf("agent_install_failed", 502, "The Agent component upload failed.", err)
@@ -164,7 +179,7 @@ func (s *Service) installRemote(ctx context.Context, id string, binary []byte, r
 		"tmp=\"$HOME/.roaminal/.upload-$1\"\n" +
 		"\"$tmp\" install\n" +
 		"status=$?\nrm -f -- \"$tmp\"\nexit $status\n"
-	result, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: installScript, Args: []string{suffix}, Stdin: bytes.NewReader(payload), Timeout: 15 * time.Second, OutputLimit: 8192})
+	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: installScript, Args: []string{suffix}, Stdin: bytes.NewReader(payload), Timeout: 15 * time.Second, OutputLimit: 8192})
 	if err != nil {
 		s.cleanupRemote(ctx, id, suffix)
 		if mapped := helperInstallError(result.ErrorOutput); mapped != nil {
@@ -172,8 +187,8 @@ func (s *Service) installRemote(ctx context.Context, id string, binary []byte, r
 		}
 		return errf("agent_install_failed", 502, "The remote Agent component installation failed.", err)
 	}
-	var response map[string]any
-	if json.Unmarshal(result.Output, &response) != nil || response["endpointKey"] != request.Endpoint.Key {
+	var response installResponse
+	if json.Unmarshal(result.Output, &response) != nil || response.EndpointKey != request.Endpoint.Key {
 		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
 	}
 	return nil
@@ -203,11 +218,11 @@ func helperInstallError(data []byte) error {
 }
 
 func (s *Service) cleanupRemote(ctx context.Context, id, suffix string) {
-	_, _ = s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: "rm -f -- \"$HOME/.roaminal/.upload-$1\"\n", Args: []string{suffix}, Timeout: 3 * time.Second, OutputLimit: 256})
+	_, _ = s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: "rm -f -- \"$HOME/.roaminal/.upload-$1\"\n", Args: []string{suffix}, Timeout: 3 * time.Second, OutputLimit: 256})
 }
 
 func (s *Service) verifyRemote(ctx context.Context, id, expectedFingerprint, endpointKey, componentSHA256 string) error {
-	result, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: "set -eu\n\"$HOME/.roaminal/bin/roaminal-agent-hook\" probe\n", Timeout: 5 * time.Second, OutputLimit: 4096})
+	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: "set -eu\n\"$HOME/.roaminal/bin/roaminal-agent-hook\" probe\n", Timeout: 5 * time.Second, OutputLimit: 4096})
 	if err != nil {
 		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", err)
 	}

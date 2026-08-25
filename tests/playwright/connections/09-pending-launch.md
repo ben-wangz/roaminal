@@ -9,7 +9,7 @@ the documented remote-state reset and use only the fixture-owned Host.
 ## Procedure and assertions
 
 1. Delay tmux readiness in the fixture and Start. Verify one pending launch ID,
-   one `/ws/connection-launches/:id` socket, a disabled/non-live contextual
+   one `/ws/v2/connection-launches/:id` socket, a disabled/non-live contextual
    keyboard, and no premature instance card.
 2. While pending, click Connections. A keepalive DELETE cancels that launch,
    its PTY/process is reaped, and no later heartbeat publishes it.

@@ -195,7 +195,7 @@ export function useFilesystemTreeData({
       const error = (reason instanceof Error ? reason : new Error('FileSystem request failed')) as FileSystemError;
       if (error instanceof DOMException && error.name === 'AbortError') return false;
       if (!isCurrentRequest(pathValue, request.generation)) return false;
-      if (error.code === 'filesystem_root_changed' && error.root) await recoverRoot(error.root, signal);
+		if (error.code === 'filesystem_root_changed' && error.root) await recoverRoot(error.root, signal);
       else if (error.code === 'filesystem_not_found') pruneDirectory(pathValue);
       else reportError(error, pathValue);
       return false;

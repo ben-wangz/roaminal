@@ -153,7 +153,7 @@ Ed25519 key.
    in the key inventory and record only its `keyId`, filename, and public-key
    fingerprint.
 3. Read the public key through the authenticated `GET
-   /api/ssh-keys/<keyId>/public-key` endpoint or the visible copy action. Write
+   /api/v2/ssh-keys/<keyId>/public-key` endpoint or the visible copy action. Write
    exactly that single line to a temporary file and remove it after the Secret
    is applied:
 

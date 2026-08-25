@@ -1,41 +1,41 @@
 # API
 
 Requests use `Content-Type: application/json`, are limited to 1 MiB (or 256 KiB
-for `/api/client-diagnostics`), and reject unknown fields. Browser requests must use the current page Origin. Errors use
-`{"error":"message","code":"stable_code"}` and may include `field`.
+for `/api/v2/client-diagnostics`), and reject unknown fields. Browser requests must use the current page Origin. Errors use
+`{"error":"message","code":"stable_code","retryable":false}` and may include `field`, `requestId`, and bounded `details`.
 Unless listed as public, endpoints require `Authorization: Bearer
 <access-token>`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/healthz` | Worker health (`503` while unavailable) |
-| GET | `/api/version` | Product, API version, process `bootId`, and diagnostic capability |
-| POST | `/api/auth/challenge`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout` | Authentication |
-| GET | `/api/auth/session`, `/api/auth/sessions` | Current or all login sessions |
-| DELETE | `/api/auth/sessions/:authSessionId` | Revoke one login session |
-| POST | `/api/auth/logout-others` | Revoke other login sessions |
-| GET/POST | `/api/heartbeat` | Read instances or submit resize updates |
-| GET/POST | `/api/connection-instances` | List or create local/remote instances |
-| PUT | `/api/connection-instances/order` | Save the current login session's sidebar order |
-| GET | `/api/connection-instances/:connectionInstanceId` | Inspect an active instance |
-| PATCH | `/api/connection-instances/:connectionInstanceId/title` | Set or clear a title |
-| DELETE | `/api/connection-instances/:connectionInstanceId` | Retire an active instance |
-| GET | `/api/connection-instances/:connectionInstanceId/remote-monitor` | Monitor a live SSH transport |
-| POST | `/api/connection-launches` | Start an owned pending tmux launch |
-| DELETE | `/api/connection-launches/:launchId` | Abort an owned pending launch |
-| GET/POST | `/api/connection-definitions` | List or create structured SSH definitions |
-| PUT/DELETE | `/api/connection-definitions/:connectionDefinitionId` | Update or delete a definition |
-| POST | `/api/connection-definitions/:connectionDefinitionId/duplicate` | Duplicate a definition |
-| GET | `/api/ssh-keys` | List detected Ed25519/RSA keys |
-| GET | `/api/ssh-keys/:keyId/public-key` | Read a public key |
-| DELETE | `/api/ssh-keys/:keyId` | Delete a writable managed key pair |
-| POST | `/api/ssh-key-generations` | Generate an absent Ed25519/RSA key |
-| POST | `/api/client-diagnostics` | Submit an authenticated bounded browser error batch |
+| GET | `/api/v2/version` | Product, API version, process `bootId`, and diagnostic capability |
+| POST | `/api/v2/auth/challenge`, `/api/v2/auth/login`, `/api/v2/auth/refresh`, `/api/v2/auth/logout` | Authentication |
+| GET | `/api/v2/auth/session`, `/api/v2/auth/sessions` | Current or all login sessions |
+| DELETE | `/api/v2/auth/sessions/:authSessionId` | Revoke one login session |
+| POST | `/api/v2/auth/logout-others` | Revoke other login sessions |
+| GET/POST | `/api/v2/heartbeat` | Read instances or submit resize updates |
+| GET/POST | `/api/v2/connection-instances` | List or create local/remote instances |
+| PUT | `/api/v2/connection-instances/order` | Save the current login session's sidebar order |
+| GET | `/api/v2/connection-instances/:connectionInstanceId` | Inspect an active instance |
+| PATCH | `/api/v2/connection-instances/:connectionInstanceId/title` | Set or clear a title |
+| DELETE | `/api/v2/connection-instances/:connectionInstanceId` | Retire an active instance |
+| GET | `/api/v2/connection-instances/:connectionInstanceId/remote-monitor` | Monitor a live SSH transport |
+| POST | `/api/v2/connection-launches` | Start an owned pending tmux launch |
+| DELETE | `/api/v2/connection-launches/:launchId` | Abort an owned pending launch |
+| GET/POST | `/api/v2/connection-definitions` | List or create structured SSH definitions |
+| PUT/DELETE | `/api/v2/connection-definitions/:connectionDefinitionId` | Update or delete a definition |
+| POST | `/api/v2/connection-definitions/:connectionDefinitionId/duplicate` | Duplicate a definition |
+| GET | `/api/v2/ssh-keys` | List detected Ed25519/RSA keys |
+| GET | `/api/v2/ssh-keys/:keyId/public-key` | Read a public key |
+| DELETE | `/api/v2/ssh-keys/:keyId` | Delete a writable managed key pair |
+| POST | `/api/v2/ssh-key-generations` | Generate an absent Ed25519/RSA key |
+| POST | `/api/v2/client-diagnostics` | Submit an authenticated bounded browser error batch |
 
 Connection-instance responses use `connectionInstanceId` as their only
 instance identifier. Active lists do not include retired or exited instances.
-Sidebar order is scoped to the current login session. `PUT
-/api/connection-instances/order` accepts `connectionInstanceIds`; retired IDs
+Sidebar order is scoped to the current login session. `PUT /api/v2/connection-instances/order`
+accepts `connectionInstanceIds`; retired IDs
 are ignored and current omitted instances are appended.
 Definition writes require the current `ETag` in `If-Match`; stale or missing
 tags return `412` or `428`. Capacity and transport state errors return `409`
@@ -47,7 +47,7 @@ definition and may set `reuseFromConnectionInstanceId` to reuse a live
 ControlMaster. Remote-monitor responses expose status, freshness, RTT, and
 scoped CPU, memory, uptime, load, and disk values.
 
-`POST /api/client-diagnostics` accepts at most 20 redacted error events in a
+`POST /api/v2/client-diagnostics` accepts at most 20 redacted error events in a
 256 KiB JSON body and returns `204` when accepted. It requires the current
 access token and same-origin request. The endpoint returns `400` for invalid
 schemas, `413` for oversized bodies, and `429` when the per-login-session
@@ -56,9 +56,11 @@ not accept terminal content, SSH material, or request bodies.
 
 ## WebSocket
 
-Connect to `/ws/connection-instances/:connectionInstanceId` or
-`/ws/connection-launches/:launchId` from the current Origin with the
-`roaminal.v1` and `roaminal.auth.<access-token>` subprotocols. Pending launches
+Connect to `/ws/v2/connection-instances/:connectionInstanceId` or
+`/ws/v2/connection-launches/:launchId` from the current Origin with the
+`roaminal.v2` and `roaminal.auth.<access-token>` subprotocols. Add
+`?role=observer` for a read-only preview; the default `interactive` role may
+claim terminal control and send input/resize commands. Pending launches
 are owned by the login session that created them. Attach order is `snapshot`,
 `meta`, `status`, then live `output`.
 

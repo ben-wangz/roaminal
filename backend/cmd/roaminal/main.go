@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -14,20 +13,28 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ben-wangz/roaminal/backend/internal/agent"
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/buildinfo"
 	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
+	"github.com/ben-wangz/roaminal/backend/internal/clock"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
+	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
 	"github.com/ben-wangz/roaminal/backend/internal/frontend"
+	"github.com/ben-wangz/roaminal/backend/internal/identity"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/random"
 	"github.com/ben-wangz/roaminal/backend/internal/server"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
+	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 	"github.com/ben-wangz/roaminal/backend/internal/worker"
+	"github.com/ben-wangz/roaminal/backend/internal/workspace"
 )
 
 func main() {
@@ -57,31 +64,28 @@ func run(cfg config.Config) error {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "Roaminal state layout=%s\n", store.Layout)
-	authManager, err := auth.New(cfg, store)
-	if err != nil {
-		return err
-	}
 	workerPath := resolveWorkerPath(cfg.WorkerPath)
 	if workerPath == "" {
 		return fmt.Errorf("terminal worker not found")
 	}
-	bootID, err := randomID()
+	randomSource := random.CryptoSource{}
+	clockSource := clock.System{}
+	idGenerator := identity.UUIDGenerator{Random: randomSource}
+	bootID, err := idGenerator.NewID()
 	if err != nil {
 		return err
 	}
-	var terminals *connection.Manager
+	var terminalRuntime *terminal.Manager
 	terminalWorker := worker.New(workerPath, func(err error) {
-		if terminals != nil {
-			terminals.WorkerFatal(err)
+		if terminalRuntime != nil {
+			terminalRuntime.WorkerFatal(err)
 		}
-	})
+	}, worker.Dependencies{Clock: clockSource, IDs: idGenerator})
 	ctx, cancel := context.WithTimeout(context.Background(), config.DefaultWorkerHandshake)
 	defer cancel()
 	if err := terminalWorker.Start(ctx); err != nil {
 		return err
 	}
-	terminals = connection.NewManager(cfg, store, terminalWorker)
-	terminals.SetRuntimeID(bootID)
 	sshRoot, sshErr := sshfs.Open()
 	if sshErr != nil {
 		fmt.Fprintf(os.Stderr, "Roaminal SSH source unavailable: %v\n", sshErr)
@@ -89,15 +93,24 @@ func run(cfg config.Config) error {
 	configRepo := sshconfig.New(sshRoot)
 	keyInventory := sshkey.New(sshRoot)
 	connectionOptions := connectionoptions.New(cfg.StateDir)
-	terminals.SetSources(configRepo, keyInventory)
-	terminals.SetConnectionOptions(connectionOptions)
+	fileRepositories := persistence.NewRepositories(store)
+	authManager, err := auth.NewWithRepositories(cfg, fileRepositories.Auth, auth.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource})
+	if err != nil {
+		_ = terminalWorker.Shutdown(context.Background())
+		return err
+	}
+	terminalRuntime = terminal.NewManagerWithRepositories(cfg, terminal.Repositories{Instances: fileRepositories.Connection, Audit: fileRepositories.Audit, Snapshots: fileRepositories.TerminalSnapshots, PersistenceDegraded: store.PersistenceDegraded}, terminalWorker, clockSource, idGenerator, bootID)
+	terminals := connection.NewManager(connection.Dependencies{
+		Config: cfg, Runtime: terminalRuntime, Clock: clockSource, IDs: idGenerator, Random: randomSource,
+		ConfigRepo: configRepo, Keys: keyInventory, Options: connectionOptions,
+	})
 	if err := terminals.Start(context.Background()); err != nil {
 		_ = terminalWorker.Shutdown(context.Background())
 		return err
 	}
 	var diagnostics *clientdiag.Sink
 	if cfg.ClientDiagnosticsEnabled {
-		diagnostics = clientdiag.New(store.DiagnosticsDir, buildinfo.Version, bootID, log.Default())
+		diagnostics = clientdiag.New(store.DiagnosticsDir, buildinfo.Version, bootID, log.Default(), clientdiag.Dependencies{Clock: clockSource, Random: randomSource})
 		defer diagnostics.Close()
 	}
 	static, err := frontend.Handler(cfg.FrontendDir)
@@ -105,8 +118,22 @@ func run(cfg config.Config) error {
 		terminals.Shutdown(context.Background())
 		return err
 	}
-	service := server.NewWithSourcesAndDiagnostics(cfg, buildinfo.Version, bootID, authManager, terminals, monitor.New(), terminalWorker, static, configRepo, keyInventory, connectionOptions, diagnostics)
-	service.SetAgentStoreRoot(store.Root)
+	agentService := agent.NewWithRepository(cfg, agent.OpenStore(store.Root), terminals, agent.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource})
+	serverDependencies := server.Dependencies{
+		Config: cfg, Version: buildinfo.Version, BootID: bootID, Auth: authManager, Workspace: workspace.New(fileRepositories.Workspace),
+		Connections: terminals, Monitor: monitor.NewWithClock(clockSource), Worker: terminalWorker,
+		Static: static, Definitions: definition.New(configRepo, keyInventory, connectionOptions), Diagnostics: diagnostics,
+		FileSystem:        filesystem.NewWithRepositories(terminals, connectionOptions, fileRepositories.Upload, cfg.StateDir, filesystem.Dependencies{Clock: clockSource, Random: randomSource}),
+		AgentProvisioning: agentService.Provisioning(),
+		AgentTelemetry:    agentService.Telemetry(),
+		IDs:               idGenerator, Clock: clockSource,
+	}
+	if err := serverDependencies.Validate(); err != nil {
+		terminals.Shutdown(context.Background())
+		_ = terminalWorker.Shutdown(context.Background())
+		return fmt.Errorf("build server: %w", err)
+	}
+	service := server.New(serverDependencies)
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Host, cfg.Port))
 	if err != nil {
 		_ = terminalWorker.Shutdown(context.Background())
@@ -149,12 +176,3 @@ func resolveWorkerPath(configured string) string {
 	return ""
 }
 func mustWD() string { path, _ := os.Getwd(); return path }
-func randomID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	raw[6] = raw[6]&0x0f | 0x40
-	raw[8] = raw[8]&0x3f | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:]), nil
-}

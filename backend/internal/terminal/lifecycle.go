@@ -9,14 +9,13 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/creack/pty"
 )
 
 func (m *Manager) Start(ctx context.Context) error {
-	metas, err := m.store.ListConnectionInstances()
+	metas, err := m.listPersistedInstances(ctx)
 	if err != nil {
 		return err
 	}
@@ -28,22 +27,22 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) retirePersisted(_ context.Context, meta persistence.ConnectionInstanceMeta) error {
+func (m *Manager) retirePersisted(_ context.Context, meta domain.ConnectionInstanceMeta) error {
 	if meta.Lifecycle == "live" || meta.Lifecycle == "" {
 		meta.Lifecycle = "interrupted"
 		meta.BackendRuntimeID = m.runtimeID
-		meta.UpdatedAt = time.Now().UTC()
-		if err := m.store.SaveConnectionInstance(meta); err != nil {
+		meta.UpdatedAt = m.now().UTC()
+		if err := m.saveMeta(meta); err != nil {
 			return err
 		}
 	}
-	if err := m.store.ArchiveConnectionInstance(meta.ID); err != nil {
+	if err := m.archivePersistedInstance(context.Background(), meta.ID); err != nil {
 		return err
 	}
-	return m.store.DeleteConnectionInstance(meta.ID)
+	return m.deletePersistedInstance(context.Background(), meta.ID)
 }
 
-func (m *Manager) startSession(ctx context.Context, meta persistence.ConnectionInstanceMeta, cwd string, createWorker bool) (*Session, error) {
+func (m *Manager) startSession(ctx context.Context, meta domain.ConnectionInstanceMeta, cwd string, createWorker bool) (*Session, error) {
 	workerReady := false
 	if createWorker {
 		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
@@ -61,12 +60,12 @@ func (m *Manager) startSession(ctx context.Context, meta persistence.ConnectionI
 	return session, nil
 }
 
-func (m *Manager) startShell(meta persistence.ConnectionInstanceMeta, cwd string) (*Session, error) {
+func (m *Manager) startShell(meta domain.ConnectionInstanceMeta, cwd string) (*Session, error) {
 	rcfile := findRCFile()
 	return m.startCommand(meta, cwd, []string{"/bin/bash", "--noprofile", "--rcfile", rcfile, "-i"}, []string{"ROAMINAL_SHELL_READY=1"})
 }
 
-func (m *Manager) startCommand(meta persistence.ConnectionInstanceMeta, cwd string, argv []string, extraEnv []string) (*Session, error) {
+func (m *Manager) startCommand(meta domain.ConnectionInstanceMeta, cwd string, argv []string, extraEnv []string) (*Session, error) {
 	if len(argv) == 0 {
 		return nil, errors.New("empty process argv")
 	}

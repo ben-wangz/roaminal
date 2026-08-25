@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import type { ConnectionView } from './connection-view';
 import type { AppPage } from './app-state';
 import type { WorkspaceMode } from './workspace-page';
+import { WorkspaceModeController } from './workspace-mode-controller';
 
 type Params = {
   view: ConnectionView;
@@ -11,18 +12,17 @@ type Params = {
 };
 
 export function useWorkspaceMode({ view, viewRef, selectConnection, setPage }: Params) {
-  const modes = useRef(new Map<string, WorkspaceMode>());
+  const controller = useRef(new WorkspaceModeController());
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('terminal');
 
   useEffect(() => {
-    const id = view.activeConnectionInstanceId;
-    setWorkspaceMode(id ? modes.current.get(id) || 'terminal' : 'terminal');
+    setWorkspaceMode(controller.current.modeFor(view.activeConnectionInstanceId));
   }, [view.activeConnectionInstanceId]);
 
   const openMode = useCallback((id: string, mode: WorkspaceMode) => {
-    modes.current.set(id, mode);
-    setWorkspaceMode(mode);
-    if (viewRef.current.activeConnectionInstanceId !== id) selectConnection(id);
+    const transition = controller.current.open(id, mode, viewRef.current.activeConnectionInstanceId);
+    setWorkspaceMode(transition.mode);
+    if (transition.selectedConnectionInstanceId) selectConnection(transition.selectedConnectionInstanceId);
     else setPage('workspace');
   }, [selectConnection, setPage, viewRef]);
 

@@ -1,10 +1,12 @@
-const PROTOCOL = 'roaminal-terminal-worker/2';
+const PROTOCOL = 'roaminal-terminal-worker/4';
+const SCHEMA_VERSION = 1;
 const HEADER_LIMIT = 64 * 1024;
 const PAYLOAD_LIMIT = 256 * 1024 * 1024;
 const WRITE_PAYLOAD_LIMIT = 256 * 1024;
 const sessions = new Map();
 let input = Buffer.alloc(0);
 let processing = Promise.resolve();
+let responseSequence = 0n;
 
 async function loadHeadlessPackages() {
   const hadNavigator = Object.prototype.hasOwnProperty.call(globalThis, 'navigator');
@@ -33,14 +35,22 @@ function frame(header, payload = Buffer.alloc(0)) {
 }
 
 function send(header, payload = Buffer.alloc(0)) {
-  process.stdout.write(frame(header, payload));
+  responseSequence += 1n;
+  process.stdout.write(frame({
+    schemaVersion: SCHEMA_VERSION,
+    sequence: String(responseSequence),
+    eventId: globalThis.crypto?.randomUUID?.() || `worker-${Date.now()}-${responseSequence}`,
+    occurredAt: new Date().toISOString(),
+    ...header,
+  }, payload));
 }
 
 function fail(error, request = {}) {
+  const correlationId = request.correlationId || `worker-error-${Date.now()}-${responseSequence + 1n}`;
   send({
     op: 'error',
     protocol: PROTOCOL,
-    ...(request.requestId ? { requestId: request.requestId } : {}),
+    correlationId,
     ...(request.terminalId ? { terminalId: request.terminalId } : {}),
     code: error.code || 'engine_failure',
     message: String(error.message || error),
@@ -76,7 +86,7 @@ function parseFrame() {
 }
 
 function validateProtocol(header) {
-  if (!header || typeof header !== 'object' || header.protocol !== PROTOCOL) {
+  if (!header || typeof header !== 'object' || header.protocol !== PROTOCOL || header.schemaVersion !== SCHEMA_VERSION || typeof header.correlationId !== 'string' || header.correlationId.length === 0) {
     const error = new Error('unsupported protocol');
     error.code = 'protocol_version';
     error.fatal = true;
@@ -86,27 +96,27 @@ function validateProtocol(header) {
 
 function validateRequest(header) {
   const allowed = {
-    hello: ['op', 'protocol', 'requestId'],
-    create: ['op', 'protocol', 'requestId', 'terminalId', 'cols', 'rows', 'scrollbackLines'],
-    restore: ['op', 'protocol', 'requestId', 'terminalId', 'cols', 'rows', 'scrollbackLines', 'throughSequence'],
-    write: ['op', 'protocol', 'terminalId', 'sequence'],
-    resize: ['op', 'protocol', 'terminalId', 'sequence', 'cols', 'rows'],
-    snapshot: ['op', 'protocol', 'requestId', 'terminalId', 'throughSequence'],
-    close: ['op', 'protocol', 'requestId', 'terminalId'],
-    shutdown: ['op', 'protocol', 'requestId']
+    hello: ['op', 'protocol', 'schemaVersion', 'correlationId'],
+    create: ['op', 'protocol', 'schemaVersion', 'correlationId', 'terminalId', 'cols', 'rows', 'scrollbackLines'],
+    restore: ['op', 'protocol', 'schemaVersion', 'correlationId', 'terminalId', 'cols', 'rows', 'scrollbackLines', 'throughSequence'],
+    write: ['op', 'protocol', 'schemaVersion', 'correlationId', 'terminalId', 'sequence'],
+    resize: ['op', 'protocol', 'schemaVersion', 'correlationId', 'terminalId', 'sequence', 'cols', 'rows'],
+    snapshot: ['op', 'protocol', 'schemaVersion', 'correlationId', 'terminalId', 'throughSequence'],
+    close: ['op', 'protocol', 'schemaVersion', 'correlationId', 'terminalId'],
+    shutdown: ['op', 'protocol', 'schemaVersion', 'correlationId']
   };
   const fields = allowed[header.op];
   if (!fields) { const error = new Error(`unknown operation: ${header.op}`); error.code = 'unknown_operation'; error.fatal = true; throw error; }
   for (const key of Object.keys(header)) if (!fields.includes(key)) { const error = new Error(`unknown header field: ${key}`); error.code = 'invalid_frame'; error.fatal = true; throw error; }
   for (const key of fields) {
-    if (key === 'op' || key === 'protocol') continue;
+    if (key === 'op' || key === 'protocol' || key === 'schemaVersion') continue;
     if (!Object.prototype.hasOwnProperty.call(header, key)) {
       const error = new Error(`missing ${key}`);
       error.code = 'invalid_frame';
       error.fatal = true;
       throw error;
     }
-    if (['requestId', 'terminalId', 'sequence', 'throughSequence'].includes(key) && (typeof header[key] !== 'string' || header[key].length === 0)) {
+    if (['correlationId', 'terminalId', 'sequence', 'throughSequence'].includes(key) && (typeof header[key] !== 'string' || header[key].length === 0)) {
       const error = new Error(`invalid ${key}`);
       error.code = 'invalid_frame';
       error.fatal = true;
@@ -169,7 +179,7 @@ async function handle({ header, payload }) {
     send({
       op: 'ready',
       protocol: PROTOCOL,
-      requestId: header.requestId,
+      correlationId: header.correlationId,
       engine: 'xterm-headless',
       engineVersion: '6.0.0',
       serializeAddonVersion: '0.14.0'
@@ -197,7 +207,7 @@ async function handle({ header, payload }) {
       session.chain = session.chain.then(() => new Promise((resolve) => terminal.write(decodeUTF8(payload), resolve)));
       await session.chain;
     }
-    send({ op: 'result', protocol: PROTOCOL, requestId: header.requestId, requestOp: op, throughSequence: String(session.sequence) });
+    send({ op: 'result', protocol: PROTOCOL, correlationId: header.correlationId, requestOp: op, throughSequence: String(session.sequence) });
     return;
   }
   const session = sessions.get(header.terminalId);
@@ -233,19 +243,19 @@ async function handle({ header, payload }) {
   if (op === 'snapshot') {
     await session.chain;
     const snapshot = session.serialize.serialize({ scrollback: session.terminal.options.scrollback });
-    send({ op: 'result', protocol: PROTOCOL, requestId: header.requestId, requestOp: op, throughSequence: String(session.sequence) }, Buffer.from(snapshot));
+    send({ op: 'result', protocol: PROTOCOL, correlationId: header.correlationId, requestOp: op, throughSequence: String(session.sequence) }, Buffer.from(snapshot));
     return;
   }
   if (op === 'close') {
     session.terminal.dispose();
     sessions.delete(header.terminalId);
-    send({ op: 'result', protocol: PROTOCOL, requestId: header.requestId, requestOp: op });
+    send({ op: 'result', protocol: PROTOCOL, correlationId: header.correlationId, requestOp: op });
     return;
   }
   if (op === 'shutdown') {
     for (const current of sessions.values()) current.terminal.dispose();
     sessions.clear();
-    send({ op: 'result', protocol: PROTOCOL, requestId: header.requestId, requestOp: op });
+    send({ op: 'result', protocol: PROTOCOL, correlationId: header.correlationId, requestOp: op });
     process.exit(0);
   }
   const error = new Error(`unknown operation: ${op}`);

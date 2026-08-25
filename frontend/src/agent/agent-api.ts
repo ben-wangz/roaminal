@@ -25,18 +25,18 @@ export type AgentInitialization = {
 };
 
 export function getAgent(connectionInstanceId: string): Promise<AgentDetails> {
-  return api<AgentDetails>(`/api/connection-instances/${connectionInstanceId}/agent`);
+  return api<AgentDetails>(`/connection-instances/${connectionInstanceId}/agent`);
 }
 
 export function initializeAgent(connectionInstanceId: string): Promise<AgentInitialization> {
-  return api<AgentInitialization>(`/api/connection-instances/${connectionInstanceId}/agent/initializations`, {
+  return api<AgentInitialization>(`/connection-instances/${connectionInstanceId}/agent/initializations`, {
     method: 'POST',
     body: '{}',
   });
 }
 
 export function getAgentInitialization(initializationId: string): Promise<AgentInitialization> {
-  return api<AgentInitialization>(`/api/agent/initializations/${initializationId}`);
+  return api<AgentInitialization>(`/agent/initializations/${initializationId}`);
 }
 
 export function agentSummary(connection: ConnectionInstanceSummary): AgentSummary {

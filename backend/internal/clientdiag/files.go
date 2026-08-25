@@ -1,29 +1,42 @@
 package clientdiag
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"sync"
 	"time"
+
+	systemclock "github.com/ben-wangz/roaminal/backend/internal/clock"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/random"
 )
 
 var managedFilePattern = regexp.MustCompile(`^client-[0-9]{8}T[0-9]{6}\.[0-9]{9}Z-[0-9a-f]{8}\.ndjson$`)
 
 type fileWriter struct {
-	mu   sync.Mutex
-	dir  string
-	file *os.File
-	path string
-	size int64
+	mu     sync.Mutex
+	dir    string
+	file   *os.File
+	path   string
+	size   int64
+	clock  ports.Clock
+	random ports.RandomSource
 }
 
-func newFileWriter(dir string) (*fileWriter, error) {
+func newFileWriter(dir string, dependencies ...Dependencies) (*fileWriter, error) {
+	deps := Dependencies{Clock: systemclock.System{}, Random: random.CryptoSource{}}
+	if len(dependencies) > 0 {
+		if dependencies[0].Clock != nil {
+			deps.Clock = dependencies[0].Clock
+		}
+		if dependencies[0].Random != nil {
+			deps.Random = dependencies[0].Random
+		}
+	}
 	if info, err := os.Lstat(dir); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return nil, errors.New("diagnostics directory is a symlink")
 	}
@@ -40,16 +53,16 @@ func newFileWriter(dir string) (*fileWriter, error) {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return nil, err
 	}
-	writer := &fileWriter{dir: dir}
+	writer := &fileWriter{dir: dir, clock: deps.Clock, random: deps.Random}
 	writer.mu.Lock()
 	defer writer.mu.Unlock()
-	if err := writer.pruneLocked(time.Now().UTC()); err != nil {
+	if err := writer.pruneLocked(writer.clock.Now().UTC()); err != nil {
 		return nil, err
 	}
 	if err := writer.rotateLocked(); err != nil {
 		return nil, err
 	}
-	if err := writer.pruneLocked(time.Now().UTC()); err != nil {
+	if err := writer.pruneLocked(writer.clock.Now().UTC()); err != nil {
 		return nil, err
 	}
 	return writer, nil
@@ -58,7 +71,7 @@ func newFileWriter(dir string) (*fileWriter, error) {
 func (w *fileWriter) WriteBatch(lines [][]byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	now := time.Now().UTC()
+	now := w.clock.Now().UTC()
 	for _, line := range lines {
 		if len(line) > MaxStoredFileBytes {
 			return errors.New("diagnostic record exceeds file limit")
@@ -108,10 +121,10 @@ func (w *fileWriter) rotateLocked() error {
 	}
 	for attempts := 0; attempts < 10; attempts++ {
 		var raw [4]byte
-		if _, err := io.ReadFull(rand.Reader, raw[:]); err != nil {
+		if _, err := w.random.Read(raw[:]); err != nil {
 			return err
 		}
-		path := filepath.Join(w.dir, fmt.Sprintf("client-%s-%x.ndjson", time.Now().UTC().Format("20060102T150405.000000000Z"), raw))
+		path := filepath.Join(w.dir, fmt.Sprintf("client-%s-%x.ndjson", w.clock.Now().UTC().Format("20060102T150405.000000000Z"), raw))
 		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if errors.Is(err, os.ErrExist) {
 			continue

@@ -1,4 +1,4 @@
-package connection
+package monitor
 
 const remoteCollectorScript = `#!/bin/sh
 set -u

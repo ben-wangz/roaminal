@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Monitor, RotateCcw, Save } from 'lucide-react';
 import type { Terminal } from '@xterm/xterm';
-import { DEFAULT_APPEARANCE, FONT_CATALOG, MAX_FONT_SIZE, MIN_FONT_SIZE, type TerminalAppearance, fontFamily, normalizeFontSize } from './appearance-model';
+import { APPEARANCE_SCHEMA_VERSION, DEFAULT_APPEARANCE, FONT_CATALOG, MAX_FONT_SIZE, MIN_FONT_SIZE, type TerminalAppearance, fontFamily, normalizeFontSize } from './appearance-model';
 
 type Props = {
   appearance: TerminalAppearance;
@@ -56,7 +56,7 @@ export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, ha
     event.preventDefault();
     const fontSize = normalizeFontSize(draft.fontSize);
     if (fontSize === null) return;
-    onSave({ schemaVersion: 1, fontId: draft.fontId, fontSize });
+    onSave({ schemaVersion: APPEARANCE_SCHEMA_VERSION, fontId: draft.fontId, fontSize });
   }
   return (
     <section className="appearance-page" aria-labelledby="appearance-title">

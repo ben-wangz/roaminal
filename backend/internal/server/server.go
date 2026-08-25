@@ -7,75 +7,94 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/agent"
+	"github.com/ben-wangz/roaminal/backend/internal/api"
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
+	systemclock "github.com/ben-wangz/roaminal/backend/internal/clock"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
-	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
-	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
-	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
-	"github.com/ben-wangz/roaminal/backend/internal/worker"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/workspace"
 )
 
 type Server struct {
 	cfg               config.Config
 	auth              *auth.Manager
-	terms             *connection.Manager
+	workspace         *workspace.Service
+	terms             connectionService
 	monitor           *monitor.Monitor
-	worker            *worker.Client
+	ids               ports.IDGenerator
+	clock             ports.Clock
+	worker            ports.TerminalWorker
 	bootID            string
 	version           string
 	handler           http.Handler
 	api               http.Handler
 	started           time.Time
 	static            http.Handler
-	sshConfig         *sshconfig.Repository
-	sshKeys           *sshkey.Inventory
-	connectionOptions *connectionoptions.Store
+	definitions       *definition.Service
 	filesystem        *filesystem.Service
 	diagnostics       *clientdiag.Sink
-	agent             *agent.Service
+	agentProvisioning agent.ProvisioningService
+	agentTelemetry    agent.TelemetryService
 }
 
-func New(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client) *Server {
-	return NewWithStatic(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, http.NotFoundHandler())
+type Dependencies struct {
+	Config            config.Config
+	Version           string
+	BootID            string
+	Auth              *auth.Manager
+	Workspace         *workspace.Service
+	Connections       connectionService
+	Monitor           *monitor.Monitor
+	IDs               ports.IDGenerator
+	Clock             ports.Clock
+	Worker            ports.TerminalWorker
+	Static            http.Handler
+	Definitions       *definition.Service
+	Diagnostics       *clientdiag.Sink
+	FileSystem        *filesystem.Service
+	AgentProvisioning agent.ProvisioningService
+	AgentTelemetry    agent.TelemetryService
 }
 
-func NewWithStatic(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler) *Server {
-	s := &Server{cfg: cfg, version: version, bootID: bootID, auth: authManager, terms: terms, monitor: monitorService, worker: terminalWorker, started: time.Now(), static: static, agent: agent.New(cfg, cfg.StateDir, terms)}
-	if terms != nil {
-		s.filesystem = filesystem.New(terms, nil)
+// New constructs the complete HTTP application graph once. Optional feature
+// dependencies are represented explicitly in Dependencies; no setter rebuilds
+// the router after construction.
+func New(deps Dependencies) *Server {
+	static := deps.Static
+	if static == nil {
+		static = http.NotFoundHandler()
 	}
+	runtimeClock := deps.Clock
+	if runtimeClock == nil {
+		runtimeClock = systemclock.System{}
+	}
+	s := &Server{
+		cfg: deps.Config, version: deps.Version, bootID: deps.BootID, auth: deps.Auth, workspace: deps.Workspace,
+		terms: deps.Connections, monitor: deps.Monitor, ids: deps.IDs, clock: runtimeClock, worker: deps.Worker,
+		started: runtimeClock.Now(), static: static, definitions: deps.Definitions,
+		diagnostics: deps.Diagnostics,
+	}
+	s.filesystem = deps.FileSystem
+	s.agentProvisioning = deps.AgentProvisioning
+	s.agentTelemetry = deps.AgentTelemetry
 	s.api = s.newAPIRouter()
 	s.handler = http.HandlerFunc(s.serve)
 	return s
 }
 
-func NewWithSources(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store) *Server {
-	return NewWithSourcesAndDiagnostics(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, static, configRepo, keys, options, nil)
-}
-
-func NewWithSourcesAndDiagnostics(cfg config.Config, version, bootID string, authManager *auth.Manager, terms *connection.Manager, monitorService *monitor.Monitor, terminalWorker *worker.Client, static http.Handler, configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store, diagnostics *clientdiag.Sink) *Server {
-	s := NewWithStatic(cfg, version, bootID, authManager, terms, monitorService, terminalWorker, static)
-	s.sshConfig, s.sshKeys, s.connectionOptions, s.diagnostics = configRepo, keys, options, diagnostics
-	if terms != nil {
-		s.filesystem = filesystem.New(terms, options)
-	}
-	s.api = s.newAPIRouter()
-	return s
-}
-
 func (s *Server) Handler() http.Handler { return s.handler }
 
-func (s *Server) SetAgentStoreRoot(root string) {
-	s.agent = agent.New(s.cfg, root, s.terms)
-	s.api = s.newAPIRouter()
-}
-
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/ws/") {
+	if s.ids != nil {
+		if value, err := s.ids.NewID(); err == nil && value != "" {
+			w.Header().Set("X-Roaminal-Request-ID", value)
+		}
+	}
+	if strings.HasPrefix(r.URL.Path, api.HTTPPrefix+"/") || r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, api.WebSocketPrefix+"/") {
 		if r.Method != http.MethodOptions && !s.sameOrigin(r) {
 			writeError(w, http.StatusForbidden, "origin denied")
 			return
@@ -145,95 +164,15 @@ func (s *Server) authenticatedRoute(fn authenticatedHandler) http.Handler {
 	})
 }
 
-func (s *Server) newAPIRouter() http.Handler {
-	mux := http.NewServeMux()
-	plain := func(method string, fn http.HandlerFunc) http.Handler { return methodRoute{method: fn} }
-	protected := func(method string, fn authenticatedHandler) http.Handler {
-		return methodRoute{method: s.authenticatedRoute(fn)}
-	}
-	mux.Handle("/healthz", plain(http.MethodGet, s.health))
-	mux.Handle("/api/version", plain(http.MethodGet, s.versionInfo))
-	if s.cfg.ClientDiagnosticsEnabled && s.diagnostics != nil {
-		mux.Handle("/api/client-diagnostics", protected(http.MethodPost, s.clientDiagnostics))
-	}
-	mux.Handle("/api/auth/challenge", plain(http.MethodPost, s.challenge))
-	mux.Handle("/api/auth/login", plain(http.MethodPost, s.login))
-	mux.Handle("/api/auth/refresh", plain(http.MethodPost, s.refresh))
-	mux.Handle("/api/auth/logout", plain(http.MethodPost, s.logout))
-	mux.Handle("/api/auth/session", protected(http.MethodGet, s.currentSession))
-	mux.Handle("/api/auth/sessions", protected(http.MethodGet, s.authSessions))
-	mux.Handle("/api/auth/sessions/{authSessionId}", protected(http.MethodDelete, s.revokeAuthSession))
-	mux.Handle("/api/auth/logout-others", protected(http.MethodPost, s.logoutOthers))
-	mux.Handle("/api/heartbeat", methodRoute{
-		http.MethodGet:  s.authenticatedRoute(s.heartbeatGet),
-		http.MethodPost: s.authenticatedRoute(s.heartbeatPost),
-	})
-	mux.Handle("/api/connection-instances", methodRoute{
-		http.MethodGet:  s.authenticatedRoute(s.listConnectionInstances),
-		http.MethodPost: s.authenticatedRoute(s.createConnectionInstance),
-	})
-	mux.Handle("/api/connection-instances/{connectionInstanceId}", methodRoute{
-		http.MethodGet:    s.authenticatedRoute(s.getConnectionInstance),
-		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionInstance),
-	})
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/agent", protected(http.MethodGet, s.agentSummary))
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/agent/initializations", methodRoute{
-		http.MethodPost: s.authenticatedRoute(s.startAgentInitialization),
-	})
-	mux.Handle("/api/agent/initializations/{initializationId}", protected(http.MethodGet, s.getAgentInitialization))
-	mux.Handle("/api/agent/events", plain(http.MethodPost, s.agentEvent))
-	mux.Handle("/api/connection-instances/order", protected(http.MethodPut, s.reorderConnectionInstances))
-	mux.Handle("/api/connection-instance-groups", methodRoute{
-		http.MethodGet:  s.authenticatedRoute(s.listConnectionInstanceGroups),
-		http.MethodPost: s.authenticatedRoute(s.createConnectionInstanceGroup),
-	})
-	mux.Handle("/api/connection-instance-groups/layout", protected(http.MethodPut, s.replaceConnectionInstanceLayout))
-	mux.Handle("/api/connection-instance-groups/{groupId}", methodRoute{
-		http.MethodPatch:  s.authenticatedRoute(s.renameConnectionInstanceGroup),
-		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionInstanceGroup),
-	})
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/remote-monitor", protected(http.MethodGet, s.remoteMonitor))
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/title", protected(http.MethodPatch, s.updateConnectionTitle))
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/root", protected(http.MethodGet, s.filesystemRoot))
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/entries", protected(http.MethodGet, s.filesystemEntries))
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/stat", protected(http.MethodGet, s.filesystemStat))
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/content", protected(http.MethodGet, s.filesystemContent))
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/uploads", methodRoute{
-		http.MethodPost: s.authenticatedRoute(s.filesystemCreateUpload),
-	})
-	mux.Handle("/api/connection-instances/{connectionInstanceId}/filesystem/uploads/{uploadId}", methodRoute{
-		http.MethodGet:    s.authenticatedRoute(s.filesystemGetUpload),
-		http.MethodDelete: s.authenticatedRoute(s.filesystemCancelUpload),
-	})
-	mux.Handle("/api/connection-launches", protected(http.MethodPost, s.createConnectionLaunch))
-	mux.Handle("/api/connection-launches/{launchId}", protected(http.MethodDelete, s.deleteConnectionLaunch))
-	mux.Handle("/api/connection-definitions", methodRoute{
-		http.MethodGet:  s.authenticatedRoute(s.listConnectionDefinitions),
-		http.MethodPost: s.authenticatedRoute(s.createConnectionDefinition),
-	})
-	mux.Handle("/api/connection-definitions/{connectionDefinitionId}", methodRoute{
-		http.MethodPut:    s.authenticatedRoute(s.updateConnectionDefinition),
-		http.MethodDelete: s.authenticatedRoute(s.deleteConnectionDefinition),
-	})
-	mux.Handle("/api/connection-definitions/{connectionDefinitionId}/duplicate", protected(http.MethodPost, s.duplicateConnectionDefinition))
-	mux.Handle("/api/ssh-keys", protected(http.MethodGet, s.listSSHKeys))
-	mux.Handle("/api/ssh-keys/{keyId}", protected(http.MethodDelete, s.deleteSSHKey))
-	mux.Handle("/api/ssh-keys/{keyId}/public-key", protected(http.MethodGet, s.publicSSHKey))
-	mux.Handle("/api/ssh-key-generations", protected(http.MethodPost, s.generateSSHKey))
-	mux.Handle("/ws/connection-instances/{connectionInstanceId}", plain(http.MethodGet, s.websocket))
-	mux.Handle("/ws/connection-launches/{launchId}", plain(http.MethodGet, s.websocket))
-	return mux
-}
-
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	if !s.worker.Available() {
 		writeError(w, http.StatusServiceUnavailable, "terminal worker unavailable")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, successResponse{Status: "ok"})
 }
 func (s *Server) versionInfo(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"name": "roaminal", "version": s.version, "apiVersion": "roaminal.v1", "bootId": s.bootID, "clientDiagnosticsEnabled": s.cfg.ClientDiagnosticsEnabled})
+	writeJSON(w, http.StatusOK, api.VersionResponse{Name: "roaminal", Version: s.version, APIVersion: api.Version, BootID: s.bootID, ClientDiagnosticsEnabled: s.cfg.ClientDiagnosticsEnabled})
 }
 
 type authenticatedHandler func(http.ResponseWriter, *http.Request, string)

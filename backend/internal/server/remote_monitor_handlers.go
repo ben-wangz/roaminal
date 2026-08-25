@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func (s *Server) remoteMonitor(w http.ResponseWriter, r *http.Request, _ string) {
@@ -17,9 +17,9 @@ func (s *Server) remoteMonitor(w http.ResponseWriter, r *http.Request, _ string)
 	result, err := s.terms.RemoteMonitor(r.Context(), id)
 	if err != nil {
 		switch {
-		case errors.Is(err, connection.ErrRemoteInstanceNotFound):
+		case errors.Is(err, ports.ErrRemoteInstanceNotFound):
 			writeError(w, http.StatusNotFound, "not found")
-		case errors.Is(err, connection.ErrRemoteNoTransport):
+		case errors.Is(err, ports.ErrRemoteNoTransport):
 			writeError(w, http.StatusConflict, "no remote transport", "no_remote_transport")
 		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			writeError(w, http.StatusRequestTimeout, "remote monitor timeout")

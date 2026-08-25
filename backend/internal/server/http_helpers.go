@@ -1,14 +1,15 @@
 package server
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/ben-wangz/roaminal/backend/internal/api"
+	"github.com/ben-wangz/roaminal/backend/internal/identity"
 )
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
@@ -47,18 +48,65 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func writeSuccess(w http.ResponseWriter) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, successResponse{Status: "ok"})
 }
 
 func writeError(w http.ResponseWriter, status int, message string, fields ...string) {
-	if status >= 500 {
-		id := requestID()
-		w.Header().Set("X-Roaminal-Request-ID", id)
-		log.Printf("request_id=%s status=%d", id, status)
+	value := api.NewApplicationError(api.ErrorCode(errorCode(message)), status, message)
+	if len(fields) > 0 {
+		value.Field = fields[0]
 	}
-	body := map[string]string{"error": message, "code": errorCode(message)}
+	writeApplicationError(w, value)
+}
+
+func writeErrorDetails(w http.ResponseWriter, status int, message string, details any) {
+	value := api.NewApplicationError(api.ErrorCode(errorCode(message)), status, message)
+	value.Details = details
+	writeApplicationError(w, value)
+}
+
+func writeApplicationError(w http.ResponseWriter, err error) {
+	var value *api.ApplicationError
+	if errors.As(err, &value) && value != nil {
+		status := value.Status
+		if status == 0 {
+			status = http.StatusInternalServerError
+		}
+		code := string(value.Code)
+		if code == "" {
+			code = string(api.ErrorInternal)
+		}
+		message := value.Message
+		if message == "" {
+			message = "internal error"
+		}
+		writeCodedErrorWithRetry(w, status, message, code, value.Details, &value.Retryable, value.Field)
+		return
+	}
+	writeError(w, http.StatusInternalServerError, "internal error")
+}
+
+func writeCodedError(w http.ResponseWriter, status int, message, code string, details any, fields ...string) {
+	writeCodedErrorWithRetry(w, status, message, code, details, nil, fields...)
+}
+
+func writeCodedErrorWithRetry(w http.ResponseWriter, status int, message, code string, details any, retryableOverride *bool, fields ...string) {
+	requestIDValue := ""
+	if status >= 500 {
+		requestIDValue = w.Header().Get("X-Roaminal-Request-ID")
+		if requestIDValue == "" {
+			requestIDValue = requestID()
+		}
+		w.Header().Set("X-Roaminal-Request-ID", requestIDValue)
+		log.Printf("request_id=%s status=%d", requestIDValue, status)
+	}
+	retryable := status == http.StatusRequestTimeout || status == http.StatusGatewayTimeout || status == http.StatusServiceUnavailable || status == http.StatusTooManyRequests
+	if retryableOverride != nil {
+		retryable = *retryableOverride
+	}
+	body := api.ErrorResponse{Error: message, Code: code, Retryable: retryable, RequestID: requestIDValue, Details: details}
 	if len(fields) > 0 && fields[0] != "" {
-		body["field"] = fields[0]
+		body.Field = fields[0]
 	}
 	writeJSON(w, status, body)
 }
@@ -71,11 +119,9 @@ func errorCode(message string) string {
 	return value
 }
 func requestID() string {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
+	value, err := (identity.UUIDGenerator{}).NewID()
+	if err != nil {
 		return "unknown"
 	}
-	value[6] = value[6]&0x0f | 0x40
-	value[8] = value[8]&0x3f | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:])
+	return value
 }

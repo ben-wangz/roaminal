@@ -38,7 +38,7 @@ export async function remoteMonitor(id: string, signal?: AbortSignal): Promise<R
   });
   try {
     return await Promise.race([
-      api<RemoteMonitorSnapshot>(`/api/connection-instances/${encodeURIComponent(id)}/remote-monitor`, { signal: controller.signal }),
+      api<RemoteMonitorSnapshot>(`/connection-instances/${encodeURIComponent(id)}/remote-monitor`, { signal: controller.signal }),
       timeout,
     ]);
   } finally {

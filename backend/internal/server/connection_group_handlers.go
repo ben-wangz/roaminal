@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ben-wangz/roaminal/backend/internal/auth"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type connectionInstanceGroupNameRequest struct {
@@ -19,7 +19,7 @@ type connectionInstanceGroupRevisionRequest struct {
 }
 
 func (s *Server) listConnectionInstanceGroups(w http.ResponseWriter, _ *http.Request, sessionID string) {
-	writeJSON(w, http.StatusOK, map[string]any{"layout": s.connectionInstanceLayout(sessionID)})
+	writeJSON(w, http.StatusOK, connectionInstanceLayoutResponse{Layout: s.connectionInstanceLayout(sessionID)})
 }
 
 func (s *Server) createConnectionInstanceGroup(w http.ResponseWriter, r *http.Request, sessionID string) {
@@ -43,20 +43,24 @@ func (s *Server) createConnectionInstanceGroup(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
-	groupID, err := persistence.NewUUID()
+	if s.ids == nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	groupID, err := s.ids.NewID()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	next := cloneConnectionInstanceLayout(layout)
-	next.Groups = append(next.Groups, persistence.ConnectionInstanceGroup{
+	next.Groups = append(next.Groups, domain.ConnectionInstanceGroup{
 		GroupID:               groupID,
 		Name:                  name,
 		ConnectionInstanceIDs: []string{},
 	})
 	ungroupedIndex := len(next.GroupOrder)
 	for index, id := range next.GroupOrder {
-		if id == persistence.UngroupedConnectionInstanceGroupID {
+		if id == domain.UngroupedConnectionInstanceGroupID {
 			ungroupedIndex = index
 			break
 		}
@@ -71,12 +75,12 @@ func (s *Server) createConnectionInstanceGroup(w http.ResponseWriter, r *http.Re
 	if next.Revision == 0 {
 		next.Revision = 1
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"layout": next})
+	writeJSON(w, http.StatusCreated, connectionInstanceLayoutResponse{Layout: next})
 }
 
 func (s *Server) renameConnectionInstanceGroup(w http.ResponseWriter, r *http.Request, sessionID string) {
 	groupID := r.PathValue("groupId")
-	if groupID == persistence.UngroupedConnectionInstanceGroupID {
+	if groupID == domain.UngroupedConnectionInstanceGroupID {
 		writeConnectionInstanceGroupError(w, http.StatusBadRequest, "ungrouped cannot be renamed", "groupId")
 		return
 	}
@@ -121,12 +125,12 @@ func (s *Server) renameConnectionInstanceGroup(w http.ResponseWriter, r *http.Re
 	if next.Revision == 0 {
 		next.Revision = 1
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"layout": next})
+	writeJSON(w, http.StatusOK, connectionInstanceLayoutResponse{Layout: next})
 }
 
 func (s *Server) deleteConnectionInstanceGroup(w http.ResponseWriter, r *http.Request, sessionID string) {
 	groupID := r.PathValue("groupId")
-	if groupID == persistence.UngroupedConnectionInstanceGroupID {
+	if groupID == domain.UngroupedConnectionInstanceGroupID {
 		writeConnectionInstanceGroupError(w, http.StatusBadRequest, "ungrouped cannot be deleted", "groupId")
 		return
 	}
@@ -149,7 +153,7 @@ func (s *Server) deleteConnectionInstanceGroup(w http.ResponseWriter, r *http.Re
 			continue
 		}
 		if len(group.ConnectionInstanceIDs) > 0 {
-			writeConnectionInstanceGroupError(w, http.StatusConflict, "connection instance group is not empty", "groupId", map[string]any{"layout": layout})
+			writeConnectionInstanceGroupError(w, http.StatusConflict, "connection instance group is not empty", "groupId", connectionInstanceLayoutResponse{Layout: layout})
 			return
 		}
 		next.Groups = append(next.Groups[:index], next.Groups[index+1:]...)
@@ -161,14 +165,14 @@ func (s *Server) deleteConnectionInstanceGroup(w http.ResponseWriter, r *http.Re
 		if next.Revision == 0 {
 			next.Revision = 1
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"layout": next})
+		writeJSON(w, http.StatusOK, connectionInstanceLayoutResponse{Layout: next})
 		return
 	}
 	writeConnectionInstanceGroupError(w, http.StatusNotFound, "connection instance group not found", "groupId")
 }
 
 func (s *Server) replaceConnectionInstanceLayout(w http.ResponseWriter, r *http.Request, sessionID string) {
-	var body persistence.ConnectionInstanceLayout
+	var body domain.ConnectionInstanceLayout
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
@@ -178,10 +182,10 @@ func (s *Server) replaceConnectionInstanceLayout(w http.ResponseWriter, r *http.
 		return
 	}
 	if hasFullConnectionInstanceGroup(body) {
-		writeConnectionInstanceGroupError(w, http.StatusConflict, "connection instance group limit reached (10)", "layout", map[string]any{"layout": layout})
+		writeConnectionInstanceGroupError(w, http.StatusConflict, "connection instance group limit reached (10)", "layout", connectionInstanceLayoutResponse{Layout: layout})
 		return
 	}
-	if err := persistence.ValidateConnectionInstanceLayout(&body); err != nil {
+	if err := domain.ValidateConnectionInstanceLayout(&body); err != nil {
 		writeConnectionInstanceGroupError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -194,34 +198,34 @@ func (s *Server) replaceConnectionInstanceLayout(w http.ResponseWriter, r *http.
 	if next.Revision == 0 {
 		next.Revision = 1
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"layout": next})
+	writeJSON(w, http.StatusOK, connectionInstanceLayoutResponse{Layout: next})
 }
 
-func (s *Server) saveConnectionInstanceLayout(w http.ResponseWriter, sessionID string, current, next persistence.ConnectionInstanceLayout) error {
+func (s *Server) saveConnectionInstanceLayout(w http.ResponseWriter, sessionID string, current, next domain.ConnectionInstanceLayout) error {
 	next.Revision = current.Revision + 1
 	if next.Revision == 0 {
 		next.Revision = 1
 	}
 	if hasFullConnectionInstanceGroup(next) {
-		writeConnectionInstanceGroupError(w, http.StatusConflict, "connection instance group limit reached (10)", "layout", map[string]any{"layout": current})
+		writeConnectionInstanceGroupError(w, http.StatusConflict, "connection instance group limit reached (10)", "layout", connectionInstanceLayoutResponse{Layout: current})
 		return errors.New("connection instance group exceeds maximum size")
 	}
-	if err := persistence.ValidateConnectionInstanceLayout(&next); err != nil {
+	if err := domain.ValidateConnectionInstanceLayout(&next); err != nil {
 		writeConnectionInstanceGroupError(w, http.StatusBadRequest, err.Error())
 		return err
 	}
-	if err := s.auth.SetConnectionInstanceLayout(sessionID, next); err != nil {
-		if errors.Is(err, auth.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-		} else {
-			writeError(w, http.StatusInternalServerError, "internal error")
+	if err := s.workspace.SetConnectionInstanceLayout(sessionID, next, current.Revision); err != nil {
+		if errors.Is(err, ports.ErrRevisionConflict) {
+			writeLayoutConflict(w, s.connectionInstanceLayout(sessionID))
+			return err
 		}
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return err
 	}
 	return nil
 }
 
-func hasFullConnectionInstanceGroup(layout persistence.ConnectionInstanceLayout) bool {
+func hasFullConnectionInstanceGroup(layout domain.ConnectionInstanceLayout) bool {
 	for _, group := range layout.Groups {
 		if len(group.ConnectionInstanceIDs) > 10 {
 			return true

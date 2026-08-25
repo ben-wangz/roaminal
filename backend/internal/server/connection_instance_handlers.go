@@ -7,8 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type createConnectionRequest struct {
@@ -20,7 +19,7 @@ type createConnectionRequest struct {
 }
 
 func (s *Server) listConnectionInstances(w http.ResponseWriter, _ *http.Request, sessionID string) {
-	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": s.orderedConnectionInstances(sessionID), "connectionInstanceLayout": s.connectionInstanceLayout(sessionID)})
+	writeJSON(w, http.StatusOK, connectionInstanceCollectionResponse{ConnectionInstances: s.orderedConnectionInstances(sessionID), ConnectionInstanceLayout: s.connectionInstanceLayout(sessionID)})
 }
 
 func (s *Server) getConnectionInstance(w http.ResponseWriter, r *http.Request, _ string) {
@@ -31,8 +30,8 @@ func (s *Server) getConnectionInstance(w http.ResponseWriter, r *http.Request, _
 	}
 	for _, item := range s.terms.Summaries() {
 		if item.ID == id {
-			if s.agent != nil {
-				item.Agent = s.agent.Summary(item)
+			if s.agentTelemetry != nil {
+				item.Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(item))
 			}
 			writeJSON(w, http.StatusOK, item)
 			return
@@ -50,7 +49,7 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 	if body.InitialCwd != nil {
 		cwd = *body.InitialCwd
 	}
-	var result terminal.Summary
+	var result ports.ConnectionInstanceSummary
 	var err error
 	if body.ConnectionDefinitionID != "" && body.ConnectionDefinitionID != "local" {
 		result, err = s.terms.CreateRemote(r.Context(), body.ConnectionDefinitionID, body.Cols, body.Rows, stringValue(body.ReuseFromConnectionInstanceID))
@@ -58,19 +57,19 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 		result, err = s.terms.Create(r.Context(), cwd, body.Cols, body.Rows)
 	}
 	if err != nil {
-		if errors.Is(err, connection.ErrTransportDraining) {
+		if errors.Is(err, ports.ErrTransportDraining) {
 			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")
-		} else if errors.Is(err, connection.ErrTransportUnavailable) {
+		} else if errors.Is(err, ports.ErrTransportUnavailable) {
 			writeError(w, http.StatusConflict, "ssh transport unavailable", "transport")
-		} else if errors.Is(err, connection.ErrConnectionCapacity) {
+		} else if errors.Is(err, ports.ErrConnectionCapacity) {
 			writeError(w, http.StatusConflict, "connection capacity reached", "capacity")
 		} else {
 			writeError(w, http.StatusBadRequest, err.Error(), "connection")
 		}
 		return
 	}
-	if s.agent != nil {
-		result.Agent = s.agent.Summary(result)
+	if s.agentTelemetry != nil {
+		result.Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(result))
 	}
 	writeJSON(w, http.StatusCreated, result)
 }
@@ -86,20 +85,20 @@ func (s *Server) createConnectionLaunch(w http.ResponseWriter, r *http.Request, 
 	}
 	result, err := s.terms.CreateRemoteLaunchOwned(r.Context(), body.ConnectionDefinitionID, body.Cols, body.Rows, stringValue(body.ReuseFromConnectionInstanceID), sessionID)
 	if err != nil {
-		if errors.Is(err, connection.ErrTmuxNotEnabled) {
+		if errors.Is(err, ports.ErrTmuxNotEnabled) {
 			writeError(w, http.StatusConflict, "tmux is not enabled for this connection", "tmux")
-		} else if errors.Is(err, connection.ErrTransportDraining) {
+		} else if errors.Is(err, ports.ErrTransportDraining) {
 			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")
-		} else if errors.Is(err, connection.ErrTransportUnavailable) {
+		} else if errors.Is(err, ports.ErrTransportUnavailable) {
 			writeError(w, http.StatusConflict, "ssh transport unavailable", "transport")
-		} else if errors.Is(err, connection.ErrConnectionCapacity) {
+		} else if errors.Is(err, ports.ErrConnectionCapacity) {
 			writeError(w, http.StatusConflict, "connection capacity reached", "capacity")
 		} else {
 			writeError(w, http.StatusBadRequest, err.Error(), "connection")
 		}
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{"launchId": result.ID, "connectionDefinitionId": result.ConnectionDefinitionID, "lifecycle": result.Lifecycle, "tmuxSessionName": result.TmuxSessionName})
+	writeJSON(w, http.StatusAccepted, connectionLaunchResponse{LaunchID: result.ID, ConnectionDefinitionID: result.ConnectionDefinitionID, Lifecycle: result.Lifecycle, TmuxSessionName: result.TmuxSessionName})
 }
 
 func (s *Server) deleteConnectionLaunch(w http.ResponseWriter, r *http.Request, sessionID string) {
@@ -183,8 +182,8 @@ func (s *Server) updateConnectionTitle(w http.ResponseWriter, r *http.Request, _
 		}
 		return
 	}
-	if s.agent != nil {
-		result.Agent = s.agent.Summary(result)
+	if s.agentTelemetry != nil {
+		result.Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(result))
 	}
 	writeJSON(w, http.StatusOK, result)
 }

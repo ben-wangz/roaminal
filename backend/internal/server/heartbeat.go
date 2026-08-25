@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type heartbeatUpdate struct {
@@ -22,9 +22,9 @@ type heartbeatUpdate struct {
 	} `json:"updates"`
 }
 type heartbeatResponse struct {
-	ConnectionInstances      []connection.Summary                 `json:"connectionInstances"`
-	ConnectionInstanceLayout persistence.ConnectionInstanceLayout `json:"connectionInstanceLayout"`
-	System                   monitor.SystemStats                  `json:"system"`
+	ConnectionInstances      []ports.ConnectionInstanceSummary `json:"connectionInstances"`
+	ConnectionInstanceLayout domain.ConnectionInstanceLayout   `json:"connectionInstanceLayout"`
+	System                   monitor.SystemStats               `json:"system"`
 	Runtime                  struct {
 		BootID              string `json:"bootId"`
 		PersistenceDegraded bool   `json:"persistenceDegraded"`

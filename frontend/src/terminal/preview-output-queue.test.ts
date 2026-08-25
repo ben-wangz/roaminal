@@ -4,6 +4,14 @@ import { PREVIEW_RENDER_INTERVAL_MS, PreviewOutputQueue } from './preview-output
 afterEach(() => vi.useRealTimers());
 
 describe('preview output queue', () => {
+  const stream = <T extends { type: 'snapshot' | 'output'; data: string }>(message: T, sequence = 1) => ({
+    ...message,
+    schemaVersion: 2,
+    sequence,
+    eventId: `event-${sequence}`,
+    occurredAt: '2026-08-24T00:00:00Z',
+  });
+
   it('renders the initial snapshot promptly and coalesces later output', () => {
     vi.useFakeTimers();
     const renders: Array<{ reset: boolean; data: string }> = [];
@@ -11,13 +19,13 @@ describe('preview output queue', () => {
       renders.push({ reset, data });
     });
 
-    queue.push({ type: 'snapshot', data: 'prompt' });
-    queue.push({ type: 'output', data: '\u001b[2Kone' });
+    queue.push(stream({ type: 'snapshot', data: 'prompt' }));
+    queue.push(stream({ type: 'output', data: '\u001b[2Kone' }, 2));
     vi.runOnlyPendingTimers();
     expect(renders).toEqual([{ reset: true, data: 'prompt\u001b[2Kone' }]);
 
-    queue.push({ type: 'output', data: 'a' });
-    queue.push({ type: 'output', data: 'b' });
+    queue.push(stream({ type: 'output', data: 'a' }, 3));
+    queue.push(stream({ type: 'output', data: 'b' }, 4));
     vi.advanceTimersByTime(PREVIEW_RENDER_INTERVAL_MS - 1);
     expect(renders).toHaveLength(1);
     vi.advanceTimersByTime(1);
@@ -34,10 +42,10 @@ describe('preview output queue', () => {
       renders.push({ reset, data });
     });
 
-    queue.push({ type: 'output', data: 'old' });
+    queue.push(stream({ type: 'output', data: 'old' }));
     vi.runOnlyPendingTimers();
-    queue.push({ type: 'output', data: 'stale' });
-    queue.push({ type: 'snapshot', data: 'current' });
+    queue.push(stream({ type: 'output', data: 'stale' }, 2));
+    queue.push(stream({ type: 'snapshot', data: 'current' }, 3));
     vi.advanceTimersByTime(PREVIEW_RENDER_INTERVAL_MS);
     expect(renders).toEqual([
       { reset: false, data: 'old' },
@@ -54,12 +62,12 @@ describe('preview output queue', () => {
       return new Promise<void>((resolve) => completions.push(resolve));
     });
 
-    queue.push({ type: 'output', data: 'old-frame' });
+    queue.push(stream({ type: 'output', data: 'old-frame' }));
     vi.runOnlyPendingTimers();
     expect(renders).toEqual([{ reset: false, data: 'old-frame' }]);
 
-    queue.push({ type: 'snapshot', data: 'current-frame' });
-    queue.push({ type: 'output', data: 'tail' });
+    queue.push(stream({ type: 'snapshot', data: 'current-frame' }, 2));
+    queue.push(stream({ type: 'output', data: 'tail' }, 3));
     vi.advanceTimersByTime(PREVIEW_RENDER_INTERVAL_MS * 2);
     expect(renders).toHaveLength(1);
 
@@ -76,7 +84,7 @@ describe('preview output queue', () => {
     vi.useFakeTimers();
     const render = vi.fn();
     const queue = new PreviewOutputQueue(render);
-    queue.push({ type: 'output', data: 'pending' });
+    queue.push(stream({ type: 'output', data: 'pending' }));
     queue.dispose();
     vi.runAllTimers();
     expect(render).not.toHaveBeenCalled();

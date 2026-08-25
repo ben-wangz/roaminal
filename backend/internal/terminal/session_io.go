@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 	"unicode/utf8"
 )
 
@@ -41,12 +40,12 @@ func (s *Session) waitLoop() {
 		value := fmt.Sprintf("%d", *status.Signal)
 		s.meta.ExitSignal = &value
 	}
-	s.meta.UpdatedAt = time.Now().UTC()
+	s.meta.UpdatedAt = s.manager.now().UTC()
 	ephemeral := s.ephemeral
-	if s.manager.store != nil && !ephemeral {
-		_ = s.manager.store.SaveConnectionInstance(s.meta)
+	if s.manager.hasPersistence() && !ephemeral {
+		_ = s.manager.saveMeta(s.meta)
 	}
-	s.broadcastLocked(message(map[string]any{"type": "status", "status": "terminated", "code": statusCode(status), "signal": status.Signal, "exitStatus": s.exitStatus}))
+	s.broadcastMessageLocked(terminatedStreamMessage(s.exitStatus))
 	if err != nil && !errors.Is(err, os.ErrProcessDone) {
 		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", s.meta.ID, err)
 	}
@@ -72,7 +71,7 @@ func (s *Session) takeExitHook() func(ExitStatus) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ephemeral {
-		s.lastActivity = time.Now()
+		s.lastActivity = s.manager.now()
 	}
 	hook := s.onExit
 	s.onExit = nil
@@ -132,7 +131,7 @@ func (s *Session) handleOutput(chunk []byte) {
 		s.manager.fail(err)
 		return
 	}
-	s.broadcastLocked(message(map[string]any{"type": "output", "data": cleaned}))
+	s.broadcastMessageLocked(outputStreamMessage(cleaned))
 	s.scheduleSnapshotLocked()
 }
 

@@ -2,17 +2,14 @@ package worker
 
 import (
 	"bufio"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
 )
 
-func frame(header map[string]any, payload []byte) ([]byte, error) {
+func frame(header any, payload []byte) ([]byte, error) {
 	headerBytes, err := json.Marshal(header)
 	if err != nil {
 		return nil, err
@@ -52,30 +49,10 @@ func readFrame(reader *bufio.Reader) (Frame, error) {
 	if _, err := io.ReadFull(reader, payload); err != nil {
 		return Frame{}, err
 	}
-	var header map[string]json.RawMessage
-	if err := json.Unmarshal(headerBytes, &header); err != nil {
+	if !json.Valid(headerBytes) || len(headerBytes) < 2 || headerBytes[0] != '{' || headerBytes[len(headerBytes)-1] != '}' {
 		return Frame{}, errors.New("invalid worker JSON header")
 	}
-	return Frame{Header: header, Payload: payload}, nil
-}
-func stringField(header map[string]json.RawMessage, key string) string {
-	var value string
-	_ = json.Unmarshal(header[key], &value)
-	return value
-}
-func boolField(header map[string]json.RawMessage, key string) bool {
-	var value bool
-	_ = json.Unmarshal(header[key], &value)
-	return value
-}
-func newID() string {
-	var rawBytes [16]byte
-	if _, err := rand.Read(rawBytes[:]); err != nil {
-		return hex.EncodeToString(rawBytes[:])
-	}
-	rawBytes[6] = rawBytes[6]&0x0f | 0x40
-	rawBytes[8] = rawBytes[8]&0x3f | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", rawBytes[0:4], rawBytes[4:6], rawBytes[6:8], rawBytes[8:10], rawBytes[10:])
+	return Frame{Header: json.RawMessage(headerBytes), Payload: payload}, nil
 }
 func validSequence(value string) bool {
 	if value == "" || (len(value) > 1 && value[0] == '0') || strings.Trim(value, "0123456789") != "" {

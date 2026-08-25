@@ -6,9 +6,57 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
+
+func TestWorkspaceLayoutSaveUsesAtomicRevisionCheck(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRepositories(store).Workspace
+	id := domain.AuthenticationSessionID("auth-session")
+	initial := domain.ConnectionInstanceLayout{Revision: 1, GroupOrder: []string{domain.UngroupedConnectionInstanceGroupID}}
+	if err := repository.SaveWorkspaceLayout(nil, id, initial, 0); err != nil {
+		t.Fatal(err)
+	}
+	left := initial
+	left.Revision = 2
+	left.UngroupedConnectionInstanceIDs = []string{"11111111-1111-4111-8111-111111111111"}
+	right := initial
+	right.Revision = 2
+	right.UngroupedConnectionInstanceIDs = []string{"22222222-2222-4222-8222-222222222222"}
+	var group sync.WaitGroup
+	group.Add(2)
+	results := make(chan error, 2)
+	go func() { defer group.Done(); results <- repository.SaveWorkspaceLayout(nil, id, left, 1) }()
+	go func() { defer group.Done(); results <- repository.SaveWorkspaceLayout(nil, id, right, 1) }()
+	group.Wait()
+	close(results)
+	successes, conflicts := 0, 0
+	for saveErr := range results {
+		switch {
+		case saveErr == nil:
+			successes++
+		case saveErr == ports.ErrRevisionConflict:
+			conflicts++
+		default:
+			t.Fatalf("unexpected save error: %v", saveErr)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("save results = successes %d conflicts %d", successes, conflicts)
+	}
+	loaded, found, err := repository.LoadWorkspaceLayout(nil, id)
+	if err != nil || !found || loaded.Revision != 2 || len(loaded.UngroupedConnectionInstanceIDs) != 1 {
+		t.Fatalf("loaded layout = %#v found=%v err=%v", loaded, found, err)
+	}
+}
 
 func TestSnapshotRoundTripAndCorruptionIsolation(t *testing.T) {
 	store, err := New(t.TempDir())
@@ -47,7 +95,7 @@ func TestSnapshotRoundTripAndCorruptionIsolation(t *testing.T) {
 	}
 }
 
-func TestConnectionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
+func TestConnectionMetadataV1MigratesAndSavesAsV3(t *testing.T) {
 	store, err := New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -76,8 +124,8 @@ func TestConnectionMetadataV1MigratesAndSavesAsV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"formatVersion": 2`) || !strings.Contains(string(data), `"automaticTitle": "shell"`) || strings.Contains(string(data), `"title":`) || strings.Contains(string(data), `"executions"`) {
-		t.Fatalf("metadata was not written as v2: %s", data)
+	if !strings.Contains(string(data), `"formatVersion": 3`) || !strings.Contains(string(data), `"automaticTitle": "shell"`) || strings.Contains(string(data), `"title":`) || strings.Contains(string(data), `"executions"`) {
+		t.Fatalf("metadata was not written as v3: %s", data)
 	}
 }
 

@@ -3,6 +3,7 @@ import { refresh } from '../auth/auth-client';
 import { DiagnosticQueue, type DiagnosticEvent, type DiagnosticOperation } from './diagnostic-queue';
 import { normalizePath, redactText } from './diagnostic-redaction';
 import { serializeConsoleArguments, serializeRejection } from './diagnostic-serialize';
+import { apiPath } from '../api/routes';
 
 type BrowserWindow = Window & typeof globalThis;
 export type DiagnosticsEnvironment = {
@@ -124,7 +125,7 @@ export class ClientDiagnostics {
 
   private async configure(): Promise<void> {
     try {
-      const response = await this.environment.fetch('/api/version', { headers: { Accept: 'application/json' } });
+			const response = await this.environment.fetch(apiPath('/version'), { headers: { Accept: 'application/json' } });
       if (!response.ok) throw new Error('version request failed');
       const value = (await response.json()) as { clientDiagnosticsEnabled?: boolean };
       if (value.clientDiagnosticsEnabled !== true) {
@@ -249,7 +250,7 @@ export class ClientDiagnostics {
   }
 
   private send(batch: unknown, token: string, keepalive: boolean): Promise<Response> {
-    return this.environment.fetch('/api/client-diagnostics', {
+		return this.environment.fetch(apiPath('/client-diagnostics'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(batch),

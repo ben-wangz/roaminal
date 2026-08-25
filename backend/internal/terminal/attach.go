@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func (m *Manager) ReserveAttach(id string) error {
@@ -29,7 +31,7 @@ func (m *Manager) reserveAttach(id string, pending bool) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	if pending && session.ephemeral {
-		session.lastActivity = time.Now()
+		session.lastActivity = m.now()
 		session.detachedAt = time.Time{}
 	}
 	if len(session.clients)+session.reservations >= m.clientLimit() {
@@ -52,13 +54,13 @@ func (m *Manager) ReleasePendingAttach(id string) {
 	}
 	session.mu.Unlock()
 }
-func (m *Manager) Attach(ctx context.Context, id string) (*Client, error) {
+func (m *Manager) Attach(ctx context.Context, id string) (ports.TerminalClient, error) {
 	return m.attach(ctx, id, false)
 }
-func (m *Manager) AttachReserved(ctx context.Context, id string) (*Client, error) {
+func (m *Manager) AttachReserved(ctx context.Context, id string) (ports.TerminalClient, error) {
 	return m.attach(ctx, id, true)
 }
-func (m *Manager) AttachPendingReserved(ctx context.Context, id string) (*Client, error) {
+func (m *Manager) AttachPendingReserved(ctx context.Context, id string) (ports.TerminalClient, error) {
 	return m.attachPending(ctx, id, true)
 }
 func (m *Manager) attach(ctx context.Context, id string, reserved bool) (*Client, error) {
@@ -94,8 +96,8 @@ func (m *Manager) attachPendingMode(ctx context.Context, id string, reserved, pe
 	sequence := strconv.FormatUint(session.sequence, 10)
 	snapshot, _, err := m.worker.Snapshot(ctx, id, sequence)
 	if err != nil {
-		if m.store != nil {
-			if _, payload, loadErr := m.store.LoadSnapshot(id); loadErr == nil {
+		if m.hasPersistence() {
+			if payload, loadErr := m.loadSnapshot(ctx, id); loadErr == nil {
 				snapshot = payload
 			} else {
 				return nil, err
@@ -104,28 +106,41 @@ func (m *Manager) attachPendingMode(ctx context.Context, id string, reserved, pe
 			return nil, err
 		}
 	}
-	client.enqueue(message(map[string]any{"type": "snapshot", "data": string(snapshot)}), false)
-	client.enqueue(message(map[string]any{"type": "meta", "title": session.meta.EffectiveTitle(), "titleMode": titleMode(session.meta), "cwd": session.meta.Cwd, "cols": session.meta.Cols, "rows": session.meta.Rows, "attention": session.attention, "sourceState": session.meta.SourceState, "generationStatus": session.meta.GenerationStatus, "generationError": session.meta.GenerationError}), false)
+	client.enqueue(session.stampInitialLocked(snapshotStreamMessage(string(snapshot))), false)
+	client.enqueue(session.stampInitialLocked(metaStreamMessage(MetaMessage{Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Attention: session.attention, SourceState: session.meta.SourceState, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError})), false)
 	if closed {
-		client.enqueue(message(map[string]any{"type": "status", "status": "terminated", "exitStatus": session.exitStatus}), false)
+		client.enqueue(session.stampInitialLocked(terminatedStreamMessage(session.exitStatus)), false)
 	} else {
-		client.enqueue(message(map[string]any{"type": "status", "status": "ready"}), false)
+		client.enqueue(session.stampInitialLocked(readyStreamMessage()), false)
 	}
 	if pending && session.published {
-		client.enqueue(message(map[string]any{"type": "launch_published", "instance": m.summaryLocked(session)}), false)
+		client.enqueue(session.stampInitialLocked(launchPublishedStreamMessage(m.summaryLocked(session))), false)
 	}
 	session.clients[client] = struct{}{}
 	return client, nil
 }
 
+func (s *Session) stampInitialLocked(message streamMessage) []byte {
+	s.streamSequence++
+	return message(streamEnvelope(s.streamSequence, s.manager.now().UTC(), s.manager.ids))
+}
+
 func (m *Manager) clientLimit() int {
 	return m.cfg.MaxClientsPerConnectionInstance
 }
-func (m *Manager) Detach(id string, client *Client) {
-	m.detach(id, client, false)
+func (m *Manager) Detach(id string, client ports.TerminalClient) {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return
+	}
+	m.detach(id, concrete, false)
 }
-func (m *Manager) DetachPending(id string, client *Client) {
-	m.detach(id, client, true)
+func (m *Manager) DetachPending(id string, client ports.TerminalClient) {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return
+	}
+	m.detach(id, concrete, true)
 }
 func (m *Manager) detach(id string, client *Client, pending bool) {
 	var session *Session
@@ -147,15 +162,31 @@ func (m *Manager) detach(id string, client *Client, pending bool) {
 	}
 	client.close()
 	if pending && session.ephemeral && len(session.clients) == 0 {
-		session.detachedAt = time.Now()
+		session.detachedAt = m.now()
 	}
 	session.mu.Unlock()
 }
-func (m *Manager) ClaimControl(id string, client *Client) error {
-	return m.claimControl(id, client, false)
+func (m *Manager) ClaimControl(id string, client ports.TerminalClient) error {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return err
+	}
+	return m.claimControl(id, concrete, false)
 }
-func (m *Manager) ClaimPendingControl(id string, client *Client) error {
-	return m.claimControl(id, client, true)
+func (m *Manager) ClaimPendingControl(id string, client ports.TerminalClient) error {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return err
+	}
+	return m.claimControl(id, concrete, true)
+}
+
+func concreteClient(client ports.TerminalClient) (*Client, error) {
+	concrete, ok := client.(*Client)
+	if !ok || concrete == nil {
+		return nil, errors.New("invalid terminal client")
+	}
+	return concrete, nil
 }
 func (m *Manager) claimControl(id string, client *Client, pending bool) error {
 	var session *Session

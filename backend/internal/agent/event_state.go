@@ -48,7 +48,7 @@ func (s *Service) markComponentReady(endpointKey, sessionName, sessionID string,
 		state.Activity = "unknown"
 		state.ErrorCode, state.ErrorMessage, state.InitializationID = "", "", ""
 		record.Targets[sessionName] = state
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	})
 }

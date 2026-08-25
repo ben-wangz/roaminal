@@ -1,4 +1,5 @@
 import { api, apiWithMeta } from '../auth/auth-client';
+import { requestResponse } from '../api/http-client';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { ConnectionInstanceLayout } from './connection-instance-groups';
 
@@ -30,27 +31,27 @@ export type KeyCollection = { keys: SSHKey[] };
 export type GenerationRequest = { algorithm: 'ed25519' | 'rsa'; rsaBits: number | null; fileName: string; comment: string };
 
 export async function loadDefinitions(): Promise<{ data: DefinitionCollection; etag: string | null }> {
-  return apiWithMeta<DefinitionCollection>('/api/connection-definitions');
+  return apiWithMeta<DefinitionCollection>('/connection-definitions');
 }
-export async function loadKeys(): Promise<KeyCollection> { return api<KeyCollection>('/api/ssh-keys'); }
+export async function loadKeys(): Promise<KeyCollection> { return api<KeyCollection>('/ssh-keys'); }
 export async function createDefinition(body: Partial<ConnectionDefinition>, etag: string): Promise<{ data: DefinitionCollection; etag: string | null }> {
-  return apiWithMeta<DefinitionCollection>('/api/connection-definitions', { method: 'POST', headers: { 'If-Match': etag }, body: JSON.stringify(body) });
+  return apiWithMeta<DefinitionCollection>('/connection-definitions', { method: 'POST', headers: { 'If-Match': etag }, body: JSON.stringify(body) });
 }
 export async function updateDefinition(id: string, body: Partial<ConnectionDefinition>, etag: string): Promise<{ data: DefinitionCollection; etag: string | null }> {
-  return apiWithMeta<DefinitionCollection>(`/api/connection-definitions/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'If-Match': etag }, body: JSON.stringify(body) });
+  return apiWithMeta<DefinitionCollection>(`/connection-definitions/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'If-Match': etag }, body: JSON.stringify(body) });
 }
 export async function duplicateDefinition(id: string, hostAlias: string, etag: string): Promise<{ data: DefinitionCollection; etag: string | null }> {
-  return apiWithMeta<DefinitionCollection>(`/api/connection-definitions/${encodeURIComponent(id)}/duplicate`, { method: 'POST', headers: { 'If-Match': etag }, body: JSON.stringify({ hostAlias }) });
+  return apiWithMeta<DefinitionCollection>(`/connection-definitions/${encodeURIComponent(id)}/duplicate`, { method: 'POST', headers: { 'If-Match': etag }, body: JSON.stringify({ hostAlias }) });
 }
 export async function deleteDefinition(id: string, etag: string): Promise<{ data: DefinitionCollection; etag: string | null }> {
-  return apiWithMeta<DefinitionCollection>(`/api/connection-definitions/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'If-Match': etag } });
+  return apiWithMeta<DefinitionCollection>(`/connection-definitions/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'If-Match': etag } });
 }
 export async function startConnectionLaunch(connectionDefinitionId: string, reuseFromConnectionInstanceId?: string): Promise<{ launchId: string; connectionDefinitionId: string; lifecycle: 'pending'; tmuxSessionName: string }> {
-  return api('/api/connection-launches', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFromConnectionInstanceId || null }) });
+  return api('/connection-launches', { method: 'POST', body: JSON.stringify({ connectionDefinitionId, reuseFromConnectionInstanceId: reuseFromConnectionInstanceId || null }) });
 }
 
 export async function saveConnectionInstanceOrder(connectionInstanceIds: string[]): Promise<ConnectionInstanceSummary[]> {
-  const result = await api<{ connectionInstances: ConnectionInstanceSummary[] }>('/api/connection-instances/order', {
+  const result = await api<{ connectionInstances: ConnectionInstanceSummary[] }>('/connection-instances/order', {
     method: 'PUT',
     body: JSON.stringify({ connectionInstanceIds }),
   });
@@ -58,12 +59,12 @@ export async function saveConnectionInstanceOrder(connectionInstanceIds: string[
 }
 
 export async function loadConnectionInstanceLayout(): Promise<ConnectionInstanceLayout> {
-  const result = await api<{ layout: ConnectionInstanceLayout }>('/api/connection-instance-groups');
+  const result = await api<{ layout: ConnectionInstanceLayout }>('/connection-instance-groups');
   return result.layout;
 }
 
 export async function createConnectionInstanceGroup(name: string, revision: number): Promise<ConnectionInstanceLayout> {
-  const result = await api<{ layout: ConnectionInstanceLayout }>('/api/connection-instance-groups', {
+  const result = await api<{ layout: ConnectionInstanceLayout }>('/connection-instance-groups', {
     method: 'POST',
     body: JSON.stringify({ name, revision }),
   });
@@ -71,7 +72,7 @@ export async function createConnectionInstanceGroup(name: string, revision: numb
 }
 
 export async function renameConnectionInstanceGroup(groupId: string, name: string, revision: number): Promise<ConnectionInstanceLayout> {
-  const result = await api<{ layout: ConnectionInstanceLayout }>(`/api/connection-instance-groups/${encodeURIComponent(groupId)}`, {
+  const result = await api<{ layout: ConnectionInstanceLayout }>(`/connection-instance-groups/${encodeURIComponent(groupId)}`, {
     method: 'PATCH',
     body: JSON.stringify({ name, revision }),
   });
@@ -79,7 +80,7 @@ export async function renameConnectionInstanceGroup(groupId: string, name: strin
 }
 
 export async function deleteConnectionInstanceGroup(groupId: string, revision: number): Promise<ConnectionInstanceLayout> {
-  const result = await api<{ layout: ConnectionInstanceLayout }>(`/api/connection-instance-groups/${encodeURIComponent(groupId)}`, {
+  const result = await api<{ layout: ConnectionInstanceLayout }>(`/connection-instance-groups/${encodeURIComponent(groupId)}`, {
     method: 'DELETE',
     body: JSON.stringify({ revision }),
   });
@@ -87,7 +88,7 @@ export async function deleteConnectionInstanceGroup(groupId: string, revision: n
 }
 
 export async function saveConnectionInstanceLayout(layout: ConnectionInstanceLayout): Promise<ConnectionInstanceLayout> {
-  const result = await api<{ layout: ConnectionInstanceLayout }>('/api/connection-instance-groups/layout', {
+  const result = await api<{ layout: ConnectionInstanceLayout }>('/connection-instance-groups/layout', {
     method: 'PUT',
     body: JSON.stringify(layout),
   });
@@ -100,20 +101,19 @@ export async function saveConnectionInstanceLayout(layout: ConnectionInstanceLay
 export function abortConnectionLaunch(id: string, auth: { accessToken: string } | null = null): void {
   const token = auth?.accessToken;
   if (!token) return;
-  void fetch(`/api/connection-launches/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-    keepalive: true,
-  }).catch(() => undefined);
+	void requestResponse(`/connection-launches/${encodeURIComponent(id)}`, {
+		method: 'DELETE',
+		keepalive: true,
+	}, token).catch(() => undefined);
 }
 
 export async function generateKey(body: GenerationRequest): Promise<ConnectionInstanceSummary> {
-  return api<ConnectionInstanceSummary>('/api/ssh-key-generations', { method: 'POST', body: JSON.stringify(body) });
+  return api<ConnectionInstanceSummary>('/ssh-key-generations', { method: 'POST', body: JSON.stringify(body) });
 }
 export async function publicKey(id: string): Promise<string> {
-  const result = await api<{ publicKey: string }>(`/api/ssh-keys/${encodeURIComponent(id)}/public-key`);
+  const result = await api<{ publicKey: string }>(`/ssh-keys/${encodeURIComponent(id)}/public-key`);
   return result.publicKey;
 }
 export async function deleteKey(id: string): Promise<void> {
-  await api<void>(`/api/ssh-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  await api<void>(`/ssh-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

@@ -2,15 +2,13 @@ package filesystem
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"path"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func (s *Service) Entries(ctx context.Context, id, relative, revision, cursor string, limit int) (DirectoryResult, error) {
@@ -36,18 +34,9 @@ func (s *Service) Entries(ctx context.Context, id, relative, revision, cursor st
 		}
 		return pageResult(id, root.Revision, clean, snapshot, offset, limit), nil
 	}
-	result, runErr := s.executor.RunRemote(ctx, id, connection.RemoteCommand{
-		Script:      directoryScript,
-		Args:        []string{root.AbsolutePath, clean},
-		OutputLimit: maxDirectoryOutput,
-		Timeout:     5 * time.Second,
-	})
+	raw, runErr := s.remote.List(ctx, id, root.AbsolutePath, clean)
 	if runErr != nil {
 		return DirectoryResult{}, mapListingError(runErr)
-	}
-	raw, parseErr := parseDirectory(result.Output)
-	if parseErr != nil {
-		return DirectoryResult{}, parseErr
 	}
 	entries := make([]Entry, 0, len(raw))
 	for _, value := range raw {
@@ -72,23 +61,14 @@ func (s *Service) Stat(ctx context.Context, id, relative, revision string) (Entr
 	if err != nil {
 		return Entry{}, RootContext{}, err
 	}
-	result, runErr := s.executor.RunRemote(ctx, id, connection.RemoteCommand{
-		Script:      statScript,
-		Args:        []string{root.AbsolutePath, clean},
-		OutputLimit: 32 << 10,
-		Timeout:     5 * time.Second,
-	})
+	raw, runErr := s.remote.Stat(ctx, id, root.AbsolutePath, clean)
 	if runErr != nil {
 		return Entry{}, RootContext{}, mapStatError(runErr)
 	}
-	raw, parseErr := parseDirectory(result.Output)
-	if parseErr != nil || len(raw) != 1 {
-		return Entry{}, RootContext{}, ErrProtocol
-	}
-	return makeEntry(root, clean, raw[0]), root, nil
+	return makeEntry(root, clean, raw), root, nil
 }
 
-func makeEntry(root RootContext, parent string, raw rawEntry) Entry {
+func makeEntry(root RootContext, parent string, raw ports.RemoteFileEntry) Entry {
 	relative := JoinRelative(parent, raw.Name)
 	if parent == "." && raw.Name == "." {
 		relative = "."
@@ -111,7 +91,9 @@ func snapshotKey(id, revision, relative string) string {
 
 func (s *Service) saveSnapshot(key string, entries []Entry) DirectorySnapshot {
 	var token [16]byte
-	if _, err := rand.Read(token[:]); err != nil {
+	if s.random == nil {
+		copy(token[:], []byte(fmt.Sprintf("%016x", s.now().UnixNano())))
+	} else if _, err := s.random.Read(token[:]); err != nil {
 		copy(token[:], []byte(fmt.Sprintf("%016x", s.now().UnixNano())))
 	}
 	snapshot := DirectorySnapshot{

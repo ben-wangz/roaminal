@@ -2,18 +2,12 @@ package filesystem
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
-	"os"
 	"os/exec"
-	"path"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 const (
@@ -22,13 +16,17 @@ const (
 )
 
 type uploadJob struct {
-	mu         sync.Mutex
-	instanceID string
-	status     UploadStatus
-	staging    string
-	files      []stagedUploadFile
-	root       RootContext
-	cancel     context.CancelFunc
+	mu             sync.Mutex
+	instanceID     string
+	status         UploadStatus
+	staging        string
+	files          []stagedUploadFile
+	root           RootContext
+	conflictPolicy string
+	createdAt      time.Time
+	clock          ports.Clock
+	cancel         context.CancelFunc
+	persist        func()
 }
 
 type stagedUploadFile struct {
@@ -40,17 +38,48 @@ func (s *Service) UploadStatus(instanceID, uploadID string) (UploadStatus, error
 	s.mu.Lock()
 	job := s.uploads[uploadID]
 	s.mu.Unlock()
-	if job == nil || job.instanceID != instanceID {
+	if job != nil {
+		if job.instanceID != instanceID {
+			return UploadStatus{}, ErrUploadNotFound
+		}
+		return job.snapshot(), nil
+	}
+	record, err := s.uploadRepo.LoadUpload(context.Background(), uploadID)
+	if err != nil {
+		if !isUploadNotFound(err) {
+			return UploadStatus{}, err
+		}
 		return UploadStatus{}, ErrUploadNotFound
 	}
-	return job.snapshot(), nil
+	if record.ConnectionInstanceID != instanceID {
+		return UploadStatus{}, ErrUploadNotFound
+	}
+	return uploadStatusFromRecord(record), nil
 }
 
 func (s *Service) CancelUpload(instanceID, uploadID string) (UploadStatus, error) {
 	s.mu.Lock()
 	job := s.uploads[uploadID]
 	s.mu.Unlock()
-	if job == nil || job.instanceID != instanceID {
+	if job == nil {
+		record, err := s.uploadRepo.LoadUpload(context.Background(), uploadID)
+		if isUploadNotFound(err) || err != nil {
+			return UploadStatus{}, ErrUploadNotFound
+		}
+		if record.ConnectionInstanceID != instanceID {
+			return UploadStatus{}, ErrUploadNotFound
+		}
+		status := uploadStatusFromRecord(record)
+		if status.Status != "completed" && status.Status != "failed" && status.Status != "partial-failure" && status.Status != "cancelled" {
+			status.Status = "cancelled"
+			record.Status = status.Status
+			record.CurrentPath = ""
+			record.UpdatedAt = s.now().UTC()
+			_ = s.uploadRepo.SaveUpload(context.Background(), record)
+		}
+		return status, nil
+	}
+	if job.instanceID != instanceID {
 		return UploadStatus{}, ErrUploadNotFound
 	}
 	job.mu.Lock()
@@ -84,7 +113,7 @@ func (s *Service) runUpload(ctx context.Context, id, conflictPolicy string, job 
 		job.cleanup()
 		return
 	}
-	info, err := s.executor.RemoteTransferInfo(id)
+	info, err := s.remote.RemoteTransferInfo(id)
 	if err != nil {
 		job.fail(ErrNoTransport)
 		job.cleanup()
@@ -126,31 +155,23 @@ func (s *Service) runUpload(ctx context.Context, id, conflictPolicy string, job 
 }
 
 func (s *Service) resolveUploadTarget(ctx context.Context, id string, root RootContext, relative string) (string, error) {
-	result, err := s.executor.RunRemote(ctx, id, connection.RemoteCommand{Script: uploadTargetScript, Args: []string{root.AbsolutePath, relative}, OutputLimit: 16 << 10, Timeout: 5 * time.Second})
+	result, err := s.remote.ResolveUploadTarget(ctx, id, root.AbsolutePath, relative)
 	if err != nil {
 		return "", mapRemoteError(err)
 	}
-	parts := strings.Split(string(result.Output), "\x00")
-	if len(parts) != 3 || parts[0] != uploadTargetMarker || parts[1] == "" || parts[2] != "" || !strings.HasPrefix(parts[1], "/") {
-		return "", ErrProtocol
-	}
-	return path.Clean(parts[1]), nil
+	return result, nil
 }
 
 func (s *Service) uploadConflicts(ctx context.Context, id string, root RootContext, target string, files []stagedUploadFile) ([]string, error) {
-	args := []string{root.AbsolutePath, target}
+	paths := make([]string, 0, len(files))
 	for _, file := range files {
-		args = append(args, file.Manifest.RelativePath)
+		paths = append(paths, file.Manifest.RelativePath)
 	}
-	result, err := s.executor.RunRemote(ctx, id, connection.RemoteCommand{Script: uploadConflictScript, Args: args, OutputLimit: 1 << 20, Timeout: 5 * time.Second})
+	result, err := s.remote.UploadConflicts(ctx, id, root.AbsolutePath, target, paths)
 	if err != nil {
 		return nil, mapRemoteError(err)
 	}
-	parts := strings.Split(string(result.Output), "\x00")
-	if len(parts) < 3 || parts[0] != uploadConflictMarker || parts[len(parts)-2] != uploadConflictEnd || parts[len(parts)-1] != "" {
-		return nil, ErrProtocol
-	}
-	return append([]string(nil), parts[1:len(parts)-2]...), nil
+	return result, nil
 }
 
 func (s *Service) rsyncAvailable(ctx context.Context, id string) (bool, error) {
@@ -160,77 +181,18 @@ func (s *Service) rsyncAvailable(ctx context.Context, id string) (bool, error) {
 		return capability.Available, nil
 	}
 	s.mu.Unlock()
-	result, err := s.executor.RunRemote(ctx, id, connection.RemoteCommand{Script: rsyncProbeScript, OutputLimit: 64, Timeout: 2 * time.Second})
+	result, err := s.remote.RsyncAvailable(ctx, id)
 	if err != nil {
 		return false, mapRemoteError(err)
 	}
-	value := strings.TrimSpace(string(result.Output)) == rsyncAvailableMarker
 	s.mu.Lock()
-	s.transfers[id] = transferCapability{Available: value, ExpiresAt: s.now().Add(30 * time.Second)}
+	s.transfers[id] = transferCapability{Available: result, ExpiresAt: s.now().Add(30 * time.Second)}
 	s.mu.Unlock()
-	return value, nil
+	return result, nil
 }
 
 func (s *Service) invalidateRsync(id string) {
 	s.mu.Lock()
 	delete(s.transfers, id)
 	s.mu.Unlock()
-}
-
-func (j *uploadJob) snapshot() UploadStatus {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	value := j.status
-	value.Failures = append([]UploadFailure(nil), j.status.Failures...)
-	return value
-}
-
-func (j *uploadJob) setStatus(update func(*UploadStatus)) {
-	j.mu.Lock()
-	update(&j.status)
-	j.mu.Unlock()
-}
-
-func (j *uploadJob) fail(err error) {
-	code := "filesystem_upload_failed"
-	if errors.Is(err, ErrNoTransport) {
-		code = "filesystem_upload_transport_unavailable"
-	}
-	j.setStatus(func(status *UploadStatus) {
-		if status.Status != "partial-failure" {
-			status.Status = "failed"
-		}
-		status.Failures = append(status.Failures, UploadFailure{Code: code, Error: err.Error()})
-	})
-}
-
-func (j *uploadJob) cleanup() {
-	_ = os.RemoveAll(j.staging)
-}
-
-func pathErrOrInvalid(err error) error {
-	if err == nil {
-		return ErrInvalidPath
-	}
-	return err
-}
-
-func newUploadID() string {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return strconv.FormatInt(time.Now().UnixNano(), 36)
-	}
-	return base64.RawURLEncoding.EncodeToString(value[:])
-}
-
-func remoteSpec(alias, remotePath string) string {
-	return alias + ":" + shellQuote(remotePath)
-}
-
-func sshTransportCommand(info connection.RemoteTransferInfo) string {
-	return shellQuote(info.SSHPath) + " -T -o ControlMaster=no -o ControlPersist=no -o " + shellQuote("ControlPath="+info.ControlPath) + " -o BatchMode=yes -o ClearAllForwardings=yes --"
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }

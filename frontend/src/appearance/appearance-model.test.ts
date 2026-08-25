@@ -38,7 +38,7 @@ describe('appearance model', () => {
 
   it('rejects invalid schema, font IDs, and sizes', () => {
     expect(validateAppearance(null)).toBeNull();
-    expect(validateAppearance({ ...DEFAULT_APPEARANCE, schemaVersion: 2 })).toBeNull();
+    expect(validateAppearance({ ...DEFAULT_APPEARANCE, schemaVersion: 1 })).toBeNull();
     expect(validateAppearance({ ...DEFAULT_APPEARANCE, fontId: 'Comic Sans' })).toBeNull();
     expect(validateAppearance({ ...DEFAULT_APPEARANCE, fontSize: 15.5 })).toBeNull();
     expect(validateAppearance({ ...DEFAULT_APPEARANCE, fontSize: MIN_FONT_SIZE - 1 })).toBeNull();

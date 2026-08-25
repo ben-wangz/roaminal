@@ -9,72 +9,24 @@ import (
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
-	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 )
 
-func keySet(keys []sshkey.Key) map[string]bool {
-	result := make(map[string]bool, len(keys))
-	for _, key := range keys {
-		result[key.FileName] = true
-	}
-	return result
-}
-
-func (s *Server) sources() (*sshconfig.Repository, map[string]bool) {
-	if s.sshConfig == nil {
-		return nil, map[string]bool{}
-	}
-	if s.sshKeys == nil {
-		return s.sshConfig, map[string]bool{}
-	}
-	return s.sshConfig, keySet(s.sshKeys.List())
-}
-
 func (s *Server) listConnectionDefinitions(w http.ResponseWriter, _ *http.Request, _ string) {
-	repo, keys := s.sources()
-	if repo == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"configSource": map[string]any{"status": "unavailable", "readable": false, "writable": false, "warnings": []any{}, "blockers": []string{"ssh_directory"}}, "tmuxOptionsSource": map[string]any{"status": "unavailable", "readable": false, "writable": false}, "definitions": []any{map[string]any{"connectionDefinitionId": "local", "type": "local"}}})
+	if s.definitions == nil || !s.definitions.Available() {
+		writeJSON(w, http.StatusOK, unavailableDefinitionCollectionResponse{
+			ConfigSource:      sshconfig.ConfigSource{Status: "unavailable", Readable: false, Writable: false, Warnings: []sshconfig.Warning{}, Blockers: []string{"ssh_directory"}},
+			TmuxOptionsSource: connectionoptions.Source{Status: "unavailable", Readable: false, Writable: false},
+			Definitions:       []sshconfig.Definition{{ConnectionDefinitionID: "local", Type: "local"}},
+		})
 		return
 	}
-	collection, err := repo.Collection(keys)
+	collection, err := s.definitions.Collection()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "config unavailable")
 		return
 	}
-	s.enrichConnectionOptions(&collection)
 	w.Header().Set("ETag", collection.ETag)
 	writeJSON(w, http.StatusOK, collection)
-}
-
-func (s *Server) enrichConnectionOptions(collection *sshconfig.Collection) {
-	if s.connectionOptions == nil {
-		collection.TmuxOptionsSource = connectionoptions.Source{Status: "unavailable", Reason: "options store unavailable"}
-		return
-	}
-	aliases := make(map[string]bool)
-	if !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing" {
-		loaded, _ := s.connectionOptions.Load(nil)
-		collection.TmuxOptionsSource = loaded.Source
-		return
-	}
-	for _, definition := range collection.Definitions {
-		if definition.Type == "ssh" {
-			aliases[definition.HostAlias] = true
-		}
-	}
-	loaded, _ := s.connectionOptions.Load(aliases)
-	collection.TmuxOptionsSource = loaded.Source
-	for index := range collection.Definitions {
-		definition := &collection.Definitions[index]
-		if option, ok := loaded.Options[definition.HostAlias]; ok && definition.Type == "ssh" {
-			if option.Enabled {
-				definition.Tmux = &sshconfig.TmuxOptions{Enabled: true, SessionName: option.SessionName}
-			}
-			definition.FileSystem = &sshconfig.FileSystemOptions{Pwd: option.Pwd}
-		} else if definition.Type == "ssh" {
-			definition.FileSystem = &sshconfig.FileSystemOptions{Pwd: connectionoptions.DefaultPwd}
-		}
-	}
 }
 
 type definitionBody struct {
@@ -97,6 +49,7 @@ func editFromBody(body definitionBody) sshconfig.Edit {
 }
 
 func matchETag(r *http.Request) string { return strings.TrimSpace(r.Header.Get("If-Match")) }
+
 func writeCollection(w http.ResponseWriter, collection sshconfig.Collection) {
 	w.Header().Set("ETag", collection.ETag)
 	writeJSON(w, http.StatusOK, collection)
@@ -129,23 +82,15 @@ func (s *Server) createConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "only ssh definitions can be created")
 		return
 	}
-	repo, keys := s.sources()
-	if repo == nil {
+	if s.definitions == nil || !s.definitions.Available() {
 		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable")
 		return
 	}
-	collection, err := repo.Create(matchETag(r), keys, editFromBody(body))
+	collection, err := s.definitions.Create(matchETag(r), editFromBody(body), body.Tmux, body.FileSystem)
 	if err != nil {
 		s.definitionError(w, err)
 		return
 	}
-	if body.Tmux != nil || body.FileSystem != nil {
-		if err := s.saveConnectionOptions(body.HostAlias, body.Tmux, body.FileSystem); err != nil {
-			s.definitionError(w, err)
-			return
-		}
-	}
-	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
 }
 
@@ -163,23 +108,15 @@ func (s *Server) updateConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "only ssh definitions can be updated")
 		return
 	}
-	repo, keys := s.sources()
-	if repo == nil {
+	if s.definitions == nil || !s.definitions.Available() {
 		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable")
 		return
 	}
-	collection, err := repo.Update(matchETag(r), keys, alias, editFromBody(body))
+	collection, err := s.definitions.Update(matchETag(r), alias, editFromBody(body), body.Tmux, body.FileSystem)
 	if err != nil {
 		s.definitionError(w, err)
 		return
 	}
-	if body.Tmux != nil || body.FileSystem != nil {
-		if err := s.saveConnectionOptions(alias, body.Tmux, body.FileSystem); err != nil {
-			s.definitionError(w, err)
-			return
-		}
-	}
-	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
 }
 
@@ -195,17 +132,15 @@ func (s *Server) duplicateConnectionDefinition(w http.ResponseWriter, r *http.Re
 	if err := decodeJSON(w, r, &body); err != nil {
 		return
 	}
-	repo, keys := s.sources()
-	if repo == nil {
+	if s.definitions == nil || !s.definitions.Available() {
 		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable")
 		return
 	}
-	collection, err := repo.Duplicate(matchETag(r), keys, alias, body.HostAlias)
+	collection, err := s.definitions.Duplicate(matchETag(r), alias, body.HostAlias)
 	if err != nil {
 		s.definitionError(w, err)
 		return
 	}
-	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
 }
 
@@ -215,20 +150,14 @@ func (s *Server) deleteConnectionDefinition(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "invalid definition id")
 		return
 	}
-	repo, keys := s.sources()
-	if repo == nil {
+	if s.definitions == nil || !s.definitions.Available() {
 		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable")
 		return
 	}
-	collection, err := repo.Delete(matchETag(r), keys, alias)
+	collection, err := s.definitions.Delete(matchETag(r), alias)
 	if err != nil {
 		s.definitionError(w, err)
 		return
 	}
-	if err := s.saveTmuxOption(alias, nil); err != nil {
-		s.definitionError(w, err)
-		return
-	}
-	s.enrichConnectionOptions(&collection)
 	writeCollection(w, collection)
 }

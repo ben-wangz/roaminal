@@ -46,8 +46,8 @@ describe('Roaminal WebSocket observation', () => {
       reportWebSocket: (operation, message) => reports.push({ operation, message }),
     });
     const fake = socket as unknown as FakeWebSocket;
-    expect(fake.url).toBe('wss://roaminal.test/ws/connection-instances/11111111-1111-4000-8000-000000000001');
-    expect(fake.protocols).toEqual(['roaminal.v1', 'roaminal.auth.secret-token']);
+    expect(fake.url).toBe('wss://roaminal.test/ws/v2/connection-instances/11111111-1111-4000-8000-000000000001');
+    expect(fake.protocols).toEqual(['roaminal.v2', 'roaminal.auth.secret-token']);
     fake.emit('error');
     fake.emit('close', Object.assign(new Event('close'), { code: 1006, wasClean: false }));
     expect(reports).toHaveLength(1);
@@ -72,5 +72,16 @@ describe('Roaminal WebSocket observation', () => {
     (intentional as unknown as FakeWebSocket).emit('error');
     (intentional as unknown as FakeWebSocket).emit('close', Object.assign(new Event('close'), { code: 1000, wasClean: true }));
     expect(reports).toHaveLength(0);
+  });
+
+  it('marks preview sockets as observer-only', () => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' } });
+    const socket = createRoaminalWebSocket('11111111-1111-4000-8000-000000000004', 'connection-instances', 'token', {
+      reportWebSocket: () => undefined,
+    }, 'observer');
+    const fake = socket as unknown as FakeWebSocket;
+    expect(fake.url).toContain('/ws/v2/connection-instances/11111111-1111-4000-8000-000000000004?role=observer');
+    expect(fake.protocols[0]).toBe('roaminal.v2');
   });
 });

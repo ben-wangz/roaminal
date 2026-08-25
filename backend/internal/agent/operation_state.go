@@ -66,7 +66,7 @@ func (s *Service) completeInitialization(id string, target Target, result string
 		if version != "" {
 			operation.Component = component
 		}
-		now := time.Now().UTC()
+		now := s.now().UTC()
 		operation.FinishedAt = &now
 		if s.endpointOps[operation.Endpoint.Key] == id {
 			delete(s.endpointOps, operation.Endpoint.Key)
@@ -87,7 +87,7 @@ func (s *Service) completeInitialization(id string, target Target, result string
 			state.InitializationID = ""
 			record.Targets[name] = state
 		}
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	})
 }
@@ -103,7 +103,7 @@ func (s *Service) failInitialization(id string, target Target, cause error) {
 	if operation != nil {
 		operation.Status, operation.Component = "failed", "error"
 		operation.Error = &SafeError{Code: code, Message: message}
-		now := time.Now().UTC()
+		now := s.now().UTC()
 		operation.FinishedAt = &now
 		if s.endpointOps[operation.Endpoint.Key] == id {
 			delete(s.endpointOps, operation.Endpoint.Key)
@@ -127,7 +127,7 @@ func (s *Service) failInitialization(id string, target Target, cause error) {
 		if !anyReady {
 			record.InstallationState = "error"
 		}
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	})
 }
@@ -135,7 +135,7 @@ func (s *Service) failInitialization(id string, target Target, cause error) {
 func (s *Service) GetInitialization(id string) (Initialization, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pruneOperationsLocked(time.Now().UTC())
+	s.pruneOperationsLocked(s.now().UTC())
 	value, ok := s.operations[id]
 	if !ok || value == nil {
 		return Initialization{}, false

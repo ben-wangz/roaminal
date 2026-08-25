@@ -22,7 +22,7 @@ func (s *Server) filesystemRoot(w http.ResponseWriter, r *http.Request, _ string
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]any{"connectionInstanceId": root.ConnectionInstanceID, "root": root})
+	writeJSON(w, http.StatusOK, filesystemRootResponse{ConnectionInstanceID: root.ConnectionInstanceID, Root: root})
 }
 
 func (s *Server) filesystemEntries(w http.ResponseWriter, r *http.Request, _ string) {
@@ -58,14 +58,14 @@ func (s *Server) filesystemStat(w http.ResponseWriter, r *http.Request, _ string
 		writeFilesystemError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"connectionInstanceId": root.ConnectionInstanceID,
-		"rootRevision":         root.Revision,
-		"entry":                entry,
-		"mimeType":             mimeTypeForEntry(entry.Name, entry.Type),
-		"encoding":             "utf-8",
-		"capabilities":         map[string]bool{"read": entry.Type == "file", "range": entry.Type == "file", "stream": entry.Type == "file", "download": entry.Type == "file"},
-		"consistencyToken":     consistencyToken(entry),
+	writeJSON(w, http.StatusOK, filesystemStatResponse{
+		ConnectionInstanceID: root.ConnectionInstanceID,
+		RootRevision:         root.Revision,
+		Entry:                entry,
+		MimeType:             mimeTypeForEntry(entry.Name, entry.Type),
+		Encoding:             "utf-8",
+		Capabilities:         filesystemCapabilities{Read: entry.Type == "file", Range: entry.Type == "file", Stream: entry.Type == "file", Download: entry.Type == "file"},
+		ConsistencyToken:     consistencyToken(entry),
 	})
 }
 
@@ -77,7 +77,7 @@ func writeFilesystemError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.As(err, &rootChanged):
 		status, code = http.StatusConflict, "filesystem_root_changed"
-		writeJSON(w, status, map[string]any{"error": "filesystem root changed", "code": code, "root": rootChanged.Root})
+		writeCodedError(w, status, "filesystem root changed", code, filesystemRootChangedDetails{Root: rootChanged.Root})
 		return
 	case errors.Is(err, filesystem.ErrUnsupported):
 		status, code = http.StatusConflict, "filesystem_unsupported"

@@ -1,26 +1,43 @@
 package agent
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/random"
 )
 
-func randomToken() (string, string, error) {
+func randomToken(sources ...ports.RandomSource) (string, string, error) {
 	var raw [32]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	source := ports.RandomSource(random.CryptoSource{})
+	if len(sources) > 0 && sources[0] != nil {
+		source = sources[0]
+	}
+	if _, err := source.Read(raw[:]); err != nil {
 		return "", "", err
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw[:])
 	return token, tokenHash(token), nil
 }
 
-func randomID() (string, error) {
+func randomID(sources ...ports.RandomSource) (string, error) {
 	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	source := ports.RandomSource(random.CryptoSource{})
+	if len(sources) > 0 && sources[0] != nil {
+		source = sources[0]
+	}
+	if _, err := source.Read(raw[:]); err != nil {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
+}
+
+func (s *Service) newID() (string, error) {
+	if s.ids != nil {
+		return s.ids.NewID()
+	}
+	return randomID(s.random)
 }
 
 func (s *Service) allowEvent(key string, now time.Time) bool {

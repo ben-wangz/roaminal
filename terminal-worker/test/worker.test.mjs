@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
-const protocol = 'roaminal-terminal-worker/2';
+const protocol = 'roaminal-terminal-worker/4';
 
 function encodeFrame(header, payload = Buffer.alloc(0)) {
   const headerBytes = Buffer.from(JSON.stringify(header));
@@ -66,14 +66,14 @@ function startWorker() {
 }
 
 async function request(worker, header, payload) {
-  const requestId = `${header.op}-request`;
-  worker.send({ ...header, requestId }, payload);
-  return worker.next((frame) => frame.header.requestId === requestId);
+  const correlationId = `${header.op}-request`;
+  worker.send({ ...header, schemaVersion: 1, correlationId }, payload);
+  return worker.next((frame) => frame.header.correlationId === correlationId);
 }
 
 test('worker protocol fixture identifies the required operations', async () => {
   const fixture = await import('../testdata/worker-fixtures.json', { with: { type: 'json' } });
-  assert.equal(fixture.default.protocol, 'roaminal-terminal-worker/2');
+  assert.equal(fixture.default.protocol, 'roaminal-terminal-worker/4');
   assert.ok(fixture.default.operations.includes('snapshot'));
 });
 
@@ -81,22 +81,24 @@ test('worker executes the lifecycle and preserves a serialized snapshot', async 
   const worker = startWorker();
   try {
     const ready = await request(worker, { op: 'hello' });
-    assert.deepEqual(ready.header, {
-      op: 'ready',
-      protocol,
-      requestId: 'hello-request',
-      engine: 'xterm-headless',
-      engineVersion: '6.0.0',
-      serializeAddonVersion: '0.14.0',
-    });
+    assert.equal(ready.header.op, 'ready');
+    assert.equal(ready.header.protocol, protocol);
+    assert.equal(ready.header.schemaVersion, 1);
+    assert.equal(ready.header.correlationId, 'hello-request');
+    assert.match(ready.header.sequence, /^[1-9][0-9]*$/);
+    assert.equal(typeof ready.header.eventId, 'string');
+    assert.equal(typeof ready.header.occurredAt, 'string');
+    assert.equal(ready.header.engine, 'xterm-headless');
+    assert.equal(ready.header.engineVersion, '6.0.0');
+    assert.equal(ready.header.serializeAddonVersion, '0.14.0');
 
     const terminalId = 'black-box-terminal';
     const created = await request(worker, { op: 'create', terminalId, cols: 80, rows: 24, scrollbackLines: 100 });
     assert.equal(created.header.requestOp, 'create');
     assert.equal(created.header.throughSequence, '0');
 
-    worker.send({ op: 'write', terminalId, sequence: '1' }, Buffer.from('roaminal worker\r\n'));
-    worker.send({ op: 'resize', terminalId, sequence: '2', cols: 100, rows: 30 });
+    worker.send({ op: 'write', schemaVersion: 1, correlationId: 'write-1', terminalId, sequence: '1' }, Buffer.from('roaminal worker\r\n'));
+    worker.send({ op: 'resize', schemaVersion: 1, correlationId: 'resize-1', terminalId, sequence: '2', cols: 100, rows: 30 });
     const snapshot = await request(worker, { op: 'snapshot', terminalId, throughSequence: '2' });
     assert.equal(snapshot.header.requestOp, 'snapshot');
     assert.equal(snapshot.header.throughSequence, '2');

@@ -11,7 +11,7 @@ workloads.
    SSH config/key fixtures. Wait for snapshots.
 2. Restart only the dedicated Roaminal Pod through its Deployment and wait for
    the Helm release to become ready at the same Service URL. Record that
-   `/api/version.bootId` changed.
+   `/api/v2/version.bootId` changed.
 3. The old browser detects the changed boot ID and reloads without an exception.
    Stable auth sessions remain valid because the password and state PVC did not
    change.

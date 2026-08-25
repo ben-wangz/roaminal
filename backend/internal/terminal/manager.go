@@ -1,21 +1,19 @@
 package terminal
 
 import (
-	"errors"
+	"context"
 	"os"
 	"os/exec"
 	"sync"
 	"time"
 
+	"github.com/ben-wangz/roaminal/backend/internal/clock"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
-	"github.com/ben-wangz/roaminal/backend/internal/worker"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-type ExitStatus struct {
-	ExitCode *int `json:"exitCode"`
-	Signal   *int `json:"signal"`
-}
+type ExitStatus = ports.TerminalExitStatus
 
 type executionRecord struct {
 	Command     string    `json:"command"`
@@ -28,38 +26,12 @@ type executionRecord struct {
 	Truncated   bool      `json:"truncated"`
 }
 
-var ErrClientCapacity = errors.New("client capacity reached")
-var ErrConnectionCapacity = errors.New("connection capacity reached")
-var ErrControlNotOwner = errors.New("terminal control is owned by another client")
-
-type Summary struct {
-	ID                     string       `json:"-"`
-	ConnectionInstanceID   string       `json:"connectionInstanceId"`
-	ConnectionDefinitionID string       `json:"connectionDefinitionId"`
-	Type                   string       `json:"type"`
-	Purpose                string       `json:"purpose"`
-	Lifecycle              string       `json:"lifecycle"`
-	SourceState            string       `json:"sourceState"`
-	SourceHostAlias        *string      `json:"sourceHostAlias,omitempty"`
-	CreatedAt              time.Time    `json:"createdAt"`
-	UpdatedAt              time.Time    `json:"updatedAt"`
-	Title                  string       `json:"title"`
-	TitleMode              string       `json:"titleMode"`
-	Cwd                    string       `json:"cwd"`
-	Cols                   int          `json:"cols"`
-	Rows                   int          `json:"rows"`
-	Attention              bool         `json:"attention"`
-	GenerationStatus       string       `json:"generationStatus,omitempty"`
-	GenerationError        string       `json:"generationError,omitempty"`
-	TmuxEnabled            bool         `json:"tmuxEnabled,omitempty"`
-	TmuxSessionName        string       `json:"tmuxSessionName,omitempty"`
-	TmuxPrefixKey          string       `json:"tmuxPrefixKey,omitempty"`
-	TmuxPrefixSource       string       `json:"tmuxPrefixSource,omitempty"`
-	Agent                  AgentSummary `json:"agent"`
-}
+var ErrClientCapacity = ports.ErrClientCapacity
+var ErrConnectionCapacity = ports.ErrConnectionCapacity
+var ErrControlNotOwner = ports.ErrControlNotOwner
 
 type Client struct {
-	Messages    chan []byte
+	messages    chan []byte
 	done        chan struct{}
 	mu          sync.Mutex
 	queued      int64
@@ -68,8 +40,9 @@ type Client struct {
 	closeReason string
 }
 
-func newClient() *Client                          { return &Client{Messages: make(chan []byte, 256), done: make(chan struct{})} }
+func newClient() *Client                          { return &Client{messages: make(chan []byte, 256), done: make(chan struct{})} }
 func (c *Client) Done() <-chan struct{}           { return c.done }
+func (c *Client) Messages() <-chan []byte         { return c.messages }
 func (c *Client) EnqueueControl(data []byte) bool { return c.enqueue(data, false) }
 func (c *Client) Consumed(size int) {
 	c.mu.Lock()
@@ -108,7 +81,7 @@ func (c *Client) enqueue(data []byte, count bool) bool {
 		c.queued += int64(len(data))
 	}
 	select {
-	case c.Messages <- data:
+	case c.messages <- data:
 		return true
 	default:
 		if count {
@@ -122,8 +95,10 @@ func (c *Client) enqueue(data []byte, count bool) bool {
 
 type Manager struct {
 	cfg                config.Config
-	store              *persistence.Store
-	worker             *worker.Client
+	repositories       Repositories
+	worker             ports.TerminalWorker
+	clock              ports.Clock
+	ids                ports.IDGenerator
 	mu                 sync.RWMutex
 	sessions           map[string]*Session
 	pending            map[string]*Session
@@ -131,44 +106,87 @@ type Manager struct {
 	fatal              chan error
 	runtimeID          string
 }
+
+var _ ports.TerminalRuntime = (*Manager)(nil)
+
 type Session struct {
-	manager       *Manager
-	mu            sync.Mutex
-	meta          persistence.ConnectionInstanceMeta
-	cmd           *exec.Cmd
-	pty           *os.File
-	clients       map[*Client]struct{}
-	reservations  int
-	controlOwner  *Client
-	sequence      uint64
-	pending       []byte
-	markerPending []byte
-	snapshotTimer *time.Timer
-	dirtySince    time.Time
-	currentExecID string
-	currentExec   *executionRecord
-	attention     bool
-	closed        bool
-	exitStatus    *ExitStatus
-	command       string
-	onExit        func(ExitStatus)
-	readDone      chan struct{}
-	retiring      bool
-	retired       bool
-	ephemeral     bool
-	published     bool
-	onMarker      func(string)
-	lastActivity  time.Time
-	detachedAt    time.Time
-	pendingOwner  string
+	manager        *Manager
+	mu             sync.Mutex
+	meta           domain.ConnectionInstanceMeta
+	cmd            *exec.Cmd
+	pty            *os.File
+	clients        map[*Client]struct{}
+	reservations   int
+	controlOwner   *Client
+	sequence       uint64
+	streamSequence uint64
+	pending        []byte
+	markerPending  []byte
+	snapshotTimer  *time.Timer
+	dirtySince     time.Time
+	currentExecID  string
+	currentExec    *executionRecord
+	attention      bool
+	closed         bool
+	exitStatus     *ExitStatus
+	command        string
+	onExit         func(ExitStatus)
+	readDone       chan struct{}
+	retiring       bool
+	retired        bool
+	ephemeral      bool
+	published      bool
+	onMarker       func(string)
+	lastActivity   time.Time
+	detachedAt     time.Time
+	pendingOwner   string
 }
 
-func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *worker.Client) *Manager {
-	return &Manager{cfg: cfg, store: store, worker: terminalWorker, sessions: make(map[string]*Session), pending: make(map[string]*Session), fatal: make(chan error, 1)}
+func NewManagerWithRepositories(cfg config.Config, repositories Repositories, terminalWorker ports.TerminalWorker, runtimeClock ports.Clock, ids ports.IDGenerator, runtimeID string) *Manager {
+	if runtimeClock == nil {
+		runtimeClock = clock.System{}
+	}
+	return &Manager{cfg: cfg, repositories: repositories, worker: terminalWorker, clock: runtimeClock, ids: ids, runtimeID: runtimeID, sessions: make(map[string]*Session), pending: make(map[string]*Session), fatal: make(chan error, 1)}
 }
-func (m *Manager) Fatal() <-chan error       { return m.fatal }
-func (m *Manager) WorkerFatal(err error)     { m.fail(err) }
-func (m *Manager) SetRuntimeID(id string)    { m.runtimeID = id }
-func (m *Manager) RuntimeID() string         { return m.runtimeID }
-func (m *Manager) InitialCwd() string        { return m.cfg.InitialCwd }
-func (m *Manager) PersistenceDegraded() bool { return m.store != nil && m.store.PersistenceDegraded() }
+func (m *Manager) Fatal() <-chan error   { return m.fatal }
+func (m *Manager) WorkerFatal(err error) { m.fail(err) }
+func (m *Manager) RuntimeID() string     { return m.runtimeID }
+func (m *Manager) InitialCwd() string    { return m.cfg.InitialCwd }
+func (m *Manager) now() time.Time        { return m.clock.Now() }
+func (m *Manager) newID() (string, error) {
+	if m.ids == nil {
+		return "", ports.ErrIDUnavailable
+	}
+	return m.ids.NewID()
+}
+func (m *Manager) PersistenceDegraded() bool {
+	return m.repositories.PersistenceDegraded != nil && m.repositories.PersistenceDegraded()
+}
+
+func (m *Manager) hasPersistence() bool { return m.repositories.available() }
+
+func (m *Manager) saveMeta(meta domain.ConnectionInstanceMeta) error {
+	return m.repositories.saveMeta(context.Background(), meta)
+}
+
+func (m *Manager) loadSnapshot(ctx context.Context, id string) ([]byte, error) {
+	return m.repositories.loadSnapshot(ctx, domain.ConnectionInstanceID(id))
+}
+
+func (m *Manager) markPersistenceDegraded(id string) {
+	if m.repositories.Instances != nil {
+		_ = m.repositories.Instances.MarkConnectionInstanceDegraded(context.Background(), domain.ConnectionInstanceID(id))
+	}
+}
+
+func (m *Manager) listPersistedInstances(ctx context.Context) ([]domain.ConnectionInstanceMeta, error) {
+	return m.repositories.listInstances(ctx)
+}
+
+func (m *Manager) archivePersistedInstance(ctx context.Context, id string) error {
+	return m.repositories.archiveInstance(ctx, domain.ConnectionInstanceID(id))
+}
+
+func (m *Manager) deletePersistedInstance(ctx context.Context, id string) error {
+	return m.repositories.deleteInstance(ctx, domain.ConnectionInstanceID(id))
+}

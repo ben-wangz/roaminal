@@ -20,7 +20,7 @@ never use real credentials or private key material.
    `page.on('websocket')` before the first `page.goto()`. Retain complete
    output through cleanup.
 4. Authenticate through the visible login UI. Record the release version and
-   `bootId` from `/api/version` without recording access or refresh tokens.
+   `bootId` from `/api/v2/version` without recording access or refresh tokens.
 
 ## Deterministic fault injection
 
@@ -34,7 +34,7 @@ release:
   opens. If the runner lacks this API, use the designated controllable proxy
   and report the missing capability as `BLOCKED`; do not substitute a broad
   WebSocket allowlist.
-- Abort only `POST **/api/client-diagnostics` while testing silent reporting
+- Abort only `POST **/api/v2/client-diagnostics` while testing silent reporting
   failure, then remove the route and verify a later event is delivered.
 
 These faults are scoped to this browser context and must be restored before
@@ -76,7 +76,7 @@ global diagnostics gate.
    and redaction. Do not print the complete file in the test report.
 7. Deploy a second disposable revision with
    `app.clientDiagnosticsEnabled=false`. Repeat the explicit Console error and
-   `GET /api/version`; assert the capability is false, the diagnostics route is
+   `GET /api/v2/version`; assert the capability is false, the diagnostics route is
    unavailable, Console output is unchanged, and no new record is appended.
 8. Remove only the disposable revisions and connection instances created by
    this case. Retain failed-run logs and traces as evidence, subject to secret

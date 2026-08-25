@@ -85,4 +85,6 @@ All expected protected API responses are correlated with the action that caused
 them. Fail on unexpected console/page errors, a request containing an absolute
 client-supplied operation path or arbitrary command, leaked file content in
 diagnostics, duplicate upload jobs, stale cross-instance state, or any full
-screen/new-window behavior.
+screen/new-window behavior. The browser may report one `net::ERR_ABORTED` for
+a `blob:` document while an image/video/PDF preview is being closed; treat only
+that document-teardown case as expected, and fail all other aborted requests.

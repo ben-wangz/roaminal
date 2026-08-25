@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func (s *Service) executeInitialization(operationID, id string, summary connection.Summary, endpoint Endpoint, target Target, webhookURL, webhookOrigin string, webhookChanged bool, priorComponent string, sessionID string, sessionCreated int64) {
+func (s *Service) executeInitialization(operationID, id string, summary ports.ConnectionInstanceView, endpoint Endpoint, target Target, webhookURL, webhookOrigin string, webhookChanged bool, priorComponent string, sessionID string, sessionCreated int64) {
 	lock := s.endpointMutex(endpoint.Key)
 	lock.Lock()
 	defer lock.Unlock()
@@ -83,7 +83,7 @@ func (s *Service) executeInitialization(operationID, id string, summary connecti
 		s.failInitialization(operationID, target, errf("agent_binding_conflict", 409, "The remote Agent binding belongs to another Roaminal state.", nil))
 		return
 	}
-	token, tokenHashValue, err := randomToken()
+	token, tokenHashValue, err := randomToken(s.random)
 	if err != nil {
 		s.failInitialization(operationID, target, errf("agent_install_failed", 502, "The Agent token could not be created.", err))
 		return
@@ -91,7 +91,7 @@ func (s *Service) executeInitialization(operationID, id string, summary connecti
 	installedComponent := "needs_trust"
 	if err := s.store.Update(endpoint.Key, func(value *EndpointRecord) error {
 		value.PendingTokenHash = tokenHashValue
-		value.PendingCreatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		value.PendingCreatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		value.ComponentVersion = manifest.ComponentVersion
 		value.ComponentSHA256 = asset.SHA256
 		value.InstallationState = "initializing"
@@ -121,7 +121,7 @@ func (s *Service) executeInitialization(operationID, id string, summary connecti
 	if err := s.store.Update(endpoint.Key, func(value *EndpointRecord) error {
 		if value.ActiveTokenHash != "" {
 			value.PreviousTokenHash = value.ActiveTokenHash
-			value.PreviousTokenExpiresAt = time.Now().UTC().Add(10 * time.Minute).Format(time.RFC3339Nano)
+			value.PreviousTokenExpiresAt = s.now().UTC().Add(10 * time.Minute).Format(time.RFC3339Nano)
 		}
 		value.ActiveTokenHash = tokenHashValue
 		value.PendingTokenHash, value.PendingCreatedAt = "", ""
@@ -136,7 +136,7 @@ func (s *Service) executeInitialization(operationID, id string, summary connecti
 		value.WebhookOrigin, value.InstallationState = webhookOrigin, component
 		state.Component, state.ComponentVersion, state.Activity = component, manifest.ComponentVersion, "unknown"
 		value.Targets[target.SessionName] = state
-		value.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		value.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	}); err != nil {
 		s.failInitialization(operationID, target, errf("agent_store_unavailable", 503, "Agent state storage is unavailable.", err))
@@ -172,7 +172,7 @@ func (s *Service) repairExisting(ctx context.Context, id string, target Target, 
 		record.WebhookOrigin, record.InstallationState = webhookOrigin, component
 		state.Component, state.ComponentVersion, state.Activity = component, version, "unknown"
 		record.Targets[target.SessionName] = state
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	})
 }

@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type reorderConnectionInstancesRequest struct {
@@ -29,12 +29,17 @@ func (s *Server) reorderConnectionInstances(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusConflict, "connection instance groups own the sidebar layout", "layout")
 		return
 	}
+	currentRevision := layout.Revision
 	layout.UngroupedConnectionInstanceIDs = order
 	layout.Revision++
 	if layout.Revision == 0 {
 		layout.Revision = 1
 	}
-	if err := s.auth.SetConnectionInstanceLayout(sessionID, layout); err != nil {
+	if err := s.workspace.SetConnectionInstanceLayout(sessionID, layout, currentRevision); err != nil {
+		if errors.Is(err, ports.ErrRevisionConflict) {
+			writeLayoutConflict(w, s.connectionInstanceLayout(sessionID))
+			return
+		}
 		if errors.Is(err, auth.ErrNotFound) {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 		} else {
@@ -43,29 +48,29 @@ func (s *Server) reorderConnectionInstances(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	ordered := orderConnectionInstances(instances, order)
-	if s.agent != nil {
+	if s.agentTelemetry != nil {
 		for index := range ordered {
-			ordered[index].Agent = s.agent.Summary(ordered[index])
+			ordered[index].Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(ordered[index]))
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"connectionInstances": ordered, "connectionInstanceLayout": layout})
+	writeJSON(w, http.StatusOK, connectionInstanceCollectionResponse{ConnectionInstances: ordered, ConnectionInstanceLayout: layout})
 }
 
-func (s *Server) orderedConnectionInstances(sessionID string) []connection.Summary {
+func (s *Server) orderedConnectionInstances(sessionID string) []ports.ConnectionInstanceSummary {
 	instances := s.connectionInstanceSummaries()
 	layout := s.connectionInstanceLayout(sessionID)
 	instances = orderConnectionInstances(instances, flattenConnectionInstanceLayout(layout))
-	if s.agent == nil {
+	if s.agentTelemetry == nil {
 		return instances
 	}
 	for index := range instances {
-		instances[index].Agent = s.agent.Summary(instances[index])
+		instances[index].Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(instances[index]))
 	}
 	return instances
 }
 
-func normalizeConnectionInstanceOrder(order []string, instances []connection.Summary) ([]string, error) {
-	if err := persistence.ValidateConnectionInstanceOrder(order); err != nil {
+func normalizeConnectionInstanceOrder(order []string, instances []ports.ConnectionInstanceSummary) ([]string, error) {
+	if err := domain.ValidateConnectionInstanceOrder(order); err != nil {
 		return nil, err
 	}
 	available := make(map[string]struct{}, len(instances))
@@ -89,15 +94,15 @@ func normalizeConnectionInstanceOrder(order []string, instances []connection.Sum
 	return normalized, nil
 }
 
-func orderConnectionInstances(instances []connection.Summary, order []string) []connection.Summary {
+func orderConnectionInstances(instances []ports.ConnectionInstanceSummary, order []string) []ports.ConnectionInstanceSummary {
 	if len(instances) < 2 || len(order) == 0 {
 		return instances
 	}
-	byID := make(map[string]connection.Summary, len(instances))
+	byID := make(map[string]ports.ConnectionInstanceSummary, len(instances))
 	for _, instance := range instances {
 		byID[instance.ID] = instance
 	}
-	result := make([]connection.Summary, 0, len(instances))
+	result := make([]ports.ConnectionInstanceSummary, 0, len(instances))
 	seen := make(map[string]struct{}, len(instances))
 	for _, id := range order {
 		if instance, exists := byID[id]; exists {

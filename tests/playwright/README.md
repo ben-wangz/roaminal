@@ -48,7 +48,7 @@ Verify all of the following:
    one ready endpoint. No Service exposes the terminal worker or a storage/runtime
    socket.
 6. Through the exact URL assigned to `ROAMINAL_E2E_BASE_URL`, `GET /healthz`
-   returns `200 {"status":"ok"}` and `GET /api/version` returns
+   returns `200 {"status":"ok"}` and `GET /api/v2/version` returns
    `name=roaminal`, the expected API version, product version, and a non-empty
    `bootId`. Access the Service/Ingress directly; never use a port-forward.
 
@@ -90,6 +90,33 @@ web security globally.
 | SSH transport | `ROAMINAL_E2E_SSH_HOST`, `ROAMINAL_E2E_SSH_USER`, `ROAMINAL_E2E_SSH_PORT` | Dedicated reachable OpenSSH fixture |
 | Tmux | `ROAMINAL_E2E_TMUX_ALIAS` | SSH fixture with `tmux` installed and a writable home |
 | Restart | test release and namespace identifiers | Permission to restart only the dedicated Roaminal workload |
+
+### Develop test environment defaults
+
+For the repository's shared `develop` test release, use these values when no
+operator-specific environment variables are provided:
+
+| Setting | Default |
+| --- | --- |
+| Helm release | `roaminal` |
+| Namespace | `develop` |
+| Direct Service URL | `http://roaminal.develop.svc.cluster.local:9846` |
+| HTTPS Ingress URL | `https://roaminal-e2e.pve.lab.geekcity.tech:22443` |
+
+Probe the direct Service before treating `ROAMINAL_E2E_BASE_URL` as missing:
+
+```sh
+if curl --connect-timeout 3 --max-time 5 -fsS \
+  http://roaminal.develop.svc.cluster.local:9846/healthz >/dev/null; then
+  export ROAMINAL_E2E_BASE_URL="${ROAMINAL_E2E_BASE_URL:-http://roaminal.develop.svc.cluster.local:9846}"
+fi
+```
+
+Use the direct Service URL for ordinary browser cases. Use the HTTPS Ingress
+URL only for cases that explicitly verify TLS termination, external Origin
+handling, or `wss:` upgrades, such as the HTTPS Ingress case. For another
+cluster or release, resolve the Service from Helm and do not reuse these
+defaults.
 
 The standard SSH/tmux fixture is documented in
 [SSH and tmux codespace](fixtures/ssh-codespace.md). Run that procedure before
@@ -136,7 +163,7 @@ all assertions and cleanup observations finish:
 - `page.on('response')`: fail unexpected `4xx` and all `5xx`; an expected
   negative response must match method, path, status, and error body.
 - `page.on('websocket')`: record URL, frames, socket errors, and close. Verify
-  that every connection uses the expected same-origin `/ws/connection-*` path.
+  that every connection uses the expected same-origin `/ws/v2/connection-*` path.
 
 Before marking a case passed, explicitly assert that the collected diagnostics
 contain none of the following known regressions:
@@ -191,6 +218,6 @@ without explaining the originating request and expiry condition.
 | Connection lifecycle | [local](connections/05-local-connection.md), [SSH](connections/06-ssh-initial-connect.md), [reuse](connections/07-transport-reuse.md), [tmux](connections/08-tmux.md), [pending launch](connections/09-pending-launch.md), [exit/failover](connections/10-exit-and-failover.md), [source change](connections/11-source-change-draining.md) |
 | SSH keys | [inventory/copy](keys/01-inventory-and-copy.md), [generation](keys/02-generation.md), [delete/read-only](keys/03-delete-and-readonly.md) |
 | Workspace | [terminal I/O](workspace/01-terminal-io.md), [sidebar/preview](workspace/02-sidebar-selection-and-preview.md), [actions/titles](workspace/03-actions-and-titles.md), [display names](workspace/04-display-name.md), [search](workspace/05-search.md), [virtual keyboard](workspace/06-contextual-keyboard.md), [mobile input](workspace/07-touch-keyboard.md), [resize](workspace/08-resize.md), [local status](workspace/09-system-status.md), [remote monitor](workspace/10-remote-monitor.md), [responsive/a11y](workspace/11-responsive-and-accessibility.md), [terminal appearance](workspace/12-terminal-appearance.md) |
-| Reliability | [refresh recovery](reliability/01-refresh-recovery.md), [WebSocket reconnect](reliability/02-websocket-reconnect.md), [backend restart](reliability/03-backend-restart-persistence.md), [multi-browser control](reliability/04-multi-browser-control.md), [capacity/isolation](reliability/05-capacity-and-isolation.md), [client diagnostics](reliability/06-client-diagnostics.md) |
+| Reliability | [refresh recovery](reliability/01-refresh-recovery.md), [WebSocket reconnect](reliability/02-websocket-reconnect.md), [backend restart](reliability/03-backend-restart-persistence.md), [multi-browser control](reliability/04-multi-browser-control.md), [capacity/isolation](reliability/05-capacity-and-isolation.md), [client diagnostics](reliability/06-client-diagnostics.md), [0.3 HTTP/WebSocket contracts](reliability/07-v2-contracts.md) |
 | Agent | [Codex status and initialization](workspace/14-codex-agent-status.md) |
 | Security | [browser boundary](security/01-browser-security.md), [HTTP/WebSocket authorization](security/02-http-websocket-authorization.md), [HTTPS ingress WebSocket](security/03-https-ingress-websocket.md) |

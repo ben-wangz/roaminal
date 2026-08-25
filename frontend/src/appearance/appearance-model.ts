@@ -1,6 +1,6 @@
-export const APPEARANCE_STORAGE_KEY = 'roaminal.appearance.v1';
-export const APPEARANCE_SCHEMA_VERSION = 1 as const;
-export const DEFAULT_FONT_SIZE = 15;
+export const APPEARANCE_STORAGE_KEY = 'roaminal.appearance.v2';
+export const APPEARANCE_SCHEMA_VERSION = 2 as const;
+export const DEFAULT_FONT_SIZE = 12;
 export const MIN_FONT_SIZE = 10;
 export const MAX_FONT_SIZE = 32;
 

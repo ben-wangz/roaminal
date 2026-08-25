@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Service) CreateUpload(ctx context.Context, id string, manifest UploadManifest, parts map[string]*multipart.FileHeader) (UploadStatus, error) {
-	if s.executor == nil {
+	if s.remote == nil {
 		return UploadStatus{}, ErrNoTransport
 	}
 	root, err := s.rootForRevision(ctx, id, manifest.RootRevision)
@@ -29,7 +29,12 @@ func (s *Service) CreateUpload(ctx context.Context, id string, manifest UploadMa
 	if len(manifest.Files) == 0 || len(manifest.Files) > maxUploadFiles {
 		return UploadStatus{}, ErrContentTooLarge
 	}
-	staging, err := os.MkdirTemp("", "roaminal-filesystem-upload-")
+	if s.stagingRoot != "" {
+		if err := os.MkdirAll(s.stagingRoot, 0o700); err != nil {
+			return UploadStatus{}, err
+		}
+	}
+	staging, err := os.MkdirTemp(s.stagingRoot, "upload-")
 	if err != nil {
 		return UploadStatus{}, err
 	}
@@ -52,6 +57,7 @@ func (s *Service) CreateUpload(ctx context.Context, id string, manifest UploadMa
 		if pathErr != nil || relative == "." || seenPaths[relative] {
 			return UploadStatus{}, pathErrOrInvalid(pathErr)
 		}
+		item.RelativePath = relative
 		seenPaths[relative] = true
 		part := parts[item.Part]
 		if part == nil || part.Size != item.Size {
@@ -88,15 +94,24 @@ func (s *Service) CreateUpload(ctx context.Context, id string, manifest UploadMa
 		}
 		files = append(files, stagedUploadFile{Manifest: item, Path: destination})
 	}
-	uploadID := newUploadID()
+	uploadID := s.newUploadID()
 	jobContext, cancel := context.WithCancel(context.Background())
 	job := &uploadJob{
-		instanceID: id,
-		status:     UploadStatus{UploadID: uploadID, Status: "queued", Transport: "pending", TargetPath: target, BytesTotal: total, Failures: []UploadFailure{}},
-		staging:    staging,
-		files:      files,
-		root:       root,
-		cancel:     cancel,
+		instanceID:     id,
+		status:         UploadStatus{UploadID: uploadID, Status: "queued", Transport: "pending", TargetPath: target, BytesTotal: total, Failures: []UploadFailure{}},
+		staging:        staging,
+		files:          files,
+		root:           root,
+		conflictPolicy: manifest.ConflictPolicy,
+		createdAt:      s.now().UTC(),
+		clock:          s.clock,
+		cancel:         cancel,
+	}
+	job.persist = func() { _ = s.persistUpload(job) }
+	if err := s.persistUpload(job); err != nil {
+		cancel()
+		_ = os.RemoveAll(staging)
+		return UploadStatus{}, err
 	}
 	s.mu.Lock()
 	s.uploads[uploadID] = job

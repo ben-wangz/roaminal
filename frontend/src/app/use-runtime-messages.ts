@@ -1,21 +1,22 @@
-import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { notify } from '../status/notifications';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
-import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import { reconcileConnections, type ConnectionView } from './connection-view';
+import type { ServerMessage } from '../terminal/terminal-protocol';
+import type { ConnectionView } from './connection-view';
 import type { AppPage } from './app-state';
 import type { ToastKind } from '../ui/toast';
+import { reduceTerminalMessage } from '../terminal/terminal-event-controller';
+import type { TerminalEventState } from '../terminal/terminal-event-controller';
+import { ConnectionInstanceController } from '../connections/connection-instance-controller';
 
 type Params = {
   currentRuntime: TerminalRuntime | null;
   activeLaunchId: string | null;
+  executionStatus: string | null;
   viewActiveConnectionInstanceId: string | null;
   viewRef: MutableRefObject<ConnectionView>;
-  connectionOrder: MutableRefObject<string[]>;
-  stateRevision: MutableRefObject<number>;
-  activateConnection: (id: string) => void;
+  controller: ConnectionInstanceController;
   clearLaunch: () => void;
-  setConnections: Dispatch<SetStateAction<ConnectionInstanceSummary[]>>;
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setView: Dispatch<SetStateAction<ConnectionView>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
@@ -24,19 +25,16 @@ type Params = {
   showToast: (message: string, kind?: ToastKind) => void;
 };
 
-// Subscribes to the active runtime's protocol messages and fans them out to
-// app state: launch publication, termination failover, metadata updates, and
-// command execution status.
+// React owns rendering; the terminal controller owns protocol-to-domain
+// transitions and returns explicit effects for lifecycle side effects.
 export function useRuntimeMessages({
   currentRuntime,
   activeLaunchId,
+  executionStatus,
   viewActiveConnectionInstanceId,
   viewRef,
-  connectionOrder,
-  stateRevision,
-  activateConnection,
+  controller,
   clearLaunch,
-  setConnections,
   setCurrentRuntime,
   setView,
   setPage,
@@ -44,91 +42,63 @@ export function useRuntimeMessages({
   setExecutionStatus,
   showToast,
 }: Params): void {
+  const stateRef = useRef<TerminalEventState>({
+    connections: controller.getSnapshot().connections,
+    view: viewRef.current,
+    connectionOrder: controller.getSnapshot().order,
+    executionStatus,
+  });
+  stateRef.current = { connections: controller.getSnapshot().connections, view: viewRef.current, connectionOrder: controller.getSnapshot().order, executionStatus };
   useEffect(() => {
     const runtimeId = activeLaunchId || viewActiveConnectionInstanceId;
     if (!currentRuntime || currentRuntime.connectionInstanceId !== runtimeId) return;
-    return currentRuntime.subscribeMessage((message) => {
-      if (message?.type === 'launch_published') {
-        setCurrentRuntime((current) => (current === currentRuntime ? null : current));
-        clearLaunch();
-        stateRevision.current += 1;
-        setConnections((current) => [
-          ...current.filter((connection) => connection.connectionInstanceId !== message.instance.connectionInstanceId),
-          message.instance,
-        ]);
-        activateConnection(message.instance.connectionInstanceId);
-        setPage('workspace');
-        return;
+    return currentRuntime.subscribeMessage((message: ServerMessage | null) => {
+      if (!message) return;
+      const currentState = stateRef.current;
+      const result = reduceTerminalMessage(currentState, message, { activeLaunchId, runtimeId });
+      const next = result.state;
+      if (next !== currentState) {
+        controller.markRevision();
+        viewRef.current = next.view;
+        controller.setConnections(next.connections);
+        stateRef.current = next;
+        setView(next.view);
+        setExecutionStatus(next.executionStatus);
       }
-      if (message?.type === 'status' && message.status === 'terminated') {
-        const exitedID = currentRuntime.connectionInstanceId;
-        if (activeLaunchId === exitedID) {
-          setCurrentRuntime((current) => (current === currentRuntime ? null : current));
-          clearLaunch();
-          setPage('connections');
-          showToast('tmux connection could not be started.', 'error');
-          return;
-        }
-        setConnections((current) => {
-          const next = current.filter((connection) => connection.connectionInstanceId !== exitedID);
-          const nextView = reconcileConnections(
-            next,
-            viewRef.current,
-            current.map((connection) => connection.connectionInstanceId),
-          );
-          setView(nextView);
-          connectionOrder.current = next.map((connection) => connection.connectionInstanceId);
-          if (!nextView.activeConnectionInstanceId) {
-            setPage('connections');
+      for (const effect of result.effects) {
+        switch (effect.type) {
+          case 'detach-runtime':
+            setCurrentRuntime((current) => (current === currentRuntime ? null : current));
+            break;
+          case 'clear-launch':
+            clearLaunch();
+            break;
+          case 'navigate':
+            setPage(effect.page);
+            break;
+          case 'close-search':
             setSearch(false);
-          }
-          return next;
-        });
-        return;
-      }
-      if (message?.type === 'meta') {
-        setConnections((current) =>
-          current.map((connection) =>
-            connection.connectionInstanceId === currentRuntime.connectionInstanceId
-              ? {
-                  ...connection,
-                  title: message.title,
-                  titleMode: message.titleMode,
-                  cwd: message.cwd,
-                  cols: message.cols,
-                  rows: message.rows,
-                  sourceState: message.sourceState as ConnectionInstanceSummary['sourceState'],
-                  generationStatus: message.generationStatus,
-                  generationError: message.generationError,
-                }
-              : connection,
-          ),
-        );
-        return;
-      }
-      if (!message || message.type !== 'execution') return;
-      if (message.phase === 'started') {
-        setExecutionStatus(message.command ? `Running: ${message.command}` : 'Running command');
-      } else if (message.phase === 'completed') {
-        setExecutionStatus(null);
-        showToast('Command completed', 'success');
-        notify('Roaminal', 'Command completed');
+            break;
+          case 'toast':
+            showToast(effect.message, effect.kind);
+            break;
+          case 'notify':
+            notify('Roaminal', effect.message);
+            break;
+        }
       }
     });
   }, [
-    activateConnection,
     activeLaunchId,
     clearLaunch,
-    connectionOrder,
+    controller,
     currentRuntime,
-    setConnections,
     setCurrentRuntime,
     setExecutionStatus,
     setPage,
     setSearch,
     setView,
     showToast,
-    stateRevision,
     viewActiveConnectionInstanceId,
     viewRef,
   ]);

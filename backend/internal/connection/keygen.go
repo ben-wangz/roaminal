@@ -5,24 +5,27 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 )
 
 func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequest, cols, rows int) (Summary, error) {
 	if m.keys == nil {
 		return Summary{}, ErrTransportUnavailable
 	}
-	id := terminalID()
+	id, err := m.newID()
+	if err != nil {
+		return Summary{}, err
+	}
 	paths, err := m.keys.PrepareGeneration(id, request)
 	if err != nil {
 		return Summary{}, err
 	}
 	cwd := m.InitialCwd()
-	meta := persistence.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: "local", Type: "local", Purpose: "ssh_key_generation", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, AutomaticTitle: "Generate " + request.FileName, GenerationStatus: "running"}
+	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: "local", Type: "local", Purpose: "ssh_key_generation", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, AutomaticTitle: "Generate " + request.FileName, GenerationStatus: "running"}
 	argv := m.keys.GenerationCommand(paths, request)
-	result, err := m.Manager.CreateProcessWithExit(ctx, meta, argv, nil, func(status terminal.ExitStatus) {
+	result, err := m.instances.CreateProcessWithExit(ctx, meta, argv, nil, func(status ports.TerminalExitStatus) {
 		m.finishKeyGeneration(id, paths, status)
 	})
 	if err != nil {
@@ -32,18 +35,18 @@ func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequ
 	return result, nil
 }
 
-func (m *Manager) finishKeyGeneration(id string, paths sshkey.GenerationPaths, status terminal.ExitStatus) {
+func (m *Manager) finishKeyGeneration(id string, paths sshkey.GenerationPaths, status ports.TerminalExitStatus) {
 	if status.ExitCode == nil || *status.ExitCode != 0 {
 		_ = m.keys.DiscardGeneration(paths)
-		_ = m.Manager.MarkGenerationResult(id, "failed", "ssh-keygen exited unsuccessfully")
+		_ = m.instances.MarkGenerationResult(id, "failed", "ssh-keygen exited unsuccessfully")
 		return
 	}
 	if err := m.keys.Promote(paths); err != nil {
 		_ = m.keys.DiscardGeneration(paths)
-		_ = m.Manager.MarkGenerationResult(id, "promotion_failed", safeGenerationError(err))
+		_ = m.instances.MarkGenerationResult(id, "promotion_failed", safeGenerationError(err))
 		return
 	}
-	_ = m.Manager.MarkGenerationResult(id, "succeeded", "")
+	_ = m.instances.MarkGenerationResult(id, "succeeded", "")
 }
 
 func safeGenerationError(err error) string {

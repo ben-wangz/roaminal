@@ -72,7 +72,7 @@ export function selectConnection(_current: ConnectionView, connectionInstanceId:
 export function loadStoredConnection(storage: Storage | null): ConnectionView {
   if (!storage) return { activeConnectionInstanceId: null };
   try {
-    const current = storage.getItem('roaminal_active_connection_instance_v1');
+    const current = storage.getItem('roaminal_active_connection_instance_v2');
     if (current) {
       const value = JSON.parse(current) as { activeConnectionInstanceId?: unknown };
       if (typeof value.activeConnectionInstanceId === 'string') {
@@ -87,5 +87,5 @@ export function loadStoredConnection(storage: Storage | null): ConnectionView {
 
 export function saveStoredConnection(storage: Storage | null, view: ConnectionView): void {
   if (!storage) return;
-  storage.setItem('roaminal_active_connection_instance_v1', JSON.stringify(view));
+  storage.setItem('roaminal_active_connection_instance_v2', JSON.stringify(view));
 }

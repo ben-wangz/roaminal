@@ -10,25 +10,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/api"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func (s *Service) Details(ctx context.Context, summary connection.Summary, requestOrigin string) map[string]any {
-	detail := map[string]any{"agent": s.Summary(summary), "webhookUrl": ""}
+func (s *Service) Details(ctx context.Context, summary ports.ConnectionInstanceView, requestOrigin string) DetailsResponse {
+	detail := DetailsResponse{Agent: s.Summary(summary)}
 	if target, record, ok := s.targetFor(summary); ok {
-		detail["endpoint"] = Endpoint{Key: target.EndpointKey, User: record.User, Host: record.Host, Port: record.Port, Display: endpointDisplay(record.User, record.Host, record.Port)}
-		detail["componentSha256"] = record.ComponentSHA256
-		detail["webhookUrl"] = joinWebhook(record.WebhookOrigin)
+		detail.Endpoint = &Endpoint{Key: target.EndpointKey, User: record.User, Host: record.Host, Port: record.Port, Display: endpointDisplay(record.User, record.Host, record.Port)}
+		detail.ComponentSHA256 = record.ComponentSHA256
+		detail.WebhookURL = joinWebhook(record.WebhookOrigin)
 	} else if s.terms != nil && summary.Type == "ssh" && summary.Lifecycle == "live" {
 		if effective, err := s.terms.ResolveEndpoint(ctx, summary.ID); err == nil {
 			if endpoint, err := NormalizeEndpoint(effective); err == nil {
-				detail["endpoint"] = endpoint
+				detail.Endpoint = &endpoint
 			}
 		}
 	}
-	if detail["webhookUrl"] == "" {
+	if detail.WebhookURL == "" {
 		if webhookURL, _, err := s.webhookURL(requestOrigin); err == nil {
-			detail["webhookUrl"] = webhookURL
+			detail.WebhookURL = webhookURL
 		}
 	}
 	return detail
@@ -38,7 +39,7 @@ func joinWebhook(origin string) string {
 	if origin == "" {
 		return ""
 	}
-	return strings.TrimRight(origin, "/") + "/api/agent/events"
+	return strings.TrimRight(origin, "/") + api.HTTPPrefix + "/agent/events"
 }
 
 func (s *Service) webhookURL(origin string) (string, string, error) {
@@ -57,7 +58,7 @@ func (s *Service) webhookURL(origin string) (string, string, error) {
 		return "", "", errf("agent_webhook_insecure", 422, "HTTPS is required for the Agent webhook.", nil)
 	}
 	originValue := parsed.Scheme + "://" + parsed.Host + strings.TrimRight(parsed.EscapedPath(), "/")
-	return originValue + path.Join("/", "api/agent/events"), originValue, nil
+	return originValue + path.Join("/", api.HTTPPrefix+"/agent/events"), originValue, nil
 }
 
 func isLoopback(host string) bool {
@@ -72,7 +73,7 @@ func (s *Service) targetPreflight(ctx context.Context, id, session string) (stri
 	if s.terms == nil {
 		return "", 0, errors.New("connection manager unavailable")
 	}
-	result, err := s.terms.RunRemote(ctx, id, connection.RemoteCommand{Script: tmuxTargetPreflightScript, Args: []string{session}, Timeout: 5 * time.Second, OutputLimit: 4096})
+	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: tmuxTargetPreflightScript, Args: []string{session}, Timeout: 5 * time.Second, OutputLimit: 4096})
 	if err != nil {
 		return "", 0, err
 	}

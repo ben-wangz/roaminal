@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
 const (
@@ -37,7 +37,7 @@ func (m *Manager) TouchPending(id string) {
 	}
 	session.mu.Lock()
 	if session.ephemeral {
-		session.lastActivity = time.Now()
+		session.lastActivity = m.now()
 		session.detachedAt = time.Time{}
 	}
 	session.mu.Unlock()
@@ -63,7 +63,7 @@ func (m *Manager) watchPending(session *Session) {
 			session.mu.Unlock()
 			return
 		}
-		now := time.Now()
+		now := m.now()
 		lastActivity := session.lastActivity
 		detachedAt := session.detachedAt
 		noClients := len(session.clients) == 0
@@ -78,7 +78,7 @@ func (m *Manager) watchPending(session *Session) {
 // PromotePending publishes a successful runtime launch as a normal connection
 // instance. The final metadata is persisted before the instance enters the
 // heartbeat-visible map.
-func (m *Manager) PromotePending(id string, meta persistence.ConnectionInstanceMeta) (Summary, error) {
+func (m *Manager) PromotePending(id string, meta domain.ConnectionInstanceMeta) (Summary, error) {
 	session := m.pendingSession(id)
 	if session == nil {
 		return Summary{}, os.ErrNotExist
@@ -93,7 +93,7 @@ func (m *Manager) PromotePending(id string, meta persistence.ConnectionInstanceM
 		meta.CreatedAt = session.meta.CreatedAt
 	}
 	if meta.UpdatedAt.IsZero() {
-		meta.UpdatedAt = time.Now().UTC()
+		meta.UpdatedAt = m.now().UTC()
 	}
 	if meta.BackendRuntimeID == "" {
 		meta.BackendRuntimeID = m.runtimeID
@@ -116,8 +116,8 @@ func (m *Manager) PromotePending(id string, meta persistence.ConnectionInstanceM
 	session.ephemeral = false
 	session.published = true
 	session.onMarker = nil
-	if m.store != nil {
-		if err := m.store.SaveConnectionInstance(meta); err != nil {
+	if m.hasPersistence() {
+		if err := m.saveMeta(meta); err != nil {
 			session.ephemeral = true
 			session.meta.Lifecycle = "pending"
 			session.mu.Unlock()
@@ -134,7 +134,7 @@ func (m *Manager) PromotePending(id string, meta persistence.ConnectionInstanceM
 	m.sessions[id] = session
 	m.mu.Unlock()
 	session.mu.Lock()
-	session.broadcastLocked(message(map[string]any{"type": "launch_published", "instance": m.summaryLocked(session)}))
+	session.broadcastMessageLocked(launchPublishedStreamMessage(m.summaryLocked(session)))
 	session.mu.Unlock()
 	return m.summary(session), nil
 }

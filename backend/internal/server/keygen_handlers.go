@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 )
 
@@ -18,7 +18,7 @@ func (s *Server) generateSSHKey(w http.ResponseWriter, r *http.Request, _ string
 	result, err := s.terms.GenerateKey(r.Context(), body, 120, 36)
 	if err != nil {
 		switch {
-		case errors.Is(err, connection.ErrTransportUnavailable):
+		case errors.Is(err, ports.ErrTransportUnavailable):
 			writeError(w, http.StatusServiceUnavailable, "ssh key generation unavailable", "key_generation")
 		case errors.Is(err, os.ErrExist), strings.Contains(err.Error(), "already exists"), strings.Contains(err.Error(), "symlink"):
 			writeError(w, http.StatusConflict, err.Error(), "file_name")

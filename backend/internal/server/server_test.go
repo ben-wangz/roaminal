@@ -11,18 +11,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ben-wangz/roaminal/backend/internal/api"
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/workspace"
 )
 
 func TestAPIRoutesTakePrecedenceOverStatic(t *testing.T) {
-	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, (*connection.Manager)(nil), nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := New(Dependencies{Config: config.Config{}, Version: "0.1.0", BootID: "boot", Static: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
-	}))
-	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/version", nil)
+	})})
+	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/version", nil)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -33,9 +34,28 @@ func TestAPIRoutesTakePrecedenceOverStatic(t *testing.T) {
 	}
 }
 
+func TestVersionContractAndLegacyRouteBoundary(t *testing.T) {
+	server := New(Dependencies{Config: config.Config{}, Version: "0.3.0", BootID: "boot", Static: http.NotFoundHandler()})
+	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/version", nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+	var version api.VersionResponse
+	if err := json.NewDecoder(response.Body).Decode(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version.APIVersion != api.Version {
+		t.Fatalf("apiVersion = %q, want %q", version.APIVersion, api.Version)
+	}
+	legacy := httptest.NewRecorder()
+	server.Handler().ServeHTTP(legacy, httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/version", nil))
+	if legacy.Code != http.StatusNotFound {
+		t.Fatalf("legacy route status = %d, want 404", legacy.Code)
+	}
+}
+
 func TestSameOriginRequiresMatchingHostAndScheme(t *testing.T) {
 	server := &Server{}
-	request := httptest.NewRequest("GET", "http://roaminal.test/api/heartbeat", nil)
+	request := httptest.NewRequest("GET", "http://roaminal.test/api/v2/heartbeat", nil)
 	request.Host = "roaminal.test"
 	request.Header.Set("Origin", "http://roaminal.test")
 	if !server.sameOrigin(request) {
@@ -71,8 +91,8 @@ func TestSameOriginRequiresMatchingHostAndScheme(t *testing.T) {
 }
 
 func TestAPIRouteAcceptsHTTPSOriginWhenProxyReportsWSS(t *testing.T) {
-	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, (*connection.Manager)(nil), nil, nil, http.NotFoundHandler())
-	request := httptest.NewRequest(http.MethodGet, "https://roaminal.test/api/version", nil)
+	server := New(Dependencies{Config: config.Config{}, Version: "0.1.0", BootID: "boot"})
+	request := httptest.NewRequest(http.MethodGet, "https://roaminal.test/api/v2/version", nil)
 	request.Host = "roaminal.test"
 	request.Header.Set("Origin", "https://roaminal.test")
 	request.Header.Set("X-Forwarded-Proto", "wss")
@@ -84,7 +104,7 @@ func TestAPIRouteAcceptsHTTPSOriginWhenProxyReportsWSS(t *testing.T) {
 }
 
 func TestRequestOriginSchemeUsesTLSOverForwardedProtocol(t *testing.T) {
-	request := httptest.NewRequest("GET", "https://roaminal.test/api/version", nil)
+	request := httptest.NewRequest("GET", "https://roaminal.test/api/v2/version", nil)
 	request.Header.Set("X-Forwarded-Proto", "http")
 	request.TLS = &tls.ConnectionState{}
 	if got := requestOriginScheme(request); got != "https" {
@@ -93,19 +113,19 @@ func TestRequestOriginSchemeUsesTLSOverForwardedProtocol(t *testing.T) {
 }
 
 func TestAPIRouteMethodMismatchReturnsStableError(t *testing.T) {
-	server := NewWithStatic(config.Config{}, "0.1.0", "boot", nil, (*connection.Manager)(nil), nil, nil, http.NotFoundHandler())
-	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/version", nil)
+	server := New(Dependencies{Config: config.Config{}, Version: "0.1.0", BootID: "boot"})
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/version", nil)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
 	}
-	var body map[string]string
+	var body api.ErrorResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode error response: %v", err)
 	}
-	if body["code"] != "method_not_allowed" {
-		t.Fatalf("error code = %q, want method_not_allowed", body["code"])
+	if body.Code != "method_not_allowed" {
+		t.Fatalf("error code = %q, want method_not_allowed", body.Code)
 	}
 	if response.Header().Get("Allow") != http.MethodGet {
 		t.Fatalf("Allow = %q, want GET", response.Header().Get("Allow"))
@@ -118,19 +138,19 @@ func TestClientDiagnosticsEndpointRequiresAuthAndAcceptsBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Config{Password: "secret", AuthAccessTTL: time.Minute, AuthRefreshTTL: time.Hour, AuthMaxAttempts: 3, ClientDiagnosticsEnabled: true}
-	authManager, err := auth.New(cfg, store)
+	authManager, err := newServerTestAuth(cfg, store)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var logs bytes.Buffer
 	sink := clientdiag.New("", "0.2.11", "boot", log.New(&logs, "", 0))
-	server := NewWithSourcesAndDiagnostics(cfg, "0.2.11", "boot", authManager, nil, nil, nil, http.NotFoundHandler(), nil, nil, nil, sink)
+	server := New(Dependencies{Config: cfg, Version: "0.2.11", BootID: "boot", Auth: authManager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace), Diagnostics: sink})
 	body := clientdiag.Batch{SchemaVersion: 1, PageID: "11111111-1111-4000-8000-000000000004", Events: []clientdiag.Event{{EventID: "11111111-1111-4000-8000-000000000005", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano), Kind: "console_error", Message: "test"}}}
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(encoded))
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/client-diagnostics", bytes.NewReader(encoded))
 	request.Header.Set("Origin", "http://roaminal.test")
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -146,7 +166,7 @@ func TestClientDiagnosticsEndpointRequiresAuthAndAcceptsBatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(encoded))
+	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/client-diagnostics", bytes.NewReader(encoded))
 	request.Header.Set("Origin", "http://roaminal.test")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
@@ -161,8 +181,8 @@ func TestClientDiagnosticsEndpointRequiresAuthAndAcceptsBatch(t *testing.T) {
 }
 
 func TestClientDiagnosticsRouteIsAbsentWhenDisabled(t *testing.T) {
-	server := NewWithSourcesAndDiagnostics(config.Config{}, "0.1.0", "boot", nil, nil, nil, nil, http.NotFoundHandler(), nil, nil, nil, nil)
-	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader([]byte(`{}`)))
+	server := New(Dependencies{Config: config.Config{}})
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/client-diagnostics", bytes.NewReader([]byte(`{}`)))
 	request.Header.Set("Origin", "http://roaminal.test")
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
@@ -174,8 +194,8 @@ func TestClientDiagnosticsRouteIsAbsentWhenDisabled(t *testing.T) {
 func TestClientDiagnosticsDecoderUsesStableErrorsAndSizeLimit(t *testing.T) {
 	valid := []byte(`{"schemaVersion":1}`)
 	for name, request := range map[string]*http.Request{
-		"content type":  httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(valid)),
-		"unknown field": httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader([]byte(`{"unknown":true}`))),
+		"content type":  httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/client-diagnostics", bytes.NewReader(valid)),
+		"unknown field": httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/client-diagnostics", bytes.NewReader([]byte(`{"unknown":true}`))),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if name == "unknown field" {
@@ -186,17 +206,17 @@ func TestClientDiagnosticsDecoderUsesStableErrorsAndSizeLimit(t *testing.T) {
 			if err == nil || response.Code != http.StatusBadRequest {
 				t.Fatalf("decode status=%d err=%v, want 400", response.Code, err)
 			}
-			var body map[string]string
+			var body api.ErrorResponse
 			if decodeErr := json.Unmarshal(response.Body.Bytes(), &body); decodeErr != nil {
 				t.Fatal(decodeErr)
 			}
-			if body["code"] != "invalid_client_diagnostics" {
-				t.Fatalf("error code=%q, want invalid_client_diagnostics", body["code"])
+			if body.Code != "invalid_client_diagnostics" {
+				t.Fatalf("error code=%q, want invalid_client_diagnostics", body.Code)
 			}
 		})
 	}
 	oversized := append(append([]byte{}, valid...), []byte(" \""+strings.Repeat("x", clientdiag.MaxBodyBytes)+"\"")...)
-	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/client-diagnostics", bytes.NewReader(oversized))
+	request := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/client-diagnostics", bytes.NewReader(oversized))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	if err := decodeClientDiagnostics(response, request, &clientdiag.Batch{}); err == nil || response.Code != http.StatusRequestEntityTooLarge {
@@ -204,16 +224,22 @@ func TestClientDiagnosticsDecoderUsesStableErrorsAndSizeLimit(t *testing.T) {
 	}
 }
 
-func TestValidWSMessageRejectsUnknownFields(t *testing.T) {
-	if !validWSMessage("input", map[string]json.RawMessage{"type": rawJSON(`"input"`), "data": rawJSON(`"pwd"`)}) {
-		t.Fatal("expected input message")
+func TestDecodeWebSocketCommandUsesTypedValidation(t *testing.T) {
+	command, err := decodeWebSocketCommand([]byte(`{"type":"input","requestId":"request-1","data":"echo \u4f60\u597d\n"}`))
+	if err != nil || command.Type != "input" || command.Data != "echo 你好\n" {
+		t.Fatalf("command=%+v err=%v", command, err)
 	}
-	if validWSMessage("input", map[string]json.RawMessage{"type": rawJSON(`"input"`), "data": rawJSON(`"pwd"`), "extra": rawJSON(`true`)}) {
-		t.Fatal("expected unknown input field to be rejected")
+	if _, err := decodeWebSocketCommand([]byte(`{"type":"resize","cols":1,"rows":24}`)); err == nil {
+		t.Fatal("expected invalid dimensions")
 	}
-	if validWSMessage("unknown", map[string]json.RawMessage{"type": rawJSON(`"unknown"`)}) {
-		t.Fatal("expected unknown message type to be rejected")
+	if _, err := decodeWebSocketCommand([]byte(`{"type":"ping","extra":true}`)); err == nil {
+		t.Fatal("expected unknown field rejection")
+	}
+	invalidObserverInput, err := decodeWebSocketCommand([]byte(`{"type":"input","data":"observer-must-not-write"}`))
+	if err == nil || invalidObserverInput.Type != "input" || !isWebSocketControlCommand(invalidObserverInput.Type) {
+		t.Fatalf("invalid observer command=%+v err=%v", invalidObserverInput, err)
+	}
+	if isWebSocketControlCommand("ping") || isWebSocketControlCommand("unknown") {
+		t.Fatal("non-control websocket commands must not be classified as control")
 	}
 }
-
-func rawJSON(value string) []byte { return []byte(value) }

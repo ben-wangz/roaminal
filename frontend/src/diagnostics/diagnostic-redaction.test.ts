@@ -15,6 +15,6 @@ describe('diagnostic redaction', () => {
   it('only returns same-origin paths', () => {
     expect(normalizePath('https://roaminal.test/assets/app.js', 'https://roaminal.test')).toBe('/assets/app.js');
     expect(normalizePath('https://other.test/app.js', 'https://roaminal.test')).toBeUndefined();
-    expect(normalizePath('/api/version', 'https://roaminal.test')).toBe('/api/version');
+    expect(normalizePath('/api/v2/version', 'https://roaminal.test')).toBe('/api/v2/version');
   });
 });

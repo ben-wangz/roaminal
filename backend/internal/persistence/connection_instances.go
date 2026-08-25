@@ -159,7 +159,7 @@ func decodeConnectionInstanceMeta(data []byte) (ConnectionInstanceMeta, error) {
 		meta := ConnectionInstanceMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, TmuxEnabled: current.TmuxEnabled, TmuxSessionName: current.TmuxSessionName, TmuxPrefixKey: current.TmuxPrefixKey, TmuxPrefixSource: current.TmuxPrefixSource}
 		meta.SyncEffectiveTitle()
 		return meta, nil
-	case ConnectionFormatVersion:
+	case PreviousConnectionFormatVersion, ConnectionFormatVersion:
 		var current connectionMetaV2
 		if err := decodeStrict(data, &current); err != nil {
 			return ConnectionInstanceMeta{}, err

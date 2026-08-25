@@ -12,6 +12,12 @@ export type PollOptions = {
   pauseWhenHidden?: boolean;
 };
 
+export type PollLoopStopOptions = { abort?: boolean };
+export type PollLoopDisposer = (() => void) & {
+  stop(options?: PollLoopStopOptions): void;
+  waitForIdle(): Promise<void>;
+};
+
 export function browserPollEnvironment(): PollEnvironment {
   return {
     setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
@@ -33,19 +39,20 @@ export function startPollLoop(
   task: (signal: AbortSignal) => Promise<void>,
   options: PollOptions,
   env: PollEnvironment = browserPollEnvironment(),
-): () => void {
+): PollLoopDisposer {
   const { intervalMs, jitterMs = 0, pauseWhenHidden = false } = options;
   let disposed = false;
   let generation = 0;
   let timer: number | null = null;
   let controller: AbortController | null = null;
-  const schedule = () => {
+  let activeRun: Promise<void> | null = null;
+  function schedule() {
     timer = env.setTimeout(() => {
       timer = null;
-      void run();
+      startRun();
     }, intervalMs + Math.floor(env.random() * jitterMs));
-  };
-  const run = async () => {
+  }
+  async function run() {
     generation += 1;
     const active = generation;
     controller?.abort();
@@ -57,7 +64,7 @@ export function startPollLoop(
     } finally {
       if (!disposed && active === generation && !(pauseWhenHidden && env.isHidden())) schedule();
     }
-  };
+  }
   const unsubscribe = pauseWhenHidden
     ? env.subscribeVisibility(() => {
         if (env.isHidden() || disposed) return;
@@ -65,15 +72,32 @@ export function startPollLoop(
           env.clearTimeout(timer);
           timer = null;
         }
-        void run();
+        startRun();
       })
     : null;
-  void run();
-  return () => {
+
+  function startRun() {
+    const pending = run();
+    activeRun = pending;
+    void pending.finally(() => {
+      if (activeRun === pending) activeRun = null;
+    });
+  }
+
+  startRun();
+  const stop = (stopOptions: PollLoopStopOptions = {}) => {
     disposed = true;
     generation += 1;
-    controller?.abort();
+    if (stopOptions.abort !== false) controller?.abort();
     if (timer !== null) env.clearTimeout(timer);
+    timer = null;
     unsubscribe?.();
   };
+  const disposer = (() => stop()) as PollLoopDisposer;
+  disposer.stop = stop;
+  disposer.waitForIdle = async () => {
+    const pending = activeRun;
+    if (pending) await pending;
+  };
+  return disposer;
 }

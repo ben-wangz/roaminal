@@ -5,9 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
-	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
 func (m *Manager) Login(challengeID, response, userAgent string) (Tokens, error) {
@@ -15,7 +14,7 @@ func (m *Manager) Login(challengeID, response, userAgent string) (Tokens, error)
 	defer m.mu.Unlock()
 	c, ok := m.challenges[challengeID]
 	delete(m.challenges, challengeID)
-	if !ok || !c.ExpiresAt.After(time.Now().UTC()) {
+	if !ok || !c.ExpiresAt.After(m.clock.Now().UTC()) {
 		return Tokens{}, ErrInvalidChallenge
 	}
 	if m.locked {
@@ -37,20 +36,20 @@ func (m *Manager) Login(challengeID, response, userAgent string) (Tokens, error)
 }
 
 func (m *Manager) issueLocked(userAgent string) (Tokens, error) {
-	now := time.Now().UTC()
-	sessionID, err := newID()
+	now := m.clock.Now().UTC()
+	sessionID, err := m.ids.NewID()
 	if err != nil {
 		return Tokens{}, err
 	}
-	access, err := opaque("ra")
+	access, err := opaque(m.random, "ra")
 	if err != nil {
 		return Tokens{}, err
 	}
-	refresh, err := opaque("rr")
+	refresh, err := opaque(m.random, "rr")
 	if err != nil {
 		return Tokens{}, err
 	}
-	entry := persistence.AuthSession{ID: sessionID, PasswordFingerprint: m.fingerprint, RefreshTokenHash: hashToken(refresh), CreatedAt: now, LastSeenAt: now, RefreshExpiresAt: now.Add(m.cfg.AuthRefreshTTL), RotatedAt: now, UserAgent: truncate(userAgent, 500)}
+	entry := domain.AuthSessionRecord{ID: sessionID, PasswordFingerprint: m.fingerprint, RefreshTokenHash: hashToken(refresh), CreatedAt: now, LastSeenAt: now, RefreshExpiresAt: now.Add(m.cfg.AuthRefreshTTL), RotatedAt: now, UserAgent: truncate(userAgent, 500)}
 	m.refresh[sessionID] = entry
 	m.access[hashToken(access)] = accessEntry{SessionID: sessionID, ExpiresAt: now.Add(m.cfg.AuthAccessTTL)}
 	if err := m.persistLocked(); err != nil {
@@ -63,7 +62,7 @@ func (m *Manager) Authenticate(token string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	entry, ok := m.access[hashToken(strings.TrimSpace(token))]
-	if !ok || !entry.ExpiresAt.After(time.Now().UTC()) {
+	if !ok || !entry.ExpiresAt.After(m.clock.Now().UTC()) {
 		return "", ErrUnauthorized
 	}
 	return entry.SessionID, nil
@@ -73,7 +72,7 @@ func (m *Manager) Refresh(token, userAgent string) (Tokens, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	hash := hashToken(strings.TrimSpace(token))
-	var old persistence.AuthSession
+	var old domain.AuthSessionRecord
 	var sessionID string
 	for id, entry := range m.refresh {
 		if hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) {
@@ -81,7 +80,7 @@ func (m *Manager) Refresh(token, userAgent string) (Tokens, error) {
 			break
 		}
 	}
-	if sessionID == "" || !old.RefreshExpiresAt.After(time.Now().UTC()) || old.PasswordFingerprint != m.fingerprint {
+	if sessionID == "" || !old.RefreshExpiresAt.After(m.clock.Now().UTC()) || old.PasswordFingerprint != m.fingerprint {
 		return Tokens{}, ErrUnauthorized
 	}
 	delete(m.refresh, sessionID)
@@ -90,15 +89,15 @@ func (m *Manager) Refresh(token, userAgent string) (Tokens, error) {
 			delete(m.access, key)
 		}
 	}
-	access, err := opaque("ra")
+	access, err := opaque(m.random, "ra")
 	if err != nil {
 		return Tokens{}, err
 	}
-	refresh, err := opaque("rr")
+	refresh, err := opaque(m.random, "rr")
 	if err != nil {
 		return Tokens{}, err
 	}
-	now := time.Now().UTC()
+	now := m.clock.Now().UTC()
 	old.RefreshTokenHash, old.LastSeenAt, old.RotatedAt = hashToken(refresh), now, now
 	if userAgent != "" {
 		old.UserAgent = truncate(userAgent, 500)

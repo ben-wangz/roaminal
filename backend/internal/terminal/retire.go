@@ -31,21 +31,21 @@ func (m *Manager) retireSession(ctx context.Context, session *Session) error {
 	}()
 
 	session.waitReadLoop()
-	if m.store != nil {
+	if m.hasPersistence() {
 		if err := session.saveSnapshotFinal(); err != nil {
 			return fmt.Errorf("save final snapshot: %w", err)
 		}
 		session.mu.Lock()
-		session.meta.UpdatedAt = time.Now().UTC()
+		session.meta.UpdatedAt = m.now().UTC()
 		meta := session.meta
 		session.mu.Unlock()
-		if err := m.store.SaveConnectionInstance(meta); err != nil {
+		if err := m.saveMeta(meta); err != nil {
 			return fmt.Errorf("save final metadata: %w", err)
 		}
-		if err := m.store.ArchiveConnectionInstance(meta.ID); err != nil {
+		if err := m.archivePersistedInstance(ctx, meta.ID); err != nil {
 			return fmt.Errorf("archive session: %w", err)
 		}
-		if err := m.store.DeleteConnectionInstance(meta.ID); err != nil {
+		if err := m.deletePersistedInstance(ctx, meta.ID); err != nil {
 			return fmt.Errorf("remove active session: %w", err)
 		}
 	}
@@ -104,7 +104,7 @@ func (m *Manager) terminateSession(ctx context.Context, session *Session, lifecy
 	cmd := session.cmd
 	session.closed = true
 	session.meta.Lifecycle = lifecycle
-	session.meta.UpdatedAt = time.Now().UTC()
+	session.meta.UpdatedAt = m.now().UTC()
 	if session.pty != nil {
 		_ = session.pty.Close()
 	}

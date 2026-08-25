@@ -1,7 +1,7 @@
-import { useEffect, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from 'react';
+import { useEffect, type MutableRefObject, type RefObject } from 'react';
 import type { AuthState } from '../auth/auth-storage';
 import { saveStoredConnection, type ConnectionView } from './connection-view';
-import type { ConnectionInstanceLayout } from '../connections/connection-instance-groups';
+import { ConnectionInstanceController } from '../connections/connection-instance-controller';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -9,10 +9,7 @@ type Params = {
   auth: AuthState | null;
   view: ConnectionView;
   viewRef: MutableRefObject<ConnectionView>;
-  connectionInstanceLayout: ConnectionInstanceLayout | null;
-  connectionInstanceLayoutRef: MutableRefObject<ConnectionInstanceLayout | null>;
-  pendingConnectionInstanceLayout: MutableRefObject<ConnectionInstanceLayout | null>;
-  setConnectionInstanceLayout: Dispatch<SetStateAction<ConnectionInstanceLayout | null>>;
+  controller: ConnectionInstanceController;
   sidebarOpen: boolean;
   virtualKeyboardOpen: boolean;
   sidebarOpenButton: RefObject<HTMLButtonElement | null>;
@@ -24,10 +21,7 @@ export function useAppShellLifecycle({
   auth,
   view,
   viewRef,
-  connectionInstanceLayout,
-  connectionInstanceLayoutRef,
-  pendingConnectionInstanceLayout,
-  setConnectionInstanceLayout,
+  controller,
   sidebarOpen,
   virtualKeyboardOpen,
   sidebarOpenButton,
@@ -39,14 +33,9 @@ export function useAppShellLifecycle({
     viewRef.current = view;
   }, [view, viewRef]);
   useEffect(() => {
-    connectionInstanceLayoutRef.current = connectionInstanceLayout;
-  }, [connectionInstanceLayout, connectionInstanceLayoutRef]);
-  useEffect(() => {
     if (auth) return;
-    pendingConnectionInstanceLayout.current = null;
-    connectionInstanceLayoutRef.current = null;
-    setConnectionInstanceLayout(null);
-  }, [auth, connectionInstanceLayoutRef, pendingConnectionInstanceLayout, setConnectionInstanceLayout]);
+    controller.reset();
+  }, [auth, controller]);
   useEffect(() => {
     if (!sidebarOpen && !virtualKeyboardOpen) sidebarOpenButton.current?.focus();
   }, [sidebarOpen, sidebarOpenButton, virtualKeyboardOpen]);

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func TestRemoteScriptsUseNulProtocolAndBoundedContent(t *testing.T) {
@@ -65,8 +65,8 @@ func TestRemoteScriptsUseNulProtocolAndBoundedContent(t *testing.T) {
 
 func TestCreateUploadRequiresManifestParts(t *testing.T) {
 	alias := "fixture"
-	fake := &fakeExecutor{summary: connection.Summary{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
-	fake.run = func(command connection.RemoteCommand) ([]byte, error) {
+	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
+	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
 		switch {
 		case command.Script == configuredRootScript:
 			return rootOutput("/workspace"), nil
@@ -93,8 +93,8 @@ func TestCreateUploadRequiresManifestParts(t *testing.T) {
 
 func TestCreateUploadRejectsUnsafeManifestBeforeStaging(t *testing.T) {
 	alias := "fixture"
-	fake := &fakeExecutor{summary: connection.Summary{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
-	fake.run = func(command connection.RemoteCommand) ([]byte, error) {
+	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
+	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
 		return rootOutput("/workspace"), nil
 	}
 	service := New(fake, nil)

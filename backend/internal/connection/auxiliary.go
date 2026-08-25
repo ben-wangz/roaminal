@@ -8,13 +8,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 const auxiliaryOutputLimit = 8 * 1024
 
 func (m *Manager) reserveAuxiliary(transport *Transport) bool {
-	m.transportMu.Lock()
-	defer m.transportMu.Unlock()
+	m.transportPool.mu.Lock()
+	defer m.transportPool.mu.Unlock()
 	if !transportAcceptsReuse(transport) {
 		return false
 	}
@@ -23,15 +25,15 @@ func (m *Manager) reserveAuxiliary(transport *Transport) bool {
 }
 
 func (m *Manager) releaseAuxiliary(transport *Transport) {
-	m.transportMu.Lock()
+	m.transportPool.mu.Lock()
 	if transport.AuxiliaryChannels > 0 {
 		transport.AuxiliaryChannels--
 	}
 	shouldStop := transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0
 	if shouldStop {
-		delete(m.transports, transport.OwnerID)
+		delete(m.transportPool.transports, transport.OwnerID)
 	}
-	m.transportMu.Unlock()
+	m.transportPool.mu.Unlock()
 	if shouldStop {
 		m.clearRemoteState(transport.OwnerID)
 		m.stopTransport(context.Background(), transport)
@@ -42,18 +44,8 @@ func (m *Manager) runAuxiliary(ctx context.Context, transport *Transport, remote
 	return m.runAuxiliaryInput(ctx, transport, nil, remoteArgs...)
 }
 
-type RemoteCommand struct {
-	Script      string
-	Args        []string
-	Stdin       io.Reader
-	OutputLimit int64
-	Timeout     time.Duration
-}
-
-type RemoteResult struct {
-	Output      []byte
-	ErrorOutput []byte
-}
+type RemoteCommand = ports.RemoteCommand
+type RemoteResult = ports.RemoteResult
 
 type auxiliaryReader struct {
 	manager   *Manager

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func NormalizeEndpoint(value connection.EffectiveEndpoint) (Endpoint, error) {
+func NormalizeEndpoint(value ports.EffectiveEndpoint) (Endpoint, error) {
 	user := strings.TrimSpace(value.User)
 	host := strings.TrimSpace(value.Host)
 	if user == "" || host == "" || value.Port < 1 || value.Port > 65535 {

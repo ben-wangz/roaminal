@@ -3,11 +3,12 @@ package terminal
 import (
 	"context"
 	"errors"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
 func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summary, error) {
@@ -72,18 +73,18 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 	if err != nil || !info.IsDir() {
 		return Summary{}, errors.New("cwd is not accessible")
 	}
-	id, err := newID()
+	id, err := m.newID()
 	if err != nil {
 		return Summary{}, err
 	}
-	now := time.Now().UTC()
-	meta := persistence.ConnectionInstanceMeta{FormatVersion: persistence.ConnectionFormatVersion, ID: id, BackendRuntimeID: m.runtimeID, ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now}
+	now := m.now().UTC()
+	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.runtimeID, ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now}
 	session, err := m.startSession(ctx, meta, cwd, true)
 	if err != nil {
 		return Summary{}, err
 	}
-	if m.store != nil {
-		if err := m.store.SaveConnectionInstance(meta); err != nil {
+	if m.hasPersistence() {
+		if err := m.saveMeta(meta); err != nil {
 			m.abortSession(ctx, session, true)
 			return Summary{}, err
 		}

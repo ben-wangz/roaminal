@@ -9,8 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/api"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/coder/websocket"
+)
+
+type websocketRole string
+
+const (
+	websocketInteractive websocketRole = "interactive"
+	websocketObserver    websocketRole = "observer"
 )
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
@@ -22,6 +30,11 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	}
 	if id == "" {
 		writeError(w, 404, "not found")
+		return
+	}
+	role, roleErr := parseWebSocketRole(r.URL.Query().Get("role"))
+	if roleErr != nil {
+		writeError(w, http.StatusBadRequest, "invalid websocket role", "role")
 		return
 	}
 	authSessionID, err := s.auth.Authenticate(websocketToken(r))
@@ -43,7 +56,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		release = s.terms.ReleasePendingAttach
 	}
 	if err := reserve(id); err != nil {
-		if errors.Is(err, connection.ErrClientCapacity) {
+		if errors.Is(err, ports.ErrClientCapacity) {
 			writeError(w, http.StatusTooManyRequests, "client capacity reached")
 		} else if errors.Is(err, os.ErrNotExist) {
 			writeError(w, http.StatusNotFound, "not found")
@@ -58,7 +71,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			release(id)
 		}
 	}()
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{"roaminal.v1"}})
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{api.WebSocketProtocol}})
 	if err != nil {
 		return
 	}
@@ -107,7 +120,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 					cancel()
 					return
 				}
-			case data := <-client.Messages:
+			case data := <-client.Messages():
 				if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
 					cancel()
 					return
@@ -126,25 +139,23 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			_ = conn.Close(websocket.StatusMessageTooBig, "message too large")
 			return
 		}
-		var msg map[string]json.RawMessage
-		if err := json.Unmarshal(data, &msg); err != nil {
-			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
-			return
-		}
-		var kind string
-		_ = json.Unmarshal(msg["type"], &kind)
-		if !validWSMessage(kind, msg) {
-			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
-			return
-		}
-		switch kind {
-		case "input":
-			var value string
-			inputErr := json.Unmarshal(msg["data"], &value)
-			if inputErr == nil {
-				inputErr = input(id, client, value)
+		command, err := decodeWebSocketCommand(data)
+		if err != nil {
+			if role == websocketObserver && isWebSocketControlCommand(command.Type) {
+				_ = conn.Close(websocket.StatusPolicyViolation, "observer_cannot_control")
+				return
 			}
-			if errors.Is(inputErr, connection.ErrControlNotOwner) {
+			_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
+			return
+		}
+		switch command.Type {
+		case "input":
+			if role == websocketObserver {
+				_ = conn.Close(websocket.StatusPolicyViolation, "observer_cannot_control")
+				return
+			}
+			inputErr := input(id, client, command.Data)
+			if errors.Is(inputErr, ports.ErrControlNotOwner) {
 				continue
 			}
 			if inputErr != nil {
@@ -152,15 +163,11 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case "resize":
-			var value struct {
-				Cols int `json:"cols"`
-				Rows int `json:"rows"`
-			}
-			if json.Unmarshal(data, &value) != nil {
-				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
+			if role == websocketObserver {
+				_ = conn.Close(websocket.StatusPolicyViolation, "observer_cannot_control")
 				return
 			}
-			if err := resize(id, client, value.Cols, value.Rows); errors.Is(err, connection.ErrControlNotOwner) {
+			if err := resize(id, client, command.Cols, command.Rows); errors.Is(err, ports.ErrControlNotOwner) {
 				continue
 			} else if err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "invalid_message")
@@ -168,8 +175,13 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 			}
 		case "ping":
 			touch(id)
-			_ = client.EnqueueControl([]byte(`{"type":"pong"}`))
+			pong, _ := json.Marshal(websocketPong{Type: "pong", RequestID: command.RequestID})
+			_ = client.EnqueueControl(pong)
 		case "claim_terminal_control":
+			if role == websocketObserver {
+				_ = conn.Close(websocket.StatusPolicyViolation, "observer_cannot_control")
+				return
+			}
 			if err := claim(id, client); err != nil {
 				_ = conn.Close(websocket.StatusPolicyViolation, "claim_failed")
 				return
@@ -182,21 +194,15 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	<-writerDone
 }
 
-func validWSMessage(kind string, msg map[string]json.RawMessage) bool {
-	allowed := map[string]map[string]bool{"input": {"type": true, "data": true}, "resize": {"type": true, "cols": true, "rows": true}, "claim_terminal_control": {"type": true}, "ping": {"type": true}}
-	fields, ok := allowed[kind]
-	if !ok {
-		return false
+func parseWebSocketRole(value string) (websocketRole, error) {
+	role := websocketRole(strings.TrimSpace(value))
+	if role == "" {
+		return websocketInteractive, nil
 	}
-	for key := range msg {
-		if !fields[key] {
-			return false
-		}
+	if role != websocketInteractive && role != websocketObserver {
+		return "", errors.New("invalid websocket role")
 	}
-	if kind == "input" || kind == "resize" {
-		return msg["data"] != nil || (msg["cols"] != nil && msg["rows"] != nil)
-	}
-	return true
+	return role, nil
 }
 
 func bearer(r *http.Request) string {

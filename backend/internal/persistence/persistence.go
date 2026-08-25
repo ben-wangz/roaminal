@@ -1,21 +1,25 @@
 package persistence
 
 import (
-	"crypto/rand"
 	"errors"
-	"fmt"
 	"os"
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
 const (
-	FormatVersion                 = 1
-	ConnectionFormatVersion       = 2
-	LegacyConnectionFormatVersion = 1
-	SnapshotMagic                 = "ROAMINAL-SNAPSHOT/1"
-	SnapshotMaxSize               = 256 * 1024 * 1024
+	// StorageSchemaVersion is the on-disk schema owned by the 0.3 runtime.
+	// Older files are accepted only by the startup migration path.
+	StorageSchemaVersion            = 3
+	FormatVersion                   = StorageSchemaVersion
+	ConnectionFormatVersion         = StorageSchemaVersion
+	LegacyConnectionFormatVersion   = 1
+	PreviousConnectionFormatVersion = 2
+	SnapshotMagic                   = "ROAMINAL-SNAPSHOT/1"
+	SnapshotMaxSize                 = 256 * 1024 * 1024
 )
 
 var ErrNotFound = os.ErrNotExist
@@ -26,96 +30,28 @@ var sequencePattern = regexp.MustCompile(`^(0|[1-9][0-9]*)$`)
 
 const UngroupedConnectionInstanceGroupID = "ungrouped"
 
-type ConnectionInstanceGroup struct {
-	GroupID               string   `json:"groupId"`
-	Name                  string   `json:"name"`
-	ConnectionInstanceIDs []string `json:"connectionInstanceIds"`
-}
+type ConnectionInstanceGroup = domain.ConnectionInstanceGroup
+type ConnectionInstanceLayout = domain.ConnectionInstanceLayout
+type ConnectionInstanceMeta = domain.ConnectionInstanceMeta
 
-type ConnectionInstanceLayout struct {
-	Revision                       uint64                    `json:"revision"`
-	GroupOrder                     []string                  `json:"groupOrder"`
-	Groups                         []ConnectionInstanceGroup `json:"groups"`
-	UngroupedConnectionInstanceIDs []string                  `json:"ungroupedConnectionInstanceIds"`
-}
-
-type ConnectionInstanceMeta struct {
-	FormatVersion                 int       `json:"-"`
-	ID                            string    `json:"id"`
-	Title                         string    `json:"-"`
-	AutomaticTitle                string    `json:"automaticTitle"`
-	TitleOverride                 *string   `json:"titleOverride"`
-	InitialCwd                    string    `json:"initialCwd"`
-	Cwd                           string    `json:"cwd"`
-	Cols                          int       `json:"cols"`
-	Rows                          int       `json:"rows"`
-	CreatedAt                     time.Time `json:"createdAt"`
-	UpdatedAt                     time.Time `json:"updatedAt"`
-	BackendRuntimeID              string    `json:"backendRuntimeId,omitempty"`
-	ConnectionDefinitionID        string    `json:"connectionDefinitionId,omitempty"`
-	Type                          string    `json:"type,omitempty"`
-	Purpose                       string    `json:"purpose,omitempty"`
-	SourceHostAlias               *string   `json:"sourceHostAlias,omitempty"`
-	Lifecycle                     string    `json:"lifecycle,omitempty"`
-	SourceState                   string    `json:"sourceState,omitempty"`
-	ExitCode                      *int      `json:"exitCode,omitempty"`
-	ExitSignal                    *string   `json:"exitSignal,omitempty"`
-	ReuseFromConnectionInstanceID *string   `json:"reuseFromConnectionInstanceId,omitempty"`
-	GenerationStatus              string    `json:"generationStatus,omitempty"`
-	GenerationError               string    `json:"generationError,omitempty"`
-	TmuxEnabled                   bool      `json:"tmuxEnabled,omitempty"`
-	TmuxSessionName               string    `json:"tmuxSessionName,omitempty"`
-	TmuxPrefixKey                 string    `json:"tmuxPrefixKey,omitempty"`
-	TmuxPrefixSource              string    `json:"tmuxPrefixSource,omitempty"`
-}
-
-func (meta ConnectionInstanceMeta) EffectiveTitle() string {
-	if meta.TitleOverride != nil {
-		return *meta.TitleOverride
-	}
-	if meta.AutomaticTitle != "" {
-		return meta.AutomaticTitle
-	}
-	return meta.Title
-}
-func (meta *ConnectionInstanceMeta) SyncEffectiveTitle() { meta.Title = meta.EffectiveTitle() }
-
+// AuthSession is the current storage representation of an authentication
+// record. Workspace layout is deliberately stored in another file.
 type AuthSession struct {
-	ID                       string                    `json:"id"`
-	PasswordFingerprint      string                    `json:"passwordFingerprint"`
-	RefreshTokenHash         string                    `json:"refreshTokenHash"`
-	CreatedAt                time.Time                 `json:"createdAt"`
-	LastSeenAt               time.Time                 `json:"lastSeenAt"`
-	RefreshExpiresAt         time.Time                 `json:"refreshExpiresAt"`
-	RotatedAt                time.Time                 `json:"rotatedAt"`
-	UserAgent                string                    `json:"userAgent"`
-	ConnectionInstanceOrder  []string                  `json:"connectionInstanceOrder,omitempty"`
-	ConnectionInstanceLayout *ConnectionInstanceLayout `json:"connectionInstanceLayout,omitempty"`
+	ID                  string    `json:"id"`
+	PasswordFingerprint string    `json:"passwordFingerprint"`
+	RefreshTokenHash    string    `json:"refreshTokenHash"`
+	CreatedAt           time.Time `json:"createdAt"`
+	LastSeenAt          time.Time `json:"lastSeenAt"`
+	RefreshExpiresAt    time.Time `json:"refreshExpiresAt"`
+	RotatedAt           time.Time `json:"rotatedAt"`
+	UserAgent           string    `json:"userAgent"`
 }
 type AuthFile struct {
 	FormatVersion int           `json:"formatVersion"`
 	Sessions      []AuthSession `json:"sessions"`
 }
 
-// NewUUID returns a version 4 identifier for persisted user-owned layout items.
-func NewUUID() (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
-		return "", err
-	}
-	value[6] = value[6]&0x0f | 0x40
-	value[8] = value[8]&0x3f | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:]), nil
-}
-
-type SnapshotHeader struct {
-	Cols            int    `json:"cols"`
-	Rows            int    `json:"rows"`
-	ScrollbackLines int    `json:"scrollbackLines"`
-	ThroughSequence string `json:"throughSequence"`
-	ByteLength      int    `json:"byteLength"`
-	SHA256          string `json:"sha256"`
-}
+type SnapshotHeader = domain.SnapshotHeader
 
 type Store struct {
 	Root           string
@@ -124,6 +60,7 @@ type Store struct {
 	DiagnosticsDir string
 	Layout         Layout
 	degradedMu     sync.RWMutex
+	workspaceMu    sync.Mutex
 	degradedIDs    map[string]struct{}
 	globalError    bool
 }

@@ -5,7 +5,7 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
 ## Procedure and assertions
 
 1. In the manager, click `Start local connection` once. Correlate one POST to
-   `/api/connection-instances` with `connectionDefinitionId=local` and a `201`
+   `/api/v2/connection-instances` with `connectionDefinitionId=local` and a `201`
    response containing a UUID instance ID.
 2. The app opens the workspace, publishes exactly one matching sidebar card and
    one main xterm runtime, and establishes one main instance WebSocket. The top

@@ -7,6 +7,10 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	systemclock "github.com/ben-wangz/roaminal/backend/internal/clock"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/random"
 )
 
 const (
@@ -25,12 +29,18 @@ type Sink struct {
 	bootID  string
 	logger  Logger
 	writer  *fileWriter
+	clock   ports.Clock
 
 	mu       sync.Mutex
 	limiters map[string]bucket
 	seen     map[string]time.Time
 	seenList []seenEntry
 	warnOnce sync.Once
+}
+
+type Dependencies struct {
+	Clock  ports.Clock
+	Random ports.RandomSource
 }
 
 type bucket struct {
@@ -43,13 +53,22 @@ type seenEntry struct {
 	at time.Time
 }
 
-func New(dir, version, bootID string, logger Logger) *Sink {
+func New(dir, version, bootID string, logger Logger, dependencies ...Dependencies) *Sink {
 	if logger == nil {
 		logger = log.Default()
 	}
-	sink := &Sink{version: version, bootID: bootID, logger: logger, limiters: make(map[string]bucket), seen: make(map[string]time.Time)}
+	deps := Dependencies{Clock: systemclock.System{}, Random: random.CryptoSource{}}
+	if len(dependencies) > 0 {
+		if dependencies[0].Clock != nil {
+			deps.Clock = dependencies[0].Clock
+		}
+		if dependencies[0].Random != nil {
+			deps.Random = dependencies[0].Random
+		}
+	}
+	sink := &Sink{version: version, bootID: bootID, logger: logger, clock: deps.Clock, limiters: make(map[string]bucket), seen: make(map[string]time.Time)}
 	if dir != "" {
-		writer, err := newFileWriter(dir)
+		writer, err := newFileWriter(dir, Dependencies{Clock: deps.Clock, Random: deps.Random})
 		if err != nil {
 			sink.warn(err)
 		} else {
@@ -69,7 +88,7 @@ func (s *Sink) Close() error {
 }
 
 func (s *Sink) Accept(sessionID, userAgent string, batch Batch) error {
-	return s.acceptAt(time.Now().UTC(), sessionID, userAgent, batch)
+	return s.acceptAt(s.clock.Now().UTC(), sessionID, userAgent, batch)
 }
 
 func (s *Sink) acceptAt(now time.Time, sessionID, userAgent string, batch Batch) error {

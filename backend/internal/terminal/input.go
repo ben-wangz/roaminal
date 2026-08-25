@@ -2,17 +2,27 @@ package terminal
 
 import (
 	"errors"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/creack/pty"
 	"os"
 	"strconv"
 	"time"
 )
 
-func (m *Manager) Input(id string, client *Client, data string) error {
-	return m.input(id, client, data, false)
+func (m *Manager) Input(id string, client ports.TerminalClient, data string) error {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return err
+	}
+	return m.input(id, concrete, data, false)
 }
-func (m *Manager) InputPending(id string, client *Client, data string) error {
-	return m.input(id, client, data, true)
+func (m *Manager) InputPending(id string, client ports.TerminalClient, data string) error {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return err
+	}
+	return m.input(id, concrete, data, true)
 }
 func (m *Manager) input(id string, client *Client, data string, pending bool) error {
 	if len([]byte(data)) > 1024*1024 {
@@ -37,7 +47,7 @@ func (m *Manager) input(id string, client *Client, data string, pending bool) er
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	if session.ephemeral {
-		session.lastActivity = time.Now()
+		session.lastActivity = m.now()
 		session.detachedAt = time.Time{}
 	}
 	if session.closed {
@@ -62,11 +72,19 @@ func (m *Manager) input(id string, client *Client, data string, pending bool) er
 	return err
 }
 
-func (m *Manager) Resize(id string, client *Client, cols, rows int) error {
-	return m.resize(id, client, cols, rows, false)
+func (m *Manager) Resize(id string, client ports.TerminalClient, cols, rows int) error {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return err
+	}
+	return m.resize(id, concrete, cols, rows, false)
 }
-func (m *Manager) ResizePending(id string, client *Client, cols, rows int) error {
-	return m.resize(id, client, cols, rows, true)
+func (m *Manager) ResizePending(id string, client ports.TerminalClient, cols, rows int) error {
+	concrete, err := concreteClient(client)
+	if err != nil {
+		return err
+	}
+	return m.resize(id, concrete, cols, rows, true)
 }
 func (m *Manager) resize(id string, client *Client, cols, rows int, pending bool) error {
 	if cols < 2 || cols > 1000 || rows < 1 || rows > 1000 {
@@ -86,7 +104,7 @@ func (m *Manager) resize(id string, client *Client, cols, rows int, pending bool
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	if session.ephemeral {
-		session.lastActivity = time.Now()
+		session.lastActivity = m.now()
 	}
 	if session.closed {
 		return os.ErrProcessDone
@@ -97,14 +115,14 @@ func (m *Manager) resize(id string, client *Client, cols, rows int, pending bool
 	if err := pty.Setsize(session.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}); err != nil {
 		return err
 	}
-	session.meta.Cols, session.meta.Rows, session.meta.UpdatedAt = cols, rows, time.Now().UTC()
+	session.meta.Cols, session.meta.Rows, session.meta.UpdatedAt = cols, rows, m.now().UTC()
 	session.sequence++
 	if err := m.worker.Resize(id, strconv.FormatUint(session.sequence, 10), cols, rows); err != nil {
 		m.fail(err)
 		return err
 	}
-	if m.store != nil && !session.ephemeral {
-		_ = m.store.SaveConnectionInstance(session.meta)
+	if m.hasPersistence() && !session.ephemeral {
+		_ = m.saveMeta(session.meta)
 	}
 	session.scheduleSnapshotLocked()
 	return nil

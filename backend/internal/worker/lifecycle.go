@@ -3,7 +3,6 @@ package worker
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -44,10 +43,10 @@ func (c *Client) Start(ctx context.Context) error {
 		}
 		c.fail(err)
 	}()
-	requestID := newID()
-	waiter := c.register(requestID)
-	if err := c.send(map[string]any{"op": "hello", "protocol": Protocol, "requestId": requestID}, nil); err != nil {
-		c.unregister(requestID, waiter)
+	correlationID := c.newID()
+	waiter := c.register(correlationID)
+	if err := c.send(requestHeader{Op: "hello", Protocol: Protocol, SchemaVersion: SchemaVersion, CorrelationID: correlationID}, nil); err != nil {
+		c.unregister(correlationID, waiter)
 		c.fail(err)
 		return err
 	}
@@ -57,14 +56,14 @@ func (c *Client) Start(ctx context.Context) error {
 	case err := <-c.ready:
 		return err
 	case result := <-waiter:
-		if stringField(result.Header, "op") == "ready" && stringField(result.Header, "protocol") == Protocol && stringField(result.Header, "engine") == "xterm-headless" {
+		if result.Header.Op == "ready" && result.Header.Protocol == Protocol && result.Header.Engine == "xterm-headless" {
 			return nil
 		}
 		err := errors.New("terminal worker handshake failed")
 		c.fail(err)
 		return err
 	case <-handshakeCtx.Done():
-		c.unregister(requestID, waiter)
+		c.unregister(correlationID, waiter)
 		c.fail(handshakeCtx.Err())
 		return handshakeCtx.Err()
 	}
@@ -93,20 +92,25 @@ func (c *Client) readLoop() {
 			c.fail(err)
 			return
 		}
-		requestID := stringField(frame.Header, "requestId")
-		if stringField(frame.Header, "op") == "error" && boolField(frame.Header, "fatal") {
-			c.fail(errors.New(stringField(frame.Header, "message")))
+		header, err := decodeResponseHeader(frame.Header)
+		if err != nil {
+			c.fail(err)
 			return
 		}
-		if requestID == "" {
+		correlationID := header.CorrelationID
+		if header.Op == "error" && header.Fatal {
+			c.fail(errors.New(header.Message))
+			return
+		}
+		if correlationID == "" {
 			continue
 		}
 		c.waitMu.Lock()
-		waiter := c.waiters[requestID]
-		delete(c.waiters, requestID)
+		waiter := c.waiters[correlationID]
+		delete(c.waiters, correlationID)
 		c.waitMu.Unlock()
 		if waiter != nil {
-			waiter <- Result{Header: frame.Header, Payload: frame.Payload}
+			waiter <- Result{Header: header, Payload: frame.Payload}
 		}
 	}
 }
@@ -117,7 +121,7 @@ func (c *Client) fail(err error) {
 		c.waitMu.Lock()
 		for id, waiter := range c.waiters {
 			delete(c.waiters, id)
-			waiter <- Result{Header: map[string]json.RawMessage{"op": raw("error"), "message": raw(err.Error())}}
+			waiter <- Result{Header: responseHeader{Op: "error", Protocol: Protocol, Message: err.Error(), SchemaVersion: SchemaVersion, CorrelationID: id, Sequence: "1", EventID: c.newID(), OccurredAt: c.now().UTC()}}
 		}
 		c.waitMu.Unlock()
 		if c.cmd != nil && c.cmd.Process != nil && c.cmd.ProcessState == nil && !c.stopping.Load() {

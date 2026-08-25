@@ -43,11 +43,11 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 	if len(body) > 64*1024 {
 		return false, errf("agent_event_too_large", 413, "The Agent event is too large.", nil)
 	}
-	endpointKey, record, ok := s.store.FindToken(token, time.Now())
+	endpointKey, record, ok := s.store.FindToken(token, s.now())
 	if !ok {
 		return false, errf("agent_event_unauthorized", 401, "The Agent event token is not valid.", nil)
 	}
-	if !s.allowEvent(endpointKey, time.Now()) {
+	if !s.allowEvent(endpointKey, s.now()) {
 		return false, errf("agent_event_rate_limited", 429, "Agent event rate limit exceeded.", nil)
 	}
 	var event webhookEvent
@@ -93,7 +93,7 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 		return false, errf("agent_event_invalid", 400, "The Agent event ID is invalid.", nil)
 	}
 	if event.OccurredAt.IsZero() {
-		event.OccurredAt = time.Now().UTC()
+		event.OccurredAt = s.now().UTC()
 	}
 	s.mu.Lock()
 	if s.runtime == nil {
@@ -108,7 +108,7 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 	if s.eventIDs == nil {
 		s.eventIDs = map[string]map[string]time.Time{}
 	}
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	if s.rememberEventLocked(endpointKey, event.EventID, now) {
 		s.mu.Unlock()
 		return true, nil
@@ -147,7 +147,7 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 	lateAfterStop := state.LastEventName == "Stop" && event.EventName != "SessionStart" && event.EventName != "SessionEnd" &&
 		(event.EventName != "UserPromptSubmit" || event.Codex.TurnID == "" || event.Codex.TurnID == state.LastTurnID)
 	compactAfterStop := event.EventName == "SessionStart" && event.Event.Source == "compact" && state.LastEventName == "Stop"
-	lateToolPermission := event.EventName == "PermissionRequest" && event.Codex.ToolUseID != "" && completedTools[event.Codex.ToolUseID].After(time.Now().Add(-24*time.Hour))
+	lateToolPermission := event.EventName == "PermissionRequest" && event.Codex.ToolUseID != "" && completedTools[event.Codex.ToolUseID].After(s.now().Add(-24*time.Hour))
 	if event.Sequence <= state.LastSequence ||
 		(state.LastEventName == "SessionEnd" && event.EventName != "SessionStart") ||
 		lateAfterStop || compactAfterStop ||
@@ -168,9 +168,9 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 	if event.EventName == "Stop" && event.Codex.TurnID != "" {
 		state.StoppedTurnID = event.Codex.TurnID
 	}
-	state.LastReceivedAt = time.Now().UTC()
+	state.LastReceivedAt = s.now().UTC()
 	state.LastEventAt = event.OccurredAt
-	if time.Since(event.OccurredAt) > 24*time.Hour || time.Since(event.OccurredAt) < -24*time.Hour {
+	if s.since(event.OccurredAt) > 24*time.Hour || s.since(event.OccurredAt) < -24*time.Hour {
 		state.LastEventAt = state.LastReceivedAt
 	}
 	if event.EventName == "PostToolUse" && event.Codex.ToolUseID != "" {

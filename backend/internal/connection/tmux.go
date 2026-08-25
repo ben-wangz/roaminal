@@ -8,12 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
 )
 
 func tmuxLaunchRevision(option connectionoptions.Tmux) string {
@@ -48,7 +47,10 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 	if !connectionoptions.ValidSessionName(option.SessionName) {
 		return Summary{}, connectionoptions.ErrInvalidSessionName
 	}
-	id := terminalID()
+	id, err := m.newID()
+	if err != nil {
+		return Summary{}, err
+	}
 	transportDir := filepath.Join(m.runtimeDir, "t-"+shortPathToken(id))
 	if err := os.MkdirAll(transportDir, 0o700); err != nil {
 		return Summary{}, err
@@ -56,13 +58,14 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 	controlPath := filepath.Join(transportDir, "ctl")
 	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: sourceRevision, TmuxLaunchRevision: tmuxLaunchRevision(option), OwnerID: id, Channels: 1}
 	aliasPtr := alias
-	meta := persistence.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName}
-	marker := randomToken()
+	now := m.clock.Now().UTC()
+	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName}
+	marker := m.randomToken()
 	argv := []string{m.sshPath, "-tt", "-o", "ControlMaster=yes", "-o", "ControlPersist=yes", "-o", "ControlPath=" + controlPath, "--", alias, tmuxRemoteCommand(option.SessionName, marker)}
-	m.transportMu.Lock()
-	m.transports[id] = transport
-	m.instances[id] = transport
-	m.transportMu.Unlock()
+	m.transportPool.mu.Lock()
+	m.transportPool.transports[id] = transport
+	m.transportPool.instances[id] = transport
+	m.transportPool.mu.Unlock()
 	onMarker := func(value string) {
 		if value != marker {
 			return
@@ -73,18 +76,18 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 			return
 		}
 		meta.TmuxPrefixKey, meta.TmuxPrefixSource = probeTmuxPrefix(context.Background(), m, transport)
-		if _, err := m.Manager.PromotePending(id, meta); err != nil {
+		if _, err := m.instances.PromotePending(id, meta); err != nil {
 			_ = m.AbortPending(context.Background(), id)
 		}
 	}
-	result, err := m.Manager.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(_ terminal.ExitStatus) {
+	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(_ ports.TerminalExitStatus) {
 		m.finishInstance(context.Background(), id, true)
 	})
 	if err != nil {
-		m.transportMu.Lock()
-		delete(m.instances, id)
-		delete(m.transports, id)
-		m.transportMu.Unlock()
+		m.transportPool.mu.Lock()
+		delete(m.transportPool.instances, id)
+		delete(m.transportPool.transports, id)
+		m.transportPool.mu.Unlock()
 		_ = os.RemoveAll(transportDir)
 		return Summary{}, err
 	}
@@ -92,19 +95,23 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 }
 
 func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias string, option connectionoptions.Tmux, transport *Transport, cols, rows int, sourceID, ownerID string) (Summary, error) {
-	id := terminalID()
+	id, err := m.newID()
+	if err != nil {
+		return Summary{}, err
+	}
 	aliasPtr := alias
-	meta := persistence.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName, ReuseFromConnectionInstanceID: &sourceID}
-	marker := randomToken()
+	now := m.clock.Now().UTC()
+	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName, ReuseFromConnectionInstanceID: &sourceID}
+	marker := m.randomToken()
 	argv := []string{m.sshPath, "-tt", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "--", alias, tmuxRemoteCommand(option.SessionName, marker)}
-	m.transportMu.Lock()
+	m.transportPool.mu.Lock()
 	if !transportAcceptsReuse(transport) {
-		m.transportMu.Unlock()
+		m.transportPool.mu.Unlock()
 		return Summary{}, ErrTransportDraining
 	}
 	transport.Channels++
-	m.instances[id] = transport
-	m.transportMu.Unlock()
+	m.transportPool.instances[id] = transport
+	m.transportPool.mu.Unlock()
 	onMarker := func(value string) {
 		if value != marker {
 			return
@@ -115,18 +122,18 @@ func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias strin
 			return
 		}
 		meta.TmuxPrefixKey, meta.TmuxPrefixSource = probeTmuxPrefix(context.Background(), m, transport)
-		if _, err := m.Manager.PromotePending(id, meta); err != nil {
+		if _, err := m.instances.PromotePending(id, meta); err != nil {
 			_ = m.AbortPending(context.Background(), id)
 		}
 	}
-	result, err := m.Manager.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(_ terminal.ExitStatus) {
+	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(_ ports.TerminalExitStatus) {
 		m.finishInstance(context.Background(), id, true)
 	})
 	if err != nil {
-		m.transportMu.Lock()
+		m.transportPool.mu.Lock()
 		transport.Channels--
-		delete(m.instances, id)
-		m.transportMu.Unlock()
+		delete(m.transportPool.instances, id)
+		m.transportPool.mu.Unlock()
 		return Summary{}, err
 	}
 	return result, nil

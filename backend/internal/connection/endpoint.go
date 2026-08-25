@@ -3,17 +3,14 @@ package connection
 import (
 	"context"
 	"errors"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type EffectiveEndpoint struct {
-	User string
-	Host string
-	Port int
-}
+type EffectiveEndpoint = ports.EffectiveEndpoint
 
 // ResolveEndpoint asks the same OpenSSH installation used by the live
 // transport for its effective identity. It deliberately does not connect.

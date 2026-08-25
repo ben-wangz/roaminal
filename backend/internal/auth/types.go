@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/config"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 const (
@@ -65,11 +66,20 @@ type challenge struct {
 type Manager struct {
 	mu             sync.Mutex
 	cfg            config.Config
-	store          *persistence.Store
+	authRepository ports.AuthRepository
+	clock          ports.Clock
+	ids            ports.IDGenerator
+	random         ports.RandomSource
 	fingerprint    string
-	refresh        map[string]persistence.AuthSession
+	refresh        map[string]domain.AuthSessionRecord
 	access         map[string]accessEntry
 	challenges     map[string]challenge
 	failedAttempts int
 	locked         bool
+}
+
+type Dependencies struct {
+	Clock  ports.Clock
+	IDs    ports.IDGenerator
+	Random ports.RandomSource
 }

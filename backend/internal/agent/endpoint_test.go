@@ -3,15 +3,15 @@ package agent
 import (
 	"testing"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func TestNormalizeEndpointIsStable(t *testing.T) {
-	first, err := NormalizeEndpoint(connection.EffectiveEndpoint{User: "Dev", Host: "[2001:DB8::1]", Port: 22})
+	first, err := NormalizeEndpoint(ports.EffectiveEndpoint{User: "Dev", Host: "[2001:DB8::1]", Port: 22})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := NormalizeEndpoint(connection.EffectiveEndpoint{User: "Dev", Host: "2001:db8::1", Port: 22})
+	second, err := NormalizeEndpoint(ports.EffectiveEndpoint{User: "Dev", Host: "2001:db8::1", Port: 22})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,11 +21,11 @@ func TestNormalizeEndpointIsStable(t *testing.T) {
 }
 
 func TestNormalizeEndpointKeepsUserCase(t *testing.T) {
-	first, err := NormalizeEndpoint(connection.EffectiveEndpoint{User: "Dev", Host: "host", Port: 22})
+	first, err := NormalizeEndpoint(ports.EffectiveEndpoint{User: "Dev", Host: "host", Port: 22})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := NormalizeEndpoint(connection.EffectiveEndpoint{User: "dev", Host: "host", Port: 22})
+	second, err := NormalizeEndpoint(ports.EffectiveEndpoint{User: "dev", Host: "host", Port: 22})
 	if err != nil {
 		t.Fatal(err)
 	}

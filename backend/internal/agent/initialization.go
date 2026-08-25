@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func (s *Service) StartInitialization(ctx context.Context, id, origin string) (Initialization, error) {
@@ -56,7 +56,7 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 		return Initialization{}, errf("agent_store_unavailable", 503, "Agent state storage is unavailable.", err)
 	}
 	s.mu.Lock()
-	s.pruneOperationsLocked(time.Now().UTC())
+	s.pruneOperationsLocked(s.now().UTC())
 	if operationID := s.endpointOps[endpoint.Key]; operationID != "" {
 		operation := s.operations[operationID]
 		if operation != nil && operation.Status == "running" {
@@ -71,12 +71,12 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 			return result, nil
 		}
 	}
-	operationID, err := randomID()
+	operationID, err := s.newID()
 	if err != nil {
 		s.mu.Unlock()
 		return Initialization{}, errf("agent_install_failed", 502, "The Agent initialization could not start.", err)
 	}
-	operation := &Initialization{ID: operationID, ConnectionInstanceID: id, Endpoint: endpoint, TmuxSessionName: summary.TmuxSessionName, WebhookURL: webhookURL, Status: "running", StartedAt: time.Now().UTC(), PriorComponent: priorComponent}
+	operation := &Initialization{ID: operationID, ConnectionInstanceID: id, Endpoint: endpoint, TmuxSessionName: summary.TmuxSessionName, WebhookURL: webhookURL, Status: "running", StartedAt: s.now().UTC(), PriorComponent: priorComponent}
 	s.operations[operationID] = operation
 	s.endpointOps[endpoint.Key] = operationID
 	s.mu.Unlock()
@@ -86,23 +86,23 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 	return result, nil
 }
 
-func (s *Service) findSummary(id string) (connection.Summary, bool) {
+func (s *Service) findSummary(id string) (ports.ConnectionInstanceView, bool) {
 	if s.terms == nil {
-		return connection.Summary{}, false
+		return ports.ConnectionInstanceView{}, false
 	}
-	for _, summary := range s.terms.Summaries() {
+	for _, summary := range s.terms.ConnectionInstanceViews() {
 		if summary.ID == id {
 			return summary, true
 		}
 	}
-	return connection.Summary{}, false
+	return ports.ConnectionInstanceView{}, false
 }
 
-func (s *Service) prepareTarget(id string, summary connection.Summary, endpoint Endpoint, target Target, sessionID string, sessionCreated int64, origin string) error {
+func (s *Service) prepareTarget(id string, summary ports.ConnectionInstanceView, endpoint Endpoint, target Target, sessionID string, sessionCreated int64, origin string) error {
 	if err := s.store.Update(endpoint.Key, func(record *EndpointRecord) error {
 		if record.User == "" {
 			record.User, record.Host, record.Port = endpoint.User, endpoint.Host, endpoint.Port
-			record.CreatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			record.CreatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		}
 		if summary.SourceHostAlias != nil && !contains(record.Aliases, *summary.SourceHostAlias) {
 			record.Aliases = append(record.Aliases, *summary.SourceHostAlias)
@@ -116,7 +116,7 @@ func (s *Service) prepareTarget(id string, summary connection.Summary, endpoint 
 		state.Component = "initializing"
 		state.Activity = "unknown"
 		record.Targets[target.SessionName] = state
-		record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	}); err != nil {
 		return err

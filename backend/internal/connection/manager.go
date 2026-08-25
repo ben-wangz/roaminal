@@ -2,55 +2,64 @@ package connection
 
 import (
 	"context"
-	"errors"
-	"sync"
 
+	"github.com/ben-wangz/roaminal/backend/internal/clock"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/monitor"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/random"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
-	"github.com/ben-wangz/roaminal/backend/internal/terminal"
-	"github.com/ben-wangz/roaminal/backend/internal/worker"
 )
 
 type Manager struct {
-	*terminal.Manager
-	configRepo  *sshconfig.Repository
-	keys        *sshkey.Inventory
-	options     *connectionoptions.Store
-	sshPath     string
-	runtimeDir  string
-	transportMu sync.Mutex
-	transports  map[string]*Transport
-	instances   map[string]*Transport
-	remoteMu    sync.Mutex
-	remoteState map[string]*remoteMonitorState
-	remoteSem   chan struct{}
-	watchCancel context.CancelFunc
+	instances     *InstanceService
+	configRepo    *sshconfig.Repository
+	keys          *sshkey.Inventory
+	options       *connectionoptions.Store
+	sshPath       string
+	runtimeDir    string
+	transportPool *TransportPool
+	remoteMonitor *monitor.RemoteMonitorService
+	watchCancel   context.CancelFunc
+	clock         ports.Clock
+	ids           ports.IDGenerator
+	random        ports.RandomSource
 }
 
-type Summary = terminal.Summary
-type Client = terminal.Client
-type ExitStatus = terminal.ExitStatus
+type Summary = ports.ConnectionInstanceSummary
+type ExitStatus = ports.TerminalExitStatus
 
-type Transport struct {
-	Alias              string
-	ControlPath        string
-	SourceRevision     string
-	TmuxLaunchRevision string
-	OwnerID            string
-	Channels           int
-	AuxiliaryChannels  int
-	OwnerClosed        bool
-	Draining           bool
-	stopRequested      bool
+type RemoteTransferInfo = ports.RemoteTransferInfo
+
+func (m *Manager) ConnectionInstance(id string) (ports.ConnectionInstanceView, error) {
+	for _, summary := range m.Summaries() {
+		if summary.ID == id || summary.ConnectionInstanceID == id {
+			return ports.ConnectionInstanceView{ID: summary.ID, ConnectionInstanceID: summary.ConnectionInstanceID, ConnectionDefinitionID: summary.ConnectionDefinitionID, Purpose: summary.Purpose, Type: summary.Type, Lifecycle: summary.Lifecycle, SourceState: summary.SourceState, SourceHostAlias: summary.SourceHostAlias, TmuxEnabled: summary.TmuxEnabled, TmuxSessionName: summary.TmuxSessionName}, nil
+		}
+	}
+	return ports.ConnectionInstanceView{}, ports.ErrRemoteInstanceNotFound
 }
 
-type RemoteTransferInfo struct {
-	Alias       string
-	ControlPath string
-	SSHPath     string
+func (m *Manager) ConnectionInstanceViews() []ports.ConnectionInstanceView {
+	summaries := m.Summaries()
+	views := make([]ports.ConnectionInstanceView, 0, len(summaries))
+	for _, summary := range summaries {
+		views = append(views, ports.ConnectionInstanceView{ID: summary.ID, ConnectionInstanceID: summary.ConnectionInstanceID, ConnectionDefinitionID: summary.ConnectionDefinitionID, Purpose: summary.Purpose, Type: summary.Type, Lifecycle: summary.Lifecycle, SourceState: summary.SourceState, SourceHostAlias: summary.SourceHostAlias, TmuxEnabled: summary.TmuxEnabled, TmuxSessionName: summary.TmuxSessionName})
+	}
+	return views
+}
+
+type Dependencies struct {
+	Config     config.Config
+	Runtime    ports.TerminalRuntime
+	ConfigRepo *sshconfig.Repository
+	Keys       *sshkey.Inventory
+	Options    *connectionoptions.Store
+	Clock      ports.Clock
+	IDs        ports.IDGenerator
+	Random     ports.RandomSource
 }
 
 func (m *Manager) RemoteTransferInfo(id string) (RemoteTransferInfo, error) {
@@ -64,38 +73,40 @@ func (m *Manager) RemoteTransferInfo(id string) (RemoteTransferInfo, error) {
 	return RemoteTransferInfo{Alias: transport.Alias, ControlPath: transport.ControlPath, SSHPath: m.sshPath}, nil
 }
 
-func transportAcceptsReuse(transport *Transport) bool {
-	return transport != nil && transport.Channels > 0 && !transport.Draining
-}
+var ErrRemoteInstanceNotFound = ports.ErrRemoteInstanceNotFound
+var ErrRemoteNoTransport = ports.ErrRemoteNoTransport
+var ErrClientCapacity = ports.ErrClientCapacity
+var ErrConnectionCapacity = ports.ErrConnectionCapacity
+var ErrControlNotOwner = ports.ErrControlNotOwner
+var ErrTransportUnavailable = ports.ErrTransportUnavailable
+var ErrTransportDraining = ports.ErrTransportDraining
+var ErrTmuxNotEnabled = ports.ErrTmuxNotEnabled
 
-var ErrClientCapacity = terminal.ErrClientCapacity
-var ErrConnectionCapacity = terminal.ErrConnectionCapacity
-var ErrControlNotOwner = terminal.ErrControlNotOwner
-var ErrTransportUnavailable = errors.New("ssh transport unavailable")
-var ErrTransportDraining = errors.New("ssh transport is draining")
-var ErrTmuxNotEnabled = errors.New("tmux is not enabled for this connection")
-
-func NewManager(cfg config.Config, store *persistence.Store, terminalWorker *worker.Client) *Manager {
-	return &Manager{Manager: terminal.NewManager(cfg, store, terminalWorker), sshPath: discover("ssh"), transports: make(map[string]*Transport), instances: make(map[string]*Transport), remoteState: make(map[string]*remoteMonitorState), remoteSem: make(chan struct{}, 4)}
-}
-
-func (m *Manager) SetRuntimeID(id string) {
-	m.Manager.SetRuntimeID(id)
-	dir, err := prepareRuntimeDir(id)
-	if err != nil {
-		// Local connections remain usable when the temporary mux root cannot
-		// be prepared; remote creation reports an unavailable capability.
-		m.runtimeDir = ""
-		return
+func NewManager(deps Dependencies) *Manager {
+	runtimeClock := deps.Clock
+	if runtimeClock == nil {
+		runtimeClock = clock.System{}
 	}
-	m.runtimeDir = dir
+	randomSource := deps.Random
+	if randomSource == nil {
+		randomSource = random.CryptoSource{}
+	}
+	idGenerator := deps.IDs
+	manager := &Manager{instances: NewInstanceService(deps.Runtime), configRepo: deps.ConfigRepo, keys: deps.Keys, options: deps.Options, sshPath: discover("ssh"), transportPool: newTransportPool(), clock: runtimeClock, ids: idGenerator, random: randomSource}
+	manager.remoteMonitor = monitor.NewRemoteMonitorService(manager, monitor.Dependencies{Clock: runtimeClock, Random: randomSource})
+	runtimeID := ""
+	if deps.Runtime != nil {
+		runtimeID = deps.Runtime.RuntimeID()
+	}
+	dir, err := manager.prepareRuntimeDir(runtimeID)
+	if err != nil {
+		// Local connections remain usable when the temporary mux root cannot be
+		// prepared; remote creation reports an unavailable capability.
+		return manager
+	}
+	manager.runtimeDir = dir
+	return manager
 }
-
-func (m *Manager) SetSources(repo *sshconfig.Repository, keys *sshkey.Inventory) {
-	m.configRepo, m.keys = repo, keys
-}
-
-func (m *Manager) SetConnectionOptions(store *connectionoptions.Store) { m.options = store }
 
 func (m *Manager) tmuxOptions(aliases map[string]bool) (map[string]connectionoptions.Tmux, error) {
 	if m.options == nil {
@@ -112,7 +123,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	if m.keys != nil {
 		m.keys.CleanupStaging()
 	}
-	if err := m.Manager.Start(ctx); err != nil {
+	if err := m.instances.Start(ctx); err != nil {
 		return err
 	}
 	if m.configRepo != nil {
@@ -128,30 +139,25 @@ func (m *Manager) Shutdown(ctx context.Context) {
 		m.watchCancel()
 		m.watchCancel = nil
 	}
-	m.transportMu.Lock()
-	transports := make([]*Transport, 0, len(m.transports))
-	for _, transport := range m.transports {
+	m.transportPool.mu.Lock()
+	transports := make([]*Transport, 0, len(m.transportPool.transports))
+	for _, transport := range m.transportPool.transports {
 		transports = append(transports, transport)
 	}
-	m.transports = make(map[string]*Transport)
-	m.instances = make(map[string]*Transport)
-	m.transportMu.Unlock()
-	m.remoteMu.Lock()
-	for _, state := range m.remoteState {
-		if state != nil && state.inflight != nil {
-			close(state.inflight)
-		}
+	m.transportPool.transports = make(map[string]*Transport)
+	m.transportPool.instances = make(map[string]*Transport)
+	m.transportPool.mu.Unlock()
+	if m.remoteMonitor != nil {
+		m.remoteMonitor.Close()
 	}
-	m.remoteState = make(map[string]*remoteMonitorState)
-	m.remoteMu.Unlock()
 	for _, transport := range transports {
 		m.stopTransport(ctx, transport)
 	}
-	m.Manager.Shutdown(ctx)
+	m.instances.Shutdown(ctx)
 }
 
 func (m *Manager) Delete(ctx context.Context, id string) error {
-	err := m.Manager.Delete(ctx, id)
+	err := m.instances.Delete(ctx, id)
 	m.finishInstance(ctx, id, err == nil)
 	return err
 }
@@ -160,9 +166,9 @@ func (m *Manager) finishInstance(ctx context.Context, id string, closed bool) {
 	if !closed {
 		return
 	}
-	m.transportMu.Lock()
-	transport := m.instances[id]
-	delete(m.instances, id)
+	m.transportPool.mu.Lock()
+	transport := m.transportPool.instances[id]
+	delete(m.transportPool.instances, id)
 	if transport != nil {
 		if transport.Channels > 0 {
 			transport.Channels--
@@ -171,10 +177,10 @@ func (m *Manager) finishInstance(ctx context.Context, id string, closed bool) {
 			transport.OwnerClosed = true
 		}
 		if transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0 {
-			delete(m.transports, transport.OwnerID)
+			delete(m.transportPool.transports, transport.OwnerID)
 		}
 	}
-	m.transportMu.Unlock()
+	m.transportPool.mu.Unlock()
 	if transport != nil && transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0 {
 		m.clearRemoteState(transport.OwnerID)
 		m.stopTransport(ctx, transport)

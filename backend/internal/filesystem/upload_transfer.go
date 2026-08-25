@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type transferCapability struct {
@@ -18,7 +18,7 @@ type transferCapability struct {
 	ExpiresAt time.Time
 }
 
-func runRsync(ctx context.Context, binary string, info connection.RemoteTransferInfo, job *uploadJob, target, conflictPolicy string) error {
+func runRsync(ctx context.Context, binary string, info ports.RemoteTransferInfo, job *uploadJob, target, conflictPolicy string) error {
 	args := []string{"-a", "--partial", "--protect-args", "--info=progress2", "-e", sshTransportCommand(info)}
 	if conflictPolicy == "update-if-newer" {
 		args = append(args, "--update")
@@ -73,7 +73,7 @@ func (w *rsyncProgressWriter) update(line string) {
 	})
 }
 
-func runScp(ctx context.Context, id string, info connection.RemoteTransferInfo, job *uploadJob, target, conflictPolicy string, service *Service) error {
+func runScp(ctx context.Context, id string, info ports.RemoteTransferInfo, job *uploadJob, target, conflictPolicy string, service *Service) error {
 	if err := service.createRemoteDirectories(ctx, id, info, job.root.AbsolutePath, job.snapshot().TargetPath, job.files); err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func runScp(ctx context.Context, id string, info connection.RemoteTransferInfo, 
 			}
 		}
 		job.setStatus(func(status *UploadStatus) { status.CurrentPath = file.Manifest.RelativePath })
-		args := []string{"-p", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + info.ControlPath, "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", "--", file.Path, remoteSpec(info.Alias, path.Join(target, file.Manifest.RelativePath))}
+		args := []string{"-p", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + info.ControlPath, "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", "--", file.Path, scpRemoteSpec(info.Alias, path.Join(target, file.Manifest.RelativePath))}
 		command := exec.CommandContext(ctx, scp, args...)
 		command.Stdout = io.Discard
 		command.Stderr = io.Discard
@@ -108,7 +108,7 @@ func runScp(ctx context.Context, id string, info connection.RemoteTransferInfo, 
 	return nil
 }
 
-func (s *Service) createRemoteDirectories(ctx context.Context, id string, _ connection.RemoteTransferInfo, root, target string, files []stagedUploadFile) error {
+func (s *Service) createRemoteDirectories(ctx context.Context, id string, _ ports.RemoteTransferInfo, root, target string, files []stagedUploadFile) error {
 	directories := make([]string, 0, len(files))
 	seen := make(map[string]bool)
 	for _, file := range files {
@@ -124,22 +124,16 @@ func (s *Service) createRemoteDirectories(ctx context.Context, id string, _ conn
 	if len(directories) == 0 {
 		return nil
 	}
-	args := []string{root, target}
-	args = append(args, directories...)
-	if _, err := s.executor.RunRemote(ctx, id, connection.RemoteCommand{Script: remoteMkdirScript, Args: args, OutputLimit: 1024, Timeout: 10 * time.Second}); err != nil {
+	if err := s.remote.CreateDirectories(ctx, id, root, target, directories); err != nil {
 		return mapRemoteError(err)
 	}
 	return nil
 }
 
 func (s *Service) shouldUploadWithScp(ctx context.Context, id, target string, file UploadManifestFile) (bool, error) {
-	result, err := s.executor.RunRemote(ctx, id, connection.RemoteCommand{Script: remoteMtimeScript, Args: []string{target, file.RelativePath, strconv.FormatInt(file.ModifiedAt.Unix(), 10)}, OutputLimit: 64, Timeout: 5 * time.Second})
+	result, err := s.remote.ShouldUploadWithScp(ctx, id, target, file.RelativePath, file.ModifiedAt.Unix())
 	if err != nil {
 		return false, mapRemoteError(err)
 	}
-	value := strings.TrimSpace(string(result.Output))
-	if value != "upload" && value != "skip" {
-		return false, ErrProtocol
-	}
-	return value == "upload", nil
+	return result, nil
 }

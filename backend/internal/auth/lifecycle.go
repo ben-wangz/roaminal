@@ -38,7 +38,7 @@ func (m *Manager) Current(sessionID string) (CurrentSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	entry, ok := m.refresh[sessionID]
-	if !ok || !entry.RefreshExpiresAt.After(time.Now().UTC()) {
+	if !ok || !entry.RefreshExpiresAt.After(m.clock.Now().UTC()) {
 		if ok {
 			delete(m.refresh, sessionID)
 			_ = m.persistLocked()
@@ -58,7 +58,7 @@ func (m *Manager) List(sessionID string) []SessionSummary {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	result := make([]SessionSummary, 0, len(m.refresh))
-	now := time.Now().UTC()
+	now := m.clock.Now().UTC()
 	changed := false
 	for id, entry := range m.refresh {
 		if !entry.RefreshExpiresAt.After(now) {

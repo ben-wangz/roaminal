@@ -23,7 +23,7 @@ cross-tab assertions.
    page exposes a font selector, synchronized font-size range/number controls,
    live read-only xterm sample, Save, Reset to defaults, Connections, and
    Workspace navigation where applicable.
-2. In a fresh profile, assert defaults are `Monaspace Neon` and `15px`. Select
+2. In a fresh profile, assert defaults are `Monaspace Neon` and `12px`. Select
    each bundled font and assert the sample changes family, the browser reports
    `document.fonts.check(...)`, and no font request leaves the Roaminal origin.
    Select System Monospace and verify it remains usable without a remote font
@@ -62,7 +62,7 @@ cross-tab assertions.
    policy are unchanged, the effective tmux grid remains usable, colors/status
    content remain intact, and no resize loop or reconnect occurs.
 9. Before reload, inject malformed JSON, an unknown font ID, schema version 2,
-   a fractional size, 9, and 33 into `localStorage['roaminal.appearance.v1']`
+   a fractional size, 9, and 33 into `localStorage['roaminal.appearance.v2']`
    in separate runs. The UI must restore defaults without a page error, console
    warning, failed request, blank sample, or external font request.
 10. Repeat the page, controls, sample, and 32px setting at desktop, tablet

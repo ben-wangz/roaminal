@@ -6,13 +6,14 @@ import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ConnectionView } from './connection-view';
 import { reconcileConnections } from './connection-view';
 import type { ToastKind } from '../ui/toast';
+import { ConnectionInstanceController } from '../connections/connection-instance-controller';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
 type Params = {
   setAuth: Dispatch<SetStateAction<AuthState | null>>;
   setError: Dispatch<SetStateAction<string>>;
-  setConnections: Dispatch<SetStateAction<ConnectionInstanceSummary[]>>;
+  controller: ConnectionInstanceController;
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setActiveView: (next: ConnectionView) => void;
   setDialog: Dispatch<SetStateAction<{ type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null>>;
@@ -20,7 +21,6 @@ type Params = {
   setSearch: Dispatch<SetStateAction<boolean>>;
   mainRuntime: MutableRefObject<TerminalRuntime | null>;
   previewRuntimeRef: DisposableRuntimeRef;
-  stateRevision: MutableRefObject<number>;
   viewRef: MutableRefObject<ConnectionView>;
   showToast: (message: string, kind?: ToastKind) => void;
 };
@@ -28,7 +28,7 @@ type Params = {
 export function useConnectionLifecycleActions({
   setAuth,
   setError,
-  setConnections,
+  controller,
   setCurrentRuntime,
   setActiveView,
   setDialog,
@@ -36,18 +36,17 @@ export function useConnectionLifecycleActions({
   setSearch,
   mainRuntime,
   previewRuntimeRef,
-  stateRevision,
   viewRef,
   showToast,
 }: Params) {
   const updateTitle = useCallback(async (id: string, title: string | null) => {
-    const updated = await api<ConnectionInstanceSummary>(`/api/connection-instances/${id}/title`, {
+    const updated = await api<ConnectionInstanceSummary>(`/connection-instances/${id}/title`, {
       method: 'PATCH',
       body: JSON.stringify({ title }),
     });
-    setConnections((current) => current.map((connection) => connection.connectionInstanceId === id ? updated : connection));
+    controller.setConnections((current) => current.map((connection) => connection.connectionInstanceId === id ? updated : connection));
     setDialog(null);
-  }, [setConnections, setDialog]);
+  }, [controller, setDialog]);
 
   const resetTitle = useCallback(async (id: string) => {
     try {
@@ -59,7 +58,7 @@ export function useConnectionLifecycleActions({
 
   const terminateConnection = useCallback(async (id: string) => {
     try {
-      stateRevision.current += 1;
+      controller.markRevision();
       if (mainRuntime.current?.connectionInstanceId === id) {
         mainRuntime.current.dispose();
         mainRuntime.current = null;
@@ -68,8 +67,8 @@ export function useConnectionLifecycleActions({
       previewRuntimeRef.current?.dispose();
       previewRuntimeRef.current = null;
       setPreviewConnectionInstanceId(null);
-      await api(`/api/connection-instances/${id}`, { method: 'DELETE' });
-      setConnections((current) => {
+      await api(`/connection-instances/${id}`, { method: 'DELETE' });
+      controller.setConnections((current) => {
         const next = current.filter((connection) => connection.connectionInstanceId !== id);
         setActiveView(reconcileConnections(next, viewRef.current, current.map((connection) => connection.connectionInstanceId)));
         return next;
@@ -80,7 +79,7 @@ export function useConnectionLifecycleActions({
     } catch (err) {
       showToast((err as Error).message, 'error');
     }
-  }, [mainRuntime, previewRuntimeRef, setActiveView, setConnections, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setSearch, showToast, stateRevision, viewRef]);
+  }, [controller, mainRuntime, previewRuntimeRef, setActiveView, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setSearch, showToast, viewRef]);
 
   const onLogin = useCallback(async (password: string) => {
     try {

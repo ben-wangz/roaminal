@@ -29,7 +29,7 @@ func (m *Manager) Shutdown(ctx context.Context) {
 			session.closed = true
 			session.meta.Lifecycle = "interrupted"
 			session.meta.BackendRuntimeID = session.manager.runtimeID
-			session.meta.UpdatedAt = time.Now().UTC()
+			session.meta.UpdatedAt = m.now().UTC()
 			if session.snapshotTimer != nil {
 				session.snapshotTimer.Stop()
 				session.snapshotTimer = nil

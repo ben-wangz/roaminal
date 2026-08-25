@@ -1,17 +1,25 @@
 package agent
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
+
+// Agent state has its own component schema; the enclosing persistence schema
+// version does not change the hook/telemetry record format.
+const agentStoreSchemaVersion = 1
 
 type fileState struct {
 	FormatVersion int                       `json:"formatVersion"`
@@ -27,7 +35,7 @@ type Store struct {
 }
 
 func OpenStore(root string) *Store {
-	store := &Store{path: filepath.Join(root, "agent-endpoints.json"), state: fileState{FormatVersion: 1, Endpoints: map[string]EndpointRecord{}}}
+	store := &Store{path: filepath.Join(root, "agent-endpoints.json"), state: fileState{FormatVersion: agentStoreSchemaVersion, Endpoints: map[string]EndpointRecord{}}}
 	info, err := os.Lstat(store.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return store
@@ -45,7 +53,19 @@ func OpenStore(root string) *Store {
 		store.err = err
 		return store
 	}
-	if err := json.Unmarshal(data, &store.state); err != nil || store.state.FormatVersion != 1 || store.state.Endpoints == nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(&store.state)
+	if err == nil {
+		var extra any
+		err = decoder.Decode(&extra)
+		if err == io.EOF {
+			err = nil
+		} else if err == nil {
+			err = errors.New("agent store contains multiple JSON values")
+		}
+	}
+	if err != nil || store.state.FormatVersion != agentStoreSchemaVersion || store.state.Endpoints == nil {
 		if err == nil {
 			err = errors.New("unsupported agent store format")
 		}
@@ -126,6 +146,7 @@ func (s *Store) FindToken(token string, now time.Time) (string, EndpointRecord, 
 }
 
 func (s *Store) saveLocked() error {
+	s.state.FormatVersion = agentStoreSchemaVersion
 	data, err := json.MarshalIndent(s.state, "", "  ")
 	if err != nil {
 		return err
@@ -198,3 +219,5 @@ func cloneRecord(value EndpointRecord) EndpointRecord {
 	}
 	return value
 }
+
+var _ ports.AgentRepository = (*Store)(nil)

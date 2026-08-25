@@ -1,5 +1,6 @@
 .git
 .gitignore
+build
 frontend/node_modules
 terminal-worker/node_modules
 frontend/dist

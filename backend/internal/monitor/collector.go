@@ -7,6 +7,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	systemclock "github.com/ben-wangz/roaminal/backend/internal/clock"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type Monitor struct {
@@ -26,7 +29,13 @@ type Monitor struct {
 	done           chan struct{}
 }
 
-func New() *Monitor                                   { return newMonitor(os.ReadFile, time.Now) }
+func New() *Monitor { return newMonitor(os.ReadFile, systemclock.System{}.Now) }
+func NewWithClock(runtimeClock ports.Clock) *Monitor {
+	if runtimeClock == nil {
+		return New()
+	}
+	return newMonitor(os.ReadFile, runtimeClock.Now)
+}
 func NewWithReader(read readFile, now clock) *Monitor { return newMonitor(read, now) }
 func newMonitor(read readFile, now clock) *Monitor {
 	started := now()

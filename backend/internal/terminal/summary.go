@@ -1,12 +1,14 @@
 package terminal
 
 import (
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"os"
 	"sort"
 	"strings"
-	"time"
 )
+
+type Summary = ports.TerminalInstanceSummary
 
 func (m *Manager) Summaries() []Summary {
 	m.mu.RLock()
@@ -65,7 +67,7 @@ func lifecycle(session *Session) string {
 	}
 	return "live"
 }
-func titleMode(meta persistence.ConnectionInstanceMeta) string {
+func titleMode(meta domain.ConnectionInstanceMeta) string {
 	if meta.TitleOverride != nil {
 		return "custom"
 	}
@@ -73,7 +75,7 @@ func titleMode(meta persistence.ConnectionInstanceMeta) string {
 }
 func (s *Session) broadcastMetaLocked() {
 	s.meta.SyncEffectiveTitle()
-	s.broadcastLocked(message(map[string]any{"type": "meta", "title": s.meta.EffectiveTitle(), "titleMode": titleMode(s.meta), "cwd": s.meta.Cwd, "cols": s.meta.Cols, "rows": s.meta.Rows, "sourceState": s.meta.SourceState, "generationStatus": s.meta.GenerationStatus, "generationError": s.meta.GenerationError}))
+	s.broadcastMessageLocked(metaStreamMessage(MetaMessage{Title: s.meta.EffectiveTitle(), TitleMode: titleMode(s.meta), Cwd: s.meta.Cwd, Cols: s.meta.Cols, Rows: s.meta.Rows, SourceState: s.meta.SourceState, GenerationStatus: s.meta.GenerationStatus, GenerationError: s.meta.GenerationError}))
 }
 
 func (m *Manager) MarkSourceState(id, state string) error {
@@ -88,8 +90,8 @@ func (m *Manager) MarkSourceState(id, state string) error {
 	if state == "deleted" || (state == "changed" && session.meta.SourceState == "current") {
 		session.meta.SourceState = state
 	}
-	if m.store != nil {
-		if err := m.store.SaveConnectionInstance(session.meta); err != nil {
+	if m.hasPersistence() {
+		if err := m.saveMeta(session.meta); err != nil {
 			return err
 		}
 	}
@@ -107,9 +109,9 @@ func (m *Manager) MarkGenerationResult(id, state, detail string) error {
 	session.mu.Lock()
 	session.meta.GenerationStatus = state
 	session.meta.GenerationError = detail
-	session.meta.UpdatedAt = time.Now().UTC()
-	if m.store != nil {
-		if err := m.store.SaveConnectionInstance(session.meta); err != nil {
+	session.meta.UpdatedAt = m.now().UTC()
+	if m.hasPersistence() {
+		if err := m.saveMeta(session.meta); err != nil {
 			session.mu.Unlock()
 			return err
 		}
@@ -128,7 +130,7 @@ func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
 	var override *string
 	if title != nil {
 		value := strings.TrimSpace(*title)
-		if err := persistence.ValidateTitleOverride(value); err != nil {
+		if err := domain.ValidateTitleOverride(value); err != nil {
 			return Summary{}, err
 		}
 		override = &value
@@ -137,9 +139,9 @@ func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
 	oldOverride, oldUpdated := session.meta.TitleOverride, session.meta.UpdatedAt
 	session.meta.TitleOverride = override
 	session.meta.SyncEffectiveTitle()
-	session.meta.UpdatedAt = time.Now().UTC()
-	if m.store != nil {
-		if err := m.store.SaveConnectionInstance(session.meta); err != nil {
+	session.meta.UpdatedAt = m.now().UTC()
+	if m.hasPersistence() {
+		if err := m.saveMeta(session.meta); err != nil {
 			session.meta.TitleOverride, session.meta.UpdatedAt = oldOverride, oldUpdated
 			session.meta.SyncEffectiveTitle()
 			session.mu.Unlock()

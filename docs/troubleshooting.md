@@ -24,7 +24,7 @@ password or restarting with a generated password revokes old refresh sessions.
 ## WebSocket closes immediately
 
 Use the current page Origin, `ws:`/`wss:` matching the page, and both
-`roaminal.v1` and `roaminal.auth.<access-token>` subprotocols. Proxies must pass
+`roaminal.v2` and `roaminal.auth.<access-token>` subprotocols. Proxies must pass
 the Upgrade request, preserve the external Host, and keep connections open for
 at least an hour. A proxy may report the WebSocket transport as `ws`/`wss` in
 `X-Forwarded-Proto`; Roaminal maps those values to the browser's `http`/`https`

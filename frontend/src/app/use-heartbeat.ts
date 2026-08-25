@@ -1,38 +1,13 @@
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { refresh } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
-import { heartbeat, type Heartbeat } from '../status/heartbeat';
-import { startPollLoop } from '../status/poll-loop';
-import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import { orderConnectionInstances, reconcileConnections, type ConnectionView } from './connection-view';
+import { heartbeat } from '../status/heartbeat';
+import { startPollLoop, type PollLoopDisposer } from '../status/poll-loop';
+import type { ConnectionView } from './connection-view';
 import type { AppPage } from './app-state';
-import { flattenConnectionInstanceLayout, normalizeConnectionInstanceLayout, type ConnectionInstanceLayout } from '../connections/connection-instance-groups';
+import { ConnectionInstanceController } from '../connections/connection-instance-controller';
 
-// Shallow per-item comparison so an unchanged heartbeat payload keeps the
-// previous array identity and memoized consumers skip re-rendering.
-export function sameConnectionSummaries(
-  left: ConnectionInstanceSummary[],
-  right: ConnectionInstanceSummary[],
-): boolean {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    const a = left[index] as unknown as Record<string, unknown>;
-    const b = right[index] as unknown as Record<string, unknown>;
-    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      if (key === 'agent') {
-        if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) return false;
-        continue;
-      }
-      if (a[key] !== b[key]) return false;
-    }
-  }
-  return true;
-}
-
-export function sameHeartbeat(left: Heartbeat, right: Heartbeat): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
+export { sameConnectionSummaries, sameHeartbeat } from '../connections/connection-instance-controller';
 
 type Params = {
   auth: AuthState | null;
@@ -42,27 +17,16 @@ type Params = {
   setPage: Dispatch<SetStateAction<AppPage>>;
   viewRef: MutableRefObject<ConnectionView>;
   setActiveView: (next: ConnectionView) => void;
-  setConnections: Dispatch<SetStateAction<ConnectionInstanceSummary[]>>;
-  setConnectionInstanceLayout: Dispatch<SetStateAction<ConnectionInstanceLayout | null>>;
-  pendingConnectionInstanceLayout: MutableRefObject<ConnectionInstanceLayout | null>;
-  setHeartbeatLatency: Dispatch<SetStateAction<number | null>>;
-  setHeartbeatState: Dispatch<SetStateAction<Heartbeat | null>>;
-  setHeartbeatConnected: Dispatch<SetStateAction<boolean>>;
-  stateRevision: MutableRefObject<number>;
-  connectionOrder: MutableRefObject<string[]>;
-  pendingConnectionOrder: MutableRefObject<string[] | null>;
-  hydrated: MutableRefObject<boolean>;
-  bootId: MutableRefObject<string | null>;
-  syncing: MutableRefObject<boolean>;
+  controller: ConnectionInstanceController;
 };
 
 // Consecutive misses before the header reports Reconnecting; one lost sample
 // of the 1 s poll should not flap the indicator.
 const DISCONNECT_AFTER_FAILURES = 2;
 
-// The 1 s heartbeat: latency measurement, backend-restart detection via
-// bootId, view reconciliation, and first-load page hydration. Deliberately
-// keeps polling while the tab is hidden so a backend restart still reloads.
+// Heartbeat owns connection-instance reconciliation through the controller.
+// It deliberately keeps polling while the tab is hidden so a backend restart
+// still reloads.
 export function useHeartbeat({
   auth,
   setAuth,
@@ -71,89 +35,67 @@ export function useHeartbeat({
   setPage,
   viewRef,
   setActiveView,
-  setConnections,
-  setConnectionInstanceLayout,
-  pendingConnectionInstanceLayout,
-  setHeartbeatLatency,
-  setHeartbeatState,
-  setHeartbeatConnected,
-  stateRevision,
-  connectionOrder,
-  pendingConnectionOrder,
-  hydrated,
-  bootId,
-  syncing,
+  controller,
 }: Params) {
   const failures = useRef(0);
-  const sync = useCallback(async () => {
-    if (syncing.current) return;
-    syncing.current = true;
+  const paused = useRef(false);
+  const loopRef = useRef<PollLoopDisposer | null>(null);
+  const sync = useCallback(async (signal: AbortSignal) => {
+    if (paused.current) return;
+    if (!controller.beginSync()) return;
     try {
-      const revision = stateRevision.current;
+      const revision = controller.getSnapshot().revision;
       const startedAt = performance.now();
-      const next = await heartbeat();
-      if (revision !== stateRevision.current) return;
+      const next = await heartbeat(signal);
+      if (paused.current || signal.aborted) return;
+      if (revision !== controller.getSnapshot().revision) return;
       failures.current = 0;
-      setHeartbeatConnected(true);
-      setHeartbeatLatency(Math.round(performance.now() - startedAt));
-      if (bootId.current && bootId.current !== next.runtime.bootId) {
+      controller.setHeartbeatConnected(true);
+      controller.setHeartbeatLatency(Math.round(performance.now() - startedAt));
+      const currentBootID = controller.getSnapshot().bootId;
+      if (currentBootID && currentBootID !== next.runtime.bootId) {
         window.location.reload();
         return;
       }
-      bootId.current = next.runtime.bootId;
-      setHeartbeatState((previous) => (previous && sameHeartbeat(previous, next) ? previous : next));
-      const nextLayout = normalizeConnectionInstanceLayout(next.connectionInstanceLayout, next.connectionInstances);
-      const pendingLayout = pendingConnectionInstanceLayout.current;
-      const layoutForState = pendingLayout ? normalizeConnectionInstanceLayout(pendingLayout, next.connectionInstances) : nextLayout;
-      if (!pendingLayout) {
-        setConnectionInstanceLayout((previous) => (JSON.stringify(previous) === JSON.stringify(nextLayout) ? previous : nextLayout));
-      }
-      const layoutConnections = flattenConnectionInstanceLayout(layoutForState, next.connectionInstances);
-      const orderedConnections = pendingConnectionOrder.current
-        ? orderConnectionInstances(layoutConnections, pendingConnectionOrder.current)
-        : layoutConnections;
-      const nextView = reconcileConnections(orderedConnections, viewRef.current, connectionOrder.current);
-      setActiveView(nextView);
-      if (!hydrated.current && !activeLaunchId) {
-        hydrated.current = true;
-        if (page !== 'appearance') setPage(nextView.activeConnectionInstanceId ? 'workspace' : 'connections');
-      } else if (!activeLaunchId && !nextView.activeConnectionInstanceId && page !== 'appearance') {
+      controller.setBootId(next.runtime.bootId);
+      const reconciled = controller.applyHeartbeat(next, viewRef.current);
+      setActiveView(reconciled.activeView);
+      if (!controller.getSnapshot().hydrated && !activeLaunchId) {
+        controller.markHydrated();
+        if (page !== 'appearance') setPage(reconciled.activeView.activeConnectionInstanceId ? 'workspace' : 'connections');
+      } else if (!activeLaunchId && !reconciled.activeView.activeConnectionInstanceId && page !== 'appearance') {
         setPage('connections');
       }
-      connectionOrder.current = orderedConnections.map((connection) => connection.connectionInstanceId);
-      setConnections((current) =>
-        sameConnectionSummaries(current, orderedConnections) ? current : orderedConnections,
-      );
     } catch (err) {
+      if (paused.current || signal.aborted || (err as Error).name === 'AbortError') return;
       failures.current += 1;
-      if (failures.current >= DISCONNECT_AFTER_FAILURES) setHeartbeatConnected(false);
+      if (failures.current >= DISCONNECT_AFTER_FAILURES) controller.setHeartbeatConnected(false);
       if ((err as Error).message === 'unauthorized') setAuth(await refresh());
     } finally {
-      syncing.current = false;
+      controller.endSync();
     }
-  }, [
-    activeLaunchId,
-    bootId,
-    connectionOrder,
-    hydrated,
-    pendingConnectionOrder,
-    page,
-    setActiveView,
-    setAuth,
-    setConnections,
-    setConnectionInstanceLayout,
-    pendingConnectionInstanceLayout,
-    setHeartbeatConnected,
-    setHeartbeatLatency,
-    setHeartbeatState,
-    setPage,
-    stateRevision,
-    syncing,
-    viewRef,
-  ]);
+  }, [activeLaunchId, controller, page, setActiveView, setAuth, setPage, viewRef]);
 
   useEffect(() => {
-    if (!auth) return;
-    return startPollLoop(() => sync(), { intervalMs: 1000 });
+    if (!auth) {
+      paused.current = false;
+      loopRef.current = null;
+      return undefined;
+    }
+    paused.current = false;
+    const loop = startPollLoop((signal) => sync(signal), { intervalMs: 1000 });
+    loopRef.current = loop;
+    return () => {
+      if (loopRef.current === loop) loopRef.current = null;
+      loop();
+    };
   }, [auth, sync]);
+
+  return useCallback(async () => {
+    paused.current = true;
+    const loop = loopRef.current;
+    if (!loop) return;
+    loop.stop({ abort: false });
+    await loop.waitForIdle();
+  }, []);
 }

@@ -51,7 +51,7 @@ describe('active connection reconciliation', () => {
 
   it('loads only the current connection selection key', async () => {
     const values = new Map([
-      ['roaminal_active_connection_instance_v1', JSON.stringify({ activeConnectionInstanceId: 'current' })],
+      ['roaminal_active_connection_instance_v2', JSON.stringify({ activeConnectionInstanceId: 'current' })],
     ]);
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,

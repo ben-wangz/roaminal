@@ -7,18 +7,26 @@ import (
 	"os/exec"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	systemclock "github.com/ben-wangz/roaminal/backend/internal/clock"
+	"github.com/ben-wangz/roaminal/backend/internal/identity"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/random"
 )
 
 var ErrUnavailable = errors.New("terminal worker unavailable")
 var ErrWriterQueueFull = errors.New("terminal worker writer queue full")
 var ErrWriterStalled = errors.New("terminal worker writer stalled")
 
+var _ ports.TerminalWorker = (*Client)(nil)
+
 type Frame struct {
-	Header  map[string]json.RawMessage
+	Header  json.RawMessage
 	Payload []byte
 }
 type Result struct {
-	Header  map[string]json.RawMessage
+	Header  responseHeader
 	Payload []byte
 }
 type Client struct {
@@ -37,6 +45,8 @@ type Client struct {
 	callbackMu  sync.Mutex
 	onFatal     func(error)
 	stopping    atomic.Bool
+	clock       ports.Clock
+	ids         ports.IDGenerator
 }
 type writeRequest struct {
 	data      []byte
@@ -44,6 +54,32 @@ type writeRequest struct {
 	done      chan error
 }
 
-func New(path string, onFatal func(error)) *Client {
-	return &Client{path: path, waiters: make(map[string]chan Result), ready: make(chan error, 1), done: make(chan struct{}), onFatal: onFatal}
+type Dependencies struct {
+	Clock ports.Clock
+	IDs   ports.IDGenerator
+}
+
+func New(path string, onFatal func(error), dependencies ...Dependencies) *Client {
+	deps := Dependencies{Clock: systemclock.System{}}
+	if len(dependencies) > 0 {
+		if dependencies[0].Clock != nil {
+			deps.Clock = dependencies[0].Clock
+		}
+		deps.IDs = dependencies[0].IDs
+	}
+	if deps.IDs == nil {
+		deps.IDs = identity.UUIDGenerator{Random: random.CryptoSource{}}
+	}
+	return &Client{path: path, waiters: make(map[string]chan Result), ready: make(chan error, 1), done: make(chan struct{}), onFatal: onFatal, clock: deps.Clock, ids: deps.IDs}
+}
+
+func (c *Client) now() time.Time { return c.clock.Now() }
+
+func (c *Client) newID() string {
+	if c.ids != nil {
+		if value, err := c.ids.NewID(); err == nil && value != "" {
+			return value
+		}
+	}
+	return "worker-id-unavailable"
 }

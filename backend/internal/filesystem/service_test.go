@@ -8,36 +8,38 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type fakeExecutor struct {
-	summary connection.Summary
-	run     func(connection.RemoteCommand) ([]byte, error)
-	calls   []connection.RemoteCommand
+	summary ports.ConnectionInstanceView
+	run     func(ports.RemoteCommand) ([]byte, error)
+	calls   []ports.RemoteCommand
 }
 
-func (f *fakeExecutor) Summaries() []connection.Summary { return []connection.Summary{f.summary} }
+func (f *fakeExecutor) ConnectionInstance(_ string) (ports.ConnectionInstanceView, error) {
+	return f.summary, nil
+}
 
-func (f *fakeExecutor) RunRemote(_ context.Context, _ string, command connection.RemoteCommand) (connection.RemoteResult, error) {
+func (f *fakeExecutor) RunRemote(_ context.Context, _ string, command ports.RemoteCommand) (ports.RemoteResult, error) {
 	f.calls = append(f.calls, command)
 	output, err := f.run(command)
-	return connection.RemoteResult{Output: output}, err
+	return ports.RemoteResult{Output: output}, err
 }
 
-func (f *fakeExecutor) OpenRemote(_ context.Context, _ string, _ connection.RemoteCommand) (io.ReadCloser, error) {
+func (f *fakeExecutor) OpenRemote(_ context.Context, _ string, _ ports.RemoteCommand) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
 
-func (f *fakeExecutor) RemoteTransferInfo(_ string) (connection.RemoteTransferInfo, error) {
-	return connection.RemoteTransferInfo{Alias: "fixture", ControlPath: "/tmp/fixture", SSHPath: "ssh"}, nil
+func (f *fakeExecutor) RemoteTransferInfo(_ string) (ports.RemoteTransferInfo, error) {
+	return ports.RemoteTransferInfo{Alias: "fixture", ControlPath: "/tmp/fixture", SSHPath: "ssh"}, nil
 }
 
 func TestRootRetriesTmuxProbe(t *testing.T) {
 	alias := "fixture"
 	failures := 0
-	fake := &fakeExecutor{summary: connection.Summary{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias, TmuxEnabled: true, TmuxSessionName: "roaminal"}}
-	fake.run = func(command connection.RemoteCommand) ([]byte, error) {
+	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias, TmuxEnabled: true, TmuxSessionName: "roaminal"}}
+	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
 		if strings.Contains(command.Script, "tmux has-session") {
 			failures++
 			if failures == 1 {
@@ -61,8 +63,8 @@ func TestRootFailureUsesConfiguredFallbackAndRetriesAfterCache(t *testing.T) {
 	alias := "fixture"
 	tmuxCalls := 0
 	configuredCalls := 0
-	fake := &fakeExecutor{summary: connection.Summary{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias, TmuxEnabled: true, TmuxSessionName: "roaminal"}}
-	fake.run = func(command connection.RemoteCommand) ([]byte, error) {
+	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias, TmuxEnabled: true, TmuxSessionName: "roaminal"}}
+	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
 		if strings.Contains(command.Script, "tmux has-session") {
 			tmuxCalls++
 			return nil, errors.New("tmux unavailable")
@@ -96,8 +98,8 @@ func TestRootFailureUsesConfiguredFallbackAndRetriesAfterCache(t *testing.T) {
 
 func TestDirectoryProtocolAndStableOrdering(t *testing.T) {
 	alias := "fixture"
-	fake := &fakeExecutor{summary: connection.Summary{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
-	fake.run = func(command connection.RemoteCommand) ([]byte, error) {
+	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
+	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
 		if command.Script == configuredRootScript {
 			return rootOutput("/workspace"), nil
 		}
@@ -127,8 +129,8 @@ func TestDirectoryProtocolAndStableOrdering(t *testing.T) {
 func TestEntriesRejectsRootRevisionChange(t *testing.T) {
 	alias := "fixture"
 	rootPath := "/workspace"
-	fake := &fakeExecutor{summary: connection.Summary{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
-	fake.run = func(command connection.RemoteCommand) ([]byte, error) {
+	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
+	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
 		if command.Script == configuredRootScript {
 			result := rootOutput(rootPath)
 			rootPath = "/other"

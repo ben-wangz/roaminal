@@ -8,87 +8,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
-	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
 )
-
-func (s *Server) saveConnectionOptions(alias string, tmux *sshconfig.TmuxOptions, filesystem *sshconfig.FileSystemOptions) error {
-	if s.connectionOptions == nil {
-		return nil
-	}
-	repo, keys := s.sources()
-	if repo == nil {
-		return sshfs.ErrUnavailable
-	}
-	collection, err := repo.Collection(keys)
-	if err != nil {
-		return err
-	}
-	if !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing" {
-		return errors.New("config cannot be read")
-	}
-	aliases := make(map[string]bool)
-	for _, definition := range collection.Definitions {
-		if definition.Type == "ssh" {
-			aliases[definition.HostAlias] = true
-		}
-	}
-	current, err := s.connectionOptions.Load(aliases)
-	if err != nil {
-		return err
-	}
-	options := current.Options
-	currentOption := options[alias]
-	if tmux != nil {
-		if !tmux.Enabled {
-			currentOption.Enabled = false
-			currentOption.SessionName = ""
-		} else {
-			currentOption.Enabled = true
-			currentOption.SessionName = tmux.SessionName
-		}
-	}
-	if filesystem != nil {
-		currentOption.Pwd = filesystem.Pwd
-	}
-	if !currentOption.Enabled && currentOption.Pwd == "" {
-		delete(options, alias)
-	} else {
-		if currentOption.Pwd == "" {
-			currentOption.Pwd = connectionoptions.DefaultPwd
-		}
-		options[alias] = currentOption
-	}
-	return s.connectionOptions.Save(options)
-}
-
-func (s *Server) saveTmuxOption(alias string, value *sshconfig.TmuxOptions) error {
-	if value == nil {
-		if s.connectionOptions == nil {
-			return nil
-		}
-		repo, keys := s.sources()
-		if repo == nil {
-			return sshfs.ErrUnavailable
-		}
-		collection, err := repo.Collection(keys)
-		if err != nil {
-			return err
-		}
-		aliases := make(map[string]bool)
-		for _, definition := range collection.Definitions {
-			if definition.Type == "ssh" {
-				aliases[definition.HostAlias] = true
-			}
-		}
-		current, err := s.connectionOptions.Load(aliases)
-		if err != nil {
-			return err
-		}
-		delete(current.Options, alias)
-		return s.connectionOptions.Save(current.Options)
-	}
-	return s.saveConnectionOptions(alias, value, nil)
-}
 
 func (s *Server) definitionError(w http.ResponseWriter, err error) {
 	switch {
@@ -110,30 +30,29 @@ func (s *Server) definitionError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) listSSHKeys(w http.ResponseWriter, _ *http.Request, _ string) {
-	if s.sshKeys == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"keys": []sshkey.Key{}})
+	if s.definitions == nil {
+		writeJSON(w, http.StatusOK, sshKeyCollectionResponse{Keys: nil})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"keys": s.sshKeys.List()})
+	writeJSON(w, http.StatusOK, sshKeyCollectionResponse{Keys: s.definitions.Keys()})
 }
 
 func (s *Server) publicSSHKey(w http.ResponseWriter, r *http.Request, _ string) {
-	if s.sshKeys == nil {
+	if s.definitions == nil {
 		writeError(w, http.StatusNotFound, "key not found")
 		return
 	}
-	id := r.PathValue("keyId")
-	value, err := s.sshKeys.Public(id)
+	value, err := s.definitions.PublicKey(r.PathValue("keyId"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "public key not found")
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]string{"publicKey": value})
+	writeJSON(w, http.StatusOK, publicKeyResponse{PublicKey: value})
 }
 
 func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request, _ string) {
-	if s.sshKeys == nil {
+	if s.definitions == nil {
 		writeError(w, http.StatusServiceUnavailable, "ssh directory unavailable", "ssh_keys")
 		return
 	}
@@ -142,7 +61,7 @@ func (s *Server) deleteSSHKey(w http.ResponseWriter, r *http.Request, _ string) 
 		writeError(w, http.StatusBadRequest, "invalid key id")
 		return
 	}
-	if err := s.sshKeys.Delete(id); err != nil {
+	if err := s.definitions.DeleteKey(id); err != nil {
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			writeError(w, http.StatusNotFound, "key not found")

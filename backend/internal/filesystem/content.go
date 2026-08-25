@@ -2,10 +2,6 @@ package filesystem
 
 import (
 	"context"
-	"fmt"
-	"time"
-
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
 )
 
 func (s *Service) OpenContent(ctx context.Context, id, relative, revision string, start, length int64) (ContentStream, error) {
@@ -31,11 +27,7 @@ func (s *Service) OpenContent(ctx context.Context, id, relative, revision string
 	if length > maxContentStream {
 		return ContentStream{}, ErrContentTooLarge
 	}
-	reader, openErr := s.executor.OpenRemote(ctx, id, connection.RemoteCommand{
-		Script:  contentScript,
-		Args:    []string{root.AbsolutePath, clean, fmt.Sprintf("%d", start), fmt.Sprintf("%d", length)},
-		Timeout: 15 * time.Minute,
-	})
+	reader, openErr := s.remote.OpenContent(ctx, id, root.AbsolutePath, clean, start, length)
 	if openErr != nil {
 		return ContentStream{}, mapRemoteError(openErr)
 	}
@@ -47,18 +39,9 @@ func (s *Service) OpenContent(ctx context.Context, id, relative, revision string
 }
 
 func (s *Service) statAtRoot(ctx context.Context, id string, root RootContext, clean string) (Entry, error) {
-	result, runErr := s.executor.RunRemote(ctx, id, connection.RemoteCommand{
-		Script:      statScript,
-		Args:        []string{root.AbsolutePath, clean},
-		OutputLimit: 32 << 10,
-		Timeout:     5 * time.Second,
-	})
+	raw, runErr := s.remote.Stat(ctx, id, root.AbsolutePath, clean)
 	if runErr != nil {
 		return Entry{}, mapStatError(runErr)
 	}
-	raw, parseErr := parseDirectory(result.Output)
-	if parseErr != nil || len(raw) != 1 {
-		return Entry{}, ErrProtocol
-	}
-	return makeEntry(root, clean, raw[0]), nil
+	return makeEntry(root, clean, raw), nil
 }

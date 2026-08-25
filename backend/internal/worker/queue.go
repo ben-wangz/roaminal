@@ -1,14 +1,17 @@
 package worker
 
 import (
-	"encoding/json"
 	"io"
 	"time"
 )
 
-func raw(value string) json.RawMessage { data, _ := json.Marshal(value); return data }
-
-func (c *Client) send(header map[string]any, payload []byte) error {
+func (c *Client) send(header requestHeader, payload []byte) error {
+	if header.SchemaVersion == 0 {
+		header.SchemaVersion = SchemaVersion
+	}
+	if header.CorrelationID == "" {
+		header.CorrelationID = c.newID()
+	}
 	data, err := frame(header, payload)
 	if err != nil {
 		return err
@@ -17,7 +20,7 @@ func (c *Client) send(header map[string]any, payload []byte) error {
 		return ErrUnavailable
 	}
 	queueSize := 0
-	if op, ok := header["op"].(string); ok && (op == "write" || op == "resize") {
+	if header.Op == "write" || header.Op == "resize" {
 		queueSize = len(payload)
 	}
 	deadline := time.NewTimer(WriterStallLimit)
@@ -84,7 +87,7 @@ func (c *Client) writeLoop() {
 }
 func (c *Client) writeAll(data []byte) error {
 	if deadlineWriter, ok := c.stdin.(interface{ SetWriteDeadline(time.Time) error }); ok {
-		_ = deadlineWriter.SetWriteDeadline(time.Now().Add(WriterStallLimit))
+		_ = deadlineWriter.SetWriteDeadline(c.now().Add(WriterStallLimit))
 		defer deadlineWriter.SetWriteDeadline(time.Time{})
 	}
 	for len(data) > 0 {

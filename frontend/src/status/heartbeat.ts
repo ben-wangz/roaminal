@@ -17,4 +17,6 @@ export type Heartbeat = {
   };
   runtime: { bootId: string; persistenceDegraded: boolean; scrollbackLines: number };
 };
-export async function heartbeat(): Promise<Heartbeat> { return api<Heartbeat>('/api/heartbeat'); }
+export async function heartbeat(signal?: AbortSignal): Promise<Heartbeat> {
+  return api<Heartbeat>('/heartbeat', signal ? { signal } : {});
+}

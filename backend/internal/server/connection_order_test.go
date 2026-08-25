@@ -12,7 +12,9 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	"github.com/ben-wangz/roaminal/backend/internal/identity"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/workspace"
 )
 
 func TestConnectionInstanceOrderRouteIsNotTreatedAsAnInstanceID(t *testing.T) {
@@ -20,12 +22,12 @@ func TestConnectionInstanceOrderRouteIsNotTreatedAsAnInstanceID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	authManager, err := auth.New(config.Config{Password: "secret", AuthAccessTTL: time.Minute, AuthRefreshTTL: time.Hour}, store)
+	authManager, err := newServerTestAuth(config.Config{Password: "secret", AuthAccessTTL: time.Minute, AuthRefreshTTL: time.Hour}, store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := NewWithStatic(config.Config{}, "0.1.0", "boot", authManager, (*connection.Manager)(nil), nil, nil, http.NotFoundHandler())
-	request := httptest.NewRequest(http.MethodPut, "http://roaminal.test/api/connection-instances/order", nil)
+	server := New(Dependencies{Config: config.Config{}, Version: "0.1.0", BootID: "boot", Auth: authManager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace)})
+	request := httptest.NewRequest(http.MethodPut, "http://roaminal.test/api/v2/connection-instances/order", nil)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
 	if response.Code != http.StatusUnauthorized {
@@ -93,7 +95,7 @@ func TestConnectionInstanceGroupRoutesPersistAndProtectRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Config{Password: "secret", AuthAccessTTL: time.Minute, AuthRefreshTTL: time.Hour}
-	authManager, err := auth.New(cfg, store)
+	authManager, err := newServerTestAuth(cfg, store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,8 +107,8 @@ func TestConnectionInstanceGroupRoutesPersistAndProtectRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := NewWithStatic(cfg, "0.1.0", "boot", authManager, (*connection.Manager)(nil), nil, nil, http.NotFoundHandler())
-	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/connection-instance-groups", nil)
+	server := New(Dependencies{Config: cfg, Version: "0.1.0", BootID: "boot", Auth: authManager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace), IDs: identity.UUIDGenerator{}})
+	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/connection-instance-groups", nil)
 	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
@@ -122,7 +124,7 @@ func TestConnectionInstanceGroupRoutesPersistAndProtectRevision(t *testing.T) {
 	if listed.Layout.Revision != 1 || !reflect.DeepEqual(listed.Layout.GroupOrder, []string{persistence.UngroupedConnectionInstanceGroupID}) {
 		t.Fatalf("initial layout = %#v", listed.Layout)
 	}
-	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/connection-instance-groups", bytes.NewReader([]byte(`{"name":"Production","revision":1}`)))
+	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/connection-instance-groups", bytes.NewReader([]byte(`{"name":"Production","revision":1}`)))
 	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 	request.Header.Set("Content-Type", "application/json")
 	response = httptest.NewRecorder()
@@ -139,7 +141,7 @@ func TestConnectionInstanceGroupRoutesPersistAndProtectRevision(t *testing.T) {
 	if len(created.Layout.Groups) != 1 || created.Layout.Revision != 2 {
 		t.Fatalf("created layout = %#v", created.Layout)
 	}
-	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/connection-instance-groups", bytes.NewReader([]byte(`{"name":"Stale","revision":1}`)))
+	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/connection-instance-groups", bytes.NewReader([]byte(`{"name":"Stale","revision":1}`)))
 	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 	request.Header.Set("Content-Type", "application/json")
 	response = httptest.NewRecorder()

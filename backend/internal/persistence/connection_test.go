@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -28,7 +29,7 @@ func TestConnectionInstanceLayoutUsesPerInstanceFiles(t *testing.T) {
 	}
 }
 
-func TestConnectionInstanceLayoutRejectsLegacySessions(t *testing.T) {
+func TestLegacySessionMigrationFailsWithActionableBackup(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "sessions"), 0o700); err != nil {
 		t.Fatal(err)
@@ -36,8 +37,12 @@ func TestConnectionInstanceLayoutRejectsLegacySessions(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "sessions", "legacy.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New(root); !errors.Is(err, ErrLegacySessions) {
+	if _, err := New(root); err == nil || !strings.Contains(err.Error(), "migration blocked") {
 		t.Fatalf("error=%v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "migrations"))
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("migration backup missing: %v", err)
 	}
 }
 

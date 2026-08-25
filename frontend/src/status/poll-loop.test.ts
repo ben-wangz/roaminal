@@ -141,6 +141,18 @@ describe('startPollLoop', () => {
     expect(callCount()).toBe(2);
   });
 
+  it('can stop scheduling while allowing the active request to drain', async () => {
+    const { env, pendingTimerCount } = testEnvironment();
+    const { task, signals, settleNext } = deferredTask();
+    const loop = startPollLoop(task, { intervalMs: 5000 }, env);
+    loop.stop({ abort: false });
+    const idle = loop.waitForIdle();
+    expect(signals[0].aborted).toBe(false);
+    await settleNext();
+    await idle;
+    expect(pendingTimerCount()).toBe(0);
+  });
+
   it('applies bounded jitter to the interval', async () => {
     const { env } = testEnvironment();
     const delays: number[] = [];

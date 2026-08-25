@@ -1,6 +1,6 @@
 import type { Terminal } from '@xterm/xterm';
-import { parseServerMessage, type ServerMessage } from './terminal-protocol';
-import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
+import type { ServerMessage } from './terminal-protocol';
+import { TerminalStream } from './terminal-stream';
 import { PreviewOutputQueue } from './preview-output-queue';
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 
@@ -8,7 +8,7 @@ type PreviewOutputMessage = Extract<ServerMessage, { type: 'snapshot' | 'output'
 
 export class TerminalPreviewRuntime {
   terminal?: Terminal;
-  private socket: WebSocket | null = null;
+  private stream: TerminalStream | null = null;
   private element: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private disposed = false;
@@ -99,31 +99,31 @@ export class TerminalPreviewRuntime {
   }
 
   private connect(): void {
-    if (this.disposed || !this.element || this.socket) return;
-    const token = this.token();
-    if (!token) return;
-    const socket = createRoaminalWebSocket(this.connectionInstanceId, 'connection-instances', token);
-    this.socket = socket;
-    socket.onopen = () => {
-      if (this.disposed || this.socket !== socket) return;
-      this.connected = true;
-      this.scaleTerminal();
-    };
-    socket.onmessage = (event) => {
-      if (this.disposed || this.socket !== socket || !this.terminal) return;
-      const message = parseServerMessage(String(event.data));
-      if (!message) return;
-      if (message.type === 'meta') {
-        this.setTerminalDimensions(message.cols, message.rows);
-      } else if (message.type === 'snapshot' || message.type === 'output') {
-        if (this.dimensionsReady) this.outputQueue.push(message);
-        else this.pendingOutput.push(message);
-      }
-    };
-    socket.onclose = () => {
-      if (this.socket === socket) this.socket = null;
-      this.connected = false;
-    };
+    if (this.disposed || !this.element || this.stream) return;
+    this.stream = new TerminalStream({
+      connectionInstanceId: this.connectionInstanceId,
+      endpoint: 'connection-instances',
+      token: this.token,
+      role: 'observer',
+      reconnect: false,
+      reporter: null,
+      onStateChange: (connected) => {
+        this.connected = connected;
+        if (connected) this.scaleTerminal();
+      },
+      onMessage: (message) => this.handleMessage(message),
+    });
+    this.stream.connect();
+  }
+
+  private handleMessage(message: ServerMessage): void {
+    if (this.disposed || !this.terminal) return;
+    if (message.type === 'meta') {
+      this.setTerminalDimensions(message.cols, message.rows);
+    } else if (message.type === 'snapshot' || message.type === 'output') {
+      if (this.dimensionsReady) this.outputQueue.push(message);
+      else this.pendingOutput.push(message);
+    }
   }
 
   connectedState(): boolean {
@@ -160,19 +160,8 @@ export class TerminalPreviewRuntime {
     this.pendingOutput.length = 0;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
-    const socket = this.socket;
-    this.socket = null;
-    if (socket?.readyState === WebSocket.CONNECTING) {
-      expectRoaminalWebSocketClose(socket);
-      socket.onopen = () => closeRoaminalWebSocket(socket);
-      socket.onerror = () => undefined;
-    } else if (socket) {
-      socket.onopen = null;
-      socket.onmessage = null;
-      socket.onclose = null;
-      socket.onerror = null;
-      closeRoaminalWebSocket(socket);
-    }
+    this.stream?.dispose();
+    this.stream = null;
     this.element = null;
     const terminal = this.terminal;
     this.terminal = undefined;

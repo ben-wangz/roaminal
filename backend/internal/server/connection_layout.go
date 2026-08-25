@@ -3,15 +3,15 @@ package server
 import (
 	"reflect"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func cloneConnectionInstanceLayout(layout persistence.ConnectionInstanceLayout) persistence.ConnectionInstanceLayout {
+func cloneConnectionInstanceLayout(layout domain.ConnectionInstanceLayout) domain.ConnectionInstanceLayout {
 	copyLayout := layout
 	copyLayout.GroupOrder = cloneConnectionInstanceIDs(layout.GroupOrder)
 	copyLayout.UngroupedConnectionInstanceIDs = cloneConnectionInstanceIDs(layout.UngroupedConnectionInstanceIDs)
-	copyLayout.Groups = make([]persistence.ConnectionInstanceGroup, len(layout.Groups))
+	copyLayout.Groups = make([]domain.ConnectionInstanceGroup, len(layout.Groups))
 	for index, group := range layout.Groups {
 		copyLayout.Groups[index] = group
 		copyLayout.Groups[index].ConnectionInstanceIDs = cloneConnectionInstanceIDs(group.ConnectionInstanceIDs)
@@ -21,38 +21,40 @@ func cloneConnectionInstanceLayout(layout persistence.ConnectionInstanceLayout) 
 
 func cloneConnectionInstanceIDs(values []string) []string {
 	if values == nil {
-		return []string{}
+		return nil
 	}
 	return append([]string{}, values...)
 }
 
-func (s *Server) connectionInstanceLayout(sessionID string) persistence.ConnectionInstanceLayout {
+func (s *Server) connectionInstanceLayout(sessionID string) domain.ConnectionInstanceLayout {
 	instances := s.connectionInstanceSummaries()
-	saved, exists := s.auth.ConnectionInstanceLayout(sessionID)
-	legacyOrder := s.auth.ConnectionInstanceOrder(sessionID)
+	saved, exists := s.workspace.ConnectionInstanceLayout(sessionID)
+	legacyOrder := s.workspace.ConnectionInstanceOrder(sessionID)
 	normalized, changed := normalizeConnectionInstanceLayout(saved, exists, legacyOrder, instances)
 	if changed {
+		expectedRevision := uint64(0)
 		if exists {
+			expectedRevision = saved.Revision
 			normalized.Revision = saved.Revision + 1
 			if normalized.Revision == 0 {
 				normalized.Revision = 1
 			}
 		}
-		if err := s.auth.SetConnectionInstanceLayout(sessionID, normalized); err != nil {
+		if err := s.workspace.SetConnectionInstanceLayout(sessionID, normalized, expectedRevision); err != nil {
 			return normalized
 		}
 	}
 	return normalized
 }
 
-func (s *Server) connectionInstanceSummaries() []connection.Summary {
+func (s *Server) connectionInstanceSummaries() []ports.ConnectionInstanceSummary {
 	if s.terms == nil {
 		return nil
 	}
 	return s.terms.Summaries()
 }
 
-func normalizeConnectionInstanceLayout(saved persistence.ConnectionInstanceLayout, exists bool, legacyOrder []string, instances []connection.Summary) (persistence.ConnectionInstanceLayout, bool) {
+func normalizeConnectionInstanceLayout(saved domain.ConnectionInstanceLayout, exists bool, legacyOrder []string, instances []ports.ConnectionInstanceSummary) (domain.ConnectionInstanceLayout, bool) {
 	available := make(map[string]struct{}, len(instances))
 	for _, instance := range instances {
 		available[instance.ID] = struct{}{}
@@ -62,9 +64,10 @@ func normalizeConnectionInstanceLayout(saved persistence.ConnectionInstanceLayou
 		if err != nil {
 			order = instanceIDs(instances)
 		}
-		return persistence.ConnectionInstanceLayout{
+		return domain.ConnectionInstanceLayout{
 			Revision:                       1,
-			GroupOrder:                     []string{persistence.UngroupedConnectionInstanceGroupID},
+			GroupOrder:                     []string{domain.UngroupedConnectionInstanceGroupID},
+			Groups:                         []domain.ConnectionInstanceGroup{},
 			UngroupedConnectionInstanceIDs: order,
 		}, true
 	}
@@ -73,18 +76,18 @@ func normalizeConnectionInstanceLayout(saved persistence.ConnectionInstanceLayou
 	if next.Revision == 0 {
 		next.Revision = 1
 	}
-	groupByID := make(map[string]persistence.ConnectionInstanceGroup, len(next.Groups))
+	groupByID := make(map[string]domain.ConnectionInstanceGroup, len(next.Groups))
 	for _, group := range next.Groups {
 		cleaned := group
 		cleaned.ConnectionInstanceIDs = cleanInstanceIDs(group.ConnectionInstanceIDs, available, nil)
 		groupByID[group.GroupID] = cleaned
 	}
-	orderedGroups := make([]persistence.ConnectionInstanceGroup, 0, len(next.Groups))
+	orderedGroups := make([]domain.ConnectionInstanceGroup, 0, len(next.Groups))
 	groupOrder := make([]string, 0, len(next.Groups)+1)
 	seenGroups := make(map[string]struct{}, len(next.Groups)+1)
 	seenInstances := make(map[string]struct{}, len(instances))
 	for _, groupID := range next.GroupOrder {
-		if groupID == persistence.UngroupedConnectionInstanceGroupID {
+		if groupID == domain.UngroupedConnectionInstanceGroupID {
 			if _, seen := seenGroups[groupID]; !seen {
 				groupOrder = append(groupOrder, groupID)
 				seenGroups[groupID] = struct{}{}
@@ -113,8 +116,8 @@ func normalizeConnectionInstanceLayout(saved persistence.ConnectionInstanceLayou
 		groupOrder = append(groupOrder, group.GroupID)
 		seenGroups[group.GroupID] = struct{}{}
 	}
-	if _, seen := seenGroups[persistence.UngroupedConnectionInstanceGroupID]; !seen {
-		groupOrder = append(groupOrder, persistence.UngroupedConnectionInstanceGroupID)
+	if _, seen := seenGroups[domain.UngroupedConnectionInstanceGroupID]; !seen {
+		groupOrder = append(groupOrder, domain.UngroupedConnectionInstanceGroupID)
 	}
 
 	ungrouped := cleanInstanceIDs(next.UngroupedConnectionInstanceIDs, available, seenInstances)
@@ -134,6 +137,9 @@ func normalizeConnectionInstanceLayout(saved persistence.ConnectionInstanceLayou
 }
 
 func cleanInstanceIDs(ids []string, available map[string]struct{}, seen map[string]struct{}) []string {
+	if ids == nil {
+		return nil
+	}
 	cleaned := make([]string, 0, len(ids))
 	for _, id := range ids {
 		if _, ok := available[id]; !ok {
@@ -152,7 +158,10 @@ func cleanInstanceIDs(ids []string, available map[string]struct{}, seen map[stri
 	return cleaned
 }
 
-func instanceIDs(instances []connection.Summary) []string {
+func instanceIDs(instances []ports.ConnectionInstanceSummary) []string {
+	if instances == nil {
+		return nil
+	}
 	ids := make([]string, 0, len(instances))
 	for _, instance := range instances {
 		ids = append(ids, instance.ID)
@@ -160,14 +169,14 @@ func instanceIDs(instances []connection.Summary) []string {
 	return ids
 }
 
-func flattenConnectionInstanceLayout(layout persistence.ConnectionInstanceLayout) []string {
+func flattenConnectionInstanceLayout(layout domain.ConnectionInstanceLayout) []string {
 	groups := make(map[string][]string, len(layout.Groups))
 	for _, group := range layout.Groups {
 		groups[group.GroupID] = group.ConnectionInstanceIDs
 	}
 	ids := make([]string, 0)
 	for _, groupID := range layout.GroupOrder {
-		if groupID == persistence.UngroupedConnectionInstanceGroupID {
+		if groupID == domain.UngroupedConnectionInstanceGroupID {
 			ids = append(ids, layout.UngroupedConnectionInstanceIDs...)
 		} else {
 			ids = append(ids, groups[groupID]...)
@@ -176,6 +185,6 @@ func flattenConnectionInstanceLayout(layout persistence.ConnectionInstanceLayout
 	return ids
 }
 
-func hasUserConnectionInstanceGroups(layout persistence.ConnectionInstanceLayout) bool {
+func hasUserConnectionInstanceGroups(layout domain.ConnectionInstanceLayout) bool {
 	return len(layout.Groups) > 0
 }

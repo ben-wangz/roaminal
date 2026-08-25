@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -38,9 +37,9 @@ func (s *Session) parseMarkersLocked(chunk []byte) []byte {
 			title := truncateUTF8(string(remainder[len(titlePrefix):len(titlePrefix)+endRel]), 512)
 			s.meta.AutomaticTitle = title
 			s.meta.SyncEffectiveTitle()
-			s.meta.UpdatedAt = time.Now().UTC()
-			if s.manager.store != nil && !s.ephemeral {
-				_ = s.manager.store.SaveConnectionInstance(s.meta)
+			s.meta.UpdatedAt = s.manager.now().UTC()
+			if s.manager.hasPersistence() && !s.ephemeral {
+				_ = s.manager.saveMeta(s.meta)
 			}
 			s.broadcastMetaLocked()
 			cleaned.Write(remainder[:len(titlePrefix)+endRel+1])
@@ -96,8 +95,8 @@ func (s *Session) applyMarkerLocked(marker string) {
 		if decoded, err := decodeMarker(value); err == nil && len(decoded) <= 4096 {
 			if path := string(decoded); filepath.IsAbs(path) {
 				s.meta.Cwd = path
-				s.meta.UpdatedAt = time.Now().UTC()
-				_ = s.manager.store.SaveConnectionInstance(s.meta)
+				s.meta.UpdatedAt = s.manager.now().UTC()
+				_ = s.manager.saveMeta(s.meta)
 				s.broadcastMetaLocked()
 			}
 		}
@@ -107,11 +106,11 @@ func (s *Session) applyMarkerLocked(marker string) {
 			if strings.Contains(command, "_roaminal_") || strings.Contains(command, "ROAMINAL_") {
 				return
 			}
-			id, _ := newID()
-			now := time.Now().UTC()
+			id, _ := s.manager.newID()
+			now := s.manager.now().UTC()
 			s.currentExecID = id
 			s.currentExec = &executionRecord{Command: command, StartedAt: now}
-			s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "started", "executionId": id, "command": command, "startedAt": now}))
+			s.broadcastMessageLocked(executionStartedStreamMessage(id, command, now))
 		}
 	case "finish":
 		if s.currentExec == nil {
@@ -122,17 +121,17 @@ func (s *Session) applyMarkerLocked(marker string) {
 			code = 0
 		}
 		s.currentExec.ExitCode = &code
-		s.currentExec.CompletedAt = time.Now().UTC()
+		s.currentExec.CompletedAt = s.manager.now().UTC()
 		s.currentExec.DurationMs = s.currentExec.CompletedAt.Sub(s.currentExec.StartedAt).Milliseconds()
 		record := *s.currentExec
-		s.meta.UpdatedAt = time.Now().UTC()
+		s.meta.UpdatedAt = s.manager.now().UTC()
 		if s.controlOwner == nil {
 			s.attention = true
 		}
-		if s.manager.store != nil && !s.ephemeral {
-			_ = s.manager.store.SaveConnectionInstance(s.meta)
+		if s.manager.hasPersistence() && !s.ephemeral {
+			_ = s.manager.saveMeta(s.meta)
 		}
-		s.broadcastLocked(message(map[string]any{"type": "execution", "phase": "completed", "executionId": s.currentExecID, "entry": record}))
+		s.broadcastMessageLocked(executionCompletedStreamMessage(s.currentExecID, record))
 		s.currentExec, s.currentExecID = nil, ""
 	case "tmux-ready":
 		if s.onMarker != nil {

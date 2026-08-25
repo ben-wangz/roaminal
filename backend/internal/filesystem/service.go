@@ -5,14 +5,16 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"io"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/connection"
+	systemclock "github.com/ben-wangz/roaminal/backend/internal/clock"
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/random"
 )
 
 const (
@@ -26,34 +28,66 @@ const (
 	maxContentStream      = 512 << 20
 )
 
-type RemoteExecutor interface {
-	Summaries() []connection.Summary
-	RunRemote(context.Context, string, connection.RemoteCommand) (connection.RemoteResult, error)
-	OpenRemote(context.Context, string, connection.RemoteCommand) (io.ReadCloser, error)
-	RemoteTransferInfo(string) (connection.RemoteTransferInfo, error)
-}
+type RemoteExecutor = ports.RemoteExecutor
 
 type Service struct {
-	executor RemoteExecutor
-	options  *connectionoptions.Store
-	now      func() time.Time
+	remote  ports.RemoteFileSystem
+	options *connectionoptions.Store
+	clock   ports.Clock
+	random  ports.RandomSource
+	now     func() time.Time
 
-	mu        sync.Mutex
-	failures  map[string]time.Time
-	snapshots map[string]DirectorySnapshot
-	uploads   map[string]*uploadJob
-	transfers map[string]transferCapability
+	mu          sync.Mutex
+	failures    map[string]time.Time
+	snapshots   map[string]DirectorySnapshot
+	uploads     map[string]*uploadJob
+	transfers   map[string]transferCapability
+	uploadRepo  ports.UploadRepository
+	stagingRoot string
 }
 
-func New(executor RemoteExecutor, options *connectionoptions.Store) *Service {
+type Dependencies struct {
+	Clock  ports.Clock
+	Random ports.RandomSource
+}
+
+func New(executor RemoteExecutor, options *connectionoptions.Store, dependencies ...Dependencies) *Service {
+	return NewWithRemote(newRemoteFileSystemAdapter(executor), options, nil, "", dependencies...)
+}
+
+func NewWithRepositories(executor RemoteExecutor, options *connectionoptions.Store, uploadRepo ports.UploadRepository, stateRoot string, dependencies ...Dependencies) *Service {
+	return NewWithRemote(newRemoteFileSystemAdapter(executor), options, uploadRepo, stateRoot, dependencies...)
+}
+
+func NewWithRemote(remote ports.RemoteFileSystem, options *connectionoptions.Store, uploadRepo ports.UploadRepository, stateRoot string, dependencies ...Dependencies) *Service {
+	deps := Dependencies{Clock: systemclock.System{}, Random: random.CryptoSource{}}
+	if len(dependencies) > 0 {
+		if dependencies[0].Clock != nil {
+			deps.Clock = dependencies[0].Clock
+		}
+		if dependencies[0].Random != nil {
+			deps.Random = dependencies[0].Random
+		}
+	}
+	if uploadRepo == nil {
+		uploadRepo = newMemoryUploadRepository()
+	}
+	stagingRoot := ""
+	if stateRoot != "" {
+		stagingRoot = filepath.Join(stateRoot, "uploads")
+	}
 	return &Service{
-		executor:  executor,
-		options:   options,
-		now:       time.Now,
-		failures:  make(map[string]time.Time),
-		snapshots: make(map[string]DirectorySnapshot),
-		uploads:   make(map[string]*uploadJob),
-		transfers: make(map[string]transferCapability),
+		remote:      remote,
+		options:     options,
+		clock:       deps.Clock,
+		random:      deps.Random,
+		now:         deps.Clock.Now,
+		failures:    make(map[string]time.Time),
+		snapshots:   make(map[string]DirectorySnapshot),
+		uploads:     make(map[string]*uploadJob),
+		transfers:   make(map[string]transferCapability),
+		uploadRepo:  uploadRepo,
+		stagingRoot: stagingRoot,
 	}
 }
 
@@ -63,7 +97,10 @@ func (s *Service) Root(ctx context.Context, id string) (RootContext, error) {
 	}
 	requestCtx, cancel := context.WithTimeout(ctx, rootRequestTimeout)
 	defer cancel()
-	summary, err := s.summary(id)
+	if s.remote == nil {
+		return RootContext{}, ErrNoTransport
+	}
+	summary, err := s.remote.ConnectionInstance(id)
 	if err != nil {
 		return RootContext{}, err
 	}
@@ -80,17 +117,10 @@ func (s *Service) Root(ctx context.Context, id string) (RootContext, error) {
 	if summary.TmuxEnabled && summary.TmuxSessionName != "" && !s.tmuxFailureCached(id) {
 		for attempt := 0; attempt < 2; attempt++ {
 			probeCtx, probeCancel := context.WithTimeout(requestCtx, rootProbeTimeout)
-			result, probeErr := s.executor.RunRemote(probeCtx, id, connection.RemoteCommand{
-				Script:      tmuxRootScript,
-				Args:        []string{summary.TmuxSessionName},
-				OutputLimit: 16 << 10,
-				Timeout:     rootProbeTimeout,
-			})
+			result, probeErr := s.remote.ProbeTmuxRoot(probeCtx, id, summary.TmuxSessionName)
 			probeCancel()
 			if probeErr == nil {
-				if absolute, parseErr := parseRootOutput(result.Output); parseErr == nil {
-					return s.makeRoot(id, absolute, "tmux", "current", summary.TmuxSessionName), nil
-				}
+				return s.makeRoot(id, result.AbsolutePath, result.Source, result.Status, summary.TmuxSessionName), nil
 			}
 			if attempt == 0 {
 				select {
@@ -112,17 +142,10 @@ func (s *Service) Root(ctx context.Context, id string) (RootContext, error) {
 		}
 	}
 	configuredCtx, configuredCancel := context.WithTimeout(requestCtx, rootProbeTimeout)
-	result, configuredErr := s.executor.RunRemote(configuredCtx, id, connection.RemoteCommand{
-		Script:      configuredRootScript,
-		Args:        []string{pwd},
-		OutputLimit: 16 << 10,
-		Timeout:     rootProbeTimeout,
-	})
+	result, configuredErr := s.remote.ProbeConfiguredRoot(configuredCtx, id, pwd)
 	configuredCancel()
 	if configuredErr == nil {
-		if absolute, parseErr := parseRootOutput(result.Output); parseErr == nil {
-			return s.makeRoot(id, absolute, "configured", "fallback", summary.TmuxSessionName), nil
-		}
+		return s.makeRoot(id, result.AbsolutePath, result.Source, result.Status, summary.TmuxSessionName), nil
 	}
 	if errors.Is(requestCtx.Err(), context.DeadlineExceeded) || errors.Is(configuredErr, context.DeadlineExceeded) {
 		return RootContext{}, ErrTimeout
@@ -142,18 +165,6 @@ func (s *Service) rootForRevision(ctx context.Context, id, revision string) (Roo
 		return RootContext{}, &RootChangedError{Root: root}
 	}
 	return root, nil
-}
-
-func (s *Service) summary(id string) (connection.Summary, error) {
-	if s.executor == nil {
-		return connection.Summary{}, ErrNoTransport
-	}
-	for _, summary := range s.executor.Summaries() {
-		if summary.ID == id || summary.ConnectionInstanceID == id {
-			return summary, nil
-		}
-	}
-	return connection.Summary{}, ErrInstanceNotFound
 }
 
 func (s *Service) makeRoot(id, absolute, source, status, sessionName string) RootContext {
@@ -203,10 +214,10 @@ func mapRemoteError(err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return ErrTimeout
 	}
-	if errors.Is(err, connection.ErrRemoteInstanceNotFound) {
+	if errors.Is(err, ports.ErrRemoteInstanceNotFound) {
 		return ErrInstanceNotFound
 	}
-	if errors.Is(err, connection.ErrRemoteNoTransport) || errors.Is(err, connection.ErrTransportUnavailable) {
+	if errors.Is(err, ports.ErrRemoteNoTransport) || errors.Is(err, ports.ErrTransportUnavailable) {
 		return ErrNoTransport
 	}
 	return err

@@ -2,28 +2,18 @@ package auth
 
 import (
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 	"strings"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func newID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	raw[6] = (raw[6] & 0x0f) | 0x40
-	raw[8] = (raw[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:]), nil
-}
-
-func opaque(prefix string) (string, error) {
+func opaque(randomSource ports.RandomSource, prefix string) (string, error) {
 	var raw [32]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	if _, err := randomSource.Read(raw[:]); err != nil {
 		return "", err
 	}
 	return prefix + "_" + base64.RawURLEncoding.EncodeToString(raw[:]), nil
@@ -38,19 +28,19 @@ func passwordKey(password string) []byte { sum := sha256.Sum256([]byte(password)
 func (m *Manager) Challenge() (ChallengeResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	id, err := newID()
+	id, err := m.ids.NewID()
 	if err != nil {
 		return ChallengeResponse{}, err
 	}
 	var saltBytes [32]byte
-	if _, err := rand.Read(saltBytes[:]); err != nil {
+	if _, err := m.random.Read(saltBytes[:]); err != nil {
 		return ChallengeResponse{}, err
 	}
-	expires := time.Now().UTC().Add(ChallengeTTL)
+	expires := m.clock.Now().UTC().Add(ChallengeTTL)
 	value := challenge{ID: id, Salt: base64.RawURLEncoding.EncodeToString(saltBytes[:]), ExpiresAt: expires}
 	m.challenges[id] = value
 	for key, item := range m.challenges {
-		if !item.ExpiresAt.After(time.Now()) {
+		if !item.ExpiresAt.After(m.clock.Now()) {
 			delete(m.challenges, key)
 		}
 	}

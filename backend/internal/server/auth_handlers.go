@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -101,7 +100,5 @@ func (s *Server) currentSession(w http.ResponseWriter, _ *http.Request, sessionI
 }
 
 func (s *Server) authSessions(w http.ResponseWriter, _ *http.Request, sessionID string) {
-	writeJSON(w, 200, map[string]any{"sessions": s.auth.List(sessionID)})
+	writeJSON(w, 200, authSessionCollectionResponse{Sessions: s.auth.List(sessionID)})
 }
-
-var _ = json.RawMessage{}

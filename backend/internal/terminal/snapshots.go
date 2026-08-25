@@ -2,11 +2,11 @@ package terminal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"strconv"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
 func (s *Session) scheduleSnapshotLocked() {
@@ -14,7 +14,7 @@ func (s *Session) scheduleSnapshotLocked() {
 		return
 	}
 	if s.snapshotTimer == nil {
-		s.dirtySince = time.Now()
+		s.dirtySince = s.manager.now()
 		s.snapshotTimer = time.AfterFunc(250*time.Millisecond, func() { s.saveSnapshot() })
 	}
 }
@@ -51,10 +51,10 @@ func (s *Session) saveSnapshotWithClosed(force bool) error {
 		s.manager.storeDegraded(meta.ID, err)
 		return err
 	}
-	if s.manager.store == nil {
+	if !s.manager.hasPersistence() {
 		return nil
 	}
-	if err := s.manager.store.SaveSnapshot(meta.ID, persistence.SnapshotHeader{Cols: meta.Cols, Rows: meta.Rows, ScrollbackLines: s.manager.cfg.ScrollbackLines, ThroughSequence: through}, payload); err != nil {
+	if err := s.manager.repositories.saveSnapshot(ctx, domain.ConnectionInstanceID(meta.ID), domain.SnapshotHeader{Cols: meta.Cols, Rows: meta.Rows, ScrollbackLines: s.manager.cfg.ScrollbackLines, ThroughSequence: through}, payload); err != nil {
 		s.manager.storeDegraded(meta.ID, err)
 		return err
 	}
@@ -65,18 +65,17 @@ func (s *Session) saveSnapshotWithClosed(force bool) error {
 	s.mu.Unlock()
 	return nil
 }
-func (s *Session) broadcastLocked(data []byte) {
+func (s *Session) broadcastMessageLocked(message streamMessage) {
+	s.streamSequence++
+	data := message(streamEnvelope(s.streamSequence, s.manager.now().UTC(), s.manager.ids))
 	for client := range s.clients {
 		if !client.enqueue(data, true) {
 			delete(s.clients, client)
 		}
 	}
 }
-func message(value any) []byte { data, _ := json.Marshal(value); return data }
 func (m *Manager) storeDegraded(id string, err error) {
-	if m.store != nil {
-		m.store.MarkConnectionInstanceDegraded(id)
-	}
+	m.markPersistenceDegraded(id)
 	fmt.Printf("Roaminal persistence degraded: %v\n", err)
 }
 func (m *Manager) fail(err error) {
