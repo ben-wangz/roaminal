@@ -8,12 +8,13 @@ type Props = {
   draft: ConnectionDraft;
   keys: SSHKey[];
   busy: boolean;
+  optionsAvailable?: boolean;
   onDraft: (draft: ConnectionDraft) => void;
   onSave: (event: React.FormEvent) => void;
   onClose: () => void;
 };
 
-export function ConnectionDefinitionEditor({ editor, draft, keys, busy, onDraft, onSave, onClose }: Props) {
+export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsAvailable = true, onDraft, onSave, onClose }: Props) {
   const set = (key: keyof ConnectionDraft, value: string) => onDraft({ ...draft, [key]: value });
   return (
     <Modal onClose={onClose}>
@@ -126,8 +127,10 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, onDraft,
         </div>
         <details className="advanced-options">
           <summary>Advanced connection options</summary>
+          {!optionsAvailable && <small className="field-help" role="alert">Roaminal tmux and FileSystem options are unavailable. Refresh the source before editing them.</small>}
           <label className="checkbox-row">
             <input
+              disabled={!optionsAvailable}
               type="checkbox"
               checked={draft.tmuxEnabled}
               onChange={(event) => onDraft({ ...draft, tmuxEnabled: event.target.checked })}
@@ -137,7 +140,7 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, onDraft,
           <label>
             Tmux session name
             <input
-              disabled={!draft.tmuxEnabled}
+              disabled={!optionsAvailable || !draft.tmuxEnabled}
               required={draft.tmuxEnabled}
               pattern={'[A-Za-z][A-Za-z0-9_\\-]{0,63}'}
               maxLength={64}
@@ -150,6 +153,7 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, onDraft,
           <label>
             FileSystem fallback pwd
             <input
+              disabled={!optionsAvailable}
               required
               value={draft.filesystemPwd}
               onChange={(event) => set('filesystemPwd', event.target.value)}
@@ -167,7 +171,7 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, onDraft,
           <button className="text-button" type="button" onClick={onClose}>
             Cancel
           </button>
-          <button className="primary" type="submit" disabled={busy}>
+          <button className="primary" type="submit" disabled={busy || !optionsAvailable}>
             {busy ? 'Saving...' : 'Save connection'}
           </button>
         </footer>

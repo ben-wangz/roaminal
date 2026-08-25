@@ -38,42 +38,48 @@ func (m *Manager) refreshSources() {
 		return
 	}
 	current := map[string]bool{}
+	revisions := map[string]string{}
+	unresolved := map[string]bool{}
 	for _, definition := range collection.Definitions {
 		if definition.Type == "ssh" {
 			current[definition.HostAlias] = true
+			if revision, fingerprintErr := m.sourceRevision(definition.HostAlias); fingerprintErr == nil {
+				revisions[definition.HostAlias] = revision
+			} else {
+				// An inconclusive per-alias probe must not look like a deleted
+				// Host block. Keep the existing transport usable and retry on
+				// the next watcher tick.
+				unresolved[definition.HostAlias] = true
+			}
 		}
 	}
 	configUnavailable := !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing"
+	for _, warning := range collection.ConfigSource.Warnings {
+		if warning.Class == "include_ignored" {
+			// The repository cannot see aliases supplied by an Include. Treat
+			// missing aliases as inconclusive instead of deleting live state.
+			configUnavailable = true
+			break
+		}
+	}
 	m.transportPool.mu.Lock()
 	transports := make([]*Transport, 0, len(m.transportPool.transports))
 	for _, transport := range m.transportPool.transports {
 		transports = append(transports, transport)
-		shouldDrain := false
-		revision := transport.SourceRevision
-		if revision != collection.ETag {
-			if !transport.Draining {
-				transport.Draining = true
-				shouldDrain = true
-			}
-		}
-		transport.stopRequested = transport.stopRequested || shouldDrain
 	}
 	m.transportPool.mu.Unlock()
 	for _, transport := range transports {
-		m.transportPool.mu.Lock()
-		draining := transport.Draining
-		stopRequested := transport.stopRequested
-		m.transportPool.mu.Unlock()
-		if draining && stopRequested {
-			m.drainTransport(transport)
-			m.transportPool.mu.Lock()
-			transport.stopRequested = false
-			m.transportPool.mu.Unlock()
-		}
-		state := transportSourceState(transport, collection.ETag, configUnavailable, current)
+		state := transportSourceState(transport, revisions, unresolved, configUnavailable, current)
 		if state == "" {
 			continue
 		}
+		m.transportPool.mu.Lock()
+		// Source changes block new connection-instance reuse, but they do
+		// not tear down the control socket while existing instances still
+		// depend on it. The final owner/auxiliary release performs cleanup.
+		transport.Draining = true
+		transport.SourceState = state
+		m.transportPool.mu.Unlock()
 		for _, summary := range m.Summaries() {
 			if summary.SourceHostAlias != nil && *summary.SourceHostAlias == transport.Alias {
 				_ = m.instances.MarkSourceState(summary.ID, state)
@@ -82,22 +88,17 @@ func (m *Manager) refreshSources() {
 	}
 }
 
-func transportSourceState(transport *Transport, revision string, configUnavailable bool, current map[string]bool) string {
+func transportSourceState(transport *Transport, revisions map[string]string, unresolved map[string]bool, configUnavailable bool, current map[string]bool) string {
 	if !configUnavailable && !current[transport.Alias] {
 		return "deleted"
 	}
-	transportRevision := transport.SourceRevision
-	if transportRevision != revision {
+	if unresolved[transport.Alias] {
+		return ""
+	}
+	if revision, ok := revisions[transport.Alias]; ok && transport.SourceRevision != revision {
 		return "changed"
 	}
 	return ""
-}
-
-func (m *Manager) drainTransport(transport *Transport) {
-	if m.sshPath == "" {
-		return
-	}
-	_ = exec.Command(m.sshPath, "-F", "none", "-S", transport.ControlPath, "-O", "stop", "--", transport.Alias).Run()
 }
 
 func (m *Manager) stopTransport(_ context.Context, transport *Transport) {

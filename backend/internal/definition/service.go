@@ -3,6 +3,7 @@ package definition
 import (
 	"errors"
 	"os"
+	"sync"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
@@ -17,6 +18,7 @@ type Service struct {
 	configRepo *sshconfig.Repository
 	keys       *sshkey.Inventory
 	options    *connectionoptions.Store
+	mu         sync.Mutex
 }
 
 func New(configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store) *Service {
@@ -29,6 +31,8 @@ func (s *Service) Collection() (sshconfig.Collection, error) {
 	if !s.Available() {
 		return sshconfig.Collection{}, sshfs.ErrUnavailable
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	collection, err := s.configRepo.Collection(s.knownKeys())
 	if err != nil {
 		return sshconfig.Collection{}, err
@@ -41,13 +45,19 @@ func (s *Service) Create(ifMatch string, edit sshconfig.Edit, tmux *sshconfig.Tm
 	if !s.Available() {
 		return sshconfig.Collection{}, sshfs.ErrUnavailable
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	configSnapshot, optionsSnapshot, err := s.snapshots(tmux != nil || filesystem != nil)
+	if err != nil {
+		return sshconfig.Collection{}, err
+	}
 	collection, err := s.configRepo.Create(ifMatch, s.knownKeys(), edit)
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
 	if tmux != nil || filesystem != nil {
 		if err := s.SaveOptions(edit.HostAlias, tmux, filesystem); err != nil {
-			return sshconfig.Collection{}, err
+			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
 		}
 	}
 	s.enrich(&collection)
@@ -58,13 +68,32 @@ func (s *Service) Update(ifMatch, alias string, edit sshconfig.Edit, tmux *sshco
 	if !s.Available() {
 		return sshconfig.Collection{}, sshfs.ErrUnavailable
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	newAlias := edit.HostAlias
+	if newAlias == "" {
+		newAlias = alias
+	}
+	configSnapshot, optionsSnapshot, err := s.snapshots(s.options != nil && (tmux != nil || filesystem != nil || newAlias != alias))
+	if err != nil {
+		return sshconfig.Collection{}, err
+	}
 	collection, err := s.configRepo.Update(ifMatch, s.knownKeys(), alias, edit)
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
 	if tmux != nil || filesystem != nil {
-		if err := s.SaveOptions(alias, tmux, filesystem); err != nil {
-			return sshconfig.Collection{}, err
+		if err := s.SaveOptions(newAlias, tmux, filesystem); err != nil {
+			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+		}
+		if s.options != nil && newAlias != alias {
+			if err := s.options.RemoveAlias(alias); err != nil {
+				return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+			}
+		}
+	} else if s.options != nil && newAlias != alias {
+		if err := s.options.MoveAlias(alias, newAlias); err != nil {
+			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
 		}
 	}
 	s.enrich(&collection)
@@ -75,9 +104,20 @@ func (s *Service) Duplicate(ifMatch, alias, newAlias string) (sshconfig.Collecti
 	if !s.Available() {
 		return sshconfig.Collection{}, sshfs.ErrUnavailable
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	configSnapshot, optionsSnapshot, err := s.snapshots(s.options != nil)
+	if err != nil {
+		return sshconfig.Collection{}, err
+	}
 	collection, err := s.configRepo.Duplicate(ifMatch, s.knownKeys(), alias, newAlias)
 	if err != nil {
 		return sshconfig.Collection{}, err
+	}
+	if s.options != nil {
+		if err := s.options.CopyAlias(alias, newAlias); err != nil {
+			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+		}
 	}
 	s.enrich(&collection)
 	return collection, nil
@@ -87,15 +127,51 @@ func (s *Service) Delete(ifMatch, alias string) (sshconfig.Collection, error) {
 	if !s.Available() {
 		return sshconfig.Collection{}, sshfs.ErrUnavailable
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	configSnapshot, optionsSnapshot, err := s.snapshots(s.options != nil)
+	if err != nil {
+		return sshconfig.Collection{}, err
+	}
 	collection, err := s.configRepo.Delete(ifMatch, s.knownKeys(), alias)
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
-	if err := s.SaveTmuxOption(alias, nil); err != nil {
-		return sshconfig.Collection{}, err
+	if s.options != nil {
+		if err := s.options.RemoveAlias(alias); err != nil {
+			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+		}
 	}
 	s.enrich(&collection)
 	return collection, nil
+}
+
+func (s *Service) snapshots(withOptions bool) (sshconfig.Snapshot, connectionoptions.Snapshot, error) {
+	configSnapshot, err := s.configRepo.Snapshot(s.knownKeys())
+	if err != nil {
+		return sshconfig.Snapshot{}, connectionoptions.Snapshot{}, err
+	}
+	if !withOptions || s.options == nil {
+		return configSnapshot, connectionoptions.Snapshot{}, nil
+	}
+	optionsSnapshot, err := s.options.Snapshot()
+	if err != nil {
+		return sshconfig.Snapshot{}, connectionoptions.Snapshot{}, err
+	}
+	return configSnapshot, optionsSnapshot, nil
+}
+
+func (s *Service) rollback(configSnapshot sshconfig.Snapshot, optionsSnapshot connectionoptions.Snapshot, cause error) error {
+	var restoreErrors []error
+	if err := s.configRepo.Restore(configSnapshot); err != nil {
+		restoreErrors = append(restoreErrors, err)
+	}
+	if s.options != nil {
+		if err := s.options.Restore(optionsSnapshot); err != nil {
+			restoreErrors = append(restoreErrors, err)
+		}
+	}
+	return errors.Join(append([]error{cause}, restoreErrors...)...)
 }
 
 func (s *Service) SaveOptions(alias string, tmux *sshconfig.TmuxOptions, filesystem *sshconfig.FileSystemOptions) error {
@@ -112,8 +188,7 @@ func (s *Service) SaveOptions(alias string, tmux *sshconfig.TmuxOptions, filesys
 	if !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing" {
 		return errors.New("config cannot be read")
 	}
-	aliases := sshAliases(collection)
-	current, err := s.options.Load(aliases)
+	current, err := s.options.Load(nil)
 	if err != nil {
 		return err
 	}
@@ -139,7 +214,8 @@ func (s *Service) SaveOptions(alias string, tmux *sshconfig.TmuxOptions, filesys
 		}
 		options[alias] = value
 	}
-	return s.options.Save(options)
+	present := value.Enabled || value.Pwd != ""
+	return s.options.UpdateAlias(alias, value, present)
 }
 
 func (s *Service) SaveTmuxOption(alias string, value *sshconfig.TmuxOptions) error {
@@ -152,12 +228,7 @@ func (s *Service) SaveTmuxOption(alias string, value *sshconfig.TmuxOptions) err
 	if !s.Available() {
 		return sshfs.ErrUnavailable
 	}
-	current, err := s.options.Load(sshAliasesFromRepo(s.configRepo, s.knownKeys()))
-	if err != nil {
-		return err
-	}
-	delete(current.Options, alias)
-	return s.options.Save(current.Options)
+	return s.options.RemoveAlias(alias)
 }
 
 func (s *Service) Keys() []sshkey.Key {
@@ -198,12 +269,21 @@ func (s *Service) enrich(collection *sshconfig.Collection) {
 		return
 	}
 	if !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing" {
-		loaded, _ := s.options.Load(nil)
+		loaded, loadErr := s.options.Load(nil)
 		collection.TmuxOptionsSource = loaded.Source
+		if loadErr != nil && collection.TmuxOptionsSource.Reason == "" {
+			collection.TmuxOptionsSource.Reason = loadErr.Error()
+		}
 		return
 	}
-	loaded, _ := s.options.Load(sshAliases(*collection))
+	loaded, loadErr := s.options.Load(sshAliases(*collection))
 	collection.TmuxOptionsSource = loaded.Source
+	if loadErr != nil {
+		if collection.TmuxOptionsSource.Reason == "" {
+			collection.TmuxOptionsSource.Reason = loadErr.Error()
+		}
+		return
+	}
 	for index := range collection.Definitions {
 		definition := &collection.Definitions[index]
 		if option, ok := loaded.Options[definition.HostAlias]; ok && definition.Type == "ssh" {

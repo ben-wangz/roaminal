@@ -18,6 +18,7 @@ async function requestFilesystemResponse(path: string, init: RequestInit = {}): 
 			const filesystemError = new Error(error.message) as FileSystemError;
 			filesystemError.code = error.code;
 			filesystemError.status = error.status;
+			filesystemError.retryable = error.retryable;
 			const details = error.details && typeof error.details === 'object' ? error.details as { root?: unknown } : undefined;
 			filesystemError.root = details?.root as RootContext | undefined;
 			throw filesystemError;
@@ -34,6 +35,7 @@ async function requestFilesystemJSON<T>(path: string, init: RequestInit = {}): P
 			const filesystemError = new Error(error.message) as FileSystemError;
 			filesystemError.code = error.code;
 			filesystemError.status = error.status;
+			filesystemError.retryable = error.retryable;
 			const details = error.details && typeof error.details === 'object' ? error.details as { root?: unknown } : undefined;
 			filesystemError.root = details?.root as RootContext | undefined;
 			throw filesystemError;

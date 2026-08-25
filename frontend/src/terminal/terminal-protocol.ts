@@ -20,6 +20,11 @@ export type ConnectionInstanceSummary = {
   tmuxSessionName?: string;
   tmuxPrefixKey?: string;
   tmuxPrefixSource?: 'runtime' | 'fallback' | 'unsupported';
+  remoteCapability?: {
+    status: 'available' | 'source_stale' | 'source_deleted' | 'transport_unavailable' | 'unsupported' | 'unavailable' | string;
+    retryable: boolean;
+    reason?: string;
+  };
   agent?: AgentSummary;
 };
 
@@ -88,7 +93,7 @@ function isExitStatus(value: unknown): value is { exitCode: number | null; signa
 function isConnectionInstanceSummary(value: unknown): value is ConnectionInstanceSummary {
   const item = record(value);
   if (!item || !stringValue(item.connectionInstanceId) || !stringValue(item.createdAt) || !stringValue(item.updatedAt) || !stringValue(item.title) || !stringValue(item.cwd) || !numberValue(item.cols) || !numberValue(item.rows) || typeof item.attention !== 'boolean') return false;
-  return optionalString(item.connectionDefinitionId) && optionalString(item.type) && optionalString(item.purpose) && optionalString(item.lifecycle) && optionalString(item.sourceState) && optionalString(item.sourceHostAlias) && optionalString(item.titleMode) && (item.agent === undefined || record(item.agent) !== null);
+  return optionalString(item.connectionDefinitionId) && optionalString(item.type) && optionalString(item.purpose) && optionalString(item.lifecycle) && optionalString(item.sourceState) && optionalString(item.sourceHostAlias) && optionalString(item.titleMode) && (item.agent === undefined || record(item.agent) !== null) && (item.remoteCapability === undefined || record(item.remoteCapability) !== null);
 }
 
 function parseMessage(value: unknown): ServerMessage | null {

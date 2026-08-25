@@ -21,18 +21,33 @@ func TestShortPathTokenKeepsMuxSocketPathBounded(t *testing.T) {
 func TestTransportSourceStateStaysCurrentWhenConfigIsUnchanged(t *testing.T) {
 	transport := &Transport{Alias: "codespace", SourceRevision: "etag-1"}
 	current := map[string]bool{"codespace": true}
+	revisions := map[string]string{"codespace": "etag-1"}
+	unresolved := map[string]bool{}
 
-	if got := transportSourceState(transport, "etag-1", false, current); got != "" {
+	if got := transportSourceState(transport, revisions, unresolved, false, current); got != "" {
 		t.Fatalf("unchanged transport state = %q, want empty", got)
 	}
-	if got := transportSourceState(transport, "etag-2", false, current); got != "changed" {
+	if got := transportSourceState(transport, map[string]string{"codespace": "etag-2"}, unresolved, false, current); got != "changed" {
 		t.Fatalf("changed config state = %q, want changed", got)
 	}
-	if got := transportSourceState(transport, "etag-1", false, map[string]bool{}); got != "deleted" {
+	if got := transportSourceState(transport, revisions, unresolved, false, map[string]bool{}); got != "deleted" {
 		t.Fatalf("missing host state = %q, want deleted", got)
 	}
-	if got := transportSourceState(transport, "etag-1", true, map[string]bool{}); got != "" {
+	if got := transportSourceState(transport, revisions, unresolved, true, map[string]bool{}); got != "" {
 		t.Fatalf("unavailable config state = %q, want empty", got)
+	}
+	if got := transportSourceState(transport, nil, map[string]bool{"codespace": true}, false, current); got != "" {
+		t.Fatalf("inconclusive alias probe state = %q, want empty", got)
+	}
+}
+
+func TestSourceStaleTransportStillAcceptsAuxiliaryChannels(t *testing.T) {
+	transport := &Transport{Channels: 1, Draining: true}
+	if transportAcceptsReuse(transport) {
+		t.Fatal("source-stale transport must reject new reuse")
+	}
+	if !transportAcceptsAuxiliary(transport) {
+		t.Fatal("source-stale transport must keep existing auxiliary access")
 	}
 }
 

@@ -85,8 +85,8 @@ func (a *remoteFileSystemAdapter) OpenContent(ctx context.Context, id, root, rel
 	return a.executor.OpenRemote(ctx, id, ports.RemoteCommand{Script: contentScript, Args: []string{root, relative, strconv.FormatInt(start, 10), strconv.FormatInt(length, 10)}, Timeout: 15 * time.Minute})
 }
 
-func (a *remoteFileSystemAdapter) RemoteTransferInfo(id string) (ports.RemoteTransferInfo, error) {
-	return a.executor.RemoteTransferInfo(id)
+func (a *remoteFileSystemAdapter) AcquireRemoteTransfer(ctx context.Context, id string) (ports.RemoteTransferLease, error) {
+	return a.executor.AcquireRemoteTransfer(ctx, id)
 }
 
 func (a *remoteFileSystemAdapter) ResolveUploadTarget(ctx context.Context, id, root, relative string) (string, error) {

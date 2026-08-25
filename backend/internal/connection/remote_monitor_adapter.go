@@ -2,6 +2,7 @@ package connection
 
 import (
 	"context"
+	"log"
 	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
@@ -32,7 +33,7 @@ func (m *Manager) Probe(ctx context.Context, target ports.MonitorTarget, request
 	if target.OwnerID == "" || request.Script == "" || request.Nonce == "" {
 		return ports.MonitorProbeResult{}, ports.ErrRemoteNoTransport
 	}
-	transport, err := m.remoteTransport(target.OwnerID)
+	transport, err := m.ownerTransport(target.OwnerID)
 	if err != nil {
 		return ports.MonitorProbeResult{}, err
 	}
@@ -53,7 +54,7 @@ func (m *Manager) RemoteMonitor(ctx context.Context, id string) (monitor.RemoteM
 func (m *Manager) remoteTransport(id string) (*Transport, error) {
 	var summary Summary
 	for _, item := range m.Summaries() {
-		if item.ID == id {
+		if item.ID == id || item.ConnectionInstanceID == id {
 			summary = item
 			break
 		}
@@ -65,18 +66,50 @@ func (m *Manager) remoteTransport(id string) (*Transport, error) {
 		return nil, ports.ErrRemoteNoTransport
 	}
 	m.transportPool.mu.Lock()
-	transport := m.transportPool.instances[id]
-	if transport != nil && transport.OwnerID != id {
+	lookupID := summary.ID
+	transport := m.transportPool.instances[lookupID]
+	if transport != nil && transport.OwnerID != lookupID {
 		transport = m.transportPool.transports[transport.OwnerID]
 	}
-	if !transportAcceptsReuse(transport) {
+	if !transportAcceptsAuxiliary(transport) {
 		transport = nil
 	}
 	m.transportPool.mu.Unlock()
 	if transport == nil {
-		return nil, ports.ErrRemoteNoTransport
+		log.Printf("remote_transport_unavailable instance_id=%q source_alias=%q lifecycle=%q source_state=%q reason=%q", id, valueOrEmpty(summary.SourceHostAlias), summary.Lifecycle, summary.SourceState, "mapping_missing")
+		return nil, ports.ErrTransportUnavailable
+	}
+	if !m.transportReady(transport) {
+		log.Printf("remote_transport_unavailable instance_id=%q source_alias=%q lifecycle=%q source_state=%q reason=%q", id, valueOrEmpty(summary.SourceHostAlias), summary.Lifecycle, summary.SourceState, "control_socket_unavailable")
+		return nil, ports.ErrTransportUnavailable
 	}
 	return transport, nil
+}
+
+// ownerTransport resolves the opaque monitor owner directly. A derived
+// connection instance may outlive its owner, so Probe must not require the
+// owner to remain in the user-visible instance summary.
+func (m *Manager) ownerTransport(ownerID string) (*Transport, error) {
+	m.transportPool.mu.Lock()
+	transport := m.transportPool.transports[ownerID]
+	if !transportAcceptsAuxiliary(transport) {
+		transport = nil
+	}
+	m.transportPool.mu.Unlock()
+	if transport == nil {
+		return nil, ports.ErrTransportUnavailable
+	}
+	if !m.transportReady(transport) {
+		return nil, ports.ErrTransportUnavailable
+	}
+	return transport, nil
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (m *Manager) clearRemoteState(ownerID string) {

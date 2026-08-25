@@ -3,6 +3,7 @@ package connection
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -40,6 +41,10 @@ func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, co
 	if definition == nil {
 		return Summary{}, errors.New("connection definition not found")
 	}
+	sourceRevision, fingerprintErr := m.sourceRevision(alias)
+	if fingerprintErr != nil {
+		return Summary{}, fmt.Errorf("%w: %v", ErrTransportUnavailable, fingerprintErr)
+	}
 	aliases := make(map[string]bool)
 	for _, item := range collection.Definitions {
 		if item.Type == "ssh" {
@@ -48,7 +53,7 @@ func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, co
 	}
 	if options, optionsErr := m.tmuxOptions(aliases); optionsErr == nil {
 		if option, ok := options[alias]; ok && option.Enabled {
-			return m.createRemoteTmux(ctx, definitionID, alias, definition, collection.ETag, option, cols, rows, ownerID)
+			return m.createRemoteTmux(ctx, definitionID, alias, definition, sourceRevision, option, cols, rows, ownerID)
 		}
 	}
 	id, err := m.newID()
@@ -62,7 +67,7 @@ func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, co
 		return Summary{}, err
 	}
 	controlPath := filepath.Join(transportDir, "ctl")
-	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: collection.ETag, OwnerID: id, Channels: 1}
+	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: sourceRevision, SourceState: "current", OwnerID: id, Channels: 1}
 	aliasPtr := alias
 	now := m.clock.Now().UTC()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "live", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias}
@@ -81,9 +86,6 @@ func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, co
 		m.transportPool.mu.Unlock()
 		_ = os.RemoveAll(transportDir)
 		return Summary{}, err
-	}
-	if !m.transportReady(transport) {
-		transport.Draining = false
 	}
 	return result, nil
 }

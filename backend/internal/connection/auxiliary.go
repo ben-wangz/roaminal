@@ -17,7 +17,7 @@ const auxiliaryOutputLimit = 8 * 1024
 func (m *Manager) reserveAuxiliary(transport *Transport) bool {
 	m.transportPool.mu.Lock()
 	defer m.transportPool.mu.Unlock()
-	if !transportAcceptsReuse(transport) {
+	if !transportAcceptsAuxiliary(transport) {
 		return false
 	}
 	transport.AuxiliaryChannels++

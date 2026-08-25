@@ -113,15 +113,17 @@ func (s *Service) runUpload(ctx context.Context, id, conflictPolicy string, job 
 		job.cleanup()
 		return
 	}
-	info, err := s.remote.RemoteTransferInfo(id)
+	lease, err := s.remote.AcquireRemoteTransfer(ctx, id)
 	if err != nil {
-		job.fail(ErrNoTransport)
+		job.fail(mapRemoteError(err))
 		job.cleanup()
 		return
 	}
+	defer lease.Close()
+	info := lease.Info()
 	rsAvailable, probeErr := s.rsyncAvailable(ctx, id)
 	if probeErr != nil {
-		job.fail(ErrNoTransport)
+		job.fail(mapRemoteError(probeErr))
 		job.cleanup()
 		return
 	}

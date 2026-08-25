@@ -54,7 +54,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
     setBusy(true);
     try {
       const [definitionResult, keyResult] = await Promise.all([loadDefinitions(), loadKeys()]);
-      setDefinitions(definitionResult.data);
+      setDefinitions((previous) => preserveLastOptions(previous, definitionResult.data));
       setETag(definitionResult.etag);
       setKeys(keyResult.keys);
     } catch (error) {
@@ -78,6 +78,8 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
           .includes(normalized),
     );
   }, [definitions, query]);
+
+  const optionsAvailable = !definitions?.tmuxOptionsSource || definitions.tmuxOptionsSource.status === 'missing' || definitions.tmuxOptionsSource.status === 'available';
 
   function beginEditor(mode: 'create' | 'edit', definition?: ConnectionDefinition) {
     setEditor({ mode, definition });
@@ -278,6 +280,7 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
           draft={draft}
           keys={keys}
           busy={busy}
+          optionsAvailable={optionsAvailable}
           onDraft={setDraft}
           onSave={(event) => void saveDefinition(event)}
           onClose={() => setEditor(null)}
@@ -295,4 +298,18 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
       )}
     </section>
   );
+}
+
+function preserveLastOptions(previous: DefinitionCollection | null, next: DefinitionCollection): DefinitionCollection {
+  const sourceStatus = next.tmuxOptionsSource?.status;
+  if (!previous || !sourceStatus || sourceStatus === 'available' || sourceStatus === 'missing') return next;
+  const previousByAlias = new Map(previous.definitions.filter((item) => item.hostAlias).map((item) => [item.hostAlias as string, item]));
+  return {
+    ...next,
+    definitions: next.definitions.map((definition) => {
+      const old = definition.hostAlias ? previousByAlias.get(definition.hostAlias) : undefined;
+      if (!old) return definition;
+      return { ...definition, tmux: old.tmux, filesystem: old.filesystem };
+    }),
+  };
 }

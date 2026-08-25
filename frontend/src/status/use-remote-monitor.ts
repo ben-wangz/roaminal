@@ -29,7 +29,8 @@ export type RemoteMonitorState = {
 export function useRemoteMonitor(instance: ConnectionInstanceSummary | null): RemoteMonitorState {
   const instanceId = instance?.connectionInstanceId ?? null;
   const lifecycle = instance?.lifecycle ?? null;
-  const pollId = instance?.type === 'ssh' && lifecycle === 'live' ? instanceId : null;
+  const capability = instance?.remoteCapability;
+  const pollId = instance?.type === 'ssh' && lifecycle === 'live' && capability?.status !== 'unsupported' ? instanceId : null;
   const [state, setState] = useState<RemoteMonitorState>(() => ({
     snapshot: pollId ? (snapshotCache.get(pollId) ?? null) : null,
     requesting: Boolean(pollId),

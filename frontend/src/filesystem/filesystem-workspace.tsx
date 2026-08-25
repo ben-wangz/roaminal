@@ -31,7 +31,10 @@ export function FileSystemWorkspace({ instance, active, onToast }: Props) {
 
   if (!active) return null;
   if (!instance) return <div className="filesystem-unavailable"><AlertTriangle size={20} aria-hidden="true" /><span>Select an SSH connection instance to browse files.</span></div>;
-  if (rootError) return <div className="filesystem-unavailable"><AlertTriangle size={20} aria-hidden="true" /><div><strong>FileSystem unavailable</strong><small>{rootError.code || rootError.message}</small><button className="secondary" type="button" onClick={() => void reloadRoot()}><RefreshCw size={14} aria-hidden="true" /> Retry</button></div></div>;
+  if (rootError) {
+    const retryable = rootError.retryable !== false && rootError.code !== 'filesystem_no_transport' && rootError.code !== 'filesystem_unsupported';
+    return <div className="filesystem-unavailable"><AlertTriangle size={20} aria-hidden="true" /><div><strong>FileSystem unavailable</strong><small>{rootError.code || rootError.message}</small>{retryable ? <button className="secondary" type="button" onClick={() => void reloadRoot()}><RefreshCw size={14} aria-hidden="true" /> Retry</button> : <small>Open a fresh SSH connection instance to restore remote file access.</small>}</div></div>;
+  }
   if (!root) return <div className="filesystem-unavailable"><LoaderCircle className="spin" size={20} aria-hidden="true" /> Probing remote root...</div>;
 
   return (

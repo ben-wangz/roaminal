@@ -35,6 +35,17 @@ func (f *fakeExecutor) RemoteTransferInfo(_ string) (ports.RemoteTransferInfo, e
 	return ports.RemoteTransferInfo{Alias: "fixture", ControlPath: "/tmp/fixture", SSHPath: "ssh"}, nil
 }
 
+func (f *fakeExecutor) AcquireRemoteTransfer(_ context.Context, _ string) (ports.RemoteTransferLease, error) {
+	return fakeTransferLease{info: ports.RemoteTransferInfo{Alias: "fixture", ControlPath: "/tmp/fixture", SSHPath: "ssh"}}, nil
+}
+
+type fakeTransferLease struct {
+	info ports.RemoteTransferInfo
+}
+
+func (l fakeTransferLease) Info() ports.RemoteTransferInfo { return l.info }
+func (l fakeTransferLease) Close()                         {}
+
 func TestRootRetriesTmuxProbe(t *testing.T) {
 	alias := "fixture"
 	failures := 0

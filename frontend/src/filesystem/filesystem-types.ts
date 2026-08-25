@@ -2,6 +2,7 @@ export type FileSystemErrorCode =
   | 'filesystem_unsupported'
   | 'filesystem_instance_not_found'
   | 'filesystem_no_transport'
+  | 'filesystem_transport_unavailable'
   | 'filesystem_root_unavailable'
   | 'filesystem_root_changed'
   | 'filesystem_path_invalid'
@@ -25,6 +26,7 @@ export type FileSystemErrorCode =
 export type FileSystemError = Error & {
   code?: FileSystemErrorCode | string;
   status?: number;
+  retryable?: boolean;
   root?: RootContext;
 };
 

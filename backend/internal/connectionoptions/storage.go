@@ -71,9 +71,47 @@ func (s *Store) saveLocked(options map[string]Tmux) error {
 		}
 		value.Connections[alias] = settings
 	}
+	return s.saveFileLocked(value)
+}
+
+func (s *Store) saveFileLocked(value file) error {
+	if len(value.Connections) == 0 {
+		if info, err := os.Lstat(s.path); err == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				return ErrOptionsSymlink
+			}
+			if err := os.Remove(s.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	if value.FormatVersion == 0 {
+		value.FormatVersion = FormatVersion
+	}
 	data, err := yaml.Marshal(value)
 	if err != nil {
 		return err
+	}
+	if len(data) > MaxBytes {
+		return errors.New("options file exceeds size limit")
+	}
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+		return err
+	}
+	if info, err := os.Lstat(s.path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return ErrOptionsSymlink
+	}
+	if info, err := os.Lstat(s.path); err == nil {
+		if ok, reason := s.canWrite(info); !ok {
+			return fmt.Errorf("%w: %s", ErrOptionsNotWritable, reason)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	} else if ok, reason := s.canWrite(nil); !ok {
+		return fmt.Errorf("%w: %s", ErrOptionsNotWritable, reason)
 	}
 	return atomicWrite(s.path, data)
 }

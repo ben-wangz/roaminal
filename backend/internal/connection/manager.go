@@ -2,6 +2,7 @@ package connection
 
 import (
 	"context"
+	"sync"
 
 	"github.com/ben-wangz/roaminal/backend/internal/clock"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
@@ -71,6 +72,44 @@ func (m *Manager) RemoteTransferInfo(id string) (RemoteTransferInfo, error) {
 		return RemoteTransferInfo{}, ErrTransportUnavailable
 	}
 	return RemoteTransferInfo{Alias: transport.Alias, ControlPath: transport.ControlPath, SSHPath: m.sshPath}, nil
+}
+
+type remoteTransferLease struct {
+	manager   *Manager
+	transport *Transport
+	info      RemoteTransferInfo
+	once      sync.Once
+}
+
+func (l *remoteTransferLease) Info() RemoteTransferInfo { return l.info }
+
+func (l *remoteTransferLease) Close() {
+	l.once.Do(func() {
+		l.manager.releaseAuxiliary(l.transport)
+	})
+}
+
+func (m *Manager) AcquireRemoteTransfer(ctx context.Context, id string) (ports.RemoteTransferLease, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	transport, err := m.remoteTransport(id)
+	if err != nil {
+		return nil, err
+	}
+	if !m.reserveAuxiliary(transport) {
+		return nil, ErrTransportUnavailable
+	}
+	return &remoteTransferLease{
+		manager:   m,
+		transport: transport,
+		info:      RemoteTransferInfo{Alias: transport.Alias, ControlPath: transport.ControlPath, SSHPath: m.sshPath},
+	}, nil
 }
 
 var ErrRemoteInstanceNotFound = ports.ErrRemoteInstanceNotFound
@@ -169,6 +208,7 @@ func (m *Manager) finishInstance(ctx context.Context, id string, closed bool) {
 	m.transportPool.mu.Lock()
 	transport := m.transportPool.instances[id]
 	delete(m.transportPool.instances, id)
+	shouldStop := false
 	if transport != nil {
 		if transport.Channels > 0 {
 			transport.Channels--
@@ -176,12 +216,13 @@ func (m *Manager) finishInstance(ctx context.Context, id string, closed bool) {
 		if id == transport.OwnerID {
 			transport.OwnerClosed = true
 		}
-		if transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0 {
+		shouldStop = transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0
+		if shouldStop {
 			delete(m.transportPool.transports, transport.OwnerID)
 		}
 	}
 	m.transportPool.mu.Unlock()
-	if transport != nil && transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0 {
+	if transport != nil && shouldStop {
 		m.clearRemoteState(transport.OwnerID)
 		m.stopTransport(ctx, transport)
 	}

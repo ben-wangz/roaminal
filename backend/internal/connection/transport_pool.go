@@ -16,13 +16,13 @@ type Transport struct {
 	Alias              string
 	ControlPath        string
 	SourceRevision     string
+	SourceState        string
 	TmuxLaunchRevision string
 	OwnerID            string
 	Channels           int
 	AuxiliaryChannels  int
 	OwnerClosed        bool
 	Draining           bool
-	stopRequested      bool
 }
 
 func newTransportPool() *TransportPool {
@@ -31,4 +31,11 @@ func newTransportPool() *TransportPool {
 
 func transportAcceptsReuse(transport *Transport) bool {
 	return transport != nil && transport.Channels > 0 && !transport.Draining
+}
+
+// Auxiliary channels are deliberately allowed to use a source-stale
+// transport. Existing terminal instances must keep their FileSystem and
+// monitor channels until the owner and all derived instances have exited.
+func transportAcceptsAuxiliary(transport *Transport) bool {
+	return transport != nil && transport.Channels > 0
 }

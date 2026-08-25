@@ -82,6 +82,18 @@ type RemoteTransferInfo struct {
 	SSHPath     string
 }
 
+// RemoteTransferLease keeps the historical SSH control transport alive for
+// the lifetime of a transfer. The lease exposes only immutable command data;
+// transport ownership and release stay inside the connection adapter.
+type RemoteTransferLease interface {
+	Info() RemoteTransferInfo
+	Close()
+}
+
+type RemoteTransferProvider interface {
+	AcquireRemoteTransfer(context.Context, string) (RemoteTransferLease, error)
+}
+
 // RemoteFileEntry and RemoteRoot are adapter results. They deliberately do
 // not contain filesystem service policy such as relative-path normalization,
 // root revisions, pagination cursors, or upload state.
@@ -109,7 +121,7 @@ type RemoteFileSystem interface {
 	List(context.Context, string, string, string) ([]RemoteFileEntry, error)
 	Stat(context.Context, string, string, string) (RemoteFileEntry, error)
 	OpenContent(context.Context, string, string, string, int64, int64) (io.ReadCloser, error)
-	RemoteTransferInfo(string) (RemoteTransferInfo, error)
+	AcquireRemoteTransfer(context.Context, string) (RemoteTransferLease, error)
 	ResolveUploadTarget(context.Context, string, string, string) (string, error)
 	UploadConflicts(context.Context, string, string, string, []string) ([]string, error)
 	RsyncAvailable(context.Context, string) (bool, error)
@@ -118,6 +130,7 @@ type RemoteFileSystem interface {
 }
 
 type RemoteExecutor interface {
+	RemoteTransferProvider
 	ConnectionInstance(string) (ConnectionInstanceView, error)
 	RunRemote(context.Context, string, RemoteCommand) (RemoteResult, error)
 	OpenRemote(context.Context, string, RemoteCommand) (io.ReadCloser, error)

@@ -29,7 +29,7 @@ func (j *uploadJob) setStatus(update func(*UploadStatus)) {
 
 func (j *uploadJob) fail(err error) {
 	code := "filesystem_upload_failed"
-	if errors.Is(err, ErrNoTransport) {
+	if errors.Is(err, ErrNoTransport) || errors.Is(err, ErrTransportUnavailable) {
 		code = "filesystem_upload_transport_unavailable"
 	}
 	j.setStatus(func(status *UploadStatus) {

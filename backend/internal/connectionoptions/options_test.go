@@ -1,6 +1,7 @@
 package connectionoptions
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func TestPwdValidation(t *testing.T) {
 	}
 }
 
-func TestStoreRoundTripAndAliasCleanup(t *testing.T) {
+func TestStoreLoadIsSideEffectFreeAndAliasCleanupIsExplicit(t *testing.T) {
 	store := New(t.TempDir())
 	if err := store.Save(map[string]Tmux{"alpha": {Enabled: true, SessionName: "t"}, "stale": {Enabled: true, SessionName: "old"}}); err != nil {
 		t.Fatal(err)
@@ -44,8 +45,12 @@ func TestStoreRoundTripAndAliasCleanup(t *testing.T) {
 	if collection.Options["alpha"].SessionName != "t" || len(collection.Options) != 1 {
 		t.Fatalf("unexpected options: %#v", collection.Options)
 	}
-	if _, err := os.Stat(store.Path()); err != nil {
-		t.Fatal("reconciliation should retain the non-empty file")
+	data, err := os.ReadFile(store.Path())
+	if err != nil || !bytes.Contains(data, []byte("stale")) {
+		t.Fatalf("Load must not reconcile stale entries: %v", err)
+	}
+	if err := store.RemoveAlias("stale"); err != nil {
+		t.Fatal(err)
 	}
 	if err := store.Save(nil); err != nil {
 		t.Fatal(err)
@@ -100,5 +105,66 @@ func TestStoreRoundTripsFilesystemOnlyOption(t *testing.T) {
 	option := collection.Options["alpha"]
 	if option.Enabled || option.Pwd != "~/workspace" {
 		t.Fatalf("unexpected filesystem option: %#v", option)
+	}
+}
+
+func TestStoreMovesAndCopiesAliasesExplicitly(t *testing.T) {
+	store := New(t.TempDir())
+	if err := store.Save(map[string]Tmux{"alpha": {Enabled: true, SessionName: "tmux-a", Pwd: "~/work"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MoveAlias("alpha", "renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CopyAlias("renamed", "copy"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := loaded.Options["alpha"]; ok {
+		t.Fatal("old alias survived explicit move")
+	}
+	if loaded.Options["renamed"].SessionName != "tmux-a" || loaded.Options["copy"].Pwd != "~/work" {
+		t.Fatalf("explicit alias operations lost settings: %#v", loaded.Options)
+	}
+}
+
+func TestExplicitAliasDeletePreservesOtherRawEntries(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	data := "formatVersion: 2\nconnections:\n  empty:\n    tmux:\n      enabled: false\n  target:\n    filesystem:\n      pwd: ~/target\n"
+	if err := os.WriteFile(store.Path(), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RemoveAlias("target"); err != nil {
+		t.Fatal(err)
+	}
+	remaining, err := os.ReadFile(store.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(remaining, []byte("empty")) || bytes.Contains(remaining, []byte("target")) {
+		t.Fatalf("explicit delete changed unrelated raw entries: %s", remaining)
+	}
+}
+
+func TestUpdateAliasPreservesUnrelatedRawEntries(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	data := "formatVersion: 2\nconnections:\n  empty:\n    tmux:\n      enabled: false\n  target:\n    filesystem:\n      pwd: ~/target\n"
+	if err := os.WriteFile(store.Path(), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateAlias("target", Tmux{Pwd: "~/changed"}, true); err != nil {
+		t.Fatal(err)
+	}
+	remaining, err := os.ReadFile(store.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(remaining, []byte("empty")) || !bytes.Contains(remaining, []byte("~/changed")) || bytes.Contains(remaining, []byte("~/target")) {
+		t.Fatalf("single-alias update changed unrelated entries: %s", remaining)
 	}
 }

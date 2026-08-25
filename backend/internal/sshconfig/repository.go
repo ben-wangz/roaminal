@@ -41,6 +41,11 @@ type Repository struct {
 	key  [32]byte
 }
 
+type Snapshot struct {
+	Data   []byte
+	Exists bool
+}
+
 func New(root *sshfs.Root) *Repository {
 	r := &Repository{root: root}
 	if _, err := rand.Read(r.key[:]); err != nil {
@@ -96,6 +101,45 @@ func (r *Repository) Collection(knownKeys map[string]bool) (Collection, error) {
 	defs := []Definition{{ConnectionDefinitionID: "local", Type: "local", HostName: nil, User: nil, Port: nil, IdentityFileNames: []string{}, Warnings: []Warning{}, Capabilities: map[string]bool{"edit": false, "delete": false}, HostVerificationAssessment: "default"}}
 	defs = append(defs, doc.Definitions(knownKeys)...)
 	return Collection{ConfigSource: source, Definitions: defs, ETag: etag}, nil
+}
+
+// Snapshot captures the managed SSH config before a coordinated definition
+// mutation. The caller may restore it if its paired add-on write fails.
+func (r *Repository) Snapshot(knownKeys map[string]bool) (Snapshot, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	doc, _, source, err := r.Read(knownKeys)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if !source.Readable && source.Status != "missing" && r.root != nil {
+		if ensureErr := r.root.EnsureDirectory(); ensureErr == nil {
+			doc, _, source, err = r.Read(knownKeys)
+			if err != nil {
+				return Snapshot{}, err
+			}
+		}
+	}
+	if !source.Readable && source.Status != "missing" {
+		return Snapshot{}, fmt.Errorf("config cannot be snapshotted: %s", source.Reason)
+	}
+	return Snapshot{Data: append([]byte(nil), doc.Bytes...), Exists: source.Status != "missing"}, nil
+}
+
+// Restore atomically restores a previous SSH config snapshot.
+func (r *Repository) Restore(snapshot Snapshot) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.root == nil {
+		return sshfs.ErrUnavailable
+	}
+	if !snapshot.Exists {
+		if err := r.root.Remove("config"); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	return r.root.AtomicReplace("config", snapshot.Data, sshfs.ConfigMaxBytes)
 }
 
 func (r *Repository) Mutate(ifMatch string, knownKeys map[string]bool, mutation func(Document) ([]byte, error)) (Collection, error) {

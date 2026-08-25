@@ -77,7 +77,13 @@ or credentials.
     request with the old root revision. Verify the UI clears the old tree,
     reloads the returned root, and shows a concise root-changed notice. Make a
     failed tmux probe and verify a later request retries after the short failure
-    cache rather than remaining permanently unavailable.
+    cache rather than remaining permanently unavailable. Inject one transient
+    `filesystem_transport_unavailable`/retryable remote-monitor response while
+    keeping the connection instance live; verify bounded automatic retry
+    recovers both features without remounting or recreating the instance. A
+    non-retryable `filesystem_no_transport` response must keep Terminal usable,
+    suppress endless retry, and explain that a fresh SSH connection instance is
+    required.
 
 ## Pass gate
 

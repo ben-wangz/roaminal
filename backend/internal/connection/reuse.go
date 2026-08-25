@@ -35,17 +35,18 @@ func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, col
 	if source.ID == "" || source.Type != "ssh" || source.Lifecycle != "live" || source.SourceState != "current" {
 		return Summary{}, ErrTransportUnavailable
 	}
-	collection, err := m.configRepo.Collection(keySet(m.keys))
-	if err != nil {
-		return Summary{}, err
-	}
 	m.transportPool.mu.Lock()
 	revision := transport.SourceRevision
 	draining, alias := transport.Draining, transport.Alias
 	m.transportPool.mu.Unlock()
-	if draining || revision != collection.ETag {
+	currentRevision, fingerprintErr := m.sourceRevision(alias)
+	if fingerprintErr != nil {
+		return Summary{}, ErrTransportUnavailable
+	}
+	if draining || revision != currentRevision {
 		m.transportPool.mu.Lock()
 		transport.Draining = true
+		transport.SourceState = "changed"
 		m.transportPool.mu.Unlock()
 		return Summary{}, ErrTransportDraining
 	}

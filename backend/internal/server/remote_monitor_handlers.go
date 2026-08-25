@@ -21,6 +21,9 @@ func (s *Server) remoteMonitor(w http.ResponseWriter, r *http.Request, _ string)
 			writeError(w, http.StatusNotFound, "not found")
 		case errors.Is(err, ports.ErrRemoteNoTransport):
 			writeError(w, http.StatusConflict, "no remote transport", "no_remote_transport")
+		case errors.Is(err, ports.ErrTransportUnavailable):
+			retryable := true
+			writeCodedErrorWithRetry(w, http.StatusServiceUnavailable, "remote transport unavailable", "remote_transport_unavailable", nil, &retryable)
 		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			writeError(w, http.StatusRequestTimeout, "remote monitor timeout")
 		default:

@@ -85,6 +85,8 @@ func writeFilesystemError(w http.ResponseWriter, err error) {
 		status, code = http.StatusNotFound, "filesystem_instance_not_found"
 	case errors.Is(err, filesystem.ErrNoTransport):
 		status, code = http.StatusConflict, "filesystem_no_transport"
+	case errors.Is(err, filesystem.ErrTransportUnavailable):
+		status, code = http.StatusServiceUnavailable, "filesystem_transport_unavailable"
 	case errors.Is(err, filesystem.ErrRootUnavailable):
 		status, code = http.StatusConflict, "filesystem_root_unavailable"
 	case errors.Is(err, filesystem.ErrInvalidPath):
@@ -121,6 +123,11 @@ func writeFilesystemError(w http.ResponseWriter, err error) {
 		status, code = http.StatusInternalServerError, "filesystem_upload_failed"
 	case errors.Is(err, filesystem.ErrListingFailed):
 		status, code = http.StatusInternalServerError, "filesystem_listing_failed"
+	}
+	if errors.Is(err, filesystem.ErrTransportUnavailable) {
+		retryable := true
+		writeCodedErrorWithRetry(w, status, "filesystem transport temporarily unavailable", code, nil, &retryable)
+		return
 	}
 	writeError(w, status, code)
 }

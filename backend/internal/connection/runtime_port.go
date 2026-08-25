@@ -20,7 +20,50 @@ func (m *Manager) InitialCwd() string { return m.instances.InitialCwd() }
 
 func (m *Manager) RuntimeID() string { return m.instances.RuntimeID() }
 
-func (m *Manager) Summaries() []Summary { return m.instances.Summaries() }
+func (m *Manager) Summaries() []Summary {
+	result := m.instances.Summaries()
+	for index := range result {
+		result[index].RemoteCapability = m.remoteCapability(result[index])
+	}
+	return result
+}
+
+func (m *Manager) remoteCapability(summary Summary) ports.RemoteCapability {
+	if summary.Type != "ssh" || summary.Purpose != "interactive" {
+		return ports.RemoteCapability{Status: "unsupported", Reason: "remote auxiliary features require an interactive SSH connection instance"}
+	}
+	if summary.Lifecycle != "live" {
+		return ports.RemoteCapability{Status: "unavailable", Reason: "connection instance is not live"}
+	}
+	if m.transportPool == nil {
+		return ports.RemoteCapability{Status: "transport_unavailable", Retryable: true, Reason: "SSH control transport pool is unavailable"}
+	}
+	m.transportPool.mu.Lock()
+	transport := m.transportPool.instances[summary.ID]
+	if transport != nil && transport.OwnerID != summary.ID {
+		transport = m.transportPool.transports[transport.OwnerID]
+	}
+	if transport == nil {
+		m.transportPool.mu.Unlock()
+		return ports.RemoteCapability{Status: "transport_unavailable", Retryable: true, Reason: "SSH control transport is unavailable"}
+	}
+	if transport.Draining {
+		state := transport.SourceState
+		m.transportPool.mu.Unlock()
+		switch state {
+		case "deleted":
+			return ports.RemoteCapability{Status: "source_deleted", Reason: "the SSH host definition was deleted; existing channels remain usable until they exit"}
+		default:
+			return ports.RemoteCapability{Status: "source_stale", Reason: "the SSH host definition changed; existing channels remain usable"}
+		}
+	}
+	if !transportAcceptsAuxiliary(transport) {
+		m.transportPool.mu.Unlock()
+		return ports.RemoteCapability{Status: "transport_unavailable", Retryable: true, Reason: "SSH control transport is unavailable"}
+	}
+	m.transportPool.mu.Unlock()
+	return ports.RemoteCapability{Status: "available"}
+}
 
 func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summary, error) {
 	return m.instances.Create(ctx, cwd, cols, rows)

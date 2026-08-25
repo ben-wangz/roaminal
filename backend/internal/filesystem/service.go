@@ -217,8 +217,11 @@ func mapRemoteError(err error) error {
 	if errors.Is(err, ports.ErrRemoteInstanceNotFound) {
 		return ErrInstanceNotFound
 	}
-	if errors.Is(err, ports.ErrRemoteNoTransport) || errors.Is(err, ports.ErrTransportUnavailable) {
+	if errors.Is(err, ports.ErrRemoteNoTransport) {
 		return ErrNoTransport
+	}
+	if errors.Is(err, ports.ErrTransportUnavailable) {
+		return ErrTransportUnavailable
 	}
 	return err
 }

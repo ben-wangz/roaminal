@@ -56,7 +56,7 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 		return Summary{}, err
 	}
 	controlPath := filepath.Join(transportDir, "ctl")
-	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: sourceRevision, TmuxLaunchRevision: tmuxLaunchRevision(option), OwnerID: id, Channels: 1}
+	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: sourceRevision, SourceState: "current", TmuxLaunchRevision: tmuxLaunchRevision(option), OwnerID: id, Channels: 1}
 	aliasPtr := alias
 	now := m.clock.Now().UTC()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName}
