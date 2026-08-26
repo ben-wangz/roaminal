@@ -83,3 +83,31 @@ func TestDrainRejectsBadEventWithoutRetainingPayload(t *testing.T) {
 		t.Fatalf("unexpected rejected record: %s", rejected)
 	}
 }
+
+func TestWriteSpoolRepairsPrivateDirectoryPermissions(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, ".roaminal")
+	if err := os.Mkdir(root, 0755); err != nil {
+		t.Fatal(err)
+	}
+	info := tmux.Info{SessionID: "$0", SessionCreated: 1, SocketFingerprint: "0123456789abcdef"}
+	event := model.Event{
+		SchemaVersion: model.SchemaVersion,
+		AgentType:     "codex",
+		EventID:       "event-permissions",
+		EventName:     "PreToolUse",
+		Activity:      "running",
+		Sequence:      1,
+		Tmux:          model.Tmux{SessionID: info.SessionID, SessionCreated: info.SessionCreated, SocketFingerprint: info.SocketFingerprint},
+	}
+	if err := WriteSpool(home, event, info); err != nil {
+		t.Fatal(err)
+	}
+	rootInfo, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rootInfo.Mode().Perm() != 0700 {
+		t.Fatalf("got root mode %o, want 0700", rootInfo.Mode().Perm())
+	}
+}

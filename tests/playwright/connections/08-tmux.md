@@ -25,10 +25,10 @@ including remote-state preparation, before this case.
    another channel over the existing SSH transport while all instances point to
    the configured tmux session. Closing one view must not kill tmux or the other
    views.
-4. Verify the sidebar defaults to Tmux virtual-keyboard mode. Its prefix is the
-   effective remote server prefix (`C-k` from the remote `~/.tmux.conf`, native
-   `C-b`, no-config fallback `C-b`, or unsupported state), not a parse of the
-   local Roaminal config.
+4. Verify the Virtual Keyboard defaults to Common mode. Select Tmux manually
+   and verify its prefix is the effective remote server prefix (`C-k` from the
+   remote `~/.tmux.conf`, native `C-b`, no-config fallback `C-b`, or unsupported
+   state), not a parse of the local Roaminal config.
 5. Verify Esc, prefix+`o` (next pane), prefix+`d` (detach), and prefix+`"`
    (horizontal split) send the exact sequences for the effective prefix. A
    custom prefix must change these sequences together with the displayed labels.

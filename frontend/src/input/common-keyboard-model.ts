@@ -5,6 +5,7 @@ export type CommonKeyboardKey = {
   label: string;
   ariaLabel: string;
   value: string;
+  action?: 'paste';
 };
 
 export function commonKeyboardKeys(): CommonKeyboardKey[] {
@@ -13,6 +14,7 @@ export function commonKeyboardKeys(): CommonKeyboardKey[] {
     { id: 'tab', label: 'Tab', ariaLabel: 'Send Tab', value: tab },
     { id: 'enter', label: 'Enter', ariaLabel: 'Send Enter', value: enter },
     { id: 'control-c', label: '^C', ariaLabel: 'Send Control C', value: controlKey('c') },
+    { id: 'paste', label: 'Paste', ariaLabel: 'Paste clipboard into terminal', value: '', action: 'paste' },
     { id: 'pipe', label: '|', ariaLabel: 'Send pipe', value: literal('|') },
     { id: 'tilde', label: '~', ariaLabel: 'Send tilde', value: literal('~') },
     { id: 'slash', label: '/', ariaLabel: 'Send slash', value: literal('/') },

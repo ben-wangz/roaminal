@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,5 +29,38 @@ func TestInstallBinaryIfNeededRepairsOwnerPermissions(t *testing.T) {
 	actual, err := executableChecksum(destination)
 	if err != nil || actual != expected {
 		t.Fatalf("got checksum %q, want %q (err=%v)", actual, expected, err)
+	}
+}
+
+func TestEnsurePrivateDirRepairsPermissions(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(directory, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensurePrivateDir(directory); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0700 {
+		t.Fatalf("got mode %o, want 0700", info.Mode().Perm())
+	}
+}
+
+func TestInstallErrorCodeClassifiesStableFailures(t *testing.T) {
+	for _, test := range []struct {
+		message string
+		want    string
+	}{
+		{message: "private directory permissions are unsafe", want: "private_directory_unsafe"},
+		{message: "hooks file permissions are unsafe", want: "hooks_file_unsafe"},
+		{message: "permission denied", want: "filesystem_permission_denied"},
+		{message: "unexpected failure", want: "install_failed"},
+	} {
+		if got := installErrorCode(errors.New(test.message)); got != test.want {
+			t.Fatalf("installErrorCode(%q) = %q, want %q", test.message, got, test.want)
+		}
 	}
 }

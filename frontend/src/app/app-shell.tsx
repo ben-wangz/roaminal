@@ -19,6 +19,7 @@ import { useVirtualKeyboardState } from './use-virtual-keyboard-state';
 import { useAppShellLifecycle } from './use-app-shell-lifecycle';
 import { useAppController } from './app-controller';
 import { useConnectionInstanceController } from '../connections/connection-instance-controller';
+import { useMobileKeyboard } from '../input/use-mobile-keyboard';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
@@ -131,6 +132,11 @@ export function AppShell() {
   const activeRuntimeId = activeLaunchId || view.activeConnectionInstanceId;
   const activeInstance =
     connections.find((connection) => connection.connectionInstanceId === view.activeConnectionInstanceId) || null;
+  const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
+  const mobileKeyboard = useMobileKeyboard(
+    activeRuntime,
+    page === 'workspace' && workspaceMode === 'terminal' && Boolean(activeRuntime),
+  );
   const sidebarLayout = useMemo(() => normalizeConnectionInstanceLayout(connectionInstanceLayout, connections), [connectionInstanceLayout, connections]);
   const contextualMode = connectionController.contextualMode(activeInstance);
   const setContextualMode = useCallback((mode: Parameters<typeof connectionController.setContextualMode>[1]) => {
@@ -176,6 +182,7 @@ export function AppShell() {
       sidebarOpenButton={sidebarOpenButton}
       virtualKeyboardOpen={virtualKeyboardOpen}
       virtualKeyboardOpenButton={virtualKeyboardOpenButton}
+      nativeKeyboardOpen={mobileKeyboard.keyboardOpen}
       connections={connections}
       connectionInstanceLayout={sidebarLayout}
       loginSessionId={actions.currentAuthSessionId}

@@ -1,11 +1,12 @@
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { controlKey, literal, pageDown, pageUp, tmuxCommand, tmuxCopyMode, tmuxPrefix } from './terminal-input';
 
-export type ContextualMode = 'tmux' | 'codex';
+export type ContextualMode = 'common' | 'tmux' | 'codex';
 export type ContextualKey = { id: string; label: string; ariaLabel: string; value: string; disabled?: boolean; kind?: 'text' };
 
 export function defaultContextualMode(instance: ConnectionInstanceSummary | null): ContextualMode {
-  return instance?.tmuxEnabled ? 'tmux' : 'codex';
+  void instance;
+  return 'common';
 }
 
 function tmuxPrefixKey(instance: ConnectionInstanceSummary | null): string {
@@ -37,6 +38,7 @@ export function contextualKeys(instance: ConnectionInstanceSummary | null, mode:
       { id: 'quit', label: 'q', ariaLabel: 'Send q', value: literal('q') }
     ];
   }
+  if (mode === 'common') return [];
   return [
     { id: 'ctrl-t', label: 'Ctrl+T', ariaLabel: 'Send Ctrl+T', value: controlKey('t') },
     { id: 'page-up', label: 'PageUp', ariaLabel: 'Send PageUp', value: pageUp },

@@ -61,8 +61,22 @@ func ensurePrivateDir(path string) error {
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() || info.Mode().Perm() != 0700 {
+	if !info.IsDir() {
 		return errors.New("private directory permissions are unsafe")
+	}
+	if info.Mode().Perm() != 0700 {
+		// Existing user-owned directories can be repaired safely by removing
+		// group/other access. Symlinks and non-directories were rejected above.
+		if err := os.Chmod(path, 0700); err != nil {
+			return err
+		}
+		info, err = os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() || info.Mode().Perm() != 0700 {
+			return errors.New("private directory permissions are unsafe")
+		}
 	}
 	return nil
 }

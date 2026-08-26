@@ -5,18 +5,21 @@ desktop. Run serially for byte-capture fixtures.
 
 ## Procedure and assertions
 
-1. A normal local/SSH instance defaults to Codex; a `tmuxEnabled=true` instance
-   defaults to Tmux. Manual mode choices are isolated per instance for the page
-   lifetime and reset to defaults after reload. The Virtual Keyboard is opened
-   from the main topbar and renders as a bottom dock, never inside the
-   connection sidebar.
-2. Open the Common section and use a terminal byte-capture command/fixture.
+1. Every local/SSH instance defaults to Common, regardless of `tmuxEnabled`.
+   Manual mode choices are isolated per connection instance for the page
+   lifetime and reset to Common after reload. The Virtual Keyboard is opened
+   from the main topbar. On desktop it replaces the connection sidebar as a
+   left panel; on tablet and phone it is placed below the Terminal workspace.
+   Common, Tmux, and Codex are peer modes, and only the selected mode is
+   rendered.
+2. Select Common and use a terminal byte-capture command/fixture.
   Assert exact bytes for Esc `0x1b`, Tab `0x09`, Enter `0x0d`, Ctrl+C `0x03`,
    `|`, `~`, `/`, and the four arrow sequences. The four visible direction
    labels are `↑`, `↓`, `←`, and `→`; their accessible names remain descriptive.
-   The Common section is rendered exactly once and is shared by Tmux and Codex.
-   Measure the computed height of every Common/contextual button and verify it
-   is `12px` or less, with no horizontal overflow at 320px.
+   Verify the Paste button is present and reads clipboard text into the active
+   terminal exactly once. The Common section is rendered exactly once. Measure
+   every visible button and verify its label is fully readable, with no clipping
+   or horizontal overflow at 320px.
 3. Press Codex-specific keys and assert exact bytes: Ctrl+T `0x14`, PageUp
    `ESC [ 5 ~`, PageDown `ESC [ 6 ~`, and `q`. Press `commit and push`, `/model`,
    and `/compact`; each enters literal ASCII text with no newline/Enter and

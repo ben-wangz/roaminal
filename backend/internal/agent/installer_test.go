@@ -72,6 +72,21 @@ func TestHelperInstallErrorMapsOnlyKnownCodes(t *testing.T) {
 	}
 }
 
+func TestHelperInstallDiagnosticUsesStableCodes(t *testing.T) {
+	if got := helperInstallDiagnostic([]byte(`{"error":"private directory permissions are unsafe","code":"private_directory_unsafe"}`)); got != "private_directory_unsafe" {
+		t.Fatalf("diagnostic code = %q", got)
+	}
+	if got := helperInstallDiagnostic([]byte(`{"error":"private directory permissions are unsafe"}`)); got != "helper_install_failed" {
+		t.Fatalf("legacy diagnostic code = %q", got)
+	}
+	if got := helperInstallDiagnostic([]byte(`{"error":"anything","code":"/secret"}`)); got != "helper_install_failed" {
+		t.Fatalf("unknown diagnostic code = %q", got)
+	}
+	if got := helperInstallDiagnostic([]byte("not-json")); got != "remote_output_unstructured" {
+		t.Fatalf("unstructured diagnostic code = %q", got)
+	}
+}
+
 func TestRemoteAgentErrorPreservesTransportFailure(t *testing.T) {
 	err := remoteAgentError("agent_install_failed", 502, "install failed", ports.ErrTransportUnavailable)
 	var agentErr *Error

@@ -1,34 +1,35 @@
 .virtual-keyboard-dock {
-  flex: 0 0 auto;
-  display: grid;
-  gap: 4px;
+  flex: 0 0 300px;
+  width: 300px;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   overflow: auto;
-  padding: 4px 6px max(4px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border);
-  background: var(--shade-2);
+  padding: 12px 10px max(12px, env(safe-area-inset-bottom));
+  border-right: 1px solid var(--border);
+  background: var(--surface-1);
 }
-.virtual-keyboard-header { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 18px; }
-.virtual-keyboard-title, .virtual-keyboard-actions { display: flex; align-items: center; gap: 4px; }
-.virtual-keyboard-title { color: var(--text-bright); font-size: .74rem; }
-.virtual-keyboard-title span { color: var(--muted); font-size: .62rem; }
-.virtual-keyboard-actions { gap: 4px; }
-.virtual-keyboard-actions > .icon-button { width: 18px; height: 18px; font-size: 12px; }
-.contextual-mode { display: inline-flex; gap: 2px; }
-.contextual-mode button { width: auto; height: 16px; min-height: 16px; max-height: 16px; border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 0 2px; font-size: 12px; line-height: 12px; }
-.contextual-mode button.active { border-color: var(--cyan); color: var(--text-bright); background: rgba(42,161,152,.16); }
-.virtual-keyboard-status { color: var(--muted); font-size: .64rem; }
-.virtual-keyboard-sections { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 4px; }
-.virtual-keyboard-section { min-width: 0; display: grid; gap: 3px; }
-.virtual-keyboard-section-label { color: var(--muted); font-size: .61rem; text-transform: uppercase; letter-spacing: .04em; }
-.common-key-grid, .contextual-key-grid { display: grid; gap: 2px; }
-.common-key-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.contextual-key-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.common-key-grid button, .contextual-key-grid button { width: 100%; height: 12px; min-width: 0; min-height: 12px; max-height: 12px; display: flex; align-items: center; justify-content: center; gap: 2px; border: 1px solid var(--border); background: var(--base1); color: var(--text); padding: 0 2px; overflow: hidden; font-size: 12px; line-height: 12px; }
+.virtual-keyboard-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
+.virtual-keyboard-title { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--text-bright); font-size: .78rem; }
+.virtual-keyboard-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.virtual-keyboard-title span { flex: 0 0 auto; color: var(--muted); font-size: .68rem; }
+.virtual-keyboard-header > .icon-button { flex: 0 0 34px; }
+.virtual-keyboard-mode { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.virtual-keyboard-mode button { min-width: 0; min-height: 32px; border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 5px 8px; font-size: .75rem; line-height: 1.2; white-space: nowrap; }
+.virtual-keyboard-mode button:hover, .virtual-keyboard-mode button:focus-visible { border-color: var(--cyan); color: var(--text-bright); outline: 0; }
+.virtual-keyboard-mode button.active { border-color: var(--cyan); color: var(--text-bright); background: rgba(42,161,152,.16); }
+.virtual-keyboard-status { color: var(--muted); font-size: .7rem; line-height: 1.35; overflow-wrap: anywhere; }
+.virtual-keyboard-sections { min-width: 0; }
+.virtual-keyboard-section { min-width: 0; display: grid; gap: 8px; }
+.virtual-keyboard-section-label { color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
+.common-key-grid, .contextual-key-grid { min-width: 0; display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; }
+.common-key-grid button, .contextual-key-grid button { flex: 1 1 auto; min-width: max-content; max-width: 100%; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--border); background: var(--base1); color: var(--text); padding: 7px 10px; font-size: .78rem; line-height: 1.2; white-space: nowrap; }
 .common-key-grid button:hover:not(:disabled), .contextual-key-grid button:hover:not(:disabled), .common-key-grid button:focus-visible, .contextual-key-grid button:focus-visible { border-color: var(--cyan); color: var(--text-bright); outline: 0; }
 .common-key-grid button:disabled, .contextual-key-grid button:disabled { cursor: not-allowed; opacity: .42; }
-.common-key-grid kbd, .contextual-key-grid kbd { min-width: 0; overflow: hidden; font: inherit; text-overflow: ellipsis; white-space: nowrap; }
-.common-key-grid kbd { overflow: visible; text-overflow: clip; }
-@media (max-width: 640px) { .virtual-keyboard-sections { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 380px) {
-  .common-key-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.common-key-grid kbd, .contextual-key-grid kbd { display: inline-block; min-width: 0; overflow: visible; font: inherit; text-overflow: clip; white-space: nowrap; }
+
+@media (max-width: 800px) {
+  .virtual-keyboard-dock { order: 2; flex: 0 0 auto; width: 100%; max-height: min(44vh, 360px); border-top: 1px solid var(--border); border-right: 0; background: var(--shade-2); }
 }

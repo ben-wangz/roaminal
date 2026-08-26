@@ -18,6 +18,7 @@ import type { AppPage } from './app-state';
 import type { TerminalAppearance } from '../appearance/appearance-model';
 import { ShellTopbar } from './shell-topbar';
 import { WorkspacePage, type WorkspaceMode } from './workspace-page';
+import { VirtualKeyboardDock } from '../input/virtual-keyboard-dock';
 
 export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null;
 
@@ -28,6 +29,7 @@ type Props = {
   sidebarOpenButton: RefObject<HTMLButtonElement | null>;
   virtualKeyboardOpen: boolean;
   virtualKeyboardOpenButton: RefObject<HTMLButtonElement | null>;
+  nativeKeyboardOpen: boolean;
   connections: ConnectionInstanceSummary[];
   connectionInstanceLayout: ConnectionInstanceLayout;
   loginSessionId: string;
@@ -95,6 +97,7 @@ export function AppShellView({
   sidebarOpenButton,
   virtualKeyboardOpen,
   virtualKeyboardOpenButton,
+  nativeKeyboardOpen,
   connections,
   connectionInstanceLayout,
   loginSessionId,
@@ -186,6 +189,18 @@ export function AppShellView({
           onTerminate={onTerminate}
         />
       )}
+      {workspaceOpen && workspaceMode === 'terminal' && (
+        <VirtualKeyboardDock
+          open={virtualKeyboardOpen}
+          instance={activeInstance}
+          runtime={activeRuntime}
+          mode={contextualMode}
+          nativeKeyboardOpen={nativeKeyboardOpen}
+          onToggle={onToggleVirtualKeyboard}
+          onModeChange={onContextualModeChange}
+          onToast={onShowToast}
+        />
+      )}
       <main className={`main-panel ${workspaceOpen && !sidebarOpen ? 'expanded' : ''}`}>
         <ShellTopbar
           workspaceOpen={workspaceOpen}
@@ -221,10 +236,6 @@ export function AppShellView({
             onOpenManager={onOpenManager}
             mode={workspaceMode}
             onToast={onShowToast}
-            virtualKeyboardOpen={virtualKeyboardOpen}
-            contextualMode={contextualMode}
-            onToggleVirtualKeyboard={onToggleVirtualKeyboard}
-            onContextualModeChange={onContextualModeChange}
           />
         ) : page === 'connections' ? (
           <ConnectionManager

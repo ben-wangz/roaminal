@@ -76,3 +76,32 @@ func TestInstallHooksCreatesOneBackup(t *testing.T) {
 		t.Fatalf("unexpected hooks permissions: %v", err)
 	}
 }
+
+func TestInstallHooksRepairsPermissions(t *testing.T) {
+	home := t.TempDir()
+	directory := filepath.Join(home, ".codex")
+	if err := os.Mkdir(directory, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "hooks.json")
+	if err := os.WriteFile(path, []byte(`{"hooks":{}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallHooks(home); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("got mode %o, want 0600", info.Mode().Perm())
+	}
+	directoryInfo, err := os.Stat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if directoryInfo.Mode().Perm() != 0755 {
+		t.Fatalf("InstallHooks unexpectedly changed directory mode to %o", directoryInfo.Mode().Perm())
+	}
+}

@@ -20,7 +20,11 @@ explicitly listed.
    `/api/v2/connection-instances/<id>/agent/initializations` with `{}`. Poll the
    operation resource and verify the sidebar progresses through `initializing`
    to `needs_trust`.
-5. On the fixture, verify the canonical helper exists at
+5. Before confirming on a disposable fixture, create existing
+   `$HOME/.roaminal` and `$HOME/.codex` directories with mode `0755`, and an
+   existing `$HOME/.codex/hooks.json` with mode `0644`. Confirm initialization
+   repairs them to `0700` and `0600` respectively, then verify the canonical
+   helper exists at
    `$HOME/.roaminal/bin/roaminal-agent-hook`, the config is mode `0600`, and the
    user hook config contains exactly one canonical command per required Codex
    event while preserving unrelated handlers.

@@ -17,10 +17,12 @@ and phone landscape.
    Repeat after a visual viewport resize and while a focusout event is pending;
    no duplicate frame or input sent to an old runtime is allowed.
 3. Close the native keyboard and open the Virtual Keyboard from the topbar.
-   The dock is visible above the terminal and contains Common keys Esc, Tab,
-   Enter, Ctrl+C, `|`, `~`, `/`, and `↑`/`↓`/`←`/`→`. Verify those buttons emit
-   exact terminal sequences, every key is at most 12px tall, and the dock does
-   not overlap the terminal or safe-area inset.
+   The dock is visible below the terminal and contains the Common mode by
+   default, including Esc, Tab, Enter, Ctrl+C, Paste, `|`, `~`, `/`, and
+   `↑`/`↓`/`←`/`→`. Verify those buttons emit exact terminal sequences, labels
+   are fully readable, and the dock does not overlap the terminal or safe-area
+   inset. Switch to Tmux and Codex and verify only the selected mode's buttons
+   are rendered.
 4. When the native keyboard is open again, the Virtual Keyboard key content
    and remote monitor are hidden while the xterm helper remains the only input
    path. The saved Virtual Keyboard preference and monitor disclosure state are

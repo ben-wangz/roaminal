@@ -95,8 +95,8 @@ describe('connection instance controller', () => {
     const tmux = instance('tmux', { tmuxEnabled: true });
     const codex = instance('codex');
 
-    expect(controller.contextualMode(tmux)).toBe('tmux');
-    expect(controller.contextualMode(codex)).toBe('codex');
+    expect(controller.contextualMode(tmux)).toBe('common');
+    expect(controller.contextualMode(codex)).toBe('common');
     controller.setContextualMode(tmux, 'codex');
     controller.setContextualMode(codex, 'tmux');
 

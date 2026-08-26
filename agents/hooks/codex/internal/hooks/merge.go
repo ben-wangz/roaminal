@@ -127,8 +127,17 @@ func InstallHooks(home string) error {
 	} else if statErr != nil {
 		return statErr
 	} else {
-		if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+		if !info.Mode().IsRegular() {
 			return errors.New("hooks file permissions are unsafe")
+		}
+		if info.Mode().Perm() != 0600 {
+			if chmodErr := os.Chmod(path, 0600); chmodErr != nil {
+				return chmodErr
+			}
+			info, statErr = os.Lstat(path)
+			if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+				return errors.New("hooks file permissions are unsafe")
+			}
 		}
 		data, statErr = os.ReadFile(path)
 		if statErr != nil {

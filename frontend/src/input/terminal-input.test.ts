@@ -41,8 +41,8 @@ describe('terminal input model', () => {
   });
 
   it('uses safe defaults and disables unsupported tmux prefixes', () => {
-    expect(defaultContextualMode(instance())).toBe('tmux');
-    expect(defaultContextualMode(null)).toBe('codex');
+    expect(defaultContextualMode(instance())).toBe('common');
+    expect(defaultContextualMode(null)).toBe('common');
     const fallback = contextualKeys(instance({ tmuxPrefixSource: 'fallback', tmuxPrefixKey: 'a' }), 'tmux');
     expect(fallback[0].label).toBe('Ctrl+B');
     expect(fallback[0].value).toBe('\u0002');
@@ -63,9 +63,14 @@ describe('terminal input model', () => {
   it('keeps common keys in one shared key set', () => {
     const keys = commonKeyboardKeys();
     expect(keys.map((key) => key.id)).toEqual([
-      'escape', 'tab', 'enter', 'control-c', 'pipe', 'tilde', 'slash',
+      'escape', 'tab', 'enter', 'control-c', 'paste', 'pipe', 'tilde', 'slash',
       'arrow-up', 'arrow-down', 'arrow-left', 'arrow-right',
     ]);
+    expect(keys.find((key) => key.id === 'paste')).toMatchObject({
+      label: 'Paste',
+      ariaLabel: 'Paste clipboard into terminal',
+      action: 'paste',
+    });
     expect(keys.slice(-4).map((key) => key.label)).toEqual(['↑', '↓', '←', '→']);
     expect(keys.slice(-4).map((key) => key.ariaLabel)).toEqual([
       'Send Arrow Up', 'Send Arrow Down', 'Send Arrow Left', 'Send Arrow Right',

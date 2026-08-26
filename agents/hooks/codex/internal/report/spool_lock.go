@@ -21,8 +21,20 @@ func ensurePrivateDir(path string) error {
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
+	if !info.IsDir() {
 		return errors.New("private spool directory permissions are unsafe")
+	}
+	if info.Mode().Perm() != 0700 {
+		if err := os.Chmod(path, 0700); err != nil {
+			return err
+		}
+		info, err = os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() || info.Mode().Perm() != 0700 {
+			return errors.New("private spool directory permissions are unsafe")
+		}
 	}
 	return nil
 }

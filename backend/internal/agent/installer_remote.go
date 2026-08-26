@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -43,7 +44,7 @@ func (s *Service) installRemote(ctx context.Context, operationID, id string, bin
 	logAgentInfo("agent_component_install_started", operationID, id, "component_version=%q component_sha256=%q", request.ComponentVersion, request.ComponentSHA256)
 	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: installScript, Args: []string{suffix}, Stdin: bytes.NewReader(payload), Timeout: 15 * time.Second, OutputLimit: 8192})
 	if err != nil {
-		logAgentInfo("agent_component_install_failed", operationID, id, "duration_ms=%d error_type=%T", durationMillis(installStarted), err)
+		logAgentInfo("agent_component_install_failed", operationID, id, "duration_ms=%d error_type=%T exit_code=%d helper_error_code=%q stdout_bytes=%d stderr_bytes=%d", durationMillis(installStarted), err, commandExitCode(err), helperInstallDiagnostic(result.ErrorOutput), len(result.Output), len(result.ErrorOutput))
 		s.cleanupRemote(ctx, id, suffix)
 		if mapped := helperInstallError(result.ErrorOutput); mapped != nil {
 			return mapped
@@ -59,11 +60,21 @@ func (s *Service) installRemote(ctx context.Context, operationID, id string, bin
 }
 
 func helperInstallError(data []byte) error {
-	var value struct {
-		Error string `json:"error"`
-	}
+	var value helperFailure
 	if json.Unmarshal(data, &value) != nil {
 		return nil
+	}
+	switch value.Code {
+	case "endpoint_conflict":
+		return errf("agent_endpoint_conflict", 409, "The remote Agent is bound to another SSH endpoint.", nil)
+	case "binding_changed":
+		return errf("agent_binding_conflict", 409, "The remote Agent binding changed during initialization.", nil)
+	case "component_downgrade":
+		return errf("agent_install_failed", 409, "The remote Agent component cannot be downgraded.", nil)
+	case "hooks_file_unsafe", "hooks_config_invalid":
+		return errf("agent_hooks_invalid", 409, "The existing Codex Hooks configuration is invalid or unsafe.", nil)
+	case "invalid_install_request", "invalid_component_checksum", "component_checksum_mismatch":
+		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
 	}
 	switch value.Error {
 	case "endpoint_conflict":
@@ -79,6 +90,64 @@ func helperInstallError(data []byte) error {
 	default:
 		return nil
 	}
+}
+
+type helperFailure struct {
+	Error string `json:"error"`
+	Code  string `json:"code"`
+}
+
+func helperInstallDiagnostic(data []byte) string {
+	var value helperFailure
+	if json.Unmarshal(data, &value) != nil {
+		return "remote_output_unstructured"
+	}
+	if value.Code != "" {
+		if isKnownHelperInstallCode(value.Code) {
+			return value.Code
+		}
+		return "helper_install_failed"
+	}
+	switch value.Error {
+	case "endpoint_conflict":
+		return "endpoint_conflict"
+	case "binding_changed":
+		return "binding_changed"
+	case "component downgrade":
+		return "component_downgrade"
+	case "hooks file permissions are unsafe":
+		return "hooks_file_unsafe"
+	case "hooks must be an object", "hooks root must be an object":
+		return "hooks_config_invalid"
+	case "invalid install request":
+		return "invalid_install_request"
+	case "invalid component checksum":
+		return "invalid_component_checksum"
+	case "component checksum mismatch":
+		return "component_checksum_mismatch"
+	default:
+		return "helper_install_failed"
+	}
+}
+
+func isKnownHelperInstallCode(value string) bool {
+	switch value {
+	case "invalid_install_request", "invalid_component_checksum", "invalid_replacement_token",
+		"binding_changed", "endpoint_conflict", "component_downgrade", "private_directory_unsafe",
+		"installed_binary_unsafe", "installation_lock_timeout", "hooks_file_unsafe", "hooks_config_invalid",
+		"component_checksum_mismatch", "replacement_token_missing", "filesystem_permission_denied", "install_failed":
+		return true
+	default:
+		return false
+	}
+}
+
+func commandExitCode(err error) int {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	return -1
 }
 
 func (s *Service) cleanupRemote(ctx context.Context, id, suffix string) {

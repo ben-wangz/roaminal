@@ -16,9 +16,12 @@ Viewports: all five standard projects and 320 x 568.
    and refits, the Open sidebar button restores it, and `aria-expanded`,
    `aria-controls`, `aria-hidden`, and inert state remain consistent.
 4. In Terminal mode, open and collapse the Virtual Keyboard from the topbar.
-   Its bottom dock stays inside the main panel, never expands the connection
-   sidebar at the same time, and its key labels fit at 320px. Opening either
-   panel closes the other; switching to FileSystem hides the dock.
+   Above 800px it replaces the connection sidebar as a left-side panel; at
+   `<=800px` it is below the main Terminal workspace. It never expands the
+   connection sidebar at the same time, and its key labels fit at 320px.
+   Common, Tmux, and Codex are peer modes with Common selected by default;
+   only the selected mode is rendered. Opening either panel closes the other;
+   switching to FileSystem hides the dock.
 5. At tablet and phone widths, both system and remote monitor disclosures start
    collapsed; desktop starts expanded. Each disclosure is an independently
    focusable real button with an accessible name and correct `aria-expanded`
