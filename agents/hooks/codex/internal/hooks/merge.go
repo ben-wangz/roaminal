@@ -80,9 +80,7 @@ func readGroups(raw json.RawMessage) ([]map[string]json.RawMessage, error) {
 
 func canonicalGroup(sessionEnd bool) map[string]json.RawMessage {
 	handler := map[string]any{"type": "command", "command": Command, "timeout": 5}
-	if !sessionEnd {
-		handler["async"] = true
-	} else {
+	if sessionEnd {
 		handler["timeout"] = 3
 	}
 	encoded, _ := json.Marshal([]any{handler})

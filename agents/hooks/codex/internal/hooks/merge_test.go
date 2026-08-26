@@ -39,6 +39,65 @@ func TestMergeIsIdempotentAndPreservesCustomHook(t *testing.T) {
 	}
 }
 
+func TestMergeRemovesAsyncFromExistingCanonicalHooks(t *testing.T) {
+	input, err := json.Marshal(map[string]any{
+		"hooks": map[string]any{
+			"Stop": []any{
+				map[string]any{
+					"hooks": []any{
+						map[string]any{"type": "command", "command": Command, "timeout": 5, "async": true},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := Merge(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(merged, &root); err != nil {
+		t.Fatal(err)
+	}
+	events, ok := root["hooks"].(map[string]any)
+	if !ok {
+		t.Fatal("merged hooks are not an object")
+	}
+	canonicalCount := 0
+	for event, rawGroups := range events {
+		groups, ok := rawGroups.([]any)
+		if !ok {
+			t.Fatalf("%s hooks are not an array", event)
+		}
+		for _, rawGroup := range groups {
+			group, ok := rawGroup.(map[string]any)
+			if !ok {
+				t.Fatalf("%s hook group is not an object", event)
+			}
+			handlers, ok := group["hooks"].([]any)
+			if !ok {
+				t.Fatalf("%s hook handlers are not an array", event)
+			}
+			for _, rawHandler := range handlers {
+				handler, ok := rawHandler.(map[string]any)
+				if !ok || handler["command"] != Command {
+					continue
+				}
+				canonicalCount++
+				if _, exists := handler["async"]; exists {
+					t.Fatalf("%s canonical hook still contains async", event)
+				}
+			}
+		}
+	}
+	if canonicalCount != 9 {
+		t.Fatalf("expected one synchronous canonical hook for each event, got %d", canonicalCount)
+	}
+}
+
 func TestMergeRejectsNonObjectHooks(t *testing.T) {
 	for _, input := range []string{"null", `{"hooks":null}`, `{"hooks":[]}`} {
 		if _, err := Merge([]byte(input)); err == nil {

@@ -37,6 +37,36 @@ Origin values on the Upgrade request. The HTTP and WebSocket routes must use the
 same external host and TLS termination settings. Do not disable Origin checks;
 fix the proxy's WebSocket route instead.
 
+## FileSystem is unavailable
+
+FileSystem requires a live SSH connection instance with a source host alias.
+The root is first resolved from the active tmux pane, with one retry per
+request, and then falls back to the connection definition's
+`filesystem.pwd` (default `$HOME`). A
+`filesystem_no_transport` or
+`filesystem_transport_unavailable`
+response means the instance has no usable remote transport; reconnect the
+instance and resolve the FileSystem root again. A root revision conflict means
+the pane directory changed; resolve the root before listing or reading entries.
+
+## Agent initialization or messages fail
+
+Agent initialization requires a live SSH tmux connection and remote `tmux`
+and Codex. Check the Agent status response, then verify that the remote
+platform is Linux or macOS on `amd64` or
+`arm64`. The initialization operation ID and phase in
+the application log identify whether transport acquisition, platform detection,
+existing-component probing, upload, or installation failed. After a failed
+installation, inspect the remote component prerequisites and retry; repeated
+initialization for the same endpoint joins the active operation.
+
+Once initialized, the remote hook must be executable and its private binding
+file must remain mode `0600`. Events are accepted only with the
+matching Agent token and valid tmux target identity. The message center reports
+accepted hook events and Codex completion events; a missing message should be
+correlated with the hook log, the endpoint/tmux binding, and the server's
+Agent-event response.
+
 ## Browser diagnostics
 
 When client diagnostics are enabled, search the application log for

@@ -1,31 +1,31 @@
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ],
     "SessionEnd": [
       { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 3 } ] }
     ],
     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ],
     "PreToolUse": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ],
     "PermissionRequest": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ],
     "PostToolUse": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ],
     "PreCompact": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ],
     "PostCompact": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ],
     "Stop": [
-      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5, "async": true } ] }
+      { "hooks": [ { "type": "command", "command": "\"$HOME/.roaminal/bin/roaminal-agent-hook\" hook", "timeout": 5 } ] }
     ]
   }
 }

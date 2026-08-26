@@ -27,6 +27,12 @@ podman run --rm --name roaminal -p 9846:9846 \
   -v roaminal-workspace:/workspace "$IMAGE"
 ```
 
+The root `.containerignore` excludes Git metadata, dependency directories,
+frontend build output, test reports, and logs from the build context. The image
+contains the compiled Agent hook bundle under
+`/opt/roaminal/agents/hooks/codex`; do not depend on a host checkout at
+runtime.
+
 ## Helm install
 
 Helm 3.13+ and Kubernetes 1.25+ are required. Set `GHCR_USERNAME` and
