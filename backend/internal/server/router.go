@@ -29,6 +29,12 @@ func (s *Server) newAPIRouter() http.Handler {
 		http.MethodGet:  s.authenticatedRoute(s.heartbeatGet),
 		http.MethodPost: s.authenticatedRoute(s.heartbeatPost),
 	})
+	mux.Handle(api.HTTPPrefix+"/messages", methodRoute{
+		http.MethodGet: s.authenticatedRoute(s.listMessages),
+	})
+	mux.Handle(api.HTTPPrefix+"/messages/read-state", methodRoute{
+		http.MethodPut: s.authenticatedRoute(s.markMessagesRead),
+	})
 	mux.Handle(api.HTTPPrefix+"/connection-instances", methodRoute{
 		http.MethodGet:  s.authenticatedRoute(s.listConnectionInstances),
 		http.MethodPost: s.authenticatedRoute(s.createConnectionInstance),

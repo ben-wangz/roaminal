@@ -61,6 +61,7 @@ type Store struct {
 	Layout         Layout
 	degradedMu     sync.RWMutex
 	workspaceMu    sync.Mutex
+	messagesMu     sync.Mutex
 	degradedIDs    map[string]struct{}
 	globalError    bool
 }

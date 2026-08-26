@@ -217,6 +217,9 @@ export function sameHeartbeat(left: Heartbeat, right: Heartbeat): boolean {
     && left.runtime.bootId === right.runtime.bootId
     && left.runtime.persistenceDegraded === right.runtime.persistenceDegraded
     && left.runtime.scrollbackLines === right.runtime.scrollbackLines
+    && (left.messageState?.revision || 0) === (right.messageState?.revision || 0)
+    && (left.messageState?.latestSequence || 0) === (right.messageState?.latestSequence || 0)
+    && (left.messageState?.unreadCount || 0) === (right.messageState?.unreadCount || 0)
     && sameSystem(left.system, right.system);
 }
 

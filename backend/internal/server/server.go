@@ -14,6 +14,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
+	"github.com/ben-wangz/roaminal/backend/internal/messages"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/workspace"
@@ -39,6 +40,7 @@ type Server struct {
 	diagnostics       *clientdiag.Sink
 	agentProvisioning agent.ProvisioningService
 	agentTelemetry    agent.TelemetryService
+	messages          *messages.Service
 }
 
 type Dependencies struct {
@@ -58,6 +60,7 @@ type Dependencies struct {
 	FileSystem        *filesystem.Service
 	AgentProvisioning agent.ProvisioningService
 	AgentTelemetry    agent.TelemetryService
+	Messages          *messages.Service
 }
 
 // New constructs the complete HTTP application graph once. Optional feature
@@ -81,6 +84,7 @@ func New(deps Dependencies) *Server {
 	s.filesystem = deps.FileSystem
 	s.agentProvisioning = deps.AgentProvisioning
 	s.agentTelemetry = deps.AgentTelemetry
+	s.messages = deps.Messages
 	s.api = s.newAPIRouter()
 	s.handler = http.HandlerFunc(s.serve)
 	return s

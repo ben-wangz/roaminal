@@ -30,6 +30,11 @@ type heartbeatResponse struct {
 		PersistenceDegraded bool   `json:"persistenceDegraded"`
 		ScrollbackLines     int    `json:"scrollbackLines"`
 	} `json:"runtime"`
+	MessageState struct {
+		Revision       uint64 `json:"revision"`
+		LatestSequence uint64 `json:"latestSequence"`
+		UnreadCount    int    `json:"unreadCount"`
+	} `json:"messageState"`
 }
 
 func (s *Server) heartbeatGet(w http.ResponseWriter, _ *http.Request, sessionID string) {
@@ -67,5 +72,12 @@ func (s *Server) heartbeat(sessionID string) heartbeatResponse {
 	result.Runtime.BootID = s.bootID
 	result.Runtime.PersistenceDegraded = s.terms.PersistenceDegraded()
 	result.Runtime.ScrollbackLines = s.cfg.ScrollbackLines
+	if s.messages != nil {
+		if state, err := s.messages.State(); err == nil {
+			result.MessageState.Revision = state.Revision
+			result.MessageState.LatestSequence = state.LatestSequence
+			result.MessageState.UnreadCount = state.UnreadCount
+		}
+	}
 	return result
 }

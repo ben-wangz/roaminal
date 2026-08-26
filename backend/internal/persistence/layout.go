@@ -68,6 +68,9 @@ func newStore(root string) (*Store, error) {
 	if err := store.migrateLegacySessions(); err != nil {
 		return nil, err
 	}
+	if err := store.initializeMessages(); err != nil {
+		return nil, err
+	}
 	return store, nil
 }
 
@@ -88,6 +91,11 @@ func stateRootHasData(root string) (bool, error) {
 		return false, err
 	}
 	if _, err := os.Stat(filepath.Join(root, "workspace-layouts.json")); err == nil {
+		return true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if _, err := os.Stat(filepath.Join(root, "messages.json")); err == nil {
 		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, err

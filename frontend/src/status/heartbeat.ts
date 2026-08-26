@@ -1,6 +1,7 @@
 import { api } from '../auth/auth-client';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { ConnectionInstanceLayout } from '../connections/connection-instance-groups';
+import type { MessageStateProjection } from '../messages/message-api';
 
 export type Heartbeat = {
   connectionInstances: ConnectionInstanceSummary[];
@@ -16,6 +17,7 @@ export type Heartbeat = {
     memory: { totalBytes: number | null; usedBytes: number | null; freeBytes: number | null; currentBytes: number | null; workingSetBytes: number | null; limitBytes: number | null; usagePercent: number | null };
   };
   runtime: { bootId: string; persistenceDegraded: boolean; scrollbackLines: number };
+  messageState?: MessageStateProjection;
 };
 export async function heartbeat(signal?: AbortSignal): Promise<Heartbeat> {
   return api<Heartbeat>('/heartbeat', signal ? { signal } : {});

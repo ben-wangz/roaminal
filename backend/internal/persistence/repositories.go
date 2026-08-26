@@ -15,11 +15,12 @@ type Repositories struct {
 	TerminalSnapshots ports.TerminalSnapshotRepository
 	Workspace         ports.WorkspaceLayoutRepository
 	Upload            ports.UploadRepository
+	Messages          ports.MessageRepository
 }
 
 func NewRepositories(store *Store) Repositories {
 	adapter := &repositoryAdapter{store: store}
-	return Repositories{Auth: adapter, Connection: adapter, Audit: adapter, TerminalSnapshots: adapter, Workspace: adapter, Upload: adapter}
+	return Repositories{Auth: adapter, Connection: adapter, Audit: adapter, TerminalSnapshots: adapter, Workspace: adapter, Upload: adapter, Messages: adapter}
 }
 
 type repositoryAdapter struct{ store *Store }
@@ -213,3 +214,4 @@ func (a *repositoryAdapter) DeleteUpload(ctx context.Context, id string) error {
 }
 
 var _ ports.UploadRepository = (*repositoryAdapter)(nil)
+var _ ports.MessageRepository = (*repositoryAdapter)(nil)

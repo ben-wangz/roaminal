@@ -19,6 +19,8 @@ import type { TerminalAppearance } from '../appearance/appearance-model';
 import { ShellTopbar } from './shell-topbar';
 import { WorkspacePage, type WorkspaceMode } from './workspace-page';
 import { VirtualKeyboardDock } from '../input/virtual-keyboard-dock';
+import { MessageNoticeStack, MessagePopover } from '../messages/message-center';
+import type { useMessages } from '../messages/use-messages';
 
 export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null;
 
@@ -30,6 +32,8 @@ type Props = {
   virtualKeyboardOpen: boolean;
   virtualKeyboardOpenButton: RefObject<HTMLButtonElement | null>;
   nativeKeyboardOpen: boolean;
+  messageButtonRef: RefObject<HTMLButtonElement | null>;
+  messageCenter: ReturnType<typeof useMessages>;
   connections: ConnectionInstanceSummary[];
   connectionInstanceLayout: ConnectionInstanceLayout;
   loginSessionId: string;
@@ -98,6 +102,8 @@ export function AppShellView({
   virtualKeyboardOpen,
   virtualKeyboardOpenButton,
   nativeKeyboardOpen,
+  messageButtonRef,
+  messageCenter,
   connections,
   connectionInstanceLayout,
   loginSessionId,
@@ -209,6 +215,9 @@ export function AppShellView({
           virtualKeyboardOpen={virtualKeyboardOpen}
           virtualKeyboardOpenButton={virtualKeyboardOpenButton}
           workspaceMode={workspaceMode}
+          messageUnreadCount={messageCenter.state.unreadCount}
+          messagesOpen={messageCenter.state.popoverOpen}
+          messageButtonRef={messageButtonRef}
           connected={heartbeatConnected && Boolean(heartbeatState)}
           connectionName={connectionDisplayName(currentConnection || null, connections)}
           connectionInstanceId={activeInstance?.connectionInstanceId || null}
@@ -218,11 +227,30 @@ export function AppShellView({
           persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
           onOpenSidebar={onOpenSidebar}
           onToggleVirtualKeyboard={onToggleVirtualKeyboard}
+          onToggleMessages={messageCenter.togglePopover}
           onToggleSearch={onToggleSearch}
           onOpenConnections={onOpenConnections}
           onOpenAppearance={onOpenAppearance}
           onOpenAuthSessions={onOpenAuthSessions}
           onSignOut={onSignOut}
+        />
+        <MessagePopover
+          state={messageCenter.state}
+          connections={connections}
+          activeConnectionInstanceId={view.activeConnectionInstanceId}
+          bellRef={messageButtonRef}
+          onClose={messageCenter.closePopover}
+          onMarkRead={messageCenter.markRead}
+          onNavigate={onSelectConnection}
+          onLoadOlder={messageCenter.loadOlder}
+        />
+        <MessageNoticeStack
+          state={messageCenter.state}
+          connections={connections}
+          activeConnectionInstanceId={view.activeConnectionInstanceId}
+          onMarkRead={messageCenter.markRead}
+          onNavigate={onSelectConnection}
+          onDismissNotice={messageCenter.dismissNotice}
         />
         {page === 'workspace' ? (
           <WorkspacePage

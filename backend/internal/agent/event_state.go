@@ -32,6 +32,17 @@ func (s *Service) rememberEventLocked(endpointKey, eventID string, now time.Time
 	return false
 }
 
+func (s *Service) eventRememberedLocked(endpointKey, eventID string, now time.Time) bool {
+	items := s.eventIDs[endpointKey]
+	for id, seenAt := range items {
+		if now.Sub(seenAt) > 24*time.Hour {
+			delete(items, id)
+		}
+	}
+	_, exists := items[eventID]
+	return exists
+}
+
 func (s *Service) markComponentReady(endpointKey, sessionName, sessionID string, sessionCreated int64, version string) error {
 	return s.store.Update(endpointKey, func(record *EndpointRecord) error {
 		record.InstallationState = "ready"

@@ -25,6 +25,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
 	"github.com/ben-wangz/roaminal/backend/internal/frontend"
 	"github.com/ben-wangz/roaminal/backend/internal/identity"
+	"github.com/ben-wangz/roaminal/backend/internal/messages"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"github.com/ben-wangz/roaminal/backend/internal/random"
@@ -123,7 +124,8 @@ func run(cfg config.Config) error {
 		terminals.Shutdown(context.Background())
 		return err
 	}
-	agentService := agent.NewWithRepository(cfg, agent.OpenStore(store.Root), terminals, agent.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource})
+	messageService := messages.New(fileRepositories.Messages, idGenerator)
+	agentService := agent.NewWithRepository(cfg, agent.OpenStore(store.Root), terminals, agent.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource, Messages: messageService})
 	serverDependencies := server.Dependencies{
 		Config: cfg, Version: buildinfo.Version, BootID: bootID, Auth: authManager, Workspace: workspace.New(fileRepositories.Workspace),
 		Connections: terminals, Monitor: monitor.NewWithClock(clockSource), Worker: terminalWorker,
@@ -131,6 +133,7 @@ func run(cfg config.Config) error {
 		FileSystem:        filesystem.NewWithRepositories(terminals, connectionOptions, fileRepositories.Upload, cfg.StateDir, filesystem.Dependencies{Clock: clockSource, Random: randomSource}),
 		AgentProvisioning: agentService.Provisioning(),
 		AgentTelemetry:    agentService.Telemetry(),
+		Messages:          messageService,
 		IDs:               idGenerator, Clock: clockSource,
 	}
 	if err := serverDependencies.Validate(); err != nil {

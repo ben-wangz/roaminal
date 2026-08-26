@@ -20,6 +20,7 @@ import { useAppShellLifecycle } from './use-app-shell-lifecycle';
 import { useAppController } from './app-controller';
 import { useConnectionInstanceController } from '../connections/connection-instance-controller';
 import { useMobileKeyboard } from '../input/use-mobile-keyboard';
+import { useMessages } from '../messages/use-messages';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
@@ -137,6 +138,12 @@ export function AppShell() {
     activeRuntime,
     page === 'workspace' && workspaceMode === 'terminal' && Boolean(activeRuntime),
   );
+  const messageButtonRef = useRef<HTMLButtonElement>(null);
+  const messageCenter = useMessages({
+    auth,
+    heartbeatState: heartbeatState?.messageState || null,
+    nativeKeyboardOpen: mobileKeyboard.keyboardOpen,
+  });
   const sidebarLayout = useMemo(() => normalizeConnectionInstanceLayout(connectionInstanceLayout, connections), [connectionInstanceLayout, connections]);
   const contextualMode = connectionController.contextualMode(activeInstance);
   const setContextualMode = useCallback((mode: Parameters<typeof connectionController.setContextualMode>[1]) => {
@@ -183,6 +190,8 @@ export function AppShell() {
       virtualKeyboardOpen={virtualKeyboardOpen}
       virtualKeyboardOpenButton={virtualKeyboardOpenButton}
       nativeKeyboardOpen={mobileKeyboard.keyboardOpen}
+      messageButtonRef={messageButtonRef}
+      messageCenter={messageCenter}
       connections={connections}
       connectionInstanceLayout={sidebarLayout}
       loginSessionId={actions.currentAuthSessionId}

@@ -15,6 +15,8 @@ Unless listed as public, endpoints require `Authorization: Bearer
 | DELETE | `/api/v2/auth/sessions/:authSessionId` | Revoke one login session |
 | POST | `/api/v2/auth/logout-others` | Revoke other login sessions |
 | GET/POST | `/api/v2/heartbeat` | Read instances or submit resize updates |
+| GET | `/api/v2/messages` | Read the authenticated operator's Agent message history |
+| PUT | `/api/v2/messages/read-state` | Advance the account-wide Agent message read cursor |
 | GET/POST | `/api/v2/connection-instances` | List or create local/remote instances |
 | PUT | `/api/v2/connection-instances/order` | Save the current login session's sidebar order |
 | GET | `/api/v2/connection-instances/:connectionInstanceId` | Inspect an active instance |
@@ -46,6 +48,13 @@ Local creation accepts `connectionDefinitionId: "local"`, optional absolute
 definition and may set `reuseFromConnectionInstanceId` to reuse a live
 ControlMaster. Remote-monitor responses expose status, freshness, RTT, and
 scoped CPU, memory, uptime, load, and disk values.
+
+Heartbeat responses include a top-level `messageState` projection with the
+current message revision, latest sequence, and unread count. Message history
+is newest-first and accepts an opaque `before` cursor; browser responses never
+include Agent event IDs, endpoint keys, tmux identifiers, tokens, or webhook
+URLs. Read state is advanced monotonically with
+`{"readThroughSequence":123}`.
 
 `POST /api/v2/client-diagnostics` accepts at most 20 redacted error events in a
 256 KiB JSON body and returns `204` when accepted. It requires the current

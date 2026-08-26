@@ -1,8 +1,9 @@
 import { memo, type RefObject } from 'react';
-import { Keyboard, PanelLeftOpen, Search, Settings, ShieldCheck } from 'lucide-react';
+import { Bell, Keyboard, PanelLeftOpen, Search, Settings, ShieldCheck } from 'lucide-react';
 import { SystemStatus } from '../status/system-status';
 import type { Heartbeat } from '../status/heartbeat';
 import type { WorkspaceMode } from './workspace-page';
+import { messageBadgeLabel, messageButtonLabel } from '../messages/message-center';
 
 type Props = {
   workspaceOpen: boolean;
@@ -23,6 +24,10 @@ type Props = {
   onToggleSearch: () => void;
   onOpenConnections: () => void;
   onOpenAppearance: () => void;
+  messageUnreadCount: number;
+  messagesOpen: boolean;
+  onToggleMessages: () => void;
+  messageButtonRef: RefObject<HTMLButtonElement | null>;
   onOpenAuthSessions: () => void;
   onSignOut: () => void;
 };
@@ -46,6 +51,10 @@ export const ShellTopbar = memo(function ShellTopbar({
   onToggleSearch,
   onOpenConnections,
   onOpenAppearance,
+  messageUnreadCount,
+  messagesOpen,
+  onToggleMessages,
+  messageButtonRef,
   onOpenAuthSessions,
   onSignOut,
 }: Props) {
@@ -104,6 +113,20 @@ export const ShellTopbar = memo(function ShellTopbar({
             </button>
           </>
         )}
+        <button
+          ref={messageButtonRef}
+          className="icon-button message-bell-button"
+          type="button"
+          onClick={onToggleMessages}
+          aria-label={messageButtonLabel(messageUnreadCount)}
+          title={messageButtonLabel(messageUnreadCount)}
+          aria-expanded={messagesOpen}
+          aria-controls="message-popover"
+          data-testid="message-button"
+        >
+          <Bell aria-hidden="true" size={17} />
+          {messageBadgeLabel(messageUnreadCount) && <span className="message-badge">{messageBadgeLabel(messageUnreadCount)}</span>}
+        </button>
         <button className="icon-button" type="button" onClick={onOpenAppearance} aria-label="Appearance" title="Appearance">
           <Settings aria-hidden="true" size={17} />
         </button>
