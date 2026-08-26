@@ -70,8 +70,19 @@ func TestStoreRejectsUnknownAndDuplicateFields(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "ssh-connection-options.yaml"), []byte(data), 0o600); err != nil {
 			t.Fatal(err)
 		}
+		before, err := os.ReadFile(store.Path())
+		if err != nil {
+			t.Fatal(err)
+		}
 		if _, err := store.Load(map[string]bool{"alpha": true}); !errors.Is(err, ErrInvalidFormat) {
 			t.Fatalf("%s: expected invalid format, got %v", name, err)
+		}
+		after, err := os.ReadFile(store.Path())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(after, before) {
+			t.Fatalf("%s: failed Load mutated raw options", name)
 		}
 	}
 }

@@ -59,9 +59,12 @@ func (s *Service) markTargetComponent(target Target, component, version string) 
 }
 
 func (s *Service) completeInitialization(id string, target Target, result string, changed bool, component, version string) {
+	var instanceID, endpointKey string
+	var elapsed int64
 	s.mu.Lock()
 	operation := s.operations[id]
 	if operation != nil {
+		instanceID, endpointKey, elapsed = operation.ConnectionInstanceID, operation.Endpoint.Key, durationMillis(operation.StartedAt)
 		operation.Status, operation.Result, operation.Component, operation.Changed = "completed", result, component, changed
 		if version != "" {
 			operation.Component = component
@@ -73,6 +76,9 @@ func (s *Service) completeInitialization(id string, target Target, result string
 		}
 	}
 	s.mu.Unlock()
+	if operation != nil {
+		logAgentInfo("agent_initialization_completed", id, instanceID, "endpoint_key=%q result=%q component=%q changed=%t duration_ms=%d", endpointKey, result, component, changed, elapsed)
+	}
 	_ = s.store.Update(target.EndpointKey, func(record *EndpointRecord) error {
 		for name, state := range record.Targets {
 			if name != target.SessionName && state.InitializationID != id {
@@ -98,9 +104,12 @@ func (s *Service) failInitialization(id string, target Target, cause error) {
 	if errors.As(cause, &agentErr) {
 		code, message = agentErr.Code, agentErr.Message
 	}
+	var instanceID, endpointKey string
+	var elapsed int64
 	s.mu.Lock()
 	operation := s.operations[id]
 	if operation != nil {
+		instanceID, endpointKey, elapsed = operation.ConnectionInstanceID, operation.Endpoint.Key, durationMillis(operation.StartedAt)
 		operation.Status, operation.Component = "failed", "error"
 		operation.Error = &SafeError{Code: code, Message: message}
 		now := s.now().UTC()
@@ -110,6 +119,9 @@ func (s *Service) failInitialization(id string, target Target, cause error) {
 		}
 	}
 	s.mu.Unlock()
+	if operation != nil {
+		logAgentInfo("agent_initialization_failed", id, instanceID, "endpoint_key=%q code=%q duration_ms=%d error_type=%T", endpointKey, code, elapsed, cause)
+	}
 	_ = s.store.Update(target.EndpointKey, func(record *EndpointRecord) error {
 		anyReady := record.InstallationState == "ready"
 		for name, state := range record.Targets {

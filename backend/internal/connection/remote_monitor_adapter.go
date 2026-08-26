@@ -52,6 +52,41 @@ func (m *Manager) RemoteMonitor(ctx context.Context, id string) (monitor.RemoteM
 }
 
 func (m *Manager) remoteTransport(id string) (*Transport, error) {
+	transport, summary, err := m.lookupRemoteTransport(id)
+	if err != nil {
+		return nil, err
+	}
+	if !m.transportReady(transport) {
+		logRemoteTransportUnavailable(id, summary, "control_socket_unavailable")
+		return nil, ports.ErrTransportUnavailable
+	}
+	return transport, nil
+}
+
+// auxiliaryTransport resolves an instance and pins its transport before
+// checking the socket. The pin closes the owner-exit cleanup race: once the
+// reservation succeeds, finishInstance cannot remove the mux directory until
+// the auxiliary command releases its channel.
+func (m *Manager) auxiliaryTransport(ctx context.Context, id string) (*Transport, error) {
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+	}
+	transport, summary, err := m.lookupRemoteTransport(id)
+	if err != nil {
+		return nil, err
+	}
+	if !m.acquireAuxiliary(ctx, transport) {
+		logRemoteTransportUnavailable(id, summary, "control_socket_unavailable")
+		return nil, ports.ErrTransportUnavailable
+	}
+	return transport, nil
+}
+
+func (m *Manager) lookupRemoteTransport(id string) (*Transport, Summary, error) {
 	var summary Summary
 	for _, item := range m.Summaries() {
 		if item.ID == id || item.ConnectionInstanceID == id {
@@ -60,10 +95,14 @@ func (m *Manager) remoteTransport(id string) (*Transport, error) {
 		}
 	}
 	if summary.ID == "" {
-		return nil, ports.ErrRemoteInstanceNotFound
+		return nil, Summary{}, ports.ErrRemoteInstanceNotFound
 	}
 	if summary.Type != "ssh" || summary.Lifecycle != "live" {
-		return nil, ports.ErrRemoteNoTransport
+		return nil, summary, ports.ErrRemoteNoTransport
+	}
+	if m.transportPool == nil {
+		logRemoteTransportUnavailable(id, summary, "mapping_missing")
+		return nil, summary, ports.ErrTransportUnavailable
 	}
 	m.transportPool.mu.Lock()
 	lookupID := summary.ID
@@ -76,20 +115,19 @@ func (m *Manager) remoteTransport(id string) (*Transport, error) {
 	}
 	m.transportPool.mu.Unlock()
 	if transport == nil {
-		log.Printf("remote_transport_unavailable instance_id=%q source_alias=%q lifecycle=%q source_state=%q reason=%q", id, valueOrEmpty(summary.SourceHostAlias), summary.Lifecycle, summary.SourceState, "mapping_missing")
-		return nil, ports.ErrTransportUnavailable
+		logRemoteTransportUnavailable(id, summary, "mapping_missing")
+		return nil, summary, ports.ErrTransportUnavailable
 	}
-	if !m.transportReady(transport) {
-		log.Printf("remote_transport_unavailable instance_id=%q source_alias=%q lifecycle=%q source_state=%q reason=%q", id, valueOrEmpty(summary.SourceHostAlias), summary.Lifecycle, summary.SourceState, "control_socket_unavailable")
-		return nil, ports.ErrTransportUnavailable
-	}
-	return transport, nil
+	return transport, summary, nil
 }
 
 // ownerTransport resolves the opaque monitor owner directly. A derived
 // connection instance may outlive its owner, so Probe must not require the
 // owner to remain in the user-visible instance summary.
 func (m *Manager) ownerTransport(ownerID string) (*Transport, error) {
+	if m.transportPool == nil {
+		return nil, ports.ErrTransportUnavailable
+	}
 	m.transportPool.mu.Lock()
 	transport := m.transportPool.transports[ownerID]
 	if !transportAcceptsAuxiliary(transport) {
@@ -99,10 +137,11 @@ func (m *Manager) ownerTransport(ownerID string) (*Transport, error) {
 	if transport == nil {
 		return nil, ports.ErrTransportUnavailable
 	}
-	if !m.transportReady(transport) {
-		return nil, ports.ErrTransportUnavailable
-	}
 	return transport, nil
+}
+
+func logRemoteTransportUnavailable(id string, summary Summary, reason string) {
+	log.Printf("remote_transport_unavailable instance_id=%q source_alias=%q lifecycle=%q source_state=%q reason=%q", id, valueOrEmpty(summary.SourceHostAlias), summary.Lifecycle, summary.SourceState, reason)
 }
 
 func valueOrEmpty(value *string) string {

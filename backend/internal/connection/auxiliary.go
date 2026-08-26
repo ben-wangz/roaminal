@@ -3,10 +3,10 @@ package connection
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
@@ -15,23 +15,59 @@ import (
 const auxiliaryOutputLimit = 8 * 1024
 
 func (m *Manager) reserveAuxiliary(transport *Transport) bool {
+	if m.transportPool == nil || transport == nil {
+		return false
+	}
 	m.transportPool.mu.Lock()
 	defer m.transportPool.mu.Unlock()
-	if !transportAcceptsAuxiliary(transport) {
+	if m.transportPool.transports[transport.OwnerID] != transport || !transportAcceptsAuxiliary(transport) {
 		return false
 	}
 	transport.AuxiliaryChannels++
 	return true
 }
 
+func (m *Manager) acquireAuxiliary(ctx context.Context, transport *Transport) bool {
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+	}
+	if !m.reserveAuxiliary(transport) {
+		return false
+	}
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			m.releaseAuxiliary(transport)
+			return false
+		default:
+		}
+	}
+	if m.transportReady(transport) {
+		return true
+	}
+	m.releaseAuxiliary(transport)
+	return false
+}
+
 func (m *Manager) releaseAuxiliary(transport *Transport) {
+	if m.transportPool == nil || transport == nil {
+		return
+	}
 	m.transportPool.mu.Lock()
 	if transport.AuxiliaryChannels > 0 {
 		transport.AuxiliaryChannels--
 	}
 	shouldStop := transport.OwnerClosed && transport.Channels == 0 && transport.AuxiliaryChannels == 0
 	if shouldStop {
-		delete(m.transportPool.transports, transport.OwnerID)
+		if m.transportPool.transports[transport.OwnerID] == transport {
+			delete(m.transportPool.transports, transport.OwnerID)
+		} else {
+			shouldStop = false
+		}
 	}
 	m.transportPool.mu.Unlock()
 	if shouldStop {
@@ -46,19 +82,6 @@ func (m *Manager) runAuxiliary(ctx context.Context, transport *Transport, remote
 
 type RemoteCommand = ports.RemoteCommand
 type RemoteResult = ports.RemoteResult
-
-type auxiliaryReader struct {
-	manager   *Manager
-	transport *Transport
-	stdout    io.ReadCloser
-	stderr    *cappedBuffer
-	cmd       *exec.Cmd
-	mu        sync.Mutex
-	finished  bool
-	waitErr   error
-	cancel    context.CancelFunc
-	done      chan struct{}
-}
 
 func (m *Manager) RunRemote(ctx context.Context, id string, command RemoteCommand) (RemoteResult, error) {
 	reader, err := m.OpenRemote(ctx, id, command)
@@ -76,13 +99,13 @@ func (m *Manager) RunRemote(ctx context.Context, id string, command RemoteComman
 		result.ErrorOutput = auxiliary.errorOutput()
 	}
 	if err != nil {
-		return result, err
+		return result, classifyAuxiliaryError(err, result.ErrorOutput)
 	}
 	if int64(len(data)) > limit {
 		return result, errors.New("remote output exceeded limit")
 	}
 	if closeErr != nil {
-		return result, closeErr
+		return result, classifyAuxiliaryError(closeErr, result.ErrorOutput)
 	}
 	return result, nil
 }
@@ -91,21 +114,16 @@ func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteComma
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	transport, err := m.remoteTransport(id)
+	if command.Script == "" {
+		return nil, errors.New("remote script is empty")
+	}
+	transport, err := m.auxiliaryTransport(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	cancel := func() {}
 	if command.Timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, command.Timeout)
-	}
-	if command.Script == "" {
-		cancel()
-		return nil, errors.New("remote script is empty")
-	}
-	if !m.reserveAuxiliary(transport) {
-		cancel()
-		return nil, ErrTransportUnavailable
 	}
 	args := m.auxiliarySSHArgs(transport)
 	args = append(args, remoteCommandInvocation(command)...)
@@ -149,64 +167,11 @@ func (m *Manager) auxiliarySSHArgs(transport *Transport) []string {
 	return []string{"-T", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", "-o", "PermitLocalCommand=no", "-o", "RemoteCommand=none", "--", transport.Alias}
 }
 
-func (r *auxiliaryReader) Read(p []byte) (int, error) {
-	n, err := r.stdout.Read(p)
-	if err != nil {
-		r.finish()
-	}
-	return n, err
-}
-
-func (r *auxiliaryReader) Close() error {
-	if !r.finishedState() {
-		_ = r.stdout.Close()
-		if r.cmd.Process != nil {
-			_ = r.cmd.Process.Kill()
-		}
-	}
-	r.finish()
-	r.mu.Lock()
-	err := r.waitErr
-	r.mu.Unlock()
-	return err
-}
-
-func (r *auxiliaryReader) finishedState() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.finished
-}
-
-func (r *auxiliaryReader) errorOutput() []byte {
-	if r.stderr == nil {
-		return nil
-	}
-	return append([]byte(nil), r.stderr.data.Bytes()...)
-}
-
-func (r *auxiliaryReader) finish() {
-	r.mu.Lock()
-	if r.finished {
-		done := r.done
-		r.mu.Unlock()
-		<-done
-		return
-	}
-	r.finished = true
-	r.mu.Unlock()
-	err := r.cmd.Wait()
-	if r.cancel != nil {
-		r.cancel()
-	}
-	r.manager.releaseAuxiliary(r.transport)
-	r.mu.Lock()
-	r.waitErr = err
-	close(r.done)
-	r.mu.Unlock()
-}
-
 func (m *Manager) runAuxiliaryInput(ctx context.Context, transport *Transport, input io.Reader, remoteArgs ...string) ([]byte, error) {
-	if m.sshPath == "" || transport == nil || !m.reserveAuxiliary(transport) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if m.sshPath == "" || transport == nil || !m.acquireAuxiliary(ctx, transport) {
 		return nil, ErrTransportUnavailable
 	}
 	defer m.releaseAuxiliary(transport)
@@ -217,12 +182,25 @@ func (m *Manager) runAuxiliaryInput(ctx context.Context, transport *Transport, i
 	command.Stdout, command.Stderr = stdout, stderr
 	command.Stdin = input
 	if err := command.Run(); err != nil {
-		return nil, err
+		return nil, classifyAuxiliaryError(err, stderr.data.Bytes())
 	}
 	if stdout.overflow || stderr.overflow {
 		return nil, errors.New("auxiliary output exceeded limit")
 	}
 	return stdout.data.Bytes(), nil
+}
+
+func classifyAuxiliaryError(err error, stderr []byte) error {
+	if err == nil || errors.Is(err, ports.ErrTransportUnavailable) {
+		return err
+	}
+	message := strings.ToLower(string(stderr))
+	for _, marker := range []string{"control socket", "controlpath", "mux_client", "master session"} {
+		if strings.Contains(message, marker) {
+			return fmt.Errorf("%w: %v", ports.ErrTransportUnavailable, err)
+		}
+	}
+	return err
 }
 
 func withAuxiliaryTimeout(parent context.Context) (context.Context, context.CancelFunc) {

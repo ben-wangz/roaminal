@@ -1,12 +1,10 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,7 +94,7 @@ func (s *Service) remotePlatform(ctx context.Context, id string) (string, string
 		"if command -v codex >/dev/null 2>&1; then printf 'codex=1\\n'; else printf 'codex=0\\n'; fi\n"
 	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: script, Timeout: 8 * time.Second, OutputLimit: 4096})
 	if err != nil {
-		return "", "", errf("agent_remote_probe_failed", 502, "The remote Agent probe failed.", err)
+		return "", "", remoteAgentError("agent_remote_probe_failed", 502, "The remote Agent probe failed.", err)
 	}
 	values := parseRemotePlatform(result.Output)
 	if !values.Tmux {
@@ -147,7 +145,7 @@ func (s *Service) existingProbe(ctx context.Context, id string) (remoteProbe, er
 		"fi\n"
 	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: script, Timeout: 5 * time.Second, OutputLimit: 4096})
 	if err != nil {
-		return remoteProbe{}, errf("agent_remote_probe_failed", 502, "The remote Agent probe failed.", err)
+		return remoteProbe{}, remoteAgentError("agent_remote_probe_failed", 502, "The remote Agent probe failed.", err)
 	}
 	var value remoteProbe
 	if json.Unmarshal(result.Output, &value) == nil {
@@ -158,84 +156,6 @@ func (s *Service) existingProbe(ctx context.Context, id string) (remoteProbe, er
 		return remoteProbe{Configured: true}, nil
 	}
 	return remoteProbe{}, nil
-}
-
-func (s *Service) installRemote(ctx context.Context, id string, binary []byte, request installRequest) error {
-	suffix := fmt.Sprintf("%x", sha256.Sum256([]byte(request.Endpoint.Key+request.ReplacementToken)))[:32]
-	uploadScript := "set -eu\numask 077\n" +
-		"mkdir -p \"$HOME/.roaminal\"\n" +
-		"tmp=\"$HOME/.roaminal/.upload-$1\"\n" +
-		"umask 077\ncat > \"$tmp\"\nchmod 0700 \"$tmp\"\nprintf '%s\\n' \"$tmp\"\n"
-	upload, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: uploadScript, Args: []string{suffix}, Stdin: bytes.NewReader(binary), Timeout: 10 * time.Second, OutputLimit: 4096})
-	if err != nil || strings.TrimSpace(string(upload.Output)) == "" {
-		s.cleanupRemote(ctx, id, suffix)
-		return errf("agent_install_failed", 502, "The Agent component upload failed.", err)
-	}
-	payload, err := json.Marshal(request)
-	if err != nil {
-		return err
-	}
-	installScript := "set +e\n" +
-		"tmp=\"$HOME/.roaminal/.upload-$1\"\n" +
-		"\"$tmp\" install\n" +
-		"status=$?\nrm -f -- \"$tmp\"\nexit $status\n"
-	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: installScript, Args: []string{suffix}, Stdin: bytes.NewReader(payload), Timeout: 15 * time.Second, OutputLimit: 8192})
-	if err != nil {
-		s.cleanupRemote(ctx, id, suffix)
-		if mapped := helperInstallError(result.ErrorOutput); mapped != nil {
-			return mapped
-		}
-		return errf("agent_install_failed", 502, "The remote Agent component installation failed.", err)
-	}
-	var response installResponse
-	if json.Unmarshal(result.Output, &response) != nil || response.EndpointKey != request.Endpoint.Key {
-		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
-	}
-	return nil
-}
-
-func helperInstallError(data []byte) error {
-	var value struct {
-		Error string `json:"error"`
-	}
-	if json.Unmarshal(data, &value) != nil {
-		return nil
-	}
-	switch value.Error {
-	case "endpoint_conflict":
-		return errf("agent_endpoint_conflict", 409, "The remote Agent is bound to another SSH endpoint.", nil)
-	case "binding_changed":
-		return errf("agent_binding_conflict", 409, "The remote Agent binding changed during initialization.", nil)
-	case "component downgrade":
-		return errf("agent_install_failed", 409, "The remote Agent component cannot be downgraded.", nil)
-	case "hooks file permissions are unsafe", "hooks must be an object", "hooks root must be an object":
-		return errf("agent_hooks_invalid", 409, "The existing Codex Hooks configuration is invalid or unsafe.", nil)
-	case "invalid install request", "invalid component checksum", "component checksum mismatch":
-		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
-	default:
-		return nil
-	}
-}
-
-func (s *Service) cleanupRemote(ctx context.Context, id, suffix string) {
-	_, _ = s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: "rm -f -- \"$HOME/.roaminal/.upload-$1\"\n", Args: []string{suffix}, Timeout: 3 * time.Second, OutputLimit: 256})
-}
-
-func (s *Service) verifyRemote(ctx context.Context, id, expectedFingerprint, endpointKey, componentSHA256 string) error {
-	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: "set -eu\n\"$HOME/.roaminal/bin/roaminal-agent-hook\" probe\n", Timeout: 5 * time.Second, OutputLimit: 4096})
-	if err != nil {
-		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", err)
-	}
-	var response struct {
-		TokenFingerprint string `json:"tokenFingerprint"`
-		EndpointKey      string `json:"endpointKey"`
-		ComponentSHA256  string `json:"componentSha256"`
-		HooksConfigured  bool   `json:"hooksConfigured"`
-	}
-	if json.Unmarshal(result.Output, &response) != nil || response.TokenFingerprint != expectedFingerprint || response.EndpointKey != endpointKey || !response.HooksConfigured || response.ComponentSHA256 != componentSHA256 {
-		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
-	}
-	return nil
 }
 
 func sha256Hex(data []byte) string {

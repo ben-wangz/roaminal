@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
@@ -22,10 +23,13 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 		return Initialization{}, errf("agent_connection_not_live", 409, "The connection is no longer live.", nil)
 	}
 	if _, err := s.terms.RemoteTransferInfo(id); err != nil {
-		return Initialization{}, errf("agent_transport_unavailable", 409, "The SSH transport is unavailable.", err)
+		return Initialization{}, errf("agent_transport_unavailable", 503, "The SSH transport is unavailable.", err)
 	}
 	effective, err := s.terms.ResolveEndpoint(ctx, id)
 	if err != nil {
+		if errors.Is(err, ports.ErrTransportUnavailable) {
+			return Initialization{}, errf("agent_transport_unavailable", 503, "The SSH transport is unavailable.", err)
+		}
 		return Initialization{}, errf("agent_endpoint_unresolved", 422, "The SSH endpoint could not be resolved.", err)
 	}
 	endpoint, err := NormalizeEndpoint(effective)
@@ -40,6 +44,9 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 	sessionID, sessionCreated, preflightErr := s.targetPreflight(preflightCtx, id, summary.TmuxSessionName)
 	cancel()
 	if preflightErr != nil {
+		if errors.Is(preflightErr, ports.ErrTransportUnavailable) {
+			return Initialization{}, errf("agent_transport_unavailable", 503, "The SSH transport is unavailable.", preflightErr)
+		}
 		return Initialization{}, errf("agent_tmux_session_not_found", 409, "The configured tmux session could not be found.", preflightErr)
 	}
 	previousRecord, previousExists := s.store.Get(endpoint.Key)
@@ -67,6 +74,7 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 			result.WebhookURL = webhookURL
 			result.Joined = true
 			s.mu.Unlock()
+			logAgentInfo("agent_initialization_joined", operationID, id, "endpoint_key=%q tmux_session=%q", endpoint.Key, summary.TmuxSessionName)
 			_ = s.setTargetInitialization(target, operationID)
 			return result, nil
 		}
@@ -80,6 +88,7 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 	s.operations[operationID] = operation
 	s.endpointOps[endpoint.Key] = operationID
 	s.mu.Unlock()
+	logAgentInfo("agent_initialization_started", operationID, id, "endpoint_key=%q tmux_session=%q", endpoint.Key, summary.TmuxSessionName)
 	_ = s.setTargetInitialization(target, operationID)
 	result := *operation
 	go s.executeInitialization(operationID, id, summary, endpoint, target, webhookURL, webhookOrigin, webhookChanged, priorComponent, sessionID, sessionCreated)

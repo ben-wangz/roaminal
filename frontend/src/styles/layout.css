@@ -32,9 +32,4 @@ body { background: var(--base); }
 .workspace-body { min-width: 0; min-height: 0; overflow: hidden; position: relative; flex: 1 1 auto; display: flex; flex-direction: column; }
 .workspace-mode-view { min-width: 0; min-height: 0; overflow: hidden; flex: 1 1 auto; display: flex; flex-direction: column; }
 .workspace-mode-view.inactive { display: none; }
-.mobile-terminal-composer { display: none; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; padding: 8px; border-top: 1px solid var(--cyan); background: var(--base1); }
-.mobile-terminal-composer textarea { min-width: 0; min-height: 48px; max-height: 132px; resize: vertical; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 9px 10px; outline: none; line-height: 1.35; }
-.mobile-terminal-composer textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
-.mobile-terminal-send { width: 44px; min-height: 48px; display: inline-grid; place-items: center; border: 1px solid var(--yellow); background: var(--yellow); color: var(--base); }
-.mobile-terminal-send:disabled { opacity: .45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .brand-mark span { animation: none; } }

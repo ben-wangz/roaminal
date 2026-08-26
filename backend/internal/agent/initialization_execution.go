@@ -13,21 +13,41 @@ func (s *Service) executeInitialization(operationID, id string, summary ports.Co
 	defer lock.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	remoteOS, remoteArch, err := s.remotePlatformWithRetry(ctx, id)
+	logAgentInfo("agent_initialization_worker_started", operationID, id, "endpoint_key=%q tmux_session=%q", endpoint.Key, target.SessionName)
+	lease, err := s.acquireRemoteTransferWithRetry(ctx, operationID, id)
 	if err != nil {
+		logAgentInfo("agent_initialization_transport_unavailable", operationID, id, "error_type=%T", err)
 		s.failInitialization(operationID, target, err)
 		return
 	}
+	defer func() {
+		lease.Close()
+		logAgentInfo("agent_initialization_transport_released", operationID, id, "")
+	}()
+
+	phaseStarted := time.Now()
+	logAgentInfo("agent_initialization_phase_started", operationID, id, "phase=%q", "remote_platform")
+	remoteOS, remoteArch, err := s.remotePlatformWithRetry(ctx, id)
+	if err != nil {
+		logAgentInfo("agent_initialization_phase_failed", operationID, id, "phase=%q duration_ms=%d error_type=%T", "remote_platform", durationMillis(phaseStarted), err)
+		s.failInitialization(operationID, target, err)
+		return
+	}
+	logAgentInfo("agent_initialization_phase_completed", operationID, id, "phase=%q duration_ms=%d remote_os=%q remote_arch=%q", "remote_platform", durationMillis(phaseStarted), remoteOS, remoteArch)
 	asset, binary, manifest, err := s.loadAsset(remoteOS, remoteArch)
 	if err != nil {
 		s.failInitialization(operationID, target, err)
 		return
 	}
+	phaseStarted = time.Now()
+	logAgentInfo("agent_initialization_phase_started", operationID, id, "phase=%q", "existing_probe")
 	remoteState, err := s.existingProbeWithRetry(ctx, id)
 	if err != nil {
+		logAgentInfo("agent_initialization_phase_failed", operationID, id, "phase=%q duration_ms=%d error_type=%T", "existing_probe", durationMillis(phaseStarted), err)
 		s.failInitialization(operationID, target, err)
 		return
 	}
+	logAgentInfo("agent_initialization_phase_completed", operationID, id, "phase=%q duration_ms=%d configured=%t", "existing_probe", durationMillis(phaseStarted), remoteState.Configured)
 	remoteFingerprint := remoteState.TokenFingerprint
 	record, exists := s.store.Get(endpoint.Key)
 	if (remoteState.Configured && remoteFingerprint == "") || (remoteFingerprint != "" && !exists) {
@@ -39,7 +59,7 @@ func (s *Service) executeInitialization(operationID, id string, summary ports.Co
 			remoteState.ComponentVersion == manifest.ComponentVersion &&
 			remoteState.ComponentSHA256 == asset.SHA256 && remoteState.HooksConfigured
 		if !componentCurrent {
-			if err := s.repairExisting(ctx, id, target, endpoint, webhookURL, remoteFingerprint, manifest.ComponentVersion, asset.SHA256, webhookOrigin, binary); err != nil {
+			if err := s.repairExisting(ctx, operationID, id, target, endpoint, webhookURL, remoteFingerprint, manifest.ComponentVersion, asset.SHA256, webhookOrigin, binary); err != nil {
 				s.failInitialization(operationID, target, err)
 				return
 			}
@@ -69,7 +89,7 @@ func (s *Service) executeInitialization(operationID, id string, summary ports.Co
 			remoteState.ComponentVersion == manifest.ComponentVersion &&
 			remoteState.ComponentSHA256 == asset.SHA256 && remoteState.HooksConfigured
 		if !componentCurrent {
-			if err := s.repairExisting(ctx, id, target, endpoint, webhookURL, remoteFingerprint, manifest.ComponentVersion, asset.SHA256, webhookOrigin, binary); err != nil {
+			if err := s.repairExisting(ctx, operationID, id, target, endpoint, webhookURL, remoteFingerprint, manifest.ComponentVersion, asset.SHA256, webhookOrigin, binary); err != nil {
 				s.failInitialization(operationID, target, err)
 				return
 			}
@@ -110,11 +130,11 @@ func (s *Service) executeInitialization(operationID, id string, summary ports.Co
 		ComponentSHA256:                 asset.SHA256,
 		TmuxSessionName:                 target.SessionName,
 	}
-	if err := s.installRemote(ctx, id, binary, request); err != nil {
+	if err := s.installRemote(ctx, operationID, id, binary, request); err != nil {
 		s.failInitialization(operationID, target, err)
 		return
 	}
-	if err := s.verifyRemote(ctx, id, tokenHashValue, endpoint.Key, asset.SHA256); err != nil {
+	if err := s.verifyRemoteWithLogging(ctx, operationID, id, tokenHashValue, endpoint.Key, asset.SHA256); err != nil {
 		s.failInitialization(operationID, target, err)
 		return
 	}
@@ -145,7 +165,7 @@ func (s *Service) executeInitialization(operationID, id string, summary ports.Co
 	s.completeInitialization(operationID, target, "installed", true, installedComponent, manifest.ComponentVersion)
 }
 
-func (s *Service) repairExisting(ctx context.Context, id string, target Target, endpoint Endpoint, webhookURL, fingerprint, version, checksum, webhookOrigin string, binary []byte) error {
+func (s *Service) repairExisting(ctx context.Context, operationID, id string, target Target, endpoint Endpoint, webhookURL, fingerprint, version, checksum, webhookOrigin string, binary []byte) error {
 	request := installRequest{
 		SchemaVersion:                   1,
 		Endpoint:                        installEndpointFor(endpoint),
@@ -155,10 +175,10 @@ func (s *Service) repairExisting(ctx context.Context, id string, target Target, 
 		ComponentSHA256:                 checksum,
 		TmuxSessionName:                 target.SessionName,
 	}
-	if err := s.installRemote(ctx, id, binary, request); err != nil {
+	if err := s.installRemote(ctx, operationID, id, binary, request); err != nil {
 		return err
 	}
-	if err := s.verifyRemote(ctx, id, fingerprint, endpoint.Key, checksum); err != nil {
+	if err := s.verifyRemoteWithLogging(ctx, operationID, id, fingerprint, endpoint.Key, checksum); err != nil {
 		return err
 	}
 	return s.store.Update(target.EndpointKey, func(record *EndpointRecord) error {
@@ -175,6 +195,18 @@ func (s *Service) repairExisting(ctx context.Context, id string, target Target, 
 		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	})
+}
+
+func (s *Service) verifyRemoteWithLogging(ctx context.Context, operationID, instanceID, expectedFingerprint, endpointKey, checksum string) error {
+	started := time.Now()
+	logAgentInfo("agent_component_verification_started", operationID, instanceID, "component_sha256=%q", checksum)
+	err := s.verifyRemote(ctx, instanceID, expectedFingerprint, endpointKey, checksum)
+	if err != nil {
+		logAgentInfo("agent_component_verification_failed", operationID, instanceID, "duration_ms=%d error_type=%T", durationMillis(started), err)
+		return err
+	}
+	logAgentInfo("agent_component_verification_completed", operationID, instanceID, "duration_ms=%d", durationMillis(started))
+	return nil
 }
 
 func contains(values []string, wanted string) bool {

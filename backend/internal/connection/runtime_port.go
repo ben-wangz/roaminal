@@ -47,9 +47,12 @@ func (m *Manager) remoteCapability(summary Summary) ports.RemoteCapability {
 		m.transportPool.mu.Unlock()
 		return ports.RemoteCapability{Status: "transport_unavailable", Retryable: true, Reason: "SSH control transport is unavailable"}
 	}
-	if transport.Draining {
-		state := transport.SourceState
-		m.transportPool.mu.Unlock()
+	draining, state, accepts := transport.Draining, transport.SourceState, transportAcceptsAuxiliary(transport)
+	m.transportPool.mu.Unlock()
+	if !accepts || !m.transportReady(transport) {
+		return ports.RemoteCapability{Status: "transport_unavailable", Retryable: true, Reason: "SSH control transport is unavailable"}
+	}
+	if draining {
 		switch state {
 		case "deleted":
 			return ports.RemoteCapability{Status: "source_deleted", Reason: "the SSH host definition was deleted; existing channels remain usable until they exit"}
@@ -57,11 +60,6 @@ func (m *Manager) remoteCapability(summary Summary) ports.RemoteCapability {
 			return ports.RemoteCapability{Status: "source_stale", Reason: "the SSH host definition changed; existing channels remain usable"}
 		}
 	}
-	if !transportAcceptsAuxiliary(transport) {
-		m.transportPool.mu.Unlock()
-		return ports.RemoteCapability{Status: "transport_unavailable", Retryable: true, Reason: "SSH control transport is unavailable"}
-	}
-	m.transportPool.mu.Unlock()
 	return ports.RemoteCapability{Status: "available"}
 }
 

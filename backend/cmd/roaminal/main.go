@@ -93,6 +93,11 @@ func run(cfg config.Config) error {
 	configRepo := sshconfig.New(sshRoot)
 	keyInventory := sshkey.New(sshRoot)
 	connectionOptions := connectionoptions.New(cfg.StateDir)
+	definitions, err := definition.New(configRepo, keyInventory, connectionOptions)
+	if err != nil {
+		_ = terminalWorker.Shutdown(context.Background())
+		return err
+	}
 	fileRepositories := persistence.NewRepositories(store)
 	authManager, err := auth.NewWithRepositories(cfg, fileRepositories.Auth, auth.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource})
 	if err != nil {
@@ -122,7 +127,7 @@ func run(cfg config.Config) error {
 	serverDependencies := server.Dependencies{
 		Config: cfg, Version: buildinfo.Version, BootID: bootID, Auth: authManager, Workspace: workspace.New(fileRepositories.Workspace),
 		Connections: terminals, Monitor: monitor.NewWithClock(clockSource), Worker: terminalWorker,
-		Static: static, Definitions: definition.New(configRepo, keyInventory, connectionOptions), Diagnostics: diagnostics,
+		Static: static, Definitions: definitions, Diagnostics: diagnostics,
 		FileSystem:        filesystem.NewWithRepositories(terminals, connectionOptions, fileRepositories.Upload, cfg.StateDir, filesystem.Dependencies{Clock: clockSource, Random: randomSource}),
 		AgentProvisioning: agentService.Provisioning(),
 		AgentTelemetry:    agentService.Telemetry(),

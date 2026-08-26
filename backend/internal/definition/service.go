@@ -1,7 +1,7 @@
 package definition
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
@@ -14,14 +14,19 @@ import (
 // and the persisted tmux/FileSystem options associated with a definition.
 // HTTP handlers receive complete collections but do not access these adapters.
 type Service struct {
-	configRepo *sshconfig.Repository
-	keys       *sshkey.Inventory
-	options    *connectionoptions.Store
-	mu         sync.Mutex
+	configRepo  *sshconfig.Repository
+	keys        *sshkey.Inventory
+	options     *connectionoptions.Store
+	journalPath string
+	mu          sync.Mutex
 }
 
-func New(configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store) *Service {
-	return &Service{configRepo: configRepo, keys: keys, options: options}
+func New(configRepo *sshconfig.Repository, keys *sshkey.Inventory, options *connectionoptions.Store) (*Service, error) {
+	service := &Service{configRepo: configRepo, keys: keys, options: options, journalPath: definitionJournalPath(options)}
+	if err := service.recoverPendingTransaction(); err != nil {
+		return nil, fmt.Errorf("recover connection-definition mutation: %w", err)
+	}
+	return service, nil
 }
 
 func (s *Service) Available() bool { return s != nil && s.configRepo != nil }
@@ -46,18 +51,25 @@ func (s *Service) Create(ifMatch string, edit sshconfig.Edit, tmux *sshconfig.Tm
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	configSnapshot, optionsSnapshot, err := s.snapshots(tmux != nil || filesystem != nil)
+	configSnapshot, optionsSnapshot, err := s.snapshots(s.options != nil)
+	if err != nil {
+		return sshconfig.Collection{}, err
+	}
+	transaction, err := s.beginTransaction(configSnapshot, optionsSnapshot)
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
 	collection, err := s.configRepo.Create(ifMatch, s.knownKeys(), edit)
 	if err != nil {
-		return sshconfig.Collection{}, err
+		return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 	}
 	if tmux != nil || filesystem != nil {
 		if err := s.SaveOptions(edit.HostAlias, tmux, filesystem); err != nil {
-			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+			return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 		}
+	}
+	if err := s.completeTransaction(transaction); err != nil {
+		return sshconfig.Collection{}, err
 	}
 	s.enrich(&collection)
 	return collection, nil
@@ -73,27 +85,34 @@ func (s *Service) Update(ifMatch, alias string, edit sshconfig.Edit, tmux *sshco
 	if newAlias == "" {
 		newAlias = alias
 	}
-	configSnapshot, optionsSnapshot, err := s.snapshots(s.options != nil && (tmux != nil || filesystem != nil || newAlias != alias))
+	configSnapshot, optionsSnapshot, err := s.snapshots(s.options != nil)
+	if err != nil {
+		return sshconfig.Collection{}, err
+	}
+	transaction, err := s.beginTransaction(configSnapshot, optionsSnapshot)
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
 	collection, err := s.configRepo.Update(ifMatch, s.knownKeys(), alias, edit)
 	if err != nil {
-		return sshconfig.Collection{}, err
+		return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 	}
 	if tmux != nil || filesystem != nil {
 		if err := s.SaveOptions(newAlias, tmux, filesystem); err != nil {
-			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+			return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 		}
 		if s.options != nil && newAlias != alias {
 			if err := s.options.RemoveAlias(alias); err != nil {
-				return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+				return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 			}
 		}
 	} else if s.options != nil && newAlias != alias {
 		if err := s.options.MoveAlias(alias, newAlias); err != nil {
-			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+			return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 		}
+	}
+	if err := s.completeTransaction(transaction); err != nil {
+		return sshconfig.Collection{}, err
 	}
 	s.enrich(&collection)
 	return collection, nil
@@ -109,14 +128,21 @@ func (s *Service) Duplicate(ifMatch, alias, newAlias string) (sshconfig.Collecti
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
-	collection, err := s.configRepo.Duplicate(ifMatch, s.knownKeys(), alias, newAlias)
+	transaction, err := s.beginTransaction(configSnapshot, optionsSnapshot)
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
+	collection, err := s.configRepo.Duplicate(ifMatch, s.knownKeys(), alias, newAlias)
+	if err != nil {
+		return sshconfig.Collection{}, s.abortTransaction(transaction, err)
+	}
 	if s.options != nil {
 		if err := s.options.CopyAlias(alias, newAlias); err != nil {
-			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+			return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 		}
+	}
+	if err := s.completeTransaction(transaction); err != nil {
+		return sshconfig.Collection{}, err
 	}
 	s.enrich(&collection)
 	return collection, nil
@@ -132,14 +158,21 @@ func (s *Service) Delete(ifMatch, alias string) (sshconfig.Collection, error) {
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
-	collection, err := s.configRepo.Delete(ifMatch, s.knownKeys(), alias)
+	transaction, err := s.beginTransaction(configSnapshot, optionsSnapshot)
 	if err != nil {
 		return sshconfig.Collection{}, err
 	}
+	collection, err := s.configRepo.Delete(ifMatch, s.knownKeys(), alias)
+	if err != nil {
+		return sshconfig.Collection{}, s.abortTransaction(transaction, err)
+	}
 	if s.options != nil {
 		if err := s.options.RemoveAlias(alias); err != nil {
-			return sshconfig.Collection{}, s.rollback(configSnapshot, optionsSnapshot, err)
+			return sshconfig.Collection{}, s.abortTransaction(transaction, err)
 		}
+	}
+	if err := s.completeTransaction(transaction); err != nil {
+		return sshconfig.Collection{}, err
 	}
 	s.enrich(&collection)
 	return collection, nil
@@ -158,17 +191,4 @@ func (s *Service) snapshots(withOptions bool) (sshconfig.Snapshot, connectionopt
 		return sshconfig.Snapshot{}, connectionoptions.Snapshot{}, err
 	}
 	return configSnapshot, optionsSnapshot, nil
-}
-
-func (s *Service) rollback(configSnapshot sshconfig.Snapshot, optionsSnapshot connectionoptions.Snapshot, cause error) error {
-	var restoreErrors []error
-	if err := s.configRepo.Restore(configSnapshot); err != nil {
-		restoreErrors = append(restoreErrors, err)
-	}
-	if s.options != nil {
-		if err := s.options.Restore(optionsSnapshot); err != nil {
-			restoreErrors = append(restoreErrors, err)
-		}
-	}
-	return errors.Join(append([]error{cause}, restoreErrors...)...)
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import { useMobileMode } from './mobile-mode';
+import { setViewportHeight, viewportHeight } from './viewport';
 
 const KEYBOARD_THRESHOLD = 80;
 type VirtualKeyboardLike = EventTarget & {
@@ -12,10 +13,7 @@ type NavigatorWithVirtualKeyboard = Navigator & {
 };
 
 export type MobileKeyboardMetrics = {
-  isMobileMode: boolean;
   keyboardOpen: boolean;
-  keyboardHeight: number;
-  viewportHeight: number;
 };
 
 export { mobileModeFromEnvironment as mobileInputModeFromEnvironment } from './mobile-mode';
@@ -32,10 +30,28 @@ export function keyboardHeightFromViewport(
   return Math.max(virtualKeyboardHeight, visualDelta, bottomOverlap);
 }
 
+export function availableViewportHeightFromKeyboard(
+  layoutHeight: number,
+  visualHeight: number,
+  offsetTop: number,
+  baselineVisualHeight: number,
+  virtualKeyboardHeight = 0,
+): number {
+  const visualDelta = Math.max(0, baselineVisualHeight - visualHeight);
+  const bottomOverlap = Math.max(0, layoutHeight - (offsetTop + visualHeight));
+  const visualObstruction = Math.max(visualDelta, bottomOverlap);
+  // A reduced/panned visual viewport already excludes the keyboard. Only
+  // subtract explicit Virtual Keyboard geometry when that signal is the sole
+  // obstruction, otherwise the same keyboard would be counted twice.
+  const explicitObstruction = visualObstruction < KEYBOARD_THRESHOLD
+    ? Math.max(0, virtualKeyboardHeight)
+    : 0;
+  return Math.max(1, visualHeight - explicitObstruction);
+}
+
 function isRuntimeInputFocused(runtime: TerminalRuntime | null): boolean {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement)) return false;
-  if (active.classList.contains('mobile-terminal-input') || active.closest('.mobile-terminal-composer')) return true;
   return Boolean(runtime?.terminal?.element?.contains(active));
 }
 
@@ -45,42 +61,32 @@ export function useMobileKeyboard(
 ): MobileKeyboardMetrics {
   const isMobileMode = useMobileMode();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(() => window.visualViewport?.height || window.innerHeight);
-  const baselineVisualHeight = useRef(viewportHeight);
-
-  useEffect(() => {
-    document.documentElement.dataset.roaminalMobileInput = isMobileMode ? 'true' : 'false';
-    return () => {
-      delete document.documentElement.dataset.roaminalMobileInput;
-    };
-  }, [isMobileMode]);
+  const baselineVisualHeight = useRef(Math.min(viewportHeight(), Math.max(1, window.innerHeight)));
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
     const virtualKeyboard = (navigator as NavigatorWithVirtualKeyboard).virtualKeyboard;
     let focusOutFrame: number | null = null;
     const update = () => {
-      const visualHeight = visualViewport?.height || window.innerHeight;
+      const layoutHeight = Math.max(1, window.innerHeight);
+      const visualHeight = Math.min(layoutHeight, Math.max(1, visualViewport?.height || layoutHeight));
       const offsetTop = visualViewport?.offsetTop || 0;
       const focused = enabled && isRuntimeInputFocused(runtime);
       if (!focused || visualHeight > baselineVisualHeight.current) baselineVisualHeight.current = visualHeight;
       const virtualHeight = virtualKeyboard?.boundingRect.height || 0;
       const height = focused
-        ? keyboardHeightFromViewport(window.innerHeight, visualHeight, offsetTop, baselineVisualHeight.current, virtualHeight)
+        ? keyboardHeightFromViewport(layoutHeight, visualHeight, offsetTop, baselineVisualHeight.current, virtualHeight)
         : 0;
       const open = Boolean(isMobileMode && focused && height >= KEYBOARD_THRESHOLD);
-      const visualReduction = Math.max(
-        0,
-        baselineVisualHeight.current - visualHeight,
-        window.innerHeight - (offsetTop + visualHeight),
+      const availableHeight = availableViewportHeightFromKeyboard(
+        layoutHeight,
+        visualHeight,
+        offsetTop,
+        baselineVisualHeight.current,
+        focused ? virtualHeight : 0,
       );
-      const availableHeight = Math.max(1, visualHeight - (focused && visualReduction < KEYBOARD_THRESHOLD ? virtualHeight : 0));
       setKeyboardOpen(open);
-      setKeyboardHeight(height);
       setViewportHeight(availableHeight);
-      document.documentElement.style.setProperty('--roaminal-viewport-height', `${availableHeight}px`);
-      document.documentElement.style.setProperty('--roaminal-keyboard-height', `${height}px`);
       document.documentElement.dataset.roaminalKeyboard = open ? 'open' : 'closed';
     };
     const scheduleFocusUpdate = () => {
@@ -105,10 +111,10 @@ export function useMobileKeyboard(
       document.removeEventListener('focusout', scheduleFocusUpdate);
       if (focusOutFrame !== null) window.cancelAnimationFrame(focusOutFrame);
       virtualKeyboard?.removeEventListener('geometrychange', update);
-      document.documentElement.style.setProperty('--roaminal-keyboard-height', '0px');
       delete document.documentElement.dataset.roaminalKeyboard;
+      setViewportHeight(viewportHeight());
     };
   }, [enabled, isMobileMode, runtime]);
 
-  return { isMobileMode, keyboardOpen, keyboardHeight, viewportHeight };
+  return { keyboardOpen };
 }

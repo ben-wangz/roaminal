@@ -1,6 +1,8 @@
 package definition
 
 import (
+	"errors"
+	"os"
 	"testing"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
@@ -16,7 +18,10 @@ func TestDefinitionMutationsPreserveOptionsAcrossRenameCopyAndDelete(t *testing.
 	defer root.Close()
 	repo := sshconfig.New(root)
 	store := connectionoptions.New(t.TempDir())
-	service := New(repo, nil, store)
+	service, err := New(repo, nil, store)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	collection, err := repo.Collection(nil)
 	if err != nil {
@@ -67,5 +72,8 @@ func TestDefinitionMutationsPreserveOptionsAcrossRenameCopyAndDelete(t *testing.
 	}
 	if _, ok := loaded.Options["gamma"]; ok {
 		t.Fatal("delete retained the deleted alias")
+	}
+	if _, err := os.Stat(service.journalPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("completed mutation left transaction journal: %v", err)
 	}
 }

@@ -2,6 +2,7 @@ import { Download, FileQuestion, LoaderCircle, Search, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { loadMetadata, readContent } from './filesystem-api';
 import type { FileEntry, FileMetadata, FileSystemError, RootContext } from './filesystem-types';
+import { MarkdownPreview } from './markdown-preview';
 import { viewerFor, viewerLabel } from './viewer-registry';
 
 type Props = {
@@ -18,8 +19,18 @@ type ScrollPosition = {
   left: number;
 };
 
-function previewScrollElement(body: HTMLDivElement | null): HTMLElement | null {
-  return body?.querySelector<HTMLElement>('.filesystem-text-viewer') || body;
+const previewScrollPositions = new Map<string, ScrollPosition>();
+const MAX_PREVIEW_SCROLL_POSITIONS = 100;
+
+function savePreviewScrollPosition(key: string | null, target: HTMLElement | null): void {
+  if (!key || !target) return;
+  previewScrollPositions.delete(key);
+  previewScrollPositions.set(key, { top: target.scrollTop, left: target.scrollLeft });
+  while (previewScrollPositions.size > MAX_PREVIEW_SCROLL_POSITIONS) {
+    const oldest = previewScrollPositions.keys().next().value;
+    if (oldest === undefined) break;
+    previewScrollPositions.delete(oldest);
+  }
 }
 
 export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootChanged }: Props) {
@@ -31,26 +42,24 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
   const [markdownSource, setMarkdownSource] = useState(false);
   const previewBodyRef = useRef<HTMLDivElement>(null);
   const loadedIdentityRef = useRef<string | null>(null);
-  const pendingScrollPositionRef = useRef<ScrollPosition | null>(null);
+  const lastRestoredScrollKeyRef = useRef<string | null>(null);
   const onRootChangedRef = useRef(onRootChanged);
   onRootChangedRef.current = onRootChanged;
   const entryPath = entry?.type === 'file' ? entry.relativePath : null;
+  const entryAbsolutePath = entry?.type === 'file' ? entry.absolutePath : null;
   const rootRevision = root.revision;
-  const previewIdentity = entryPath ? `${instanceId}\u0000${entryPath}` : null;
+  const previewIdentity = entryAbsolutePath ? `${instanceId}\u0000${entryAbsolutePath}` : null;
+  const kind = metadata ? viewerFor(metadata) : null;
+  const text = useMemo(() => data ? new TextDecoder(metadata?.encoding || 'utf-8', { fatal: false }).decode(data) : '', [data, metadata?.encoding]);
+  const scrollKey = previewIdentity
+    ? `${previewIdentity}\u0000${kind === 'markdown' && !markdownSource ? 'rendered' : kind === 'markdown' ? 'source' : 'content'}`
+    : null;
 
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
     const samePreview = loadedIdentityRef.current === previewIdentity;
-    const currentScrollElement = previewScrollElement(previewBodyRef.current);
-    if (samePreview && currentScrollElement) {
-      pendingScrollPositionRef.current = {
-        top: currentScrollElement.scrollTop,
-        left: currentScrollElement.scrollLeft,
-      };
-    } else {
-      pendingScrollPositionRef.current = null;
-      currentScrollElement?.scrollTo({ top: 0, left: 0 });
+    if (!samePreview) {
       setMetadata(null);
       setData(null);
       setSource(null);
@@ -95,19 +104,32 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
   }, [entryPath, instanceId, previewIdentity, rootRevision]);
 
   useLayoutEffect(() => {
-    const position = pendingScrollPositionRef.current;
-    if (position === null || loading) return;
-    const target = previewScrollElement(previewBodyRef.current);
-    if (!target) return;
-    target.scrollTop = position.top;
-    target.scrollLeft = position.left;
-    pendingScrollPositionRef.current = null;
-  }, [data, loading, markdownSource, metadata, source]);
+    const target = previewBodyRef.current;
+    if (!target || !scrollKey) return undefined;
+    const save = () => savePreviewScrollPosition(scrollKey, target);
+    target.addEventListener('scroll', save, { passive: true });
+    return () => {
+      save();
+      target.removeEventListener('scroll', save);
+    };
+  }, [scrollKey]);
+
+  useLayoutEffect(() => {
+    const target = previewBodyRef.current;
+    if (!target || !scrollKey || loading) return;
+    const position = previewScrollPositions.get(scrollKey);
+    if (position) {
+      target.scrollTop = position.top;
+      target.scrollLeft = position.left;
+    } else if (lastRestoredScrollKeyRef.current !== scrollKey) {
+      target.scrollTop = 0;
+      target.scrollLeft = 0;
+    }
+    lastRestoredScrollKeyRef.current = scrollKey;
+  }, [data, loading, metadata, scrollKey, source]);
 
   useEffect(() => () => { if (source) URL.revokeObjectURL(source); }, [source]);
 
-  const kind = metadata ? viewerFor(metadata) : null;
-  const text = useMemo(() => data ? new TextDecoder(metadata?.encoding || 'utf-8', { fatal: false }).decode(data) : '', [data, metadata?.encoding]);
   const hasPreviewContent = Boolean(metadata && (data !== null || source !== null || kind === 'raw'));
   const download = async () => {
     if (!entry || !metadata) return;
@@ -156,20 +178,6 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
       </div>
     </section>
   );
-}
-
-function MarkdownPreview({ value }: { value: string }) {
-  const html = value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.*)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br />');
-  return <article className="filesystem-markdown-viewer" dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }} />;
 }
 
 function formatSize(size: number | null): string {

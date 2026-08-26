@@ -98,12 +98,9 @@ func (m *Manager) AcquireRemoteTransfer(ctx context.Context, id string) (ports.R
 		return nil, ctx.Err()
 	default:
 	}
-	transport, err := m.remoteTransport(id)
+	transport, err := m.auxiliaryTransport(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	if !m.reserveAuxiliary(transport) {
-		return nil, ErrTransportUnavailable
 	}
 	return &remoteTransferLease{
 		manager:   m,

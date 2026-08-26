@@ -2,7 +2,6 @@ import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { TerminalViewport } from '../terminal/terminal-viewport';
 import { TerminalSearch } from '../terminal/terminal-search';
-import { MobileTerminalComposer } from '../input/mobile-terminal-composer';
 import { useMobileKeyboard } from '../input/use-mobile-keyboard';
 import { VirtualKeyboardDock } from '../input/virtual-keyboard-dock';
 import type { ContextualMode } from '../input/contextual-keyboard-model';
@@ -75,7 +74,6 @@ export function WorkspacePage({
                 </button>
               </div>
             )}
-            {activeRuntime && <MobileTerminalComposer runtime={activeRuntime} active={mode === 'terminal'} keyboardOpen={mobileKeyboard.keyboardOpen} />}
           </section>
           <footer className="statusbar">
             <span>{currentConnection?.cwd || 'No connection'}</span>

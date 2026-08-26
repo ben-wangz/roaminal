@@ -2,9 +2,11 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/ben-wangz/roaminal/backend/internal/config"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func TestWebhookURLUsesV2AgentEventRoute(t *testing.T) {
@@ -67,5 +69,20 @@ func TestHelperInstallErrorMapsOnlyKnownCodes(t *testing.T) {
 	}
 	if helperInstallError([]byte(`{"error":"/remote/private/path"}`)) != nil {
 		t.Fatal("unknown helper output must remain generic")
+	}
+}
+
+func TestRemoteAgentErrorPreservesTransportFailure(t *testing.T) {
+	err := remoteAgentError("agent_install_failed", 502, "install failed", ports.ErrTransportUnavailable)
+	var agentErr *Error
+	if !errors.As(err, &agentErr) || agentErr.Code != "agent_transport_unavailable" || agentErr.Status != 503 {
+		t.Fatalf("mapped transport error = %v, want agent_transport_unavailable/503", err)
+	}
+	if !errors.Is(err, ports.ErrTransportUnavailable) {
+		t.Fatalf("mapped transport error lost cause: %v", err)
+	}
+	ordinary := remoteAgentError("agent_install_failed", 502, "install failed", errors.New("remote helper failed"))
+	if !errors.As(ordinary, &agentErr) || agentErr.Code != "agent_install_failed" || agentErr.Status != 502 {
+		t.Fatalf("ordinary error was remapped: %v", ordinary)
 	}
 }

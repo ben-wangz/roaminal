@@ -1,9 +1,16 @@
 package connection
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
+	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
 )
 
 func TestShortPathTokenKeepsMuxSocketPathBounded(t *testing.T) {
@@ -65,5 +72,83 @@ func TestClosedOwnerKeepsTransportReusableWhileChannelsRemain(t *testing.T) {
 	transport.Channels = 0
 	if transportAcceptsReuse(transport) {
 		t.Fatal("channel-less transport should block reuse")
+	}
+}
+
+func TestRefreshSourcesIsolatesUnrelatedChangesAndPreservesHistoricalAccess(t *testing.T) {
+	realSSH, err := exec.LookPath("ssh")
+	if err != nil {
+		t.Skip("ssh is unavailable")
+	}
+	sshDir := t.TempDir()
+	if err := os.Chmod(sshDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(sshDir, "config")
+	config := "Host *\n  User wildcard\n  Port 2200\nHost alpha\n  HostName alpha.example\nHost beta\n  HostName beta.example\n"
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := sshfs.OpenAt(sshDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	sshPath := filepath.Join(t.TempDir(), "ssh-wrapper")
+	script := fmt.Sprintf("#!/bin/sh\nexec %s -F %s \"$@\"\n", shellQuote(realSSH), shellQuote(configPath))
+	if err := os.WriteFile(sshPath, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	repo := sshconfig.New(root)
+	aliasAlpha, aliasBeta := "alpha", "beta"
+	runtime := newTransportTestRuntime(
+		ports.TerminalInstanceSummary{ID: "a-instance", ConnectionInstanceID: "a-instance", Type: "ssh", Purpose: "interactive", Lifecycle: "live", SourceState: "current", SourceHostAlias: &aliasAlpha},
+		ports.TerminalInstanceSummary{ID: "b-instance", ConnectionInstanceID: "b-instance", Type: "ssh", Purpose: "interactive", Lifecycle: "live", SourceState: "current", SourceHostAlias: &aliasBeta},
+	)
+	manager := &Manager{configRepo: repo, sshPath: sshPath, instances: NewInstanceService(runtime), transportPool: newTransportPool()}
+	alpha := &Transport{OwnerID: "a-instance", Alias: "alpha", SourceRevision: "", Channels: 1, SourceState: "current"}
+	beta := &Transport{OwnerID: "b-instance", Alias: "beta", SourceRevision: "", Channels: 1, SourceState: "current"}
+	alpha.SourceRevision, err = manager.sourceRevision(alpha.Alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beta.SourceRevision, err = manager.sourceRevision(beta.Alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.transportPool.transports[alpha.OwnerID] = alpha
+	manager.transportPool.transports[beta.OwnerID] = beta
+	manager.transportPool.instances[alpha.OwnerID] = alpha
+	manager.transportPool.instances[beta.OwnerID] = beta
+
+	if err := os.WriteFile(configPath, []byte(config+"Host unrelated\n  HostName unrelated.example\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager.refreshSources()
+	if alpha.Draining || beta.Draining {
+		t.Fatalf("unrelated Host change drained a transport: alpha=%+v beta=%+v", alpha, beta)
+	}
+
+	changedBeta := "Host *\n  User wildcard\n  Port 2200\nHost alpha\n  HostName alpha.example\nHost beta\n  HostName beta-new.example\nHost unrelated\n  HostName unrelated.example\n"
+	if err := os.WriteFile(configPath, []byte(changedBeta), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager.refreshSources()
+	if alpha.Draining {
+		t.Fatal("changing beta drained alpha")
+	}
+	if !beta.Draining || beta.SourceState != "changed" {
+		t.Fatalf("changing beta did not drain only beta: %+v", beta)
+	}
+	if !transportAcceptsAuxiliary(alpha) || !transportAcceptsAuxiliary(beta) {
+		t.Fatal("historical transport lost auxiliary capability after source change")
+	}
+
+	if err := os.WriteFile(configPath, []byte("Host *\n  User wildcard\n  Port 2200\nHost alpha\n  HostName alpha.example\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager.refreshSources()
+	if alpha.Draining || beta.SourceState != "deleted" || !beta.Draining {
+		t.Fatalf("deleting beta did not preserve alpha and mark beta deleted: alpha=%+v beta=%+v", alpha, beta)
 	}
 }

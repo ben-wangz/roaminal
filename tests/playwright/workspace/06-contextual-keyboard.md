@@ -40,7 +40,8 @@ desktop. Run serially for byte-capture fixtures.
    are never simultaneously expanded. Collapse/expand state follows the
    login-scoped browser preference; switching to FileSystem hides the dock.
 8. When the native mobile keyboard is open, the Virtual Keyboard key content is
-   hidden and the composer is the only custom text-entry surface. Closing the
+   hidden and the active xterm helper textarea is the only text-entry path;
+   no application-owned composer or Send control is rendered. Closing the
    native keyboard restores the saved Virtual Keyboard preference.
 9. During a pending launch, before WebSocket connection, after disconnection,
    and after exit, every applicable key is disabled and sends no frames to an
