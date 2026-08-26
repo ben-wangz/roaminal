@@ -1,13 +1,11 @@
 import type { RefObject } from 'react';
-import { AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-session-ui';
+import type { AuthSessionSummary } from '../auth/auth-session-ui';
 import { connectionDisplayName } from '../status/connection-label';
-import { Toast, type ToastKind, type ToastState } from '../ui/toast';
+import type { ToastKind, ToastState } from '../ui/toast';
 import { ConnectionSidebar } from '../ui/connection-sidebar';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import type { ContextualMode } from '../input/contextual-keyboard-model';
-import { RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialogs';
-import { AgentDialog } from '../ui/agent-dialog';
 import { ConnectionManager } from '../connections/connection-manager';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { ConnectionInstanceLayout, InstanceMovePlacement } from '../connections/connection-instance-groups';
@@ -21,9 +19,8 @@ import { WorkspacePage, type WorkspaceMode } from './workspace-page';
 import { VirtualKeyboardDock } from '../input/virtual-keyboard-dock';
 import { MessageNoticeStack, MessagePopover } from '../messages/message-center';
 import type { useMessages } from '../messages/use-messages';
-
-export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null;
-
+import { AppShellOverlays, type Dialog } from './app-shell-overlays';
+export type { Dialog } from './app-shell-overlays';
 type Props = {
   page: AppPage;
   appearance: TerminalAppearance;
@@ -284,38 +281,20 @@ export function AppShellView({
           />
         )}
       </main>
-      <Toast toast={toast} />
-      {dialog?.type === 'rename' && dialogConnection && (
-        <RenameTitleDialog
-          connection={dialogConnection}
-          onSave={(title) => onRenameTitle(dialogConnection.connectionInstanceId, title)}
-          onClose={onCloseDialog}
-        />
-      )}
-      {dialog?.type === 'terminate' && dialogConnection && (
-        <CloseConnectionDialog
-          connection={dialogConnection}
-          onConfirm={() => onTerminateConnection(dialogConnection.connectionInstanceId)}
-          onClose={onCloseDialog}
-        />
-      )}
-      {dialog?.type === 'auth' && (
-        <AuthSessionsDialog
-          sessions={authSessions}
-          currentId={currentAuthSessionId}
-          busy={authSessionBusy}
-          onRevoke={onRevokeAuthSession}
-          onLogoutOthers={onLogoutOtherAuthSessions}
-          onClose={onCloseDialog}
-        />
-      )}
-      {dialog?.type === 'agent' && dialogConnection && (
-        <AgentDialog
-          connection={dialogConnection}
-          onClose={onCloseDialog}
-          onShowToast={onShowToast}
-        />
-      )}
+      <AppShellOverlays
+        toast={toast}
+        dialog={dialog}
+        dialogConnection={dialogConnection}
+        authSessions={authSessions}
+        currentAuthSessionId={currentAuthSessionId}
+        authSessionBusy={authSessionBusy}
+        onShowToast={onShowToast}
+        onRenameTitle={onRenameTitle}
+        onTerminateConnection={onTerminateConnection}
+        onRevokeAuthSession={onRevokeAuthSession}
+        onLogoutOtherAuthSessions={onLogoutOtherAuthSessions}
+        onCloseDialog={onCloseDialog}
+      />
     </div>
   );
 }
