@@ -23,7 +23,7 @@ imagePullSecrets: []
 image:
   registry: ghcr.io
   repository: ben-wangz/roaminal
-  tag: 0.3.8
+  tag: 0.3.9
   digest: ""
   pullPolicy: IfNotPresent
 
