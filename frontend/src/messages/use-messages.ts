@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import type { AuthState } from '../auth/auth-storage';
-import { advanceMessageReadState, fetchMessages, type AgentMessage, type MessageStateProjection } from './message-api';
+import { advanceMessageReadState, clearMessages as clearMessagesRequest, deleteMessage as deleteMessageRequest, fetchMessages, type AgentMessage, type MessageStateProjection } from './message-api';
 import { MessageController } from './message-controller';
+import { closeAgentNotification, closeAgentNotifications, notifyAgentMessage } from '../status/notification-service';
 
 type Params = {
   auth: AuthState | null;
   heartbeatState: MessageStateProjection | null;
   nativeKeyboardOpen: boolean;
+  onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
 };
 
-export function useMessages({ auth, heartbeatState, nativeKeyboardOpen }: Params) {
+export function useMessages({ auth, heartbeatState, nativeKeyboardOpen, onToast }: Params) {
   const controllerRef = useRef<MessageController | null>(null);
   if (!controllerRef.current) controllerRef.current = new MessageController();
   const controller = controllerRef.current;
@@ -35,7 +37,11 @@ export function useMessages({ auth, heartbeatState, nativeKeyboardOpen }: Params
         clearTimeout(retryTimer.current);
         retryTimer.current = null;
       }
-      if (authenticatedRef.current) controller.applyPage(page, { baseline: baseline || !controller.getSnapshot().hydrated });
+      if (authenticatedRef.current) {
+        const baselinePage = baseline || !controller.getSnapshot().hydrated;
+        const incoming = controller.applyPage(page, { baseline: baselinePage });
+        if (!baselinePage) for (const message of incoming) notifyAgentMessage(message);
+      }
     } catch {
       if (retryTimer.current === null) {
         retryTimer.current = setTimeout(() => {
@@ -108,6 +114,35 @@ export function useMessages({ auth, heartbeatState, nativeKeyboardOpen }: Params
     }
   }, [auth, controller, state.loading, state.nextCursor]);
 
+  const deleteMessage = useCallback(async (messageId: string) => {
+    if (!auth || !authenticatedRef.current || !controller.beginDelete(messageId)) return;
+    try {
+      const result = await deleteMessageRequest(auth, messageId);
+      if (authenticatedRef.current) controller.applyDeletedMessage(result);
+      else controller.finishDelete(messageId);
+      void syncRef.current(false);
+      void closeAgentNotification(messageId);
+    } catch (err) {
+      controller.finishDelete(messageId);
+      onToast(err instanceof Error ? err.message : 'Unable to update messages.', 'error');
+    }
+  }, [auth, controller, onToast]);
+
+  const clearMessages = useCallback(async () => {
+    if (!auth || !authenticatedRef.current || !controller.beginClear()) return;
+    try {
+      const result = await clearMessagesRequest(auth);
+      if (authenticatedRef.current) controller.applyClearedMessages(result);
+      else controller.finishClear();
+      void syncRef.current(false);
+      void closeAgentNotifications();
+      onToast('Messages cleared.', 'success');
+    } catch (err) {
+      controller.finishClear();
+      onToast(err instanceof Error ? err.message : 'Unable to update messages.', 'error');
+    }
+  }, [auth, controller, onToast]);
+
   const clickMessage = useCallback(async (message: AgentMessage, navigate: (id: string) => void) => {
     await markRead(message.sequence);
     const id = message.connectionInstanceIds[0];
@@ -120,8 +155,12 @@ export function useMessages({ auth, heartbeatState, nativeKeyboardOpen }: Params
     togglePopover: useCallback(() => controller.togglePopover(), [controller]),
     closePopover: useCallback(() => controller.closePopover(), [controller]),
     dismissNotice: useCallback((noticeID: string) => controller.dismissNotice(noticeID), [controller]),
+    beginClearConfirmation: useCallback(() => controller.beginClearConfirmation(), [controller]),
+    cancelClearConfirmation: useCallback(() => controller.cancelClearConfirmation(), [controller]),
     markRead,
     loadOlder,
+    deleteMessage,
+    clearMessages,
     clickMessage,
   };
 }

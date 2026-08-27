@@ -91,6 +91,14 @@ auth:
   existingSecret: roaminal
   passwordKey: password
 
+# Optional authenticated Web Push sender configuration. The chart never
+# creates this Secret; leave existingSecret empty to keep Web Push disabled.
+webPush:
+  existingSecret: ""
+  vapidPublicKeyKey: vapid-public-key
+  vapidPrivateKeyKey: vapid-private-key
+  subjectKey: subject
+
 persistence:
   enabled: true
   existingClaim: ""

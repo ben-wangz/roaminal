@@ -34,7 +34,7 @@ func applyArgs(c *Config, args []string) error {
 		key, value, hasValue := strings.Cut(arg, "=")
 		if !hasValue {
 			switch key {
-			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-webhook-base-url", "--agent-allow-insecure-webhook", "--agent-hooks-dir":
+			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-webhook-base-url", "--agent-allow-insecure-webhook", "--agent-hooks-dir", "--web-push-vapid-public-key", "--web-push-vapid-private-key", "--web-push-subject":
 				if i+1 >= len(args) {
 					return fmt.Errorf("missing value for %s", key)
 				}
@@ -117,6 +117,12 @@ func applyArgs(c *Config, args []string) error {
 			c.AgentAllowInsecureWebhook = b
 		case "--agent-hooks-dir":
 			c.AgentHooksDir = value
+		case "--web-push-vapid-public-key":
+			c.WebPushVAPIDPublicKey = value
+		case "--web-push-vapid-private-key":
+			c.WebPushVAPIDPrivateKey = value
+		case "--web-push-subject":
+			c.WebPushSubject = value
 		default:
 			return fmt.Errorf("unknown argument %s", arg)
 		}
@@ -191,6 +197,15 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := set("ROAMINAL_AGENT_HOOKS_DIR", func(v string) error { c.AgentHooksDir = v; return nil }); err != nil {
+		return err
+	}
+	if err := set("ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY", func(v string) error { c.WebPushVAPIDPublicKey = v; return nil }); err != nil {
+		return err
+	}
+	if err := set("ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY", func(v string) error { c.WebPushVAPIDPrivateKey = v; return nil }); err != nil {
+		return err
+	}
+	if err := set("ROAMINAL_WEB_PUSH_SUBJECT", func(v string) error { c.WebPushSubject = v; return nil }); err != nil {
 		return err
 	}
 	return nil

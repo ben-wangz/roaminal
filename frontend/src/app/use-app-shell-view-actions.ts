@@ -4,6 +4,7 @@ import type { ToastKind } from '../ui/toast';
 import type { AppPage } from './app-state';
 import type { ConnectionView } from './connection-view';
 import type { Dialog } from './app-shell-view';
+import type { WorkspaceTool } from './workspace-tool';
 
 type Params = {
   workspaceMode: 'terminal' | 'filesystem';
@@ -11,8 +12,8 @@ type Params = {
   onOpenFileSystem: (id: string) => void;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<SetStateAction<Dialog>>;
-  setSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  setVirtualKeyboardOpen: Dispatch<SetStateAction<boolean>>;
+  setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
+  setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
   cancelLaunch: () => void;
@@ -27,8 +28,8 @@ export function useAppShellViewActions({
   onOpenFileSystem,
   setPreviewConnectionInstanceId,
   setDialog,
-  setSidebarOpen,
-  setVirtualKeyboardOpen,
+  setWorkspaceTool,
+  setWorkspaceToolOpen,
   setSearch,
   setPage,
   cancelLaunch,
@@ -50,30 +51,34 @@ export function useAppShellViewActions({
   }, [onOpenTerminal, setDialog, workspaceMode]);
   const handleOpenFileSystem = useCallback((id: string) => {
     setPreviewConnectionInstanceId(null);
-    setVirtualKeyboardOpen(false);
+    setWorkspaceTool('connections');
+    setWorkspaceToolOpen(!window.matchMedia('(max-width: 800px)').matches);
     onOpenFileSystem(id);
-  }, [onOpenFileSystem, setPreviewConnectionInstanceId, setVirtualKeyboardOpen]);
+  }, [onOpenFileSystem, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), [setDialog]);
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), [setDialog]);
-  const handleOpenSidebar = useCallback(() => {
-    setVirtualKeyboardOpen(false);
-    setSidebarOpen(true);
-  }, [setSidebarOpen, setVirtualKeyboardOpen]);
+  const handleSelectConnectionsTool = useCallback(() => {
+    setPreviewConnectionInstanceId(null);
+    setWorkspaceTool('connections');
+    setWorkspaceToolOpen(true);
+  }, [setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleToggleSearch = useCallback(() => setSearch((value) => !value), [setSearch]);
   const handleCloseSearch = useCallback(() => setSearch(false), [setSearch]);
   const handleOpenConnections = useCallback(() => {
     cancelLaunch();
     setPreviewConnectionInstanceId(null);
-    setVirtualKeyboardOpen(false);
+    setWorkspaceToolOpen(false);
+    setWorkspaceTool('connections');
     setSearch(false);
     setPage('connections');
-  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSearch, setVirtualKeyboardOpen]);
+  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleOpenAppearance = useCallback(() => {
     setPreviewConnectionInstanceId(null);
-    setVirtualKeyboardOpen(false);
+    setWorkspaceToolOpen(false);
+    setWorkspaceTool('connections');
     setSearch(false);
     setPage('appearance');
-  }, [setPage, setPreviewConnectionInstanceId, setSearch, setVirtualKeyboardOpen]);
+  }, [setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleOpenWorkspace = useCallback(() => {
     if (viewRef.current.activeConnectionInstanceId) setPage('workspace');
   }, [setPage, viewRef]);
@@ -94,7 +99,7 @@ export function useAppShellViewActions({
     handleOpenFileSystem,
     handleRename,
     handleTerminate,
-    handleOpenSidebar,
+    handleSelectConnectionsTool,
     handleToggleSearch,
     handleCloseSearch,
     handleOpenConnections,

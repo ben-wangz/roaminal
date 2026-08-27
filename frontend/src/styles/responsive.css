@@ -1,11 +1,12 @@
 /* 800px breakpoint mirrored in input/viewport.ts (SIDEBAR_BREAKPOINT_QUERY). */
-.sidebar-open-button { flex: 0 0 auto; }
 @media (max-width: 800px) {
   .app-shell { flex-direction: column; }
-  .sidebar { position: fixed; inset: 0 auto 0 0; width: min(300px, 88vw); flex-basis: min(300px, 88vw); transform: translateX(-100%); box-shadow: 12px 0 28px rgba(0,0,0,.32); }
-  .sidebar.open { transform: translateX(0); }
-  .sidebar.closed { width: min(300px, 88vw); flex-basis: min(300px, 88vw); overflow: visible; border-right: 1px solid var(--border); pointer-events: none; }
-  .sidebar-backdrop { position: fixed; inset: 0; z-index: 2; display: block; border: 0; background: rgba(0,43,54,.58); }
+  .workspace-tool-surface.workspace-tool-connections { position: fixed; inset: 0 auto 0 0; width: min(300px, 88vw); flex-basis: min(300px, 88vw); transform: translateX(-100%); box-shadow: 12px 0 28px rgba(0,0,0,.32); }
+  .workspace-tool-surface.workspace-tool-connections.open { transform: translateX(0); }
+  .workspace-tool-surface.workspace-tool-connections.closed { width: min(300px, 88vw); flex-basis: min(300px, 88vw); overflow: visible; border-right: 1px solid var(--border); pointer-events: none; }
+  .workspace-tool-surface.workspace-tool-keyboard { order: 2; flex: 0 0 auto; width: 100%; max-height: min(44vh, 360px); transform: none; transition: none; border-top: 1px solid var(--border); border-right: 0; background: var(--shade-2); }
+  .workspace-tool-surface.workspace-tool-keyboard.closed { display: none; }
+  .workspace-tool-backdrop { position: fixed; inset: 0; z-index: 2; display: block; border: 0; background: rgba(0,43,54,.58); }
   .main-panel { order: 1; width: 100%; }
   .terminal-stage { padding: 8px 8px 0; }
   .connection-card:hover .connection-card-overlay, .connection-card:focus-within .connection-card-overlay { transform: none; }
@@ -13,10 +14,10 @@
   .appearance-content { grid-template-columns: 1fr; gap: 18px; margin-top: 22px; }
   .appearance-header { align-items: flex-start; }
 }
-@media (min-width: 801px) { .main-panel.expanded { width: auto; } .sidebar-backdrop { display: none; } }
+@media (min-width: 801px) { .main-panel.expanded { width: auto; } .workspace-tool-backdrop { display: none; } }
 html[data-roaminal-keyboard="open"] .topbar,
 html[data-roaminal-keyboard="open"] .remote-monitor-band,
-html[data-roaminal-keyboard="open"] .virtual-keyboard-dock,
+html[data-roaminal-keyboard="open"] .workspace-tool-keyboard,
 html[data-roaminal-keyboard="open"] .statusbar { display: none; }
 html[data-roaminal-keyboard="open"] .terminal-stage { padding: 0; }
 @media (max-width: 440px) {

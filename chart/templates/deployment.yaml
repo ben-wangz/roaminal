@@ -166,6 +166,23 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.auth.existingSecret }}
                   key: {{ .Values.auth.passwordKey }}
+            {{- if .Values.webPush.existingSecret }}
+            - name: ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.webPush.existingSecret }}
+                  key: {{ .Values.webPush.vapidPublicKeyKey }}
+            - name: ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.webPush.existingSecret }}
+                  key: {{ .Values.webPush.vapidPrivateKeyKey }}
+            - name: ROAMINAL_WEB_PUSH_SUBJECT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.webPush.existingSecret }}
+                  key: {{ .Values.webPush.subjectKey }}
+            {{- end }}
           {{- if .Values.extraEnv }}
             {{- toYaml .Values.extraEnv | nindent 12 }}
           {{- end }}

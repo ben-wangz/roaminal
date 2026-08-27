@@ -24,6 +24,9 @@ Roaminal fields are accepted. Durations use Go syntax.
 | `agentWebhookBaseUrl` | `--agent-webhook-base-url` | `ROAMINAL_AGENT_WEBHOOK_BASE_URL` | empty; uses the verified request origin |
 | `agentAllowInsecureWebhook` | `--agent-allow-insecure-webhook=<bool>` | `ROAMINAL_AGENT_ALLOW_INSECURE_WEBHOOK` | `false` |
 | `agentHooksDir` | `--agent-hooks-dir` | `ROAMINAL_AGENT_HOOKS_DIR` | `/opt/roaminal/agents/hooks` |
+| `webPushVapidPublicKey` | `--web-push-vapid-public-key` | `ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY` | empty; disables Web Push when all three fields are empty |
+| `webPushVapidPrivateKey` | `--web-push-vapid-private-key` | `ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY` | empty |
+| `webPushSubject` | `--web-push-subject` | `ROAMINAL_WEB_PUSH_SUBJECT` | empty |
 
 Terms acknowledgement is required. Explicitly supplied empty passwords are an
 error; when no password is supplied a new random password is printed once at
@@ -32,7 +35,7 @@ restart. Invalid values fail startup rather than being clamped.
 
 The state directory is `~/.roaminal`. It contains authentication sessions,
 per-login-session `workspace-layouts.json`, Agent endpoint bindings and token
-hashes, `messages.json`, upload records, active
+hashes, `messages.json`, `push-subscriptions.json`, upload records, active
 `connection-instances/<id>/metadata.json` and `terminal.snapshot` files, audit
 copies under `audit/connection-instances/`, and
 `ssh-connection-options.yaml` for Roaminal-only tmux/FileSystem settings.
@@ -44,3 +47,9 @@ stored below `diagnostics/` with bounded retention.
 without credentials, query, or fragment; non-loopback HTTP requires
 `agentAllowInsecureWebhook=true`. The hook asset directory is read-only input
 to Agent initialization and normally comes from the container image.
+
+Web Push is disabled unless `webPushVapidPublicKey`,
+`webPushVapidPrivateKey`, and `webPushSubject` are configured together. For
+Helm, put these values in an existing Secret and reference it with
+`webPush.existingSecret`; the chart maps its configured keys to the three
+environment variables and never renders the secret contents.

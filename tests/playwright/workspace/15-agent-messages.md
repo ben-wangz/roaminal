@@ -35,38 +35,59 @@ disposable remote home. Viewports: desktop, tablet, phone, and 320 px.
    yet.` on a fresh fixture. Opening the panel marks loaded messages read;
    `Mark all read` advances the global cursor. In two tabs, verify read state
    never moves backwards and synchronizes after the next heartbeat revision.
-7. Generate more than three messages together. Verify transient notices show
+7. Click a message whose target connection instance is live and verify the
+   workspace switches to that connection's Terminal mode. From a message
+   associated with multiple live instances, verify the selected live instance
+   is preferred and a remaining live instance is selected after the current
+   one is retired. Retire every associated instance, click the historical row,
+   and verify the exact toast `The connection for this message is no longer
+   connected.` appears without changing the active connection or workspace.
+8. Delete one history row with its trailing delete control and verify only that
+   row disappears, its transient notice disappears, and the row remains absent
+   after refresh. Open the clear control, verify the compact inline
+   confirmation `Clear all messages?`, cancel it once without data loss, then
+   confirm it and verify all rows and notices disappear, the exact empty state
+   is `No messages yet.`, and the Bell has no badge. A repeated delete of the
+   same ID must not create an error.
+9. Generate more than three messages together. Verify transient notices show
    at most the newest two plus one summary such as `3 more Agent messages`.
    Info/success notices expire after six seconds and an explicit failed fixture
    (only if supported) expires after ten seconds. Dismissal leaves the durable
    row unread; clicking a notice marks it read and navigates when a live target
    exists. The existing bottom-right operation toast remains visible and
    independent.
-8. At phone and tablet widths verify the Bell remains in the topbar and the
+10. At phone and tablet widths verify the Bell remains in the topbar and the
    message panel is a fixed panel with 8 px side margins below the topbar, not
    a bottom sheet. Open the native software keyboard through the terminal
    helper, verify the panel closes and notices are suppressed without moving
    focus from the helper textarea, then create a message and verify at most the
    newest queued notice appears after the keyboard closes.
-9. Inspect request and browser diagnostics. Message responses must not contain
+11. Inspect request and browser diagnostics. Message responses must not contain
    endpoint keys, Agent event IDs, Codex session or turn IDs, tmux socket
    fingerprints, tokens, webhook URLs, prompts, transcripts, cwd, models,
    command output, tool arguments, or tool output. Invalid cursors return
    `message_cursor_invalid`; malformed read state returns
    `message_read_state_invalid`; a storage outage returns retryable
    `message_store_unavailable` without acknowledging the Agent event.
-10. Verify Escape and outside pointer close the panel and return focus to the
+12. Verify Escape and outside pointer close the panel and return focus to the
     Bell, icon-only controls have accessible names and tooltips, status is not
-    communicated by color alone, reduced motion is understandable, and the
-    320 px viewport has no horizontal document overflow.
+    communicated by color alone, reduced motion is understandable, delete and
+    clear controls are keyboard accessible, and the 320 px viewport has no
+    horizontal document overflow. Repeat the row and clear-control assertions
+    at phone and tablet widths, where the row delete control must remain
+    available without hover.
 
 ## Pass gate and cleanup
 
 Correlate every message API response with the event or UI action that caused
 it. Fail on duplicate durable messages, replayed hydration notices, incorrect
-shared-target attribution, read-state regression, leaked metadata, unexpected
-browser diagnostics, or any command/fullscreen UI. Capture screenshots of the
-Bell with an unread badge, the open history panel, a transient notice, the
-shared-target `+1` label, and the keyboard-suppressed phone layout. Delete only
+shared-target attribution, read-state regression, undeleted rows, accidental
+clear without confirmation, wrong unavailable-target navigation, leaked
+metadata, unexpected browser diagnostics, automatic command execution, or
+automatic fullscreen entry. The independent browser notification and
+fullscreen controls are covered by their dedicated capability assertions.
+Capture screenshots of the Bell with an unread badge, the open history panel,
+a transient notice, the shared-target `+1` label, the unavailable-target toast,
+the clear confirmation, and the keyboard-suppressed phone layout. Delete only
 connection instances, tmux sessions, and remote files created by the case,
 then reset the disposable fixture home.

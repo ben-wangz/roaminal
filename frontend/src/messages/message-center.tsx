@@ -1,11 +1,11 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { CheckCheck, CheckCircle2, CircleAlert, Info, X } from 'lucide-react';
+import { CheckCheck, CheckCircle2, CircleAlert, Info, Trash2, X } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { connectionDisplayName } from '../status/connection-label';
 import type { AgentMessage } from './message-api';
 import type { MessageControllerState, MessageNotice } from './message-controller';
 
-type MessageTarget = { label: string; connectionInstanceId: string | null };
+export type MessageTarget = { label: string; connectionInstanceId: string | null; connected: boolean };
 
 type SharedProps = {
   state: MessageControllerState;
@@ -13,18 +13,36 @@ type SharedProps = {
   activeConnectionInstanceId: string | null;
   onMarkRead: (sequence: number) => Promise<void>;
   onNavigate: (connectionInstanceId: string) => void;
+  onUnavailableTarget: () => void;
   onDismissNotice?: (noticeId: string) => void;
+  onDeleteMessage: (messageId: string) => Promise<void>;
 };
 
 type PopoverProps = SharedProps & {
   bellRef: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onLoadOlder: () => Promise<void>;
+  onBeginClearConfirmation: () => void;
+  onCancelClearConfirmation: () => void;
+  onClearMessages: () => Promise<void>;
 };
 
-export function MessagePopover({ state, connections, activeConnectionInstanceId, bellRef, onClose, onMarkRead, onNavigate, onLoadOlder }: PopoverProps) {
+export function MessagePopover({
+  state,
+  connections,
+  activeConnectionInstanceId,
+  bellRef,
+  onClose,
+  onMarkRead,
+  onNavigate,
+  onUnavailableTarget,
+  onLoadOlder,
+  onDeleteMessage,
+  onBeginClearConfirmation,
+  onCancelClearConfirmation,
+  onClearMessages,
+}: PopoverProps) {
   const panelRef = useRef<HTMLElement>(null);
-  const messageListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!state.popoverOpen) return undefined;
@@ -50,14 +68,27 @@ export function MessagePopover({ state, connections, activeConnectionInstanceId,
   if (!state.popoverOpen || state.keyboardOpen) return null;
   return (
     <section id="message-popover" ref={panelRef} className="message-popover" aria-labelledby="message-popover-title" data-testid="message-popover">
-      <header className="message-popover-header">
+      <header className={`message-popover-header ${state.clearConfirming ? 'confirming' : ''}`}>
         <div className="message-popover-heading">
           <h2 id="message-popover-title">Messages</h2>
           <span className="message-unread-count">{state.unreadCount}</span>
         </div>
-        <button className="icon-button" type="button" onClick={() => { onClose(); bellRef.current?.focus(); }} aria-label="Close messages" title="Close messages">
-          <X aria-hidden="true" size={16} />
-        </button>
+        <div className="message-popover-header-actions">
+          {state.clearConfirming ? (
+            <div className="message-clear-confirmation" data-testid="message-clear-confirmation">
+              <span>Clear all messages?</span>
+              <button className="text-button message-clear-confirm" type="button" onClick={() => void onClearMessages()} disabled={state.clearPending}>Clear</button>
+              <button className="text-button" type="button" onClick={onCancelClearConfirmation} disabled={state.clearPending}>Cancel</button>
+            </div>
+          ) : state.messages.length > 0 ? (
+            <button className="icon-button" type="button" onClick={onBeginClearConfirmation} disabled={state.clearPending} aria-label="Clear all messages" title="Clear all messages">
+              <Trash2 aria-hidden="true" size={16} />
+            </button>
+          ) : null}
+          <button className="icon-button" type="button" onClick={() => { onClose(); bellRef.current?.focus(); }} aria-label="Close messages" title="Close messages">
+            <X aria-hidden="true" size={16} />
+          </button>
+        </div>
       </header>
       {state.unreadCount > 0 && (
         <div className="message-popover-actions">
@@ -67,7 +98,6 @@ export function MessagePopover({ state, connections, activeConnectionInstanceId,
         </div>
       )}
       <div
-        ref={messageListRef}
         className="message-list"
         role="list"
         aria-busy={state.loading}
@@ -82,13 +112,16 @@ export function MessagePopover({ state, connections, activeConnectionInstanceId,
           <MessageRow
             key={message.messageId}
             message={message}
-            target={resolveTarget(message, connections, activeConnectionInstanceId)}
+            target={resolveMessageTarget(message, connections, activeConnectionInstanceId)}
+            deleting={state.deletingMessageIds.includes(message.messageId)}
             onClick={async () => {
               await onMarkRead(message.sequence);
-              const target = resolveTarget(message, connections, activeConnectionInstanceId);
+              const target = resolveMessageTarget(message, connections, activeConnectionInstanceId);
               if (target.connectionInstanceId) onNavigate(target.connectionInstanceId);
+              else onUnavailableTarget();
               onClose();
             }}
+            onDelete={() => onDeleteMessage(message.messageId)}
           />
         ))}
         {state.loading && state.messages.length > 0 && <p className="message-loading">Loading...</p>}
@@ -97,26 +130,52 @@ export function MessagePopover({ state, connections, activeConnectionInstanceId,
   );
 }
 
-function MessageRow({ message, target, onClick }: { message: AgentMessage; target: MessageTarget; onClick: () => Promise<void> }) {
+function MessageRow({
+  message,
+  target,
+  deleting,
+  onClick,
+  onDelete,
+}: {
+  message: AgentMessage;
+  target: MessageTarget;
+  deleting: boolean;
+  onClick: () => Promise<void>;
+  onDelete: () => Promise<void>;
+}) {
   const StatusIcon = messageIcon(message.severity);
   const occurred = Date.parse(message.occurredAt);
   const exactTime = Number.isFinite(occurred) ? new Date(occurred).toLocaleString() : message.occurredAt;
   return (
-    <div className={`message-row-shell ${message.read ? 'read' : 'unread'}`} role="listitem">
-      <button className="message-row" type="button" onClick={() => void onClick()} title={exactTime}>
-        <StatusIcon className="message-status-icon" aria-hidden="true" size={16} />
-        <span className="message-row-copy">
-          <strong title={target.label}>{target.label}</strong>
-          <span>{message.text}</span>
-        </span>
-        <time dateTime={message.occurredAt} title={exactTime}>{relativeTime(occurred)}</time>
-        {!message.read && <span className="message-unread-dot" aria-label="Unread" title="Unread" />}
-      </button>
+    <div className={`message-row-shell ${message.read ? 'read' : 'unread'} ${deleting ? 'deleting' : ''}`} role="listitem">
+      <div className="message-row">
+        <button className="message-row-main" type="button" onClick={() => void onClick()} title={exactTime} disabled={deleting}>
+          <StatusIcon className="message-status-icon" aria-hidden="true" size={16} />
+          <span className="message-row-copy">
+            <strong title={target.label}>{target.label}</strong>
+            <span>{message.text}</span>
+            {!target.connected && <small>Not connected</small>}
+          </span>
+          <time dateTime={message.occurredAt} title={exactTime}>{relativeTime(occurred)}</time>
+          {!message.read && <span className="message-unread-dot" aria-label="Unread" title="Unread" />}
+        </button>
+        <button className="icon-button message-row-delete" type="button" onClick={(event) => { event.stopPropagation(); void onDelete(); }} disabled={deleting} aria-label="Delete message" title="Delete message">
+          <Trash2 aria-hidden="true" size={14} />
+        </button>
+      </div>
     </div>
   );
 }
 
-export function MessageNoticeStack({ state, connections, activeConnectionInstanceId, onMarkRead, onNavigate, onDismissNotice }: SharedProps) {
+export function MessageNoticeStack({
+  state,
+  connections,
+  activeConnectionInstanceId,
+  onMarkRead,
+  onNavigate,
+  onUnavailableTarget,
+  onDismissNotice,
+}: SharedProps) {
   if (state.keyboardOpen || state.notices.length === 0) return null;
   return (
     <div className="message-notice-stack" data-testid="message-notices">
@@ -130,12 +189,14 @@ export function MessageNoticeStack({ state, connections, activeConnectionInstanc
         <MessageNoticeItem
           key={notice.noticeId}
           notice={notice}
-          target={notice.message ? resolveTarget(notice.message, connections, activeConnectionInstanceId) : null}
+          target={notice.message ? resolveMessageTarget(notice.message, connections, activeConnectionInstanceId) : null}
           onClick={async () => {
             if (!notice.message) return;
             await onMarkRead(notice.message.sequence);
-            const target = resolveTarget(notice.message, connections, activeConnectionInstanceId);
+            const target = resolveMessageTarget(notice.message, connections, activeConnectionInstanceId);
             if (target.connectionInstanceId) onNavigate(target.connectionInstanceId);
+            else onUnavailableTarget();
+            onDismissNotice?.(notice.noticeId);
           }}
           onDismiss={() => onDismissNotice?.(notice.noticeId)}
         />
@@ -144,7 +205,17 @@ export function MessageNoticeStack({ state, connections, activeConnectionInstanc
   );
 }
 
-function MessageNoticeItem({ notice, target, onClick, onDismiss }: { notice: MessageNotice; target: MessageTarget | null; onClick: () => Promise<void>; onDismiss: () => void }) {
+function MessageNoticeItem({
+  notice,
+  target,
+  onClick,
+  onDismiss,
+}: {
+  notice: MessageNotice;
+  target: MessageTarget | null;
+  onClick: () => Promise<void>;
+  onDismiss: () => void;
+}) {
   const StatusIcon = messageIcon(notice.severity);
   const clickable = Boolean(notice.message && target?.connectionInstanceId);
   const occurred = notice.message ? Date.parse(notice.message.occurredAt) : Number.NaN;
@@ -157,6 +228,7 @@ function MessageNoticeItem({ notice, target, onClick, onDismiss }: { notice: Mes
         <span>
           <strong>{target?.label || notice.text}</strong>
           {target && <span>{notice.text}</span>}
+          {target && !target.connected && <small>Not connected</small>}
           <time dateTime={new Date(timestamp).toISOString()} title={exactTime}>{relativeTime(timestamp)}</time>
         </span>
       </button>
@@ -173,12 +245,24 @@ function messageIcon(severity: AgentMessage['severity'] | MessageNotice['severit
   return Info;
 }
 
-function resolveTarget(message: AgentMessage, connections: ConnectionInstanceSummary[], activeID: string | null): MessageTarget {
+export function resolveMessageTarget(message: AgentMessage, connections: ConnectionInstanceSummary[], activeID: string | null): MessageTarget {
   const matches = connections.filter((connection) => message.connectionInstanceIds.includes(connection.connectionInstanceId));
-  const selected = matches.find((connection) => connection.connectionInstanceId === activeID) || matches[0];
-  if (!selected) return { label: message.fallbackLabel || 'Historical connection', connectionInstanceId: null };
+  const liveMatches = matches.filter((connection) => connection.lifecycle === 'live');
+  const selected = liveMatches.find((connection) => connection.connectionInstanceId === activeID) || liveMatches[0];
+  if (!selected) {
+    const historical = matches[0];
+    return {
+      label: historical ? connectionDisplayName(historical, connections) : message.fallbackLabel || 'Historical connection',
+      connectionInstanceId: null,
+      connected: false,
+    };
+  }
   const base = connectionDisplayName(selected, connections);
-  return { label: matches.length > 1 ? `${base} +${matches.length - 1}` : base, connectionInstanceId: selected.connectionInstanceId };
+  return {
+    label: liveMatches.length > 1 ? `${base} +${liveMatches.length - 1}` : base,
+    connectionInstanceId: selected.connectionInstanceId,
+    connected: true,
+  };
 }
 
 function relativeTime(timestamp: number): string {

@@ -1,6 +1,6 @@
-.virtual-keyboard-dock {
-  flex: 0 0 300px;
-  width: 300px;
+.virtual-keyboard-content {
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -8,14 +8,7 @@
   gap: 12px;
   overflow: auto;
   padding: 12px 10px max(12px, env(safe-area-inset-bottom));
-  border-right: 1px solid var(--border);
-  background: var(--surface-1);
 }
-.virtual-keyboard-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
-.virtual-keyboard-title { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--text-bright); font-size: .78rem; }
-.virtual-keyboard-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.virtual-keyboard-title span { flex: 0 0 auto; color: var(--muted); font-size: .68rem; }
-.virtual-keyboard-header > .icon-button { flex: 0 0 34px; }
 .virtual-keyboard-mode { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .virtual-keyboard-mode button { min-width: 0; min-height: 32px; border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 5px 8px; font-size: .75rem; line-height: 1.2; white-space: nowrap; }
 .virtual-keyboard-mode button:hover, .virtual-keyboard-mode button:focus-visible { border-color: var(--cyan); color: var(--text-bright); outline: 0; }
@@ -29,7 +22,3 @@
 .common-key-grid button:hover:not(:disabled), .contextual-key-grid button:hover:not(:disabled), .common-key-grid button:focus-visible, .contextual-key-grid button:focus-visible { border-color: var(--cyan); color: var(--text-bright); outline: 0; }
 .common-key-grid button:disabled, .contextual-key-grid button:disabled { cursor: not-allowed; opacity: .42; }
 .common-key-grid kbd, .contextual-key-grid kbd { display: inline-block; min-width: 0; overflow: visible; font: inherit; text-overflow: clip; white-space: nowrap; }
-
-@media (max-width: 800px) {
-  .virtual-keyboard-dock { order: 2; flex: 0 0 auto; width: 100%; max-height: min(44vh, 360px); border-top: 1px solid var(--border); border-right: 0; background: var(--shade-2); }
-}

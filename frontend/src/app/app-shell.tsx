@@ -21,11 +21,16 @@ import { useAppController } from './app-controller';
 import { useConnectionInstanceController } from '../connections/connection-instance-controller';
 import { useMobileKeyboard } from '../input/use-mobile-keyboard';
 import { useMessages } from '../messages/use-messages';
+import type { WorkspaceTool } from './workspace-tool';
+import { useBrowserFullscreen } from './use-browser-fullscreen';
+import { useBrowserNotifications } from '../status/use-browser-notifications';
+import { fetchMessages } from '../messages/message-api';
+import { resolveMessageTarget } from '../messages/message-center';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
-  const { state: appState, viewRef, setActiveView, setView, setPage, setSidebarOpen, setVirtualKeyboardOpen, setPreviewConnectionInstanceId, setSearch, setDialog } = appController;
-  const { view, page, sidebarOpen, virtualKeyboardOpen, previewConnectionInstanceId, search, dialog } = appState;
+  const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setPreviewConnectionInstanceId, setSearch, setDialog } = appController;
+  const { view, page, workspaceTool, workspaceToolOpen, previewConnectionInstanceId, search, dialog } = appState;
   const [auth, setAuth] = useState(loadAuth());
   const { connections, layout: connectionInstanceLayout, heartbeat: heartbeatState, heartbeatLatency, heartbeatConnected } = connectionState;
   const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
@@ -34,13 +39,15 @@ export function AppShell() {
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
-  const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, sidebarOpen, appearance);
+  const connectionsOpen = workspaceTool === 'connections' && workspaceToolOpen;
+  const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, connectionsOpen, appearance);
   const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(
     auth,
     mainRuntime,
     previewRuntimeRef,
   );
-  const sidebarOpenButton = useRef<HTMLButtonElement>(null);
+  const connectionToolButton = useRef<HTMLButtonElement>(null);
+  const keyboardToolButton = useRef<HTMLButtonElement>(null);
   const toastTimer = useRef<number | null>(null);
   useEffect(() => observeViewportHeight(), []);
   const showToast = useCallback((message: string, kind: ToastKind = 'info') => {
@@ -51,6 +58,7 @@ export function AppShell() {
       toastTimer.current = null;
     }, 4500);
   }, []);
+  const fullscreen = useBrowserFullscreen((message) => showToast(message, 'error'));
   const actions = useAppShellActions({
     auth,
     setAuth,
@@ -69,8 +77,9 @@ export function AppShell() {
     controller: connectionController,
     setCurrentRuntime,
     setPage,
-    setSidebarOpen,
-    setVirtualKeyboardOpen,
+    workspaceTool,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
     setSearch,
     setPreviewConnectionInstanceId,
     setDialog,
@@ -82,24 +91,11 @@ export function AppShell() {
     selectConnection: actions.selectConnectionInstance,
     setPage,
   });
-  const { virtualKeyboardOpenButton, toggleVirtualKeyboard } = useVirtualKeyboardState({
-    loginSessionId: actions.currentAuthSessionId,
-    page,
-    workspaceMode,
-    sidebarOpen,
-    virtualKeyboardOpen,
-    setVirtualKeyboardOpen,
-    setSidebarOpen,
-    setPreviewConnectionInstanceId,
-  });
   useAppShellLifecycle({
     auth,
     view,
     viewRef,
     controller: connectionController,
-    sidebarOpen,
-    virtualKeyboardOpen,
-    sidebarOpenButton,
     mainRuntime,
     previewRuntimeRef,
   });
@@ -138,12 +134,68 @@ export function AppShell() {
     activeRuntime,
     page === 'workspace' && workspaceMode === 'terminal' && Boolean(activeRuntime),
   );
+  const { selectVirtualKeyboard, collapseVirtualKeyboard } = useVirtualKeyboardState({
+    loginSessionId: actions.currentAuthSessionId,
+    page,
+    workspaceMode,
+    workspaceTool,
+    workspaceToolOpen,
+    nativeKeyboardOpen: mobileKeyboard.keyboardOpen,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
+    setPreviewConnectionInstanceId,
+  });
   const messageButtonRef = useRef<HTMLButtonElement>(null);
   const messageCenter = useMessages({
     auth,
     heartbeatState: heartbeatState?.messageState || null,
     nativeKeyboardOpen: mobileKeyboard.keyboardOpen,
+    onToast: showToast,
   });
+  const handleNotificationClick = useCallback(async (messageId: string) => {
+    let message = messageCenter.state.messages.find((item) => item.messageId === messageId);
+    if (!message && auth) {
+      try {
+        const page = await fetchMessages(auth);
+        message = page.messages.find((item) => item.messageId === messageId);
+      } catch {
+        // The durable Message Center remains the fallback when hydration fails.
+      }
+    }
+    if (!message) {
+      showToast('The connection for this message is no longer connected.', 'error');
+      return;
+    }
+    await messageCenter.markRead(message.sequence);
+    messageCenter.closePopover();
+    const target = resolveMessageTarget(message, connections, view.activeConnectionInstanceId);
+    if (!target.connectionInstanceId) {
+      showToast('The connection for this message is no longer connected.', 'error');
+      return;
+    }
+    setWorkspaceTool('connections');
+    setWorkspaceToolOpen(!window.matchMedia('(max-width: 800px)').matches);
+    onOpenTerminal(target.connectionInstanceId);
+  }, [auth, connections, messageCenter, onOpenTerminal, setWorkspaceTool, setWorkspaceToolOpen, showToast, view.activeConnectionInstanceId]);
+  const notifications = useBrowserNotifications(auth, (messageId) => { void handleNotificationClick(messageId); });
+  const handleSelectWorkspaceTool = useCallback((tool: WorkspaceTool) => {
+    if (tool === 'keyboard') {
+      selectVirtualKeyboard();
+      return;
+    }
+    setPreviewConnectionInstanceId(null);
+    setWorkspaceTool('connections');
+    setWorkspaceToolOpen(true);
+  }, [selectVirtualKeyboard, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen]);
+  const handleCollapseWorkspaceTool = useCallback(() => {
+    if (workspaceTool === 'keyboard') collapseVirtualKeyboard();
+    else setWorkspaceToolOpen(false);
+    setPreviewConnectionInstanceId(null);
+    window.requestAnimationFrame(() => {
+      const trigger = workspaceTool === 'connections' ? connectionToolButton : keyboardToolButton;
+      trigger.current?.focus();
+    });
+  }, [collapseVirtualKeyboard, connectionToolButton, keyboardToolButton, setPreviewConnectionInstanceId, setWorkspaceToolOpen, workspaceTool]);
   const sidebarLayout = useMemo(() => normalizeConnectionInstanceLayout(connectionInstanceLayout, connections), [connectionInstanceLayout, connections]);
   const contextualMode = connectionController.contextualMode(activeInstance);
   const setContextualMode = useCallback((mode: Parameters<typeof connectionController.setContextualMode>[1]) => {
@@ -156,7 +208,6 @@ export function AppShell() {
     handleOpenFileSystem,
     handleRename,
     handleTerminate,
-    handleOpenSidebar,
     handleToggleSearch,
     handleCloseSearch,
     handleOpenConnections,
@@ -170,14 +221,14 @@ export function AppShell() {
     onOpenFileSystem,
     setPreviewConnectionInstanceId,
     setDialog,
-    setSidebarOpen,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
     setSearch,
     setPage,
     cancelLaunch,
     viewRef,
     showToast,
     setAppearance,
-    setVirtualKeyboardOpen,
   });
   if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
   const dialogConnection = dialog && 'connectionInstanceId' in dialog ? connections.find((connection) => connection.connectionInstanceId === dialog.connectionInstanceId) : undefined;
@@ -185,10 +236,10 @@ export function AppShell() {
     <AppShellView
       page={page}
       appearance={appearance}
-      sidebarOpen={sidebarOpen}
-      sidebarOpenButton={sidebarOpenButton}
-      virtualKeyboardOpen={virtualKeyboardOpen}
-      virtualKeyboardOpenButton={virtualKeyboardOpenButton}
+      workspaceTool={workspaceTool}
+      workspaceToolOpen={workspaceToolOpen}
+      connectionToolButton={connectionToolButton}
+      keyboardToolButton={keyboardToolButton}
       nativeKeyboardOpen={mobileKeyboard.keyboardOpen}
       messageButtonRef={messageButtonRef}
       messageCenter={messageCenter}
@@ -214,10 +265,11 @@ export function AppShell() {
       authSessions={actions.authSessions}
       currentAuthSessionId={actions.currentAuthSessionId}
       authSessionBusy={actions.authSessionBusy}
-      onToggleSidebar={actions.toggleSidebar}
-      onOpenSidebar={handleOpenSidebar}
-      onToggleVirtualKeyboard={toggleVirtualKeyboard}
+      onSelectWorkspaceTool={handleSelectWorkspaceTool}
+      onCollapseWorkspaceTool={handleCollapseWorkspaceTool}
       onSelectConnection={actions.selectConnectionInstance}
+      onNavigateToConnection={onOpenTerminal}
+      onMessageTargetUnavailable={() => showToast('The connection for this message is no longer connected.', 'error')}
       onMoveConnectionInstance={actions.moveConnectionInstanceToGroup}
       onReorderConnectionGroup={actions.reorderConnectionInstanceGroup}
       onCreateConnectionGroup={actions.createConnectionInstanceGroup}
@@ -250,6 +302,14 @@ export function AppShell() {
       onLogoutOtherAuthSessions={() => void actions.logoutOtherAuthSessions()}
       onCloseDialog={handleCloseDialog}
       workspaceMode={workspaceMode}
+      appShellRef={fullscreen.targetRef}
+      fullscreenActive={fullscreen.active}
+      fullscreenSupported={fullscreen.supported}
+      fullscreenPending={fullscreen.pending}
+      onToggleFullscreen={fullscreen.toggle}
+      notificationState={notifications.state}
+      onEnableNotifications={notifications.enable}
+      onDisableNotifications={notifications.disable}
     />
   );
 }

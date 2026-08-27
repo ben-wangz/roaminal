@@ -1,8 +1,8 @@
 import type { RefObject } from 'react';
+import { Minimize } from 'lucide-react';
 import type { AuthSessionSummary } from '../auth/auth-session-ui';
 import { connectionDisplayName } from '../status/connection-label';
 import type { ToastKind, ToastState } from '../ui/toast';
-import { ConnectionSidebar } from '../ui/connection-sidebar';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import type { ContextualMode } from '../input/contextual-keyboard-model';
@@ -13,10 +13,13 @@ import type { Heartbeat } from '../status/heartbeat';
 import type { ConnectionView } from './connection-view';
 import { AppearanceSettings } from '../appearance/appearance-settings';
 import type { AppPage } from './app-state';
+import type { WorkspaceTool } from './workspace-tool';
+import type { FullscreenTarget } from './use-browser-fullscreen';
+import type { NotificationState } from '../status/notification-service';
 import type { TerminalAppearance } from '../appearance/appearance-model';
 import { ShellTopbar } from './shell-topbar';
 import { WorkspacePage, type WorkspaceMode } from './workspace-page';
-import { VirtualKeyboardDock } from '../input/virtual-keyboard-dock';
+import { WorkspaceToolSurface } from '../ui/workspace-tool-surface';
 import { MessageNoticeStack, MessagePopover } from '../messages/message-center';
 import type { useMessages } from '../messages/use-messages';
 import { AppShellOverlays, type Dialog } from './app-shell-overlays';
@@ -24,10 +27,10 @@ export type { Dialog } from './app-shell-overlays';
 type Props = {
   page: AppPage;
   appearance: TerminalAppearance;
-  sidebarOpen: boolean;
-  sidebarOpenButton: RefObject<HTMLButtonElement | null>;
-  virtualKeyboardOpen: boolean;
-  virtualKeyboardOpenButton: RefObject<HTMLButtonElement | null>;
+  workspaceTool: WorkspaceTool;
+  workspaceToolOpen: boolean;
+  connectionToolButton: RefObject<HTMLButtonElement | null>;
+  keyboardToolButton: RefObject<HTMLButtonElement | null>;
   nativeKeyboardOpen: boolean;
   messageButtonRef: RefObject<HTMLButtonElement | null>;
   messageCenter: ReturnType<typeof useMessages>;
@@ -53,10 +56,11 @@ type Props = {
   authSessions: AuthSessionSummary[];
   currentAuthSessionId: string;
   authSessionBusy: string | null;
-  onToggleSidebar: () => void;
-  onOpenSidebar: () => void;
-  onToggleVirtualKeyboard: () => void;
+  onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
+  onCollapseWorkspaceTool: () => void;
   onSelectConnection: (id: string) => void;
+  onNavigateToConnection: (id: string) => void;
+  onMessageTargetUnavailable: () => void;
   onMoveConnectionInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
   onReorderConnectionGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
   onCreateConnectionGroup: (name: string) => Promise<boolean>;
@@ -89,15 +93,23 @@ type Props = {
   onLogoutOtherAuthSessions: () => void;
   onCloseDialog: () => void;
   workspaceMode: WorkspaceMode;
+  appShellRef: RefObject<FullscreenTarget | null>;
+  fullscreenActive: boolean;
+  fullscreenSupported: boolean;
+  fullscreenPending: boolean;
+  onToggleFullscreen: () => void;
+  notificationState: NotificationState;
+  onEnableNotifications: () => Promise<void>;
+  onDisableNotifications: () => Promise<void>;
 };
 
 export function AppShellView({
   page,
   appearance,
-  sidebarOpen,
-  sidebarOpenButton,
-  virtualKeyboardOpen,
-  virtualKeyboardOpenButton,
+  workspaceTool,
+  workspaceToolOpen,
+  connectionToolButton,
+  keyboardToolButton,
   nativeKeyboardOpen,
   messageButtonRef,
   messageCenter,
@@ -123,10 +135,11 @@ export function AppShellView({
   authSessions,
   currentAuthSessionId,
   authSessionBusy,
-  onToggleSidebar,
-  onOpenSidebar,
-  onToggleVirtualKeyboard,
+  onSelectWorkspaceTool,
+  onCollapseWorkspaceTool,
   onSelectConnection,
+  onNavigateToConnection,
+  onMessageTargetUnavailable,
   onMoveConnectionInstance,
   onReorderConnectionGroup,
   onCreateConnectionGroup,
@@ -159,58 +172,62 @@ export function AppShellView({
   onLogoutOtherAuthSessions,
   onCloseDialog,
   workspaceMode,
+  appShellRef,
+  fullscreenActive,
+  fullscreenSupported,
+  fullscreenPending,
+  onToggleFullscreen,
+  notificationState,
+  onEnableNotifications,
+  onDisableNotifications,
 }: Props) {
   const workspaceOpen = page === 'workspace';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
   return (
-    <div className="app-shell">
+    <div ref={appShellRef} className="app-shell">
       {workspaceOpen && (
-        <ConnectionSidebar
-          id="connection-sidebar"
+        <WorkspaceToolSurface
+          tool={workspaceTool}
+          open={workspaceToolOpen}
+          workspaceMode={workspaceMode}
           connections={connections}
           layout={connectionInstanceLayout}
           loginSessionId={loginSessionId}
           active={view.activeConnectionInstanceId}
-          open={sidebarOpen}
           previewConnectionInstanceId={previewConnectionInstanceId}
           previewRuntime={previewRuntime?.connectionInstanceId === previewConnectionInstanceId ? previewRuntime : null}
-          onToggle={onToggleSidebar}
-          onSelect={onSelectConnection}
-          onMoveInstance={onMoveConnectionInstance}
-          onReorderGroup={onReorderConnectionGroup}
-          onCreateGroup={onCreateConnectionGroup}
-          onRenameGroup={onRenameConnectionGroup}
-          onDeleteGroup={onDeleteConnectionGroup}
-          onMoveGroupMembers={onMoveConnectionGroupMembers}
+          activeInstance={activeInstance}
+          activeRuntime={activeRuntime}
+          contextualMode={contextualMode}
+          nativeKeyboardOpen={nativeKeyboardOpen}
+          connectionToolButton={connectionToolButton}
+          keyboardToolButton={keyboardToolButton}
+          onCollapse={onCollapseWorkspaceTool}
+          onSelectConnection={onSelectConnection}
+          onMoveConnectionInstance={onMoveConnectionInstance}
+          onReorderConnectionGroup={onReorderConnectionGroup}
+          onCreateConnectionGroup={onCreateConnectionGroup}
+          onRenameConnectionGroup={onRenameConnectionGroup}
+          onDeleteConnectionGroup={onDeleteConnectionGroup}
+          onMoveConnectionGroupMembers={onMoveConnectionGroupMembers}
           onPreviewStart={onPreviewStart}
           onPreviewEnd={onPreviewEnd}
           onAgent={onAgent}
           onOpenFileSystem={onOpenFileSystem}
-          workspaceMode={workspaceMode}
           onRename={onRename}
           onAutomaticTitle={onAutomaticTitle}
           onTerminate={onTerminate}
-        />
-      )}
-      {workspaceOpen && workspaceMode === 'terminal' && (
-        <VirtualKeyboardDock
-          open={virtualKeyboardOpen}
-          instance={activeInstance}
-          runtime={activeRuntime}
-          mode={contextualMode}
-          nativeKeyboardOpen={nativeKeyboardOpen}
-          onToggle={onToggleVirtualKeyboard}
           onModeChange={onContextualModeChange}
           onToast={onShowToast}
         />
       )}
-      <main className={`main-panel ${workspaceOpen && !sidebarOpen ? 'expanded' : ''}`}>
+      <main className={`main-panel ${workspaceOpen && !workspaceToolOpen ? 'expanded' : ''}`}>
         <ShellTopbar
           workspaceOpen={workspaceOpen}
-          sidebarOpen={sidebarOpen}
-          sidebarOpenButton={sidebarOpenButton}
-          virtualKeyboardOpen={virtualKeyboardOpen}
-          virtualKeyboardOpenButton={virtualKeyboardOpenButton}
+          workspaceTool={workspaceTool}
+          workspaceToolOpen={workspaceToolOpen}
+          connectionToolButton={connectionToolButton}
+          keyboardToolButton={keyboardToolButton}
           workspaceMode={workspaceMode}
           messageUnreadCount={messageCenter.state.unreadCount}
           messagesOpen={messageCenter.state.popoverOpen}
@@ -222,14 +239,17 @@ export function AppShellView({
           connectionCount={connections.length}
           latencyMs={heartbeatLatency}
           persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
-          onOpenSidebar={onOpenSidebar}
-          onToggleVirtualKeyboard={onToggleVirtualKeyboard}
+          onSelectWorkspaceTool={onSelectWorkspaceTool}
           onToggleMessages={messageCenter.togglePopover}
           onToggleSearch={onToggleSearch}
           onOpenConnections={onOpenConnections}
           onOpenAppearance={onOpenAppearance}
           onOpenAuthSessions={onOpenAuthSessions}
           onSignOut={onSignOut}
+          fullscreenActive={fullscreenActive}
+          fullscreenSupported={fullscreenSupported}
+          fullscreenPending={fullscreenPending}
+          onToggleFullscreen={onToggleFullscreen}
         />
         <MessagePopover
           state={messageCenter.state}
@@ -238,15 +258,22 @@ export function AppShellView({
           bellRef={messageButtonRef}
           onClose={messageCenter.closePopover}
           onMarkRead={messageCenter.markRead}
-          onNavigate={onSelectConnection}
+          onNavigate={onNavigateToConnection}
+          onUnavailableTarget={onMessageTargetUnavailable}
+          onDeleteMessage={messageCenter.deleteMessage}
           onLoadOlder={messageCenter.loadOlder}
+          onBeginClearConfirmation={messageCenter.beginClearConfirmation}
+          onCancelClearConfirmation={messageCenter.cancelClearConfirmation}
+          onClearMessages={messageCenter.clearMessages}
         />
         <MessageNoticeStack
           state={messageCenter.state}
           connections={connections}
           activeConnectionInstanceId={view.activeConnectionInstanceId}
           onMarkRead={messageCenter.markRead}
-          onNavigate={onSelectConnection}
+          onNavigate={onNavigateToConnection}
+          onUnavailableTarget={onMessageTargetUnavailable}
+          onDeleteMessage={messageCenter.deleteMessage}
           onDismissNotice={messageCenter.dismissNotice}
         />
         {page === 'workspace' ? (
@@ -278,9 +305,17 @@ export function AppShellView({
             onBack={onOpenConnections}
             onWorkspace={onOpenWorkspace}
             hasWorkspace={Boolean(activeInstance)}
+            notificationState={notificationState}
+            onEnableNotifications={onEnableNotifications}
+            onDisableNotifications={onDisableNotifications}
           />
         )}
       </main>
+      {fullscreenActive && nativeKeyboardOpen && (
+        <button className="icon-button fullscreen-mobile-exit" type="button" onClick={onToggleFullscreen} aria-label="Exit fullscreen" title="Exit fullscreen">
+          <Minimize aria-hidden="true" size={17} />
+        </button>
+      )}
       <AppShellOverlays
         toast={toast}
         dialog={dialog}

@@ -21,6 +21,10 @@ require `Authorization: Bearer <access-token>`. Errors use
 | GET/POST | `/api/v2/heartbeat` | Read instances or submit resize updates |
 | GET | `/api/v2/messages` | Read the authenticated operator's Agent message history |
 | PUT | `/api/v2/messages/read-state` | Advance the account-wide Agent message read cursor |
+| GET | `/api/v2/notifications/config` | Read authenticated Web Push availability and the public VAPID key |
+| PUT | `/api/v2/notifications/subscription` | Register or replace the current browser's Web Push subscription |
+| DELETE | `/api/v2/notifications/subscription/:subscriptionId` | Remove one current-session Web Push subscription |
+| DELETE | `/api/v2/notifications/subscriptions` | Remove all current-session Web Push subscriptions |
 | GET/POST | `/api/v2/connection-instances` | List or create local/remote instances |
 | PUT | `/api/v2/connection-instances/order` | Save the current login session's sidebar order |
 | GET | `/api/v2/connection-instances/:connectionInstanceId` | Inspect an active instance |
@@ -79,6 +83,13 @@ most 500 records or seven days. Read state is advanced monotonically with
 `{"readThroughSequence":123}`. Message responses contain presentation-safe
 metadata only; credentials, Agent tokens, endpoint keys, and webhook URLs are
 not returned.
+
+Web Push sends only newly persisted Codex completion or failure messages. The
+server keeps subscription endpoints and encryption keys in private state and
+never returns them. The browser's single notification switch controls local
+delivery and removes all subscriptions for the current authentication session
+when turned off. If VAPID configuration is absent, the config endpoint reports
+Web Push disabled and the browser may still offer foreground-only notifications.
 
 ## FileSystem
 

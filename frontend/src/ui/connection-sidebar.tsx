@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Check, ChevronDown, ChevronRight, FolderOpen, FolderPlus, GripVertical, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronRight, FolderOpen, FolderPlus, GripVertical, Search, X } from 'lucide-react';
 import type { ConnectionInstanceLayout, InstanceMovePlacement } from '../connections/connection-instance-groups';
 import { groupedConnectionInstances, UNGROUPED_GROUP_ID } from '../connections/connection-instance-groups';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
@@ -13,15 +13,12 @@ import { ConnectionGroupActions } from './connection-group-actions';
 import { loadCollapsed, saveCollapsed } from './connection-sidebar-storage';
 
 type Props = {
-  id: string;
   connections: ConnectionInstanceSummary[];
   layout: ConnectionInstanceLayout;
   loginSessionId: string;
   active: string | null;
-  open: boolean;
   previewConnectionInstanceId: string | null;
   previewRuntime: TerminalPreviewRuntime | null;
-  onToggle: () => void;
   onSelect: (id: string) => void;
   onMoveInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
   onReorderGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
@@ -75,15 +72,12 @@ function matchesSearch(connection: ConnectionInstanceSummary, groupName: string,
 }
 
 export const ConnectionSidebar = memo(function ConnectionSidebar({
-  id,
   connections,
   layout,
   loginSessionId,
   active,
-  open,
   previewConnectionInstanceId,
   previewRuntime,
-  onToggle,
   onSelect,
   onMoveInstance,
   onReorderGroup,
@@ -100,9 +94,6 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   onAutomaticTitle,
   onTerminate,
 }: Props) {
-  const aside = useRef<HTMLElement>(null);
-  const toggle = useRef<HTMLButtonElement>(null);
-  const mounted = useRef(false);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed(loginSessionId));
   const [creatingGroup, setCreatingGroup] = useState(false);
@@ -145,38 +136,6 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
     }
     previousGroupIds.current = currentIds;
   }, [groups]);
-  useEffect(() => {
-    if (mounted.current && open) toggle.current?.focus();
-    mounted.current = true;
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyboard = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches) {
-        event.preventDefault();
-        onToggle();
-        return;
-      }
-      if (event.key !== 'Tab' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches || !aside.current) return;
-      const focusable = Array.from(aside.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!aside.current.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', handleKeyboard);
-    return () => document.removeEventListener('keydown', handleKeyboard);
-  }, [onToggle, open]);
-
   const toggleGroup = (groupId: string) => {
     const next = new Set(collapsed);
     if (next.has(groupId)) next.delete(groupId);
@@ -203,16 +162,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   };
 
   return (
-    <>
-      {open && <button className="sidebar-backdrop" type="button" aria-label="Close sidebar" onClick={onToggle} />}
-      <aside ref={aside} id={id} className={`sidebar ${open ? 'open' : 'closed'}`} aria-hidden={!open} inert={!open || undefined}>
-        <div className="sidebar-header">
-          <div className="brand-mark small">r<span>&gt;</span></div>
-          <strong>Roaminal</strong>
-          <button ref={toggle} className="icon-button sidebar-toggle" type="button" onClick={onToggle} aria-label="Toggle sidebar" title="Toggle sidebar" aria-expanded={open} aria-controls={id}>
-            {open ? <PanelLeftClose aria-hidden="true" size={18} /> : <PanelLeftOpen aria-hidden="true" size={18} />}
-          </button>
-        </div>
+    <div className="connection-sidebar-content">
         <div className="connection-sidebar-toolbar">
           <strong>Connections <span>{connections.length}</span></strong>
           <button className="icon-button" type="button" aria-label="Create connection group" title="Create connection group" onClick={() => setCreatingGroup(true)}><FolderPlus size={15} aria-hidden="true" /></button>
@@ -248,8 +198,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
           {!groups.some(({ group, connections: groupConnections }) => !query || group.name.toLowerCase().includes(query) || groupConnections.some((connection) => matchesSearch(connection, group.name, query))) && <div className="connection-group-empty">No matching connections</div>}
         </div>
         <div className="sidebar-footer">Connection workspace</div>
-      </aside>
-    </>
+    </div>
   );
 
   function renderConnection(connection: ConnectionInstanceSummary, groupId: string) {

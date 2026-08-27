@@ -15,6 +15,22 @@
 .appearance-error { color: var(--danger-soft); font-size: .68rem; }
 .appearance-actions { justify-content: flex-start; }
 .appearance-actions .text-button { display: inline-flex; align-items: center; gap: 6px; }
+.appearance-notification-settings { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid var(--border); }
+.appearance-notification-settings header, .appearance-notification-settings header > div { display: flex; align-items: center; gap: 7px; }
+.appearance-notification-settings header { justify-content: space-between; }
+.appearance-notification-settings strong { color: var(--text-bright); font-size: .75rem; }
+.appearance-notification-settings p { margin: 0; color: var(--muted); font-size: .68rem; line-height: 1.45; }
+.notification-state { color: var(--muted); font-size: .64rem; text-transform: uppercase; }
+.notification-state-enabled { color: var(--green); }
+.notification-state-foreground-only { color: var(--yellow); }
+.notification-state-blocked, .notification-state-unavailable { color: var(--danger-soft); }
+.notification-toggle { display: inline-flex; align-items: center; gap: 7px; width: max-content; min-height: 30px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 4px 8px 4px 5px; font: inherit; font-size: .7rem; }
+.notification-toggle:hover { background: var(--hover-wash); }
+.notification-toggle-track { display: inline-flex; align-items: center; width: 25px; height: 15px; padding: 2px; border: 1px solid var(--border); background: var(--base2); }
+.notification-toggle-track span { width: 11px; height: 11px; background: var(--muted); }
+.notification-toggle[aria-checked='true'] { border-color: var(--cyan); color: var(--text-bright); }
+.notification-toggle[aria-checked='true'] .notification-toggle-track { background: rgba(42,161,152,.3); border-color: var(--cyan); justify-content: flex-end; }
+.notification-toggle[aria-checked='true'] .notification-toggle-track span { background: var(--cyan); }
 .appearance-preview-region { min-width: 0; }
 .appearance-preview-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; color: var(--text-bright); font-size: .75rem; }
 .appearance-preview-heading span { color: var(--muted); font-size: .68rem; }

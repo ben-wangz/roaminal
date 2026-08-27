@@ -99,5 +99,14 @@ func applyFile(c *Config, v fileConfig) error {
 	if v.AgentHooksDir != nil {
 		c.AgentHooksDir = *v.AgentHooksDir
 	}
+	if v.WebPushVAPIDPublicKey != nil {
+		c.WebPushVAPIDPublicKey = *v.WebPushVAPIDPublicKey
+	}
+	if v.WebPushVAPIDPrivateKey != nil {
+		c.WebPushVAPIDPrivateKey = *v.WebPushVAPIDPrivateKey
+	}
+	if v.WebPushSubject != nil {
+		c.WebPushSubject = *v.WebPushSubject
+	}
 	return nil
 }

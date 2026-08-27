@@ -64,6 +64,37 @@ func (s *Server) markMessagesRead(w http.ResponseWriter, r *http.Request, _ stri
 	writeJSON(w, http.StatusOK, messageReadStateResponse{Revision: state.Revision, LatestSequence: state.LatestSequence, UnreadCount: state.UnreadCount})
 }
 
+func (s *Server) deleteMessage(w http.ResponseWriter, r *http.Request, _ string) {
+	if s.messages == nil {
+		writeCodedError(w, http.StatusServiceUnavailable, "Message storage is unavailable.", "message_store_unavailable", nil)
+		return
+	}
+	messageID := strings.TrimSpace(r.PathValue("messageId"))
+	if messageID == "" {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	result, err := s.messages.DeleteMessage(messageID)
+	if err != nil {
+		writeMessageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) clearMessages(w http.ResponseWriter, _ *http.Request, _ string) {
+	if s.messages == nil {
+		writeCodedError(w, http.StatusServiceUnavailable, "Message storage is unavailable.", "message_store_unavailable", nil)
+		return
+	}
+	result, err := s.messages.ClearMessages()
+	if err != nil {
+		writeMessageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func decodeMessageReadState(w http.ResponseWriter, r *http.Request, target *messageReadStateRequest) error {
 	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
 		writeCodedError(w, http.StatusBadRequest, "The message read state is invalid.", "message_read_state_invalid", nil)
@@ -95,6 +126,8 @@ func writeMessageError(w http.ResponseWriter, err error) {
 		writeCodedError(w, http.StatusBadRequest, "The message cursor is invalid.", "message_cursor_invalid", nil)
 	case errors.Is(err, messages.ErrReadStateInvalid):
 		writeCodedError(w, http.StatusBadRequest, "The message read state is invalid.", "message_read_state_invalid", nil)
+	case errors.Is(err, messages.ErrMessageIDInvalid):
+		writeError(w, http.StatusNotFound, "not found")
 	case errors.Is(err, messages.ErrStoreUnavailable):
 		writeCodedError(w, http.StatusServiceUnavailable, "Message storage is unavailable.", "message_store_unavailable", nil)
 	default:

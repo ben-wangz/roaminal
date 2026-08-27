@@ -62,6 +62,7 @@ type Store struct {
 	degradedMu     sync.RWMutex
 	workspaceMu    sync.Mutex
 	messagesMu     sync.Mutex
+	pushMu         sync.Mutex
 	degradedIDs    map[string]struct{}
 	globalError    bool
 }

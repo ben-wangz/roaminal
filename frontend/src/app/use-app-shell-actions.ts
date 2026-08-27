@@ -12,6 +12,7 @@ import { useConnectionLifecycleActions } from './use-connection-lifecycle-action
 import { ConnectionInstanceController } from '../connections/connection-instance-controller';
 import { useConnectionInstanceActions } from './use-connection-instance-actions';
 import { useAppShellChromeActions } from './use-app-shell-chrome-actions';
+import type { WorkspaceTool } from './workspace-tool';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -33,8 +34,9 @@ type Params = {
   controller: ConnectionInstanceController;
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
-  setSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  setVirtualKeyboardOpen: Dispatch<SetStateAction<boolean>>;
+  workspaceTool: WorkspaceTool;
+  setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
+  setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<
@@ -61,8 +63,9 @@ export function useAppShellActions({
   controller,
   setCurrentRuntime,
   setPage,
-  setSidebarOpen,
-  setVirtualKeyboardOpen,
+  workspaceTool,
+  setWorkspaceTool,
+  setWorkspaceToolOpen,
   setSearch,
   setPreviewConnectionInstanceId,
   setDialog,
@@ -121,15 +124,16 @@ export function useAppShellActions({
     controller,
     setCurrentRuntime,
     setPage,
-    setSidebarOpen,
-    setVirtualKeyboardOpen,
+    workspaceTool,
+    setWorkspaceToolOpen,
     setSearch,
     setPreviewConnectionInstanceId,
     showToast,
   });
   const chromeActions = useAppShellChromeActions({
-    setSidebarOpen,
-    setVirtualKeyboardOpen,
+    workspaceTool,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
     setPreviewConnectionInstanceId,
   });
 

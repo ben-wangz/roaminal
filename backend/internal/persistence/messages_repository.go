@@ -108,6 +108,47 @@ func (a *repositoryAdapter) MessageState() (domain.MessageState, error) {
 	return messageState(file), nil
 }
 
+func (a *repositoryAdapter) DeleteMessage(messageID string) (domain.MessageState, bool, error) {
+	a.store.messagesMu.Lock()
+	defer a.store.messagesMu.Unlock()
+	file, err := a.store.loadMessages()
+	if err != nil {
+		return domain.MessageState{}, false, a.store.markError(err)
+	}
+	for index, record := range file.Messages {
+		if record.MessageID != messageID {
+			continue
+		}
+		file.Messages = append(file.Messages[:index], file.Messages[index+1:]...)
+		file.Revision++
+		if err := a.store.saveMessages(file); err != nil {
+			return domain.MessageState{}, false, err
+		}
+		return messageState(file), true, nil
+	}
+	return messageState(file), false, nil
+}
+
+func (a *repositoryAdapter) ClearMessages() (domain.MessageState, int, error) {
+	a.store.messagesMu.Lock()
+	defer a.store.messagesMu.Unlock()
+	file, err := a.store.loadMessages()
+	if err != nil {
+		return domain.MessageState{}, 0, a.store.markError(err)
+	}
+	deletedCount := len(file.Messages)
+	if deletedCount == 0 {
+		return messageState(file), 0, nil
+	}
+	file.Messages = []domain.MessageRecord{}
+	file.ReadThroughSequence = file.LatestSequence
+	file.Revision++
+	if err := a.store.saveMessages(file); err != nil {
+		return domain.MessageState{}, 0, err
+	}
+	return messageState(file), deletedCount, nil
+}
+
 func messageState(file messageFile) domain.MessageState {
 	return domain.MessageState{Revision: file.Revision, LatestSequence: file.LatestSequence, ReadThroughSequence: file.ReadThroughSequence, UnreadCount: unreadMessageCount(file)}
 }

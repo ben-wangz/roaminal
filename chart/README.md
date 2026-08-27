@@ -88,6 +88,23 @@ Client diagnostics are enabled by default. Set
 redacted events use the existing `state/` subdirectory and are capped at five
 files and 10 MiB; no extra PVC is created.
 
+## Browser notifications
+
+Web Push is disabled by default. To enable the authenticated sender, create an
+existing Secret with the VAPID public key, private key, and subject, then set:
+
+```yaml
+webPush:
+  existingSecret: roaminal-web-push
+  vapidPublicKeyKey: public-key
+  vapidPrivateKeyKey: private-key
+  subjectKey: subject
+```
+
+The browser's single notification switch controls both foreground and Web Push
+delivery for the current login session. The chart never creates or renders the
+Web Push Secret.
+
 ## Ingress and WebSockets
 
 Ingress is disabled by default. When enabled, configure an existing TLS Secret

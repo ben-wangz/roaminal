@@ -1,8 +1,13 @@
 package config
 
 import (
+	"bytes"
+	"crypto/elliptic"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/mail"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,5 +71,52 @@ func (c Config) Validate() error {
 	if c.AgentWebhookBaseURL != "" && !strings.HasPrefix(c.AgentWebhookBaseURL, "http://") && !strings.HasPrefix(c.AgentWebhookBaseURL, "https://") {
 		return errors.New("agentWebhookBaseURL must use http or https")
 	}
+	if err := validateWebPush(c); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateWebPush(c Config) error {
+	publicKey := strings.TrimSpace(c.WebPushVAPIDPublicKey)
+	privateKey := strings.TrimSpace(c.WebPushVAPIDPrivateKey)
+	subject := strings.TrimSpace(c.WebPushSubject)
+	if publicKey == "" && privateKey == "" && subject == "" {
+		return nil
+	}
+	if publicKey == "" || privateKey == "" || subject == "" {
+		return errors.New("web push requires VAPID public key, private key, and subject")
+	}
+	publicBytes, err := base64.RawURLEncoding.DecodeString(publicKey)
+	if err != nil || len(publicBytes) != 65 || publicBytes[0] != 4 {
+		return errors.New("webPushVAPIDPublicKey must be an uncompressed P-256 public key")
+	}
+	if x, y := elliptic.Unmarshal(elliptic.P256(), publicBytes); x == nil || y == nil {
+		return errors.New("webPushVAPIDPublicKey is not a valid P-256 public key")
+	}
+	privateBytes, err := base64.RawURLEncoding.DecodeString(privateKey)
+	if err != nil || len(privateBytes) != 32 {
+		return errors.New("webPushVAPIDPrivateKey must be a 32-byte base64url key")
+	}
+	privateX, privateY := elliptic.P256().ScalarBaseMult(privateBytes)
+	if privateX == nil || privateY == nil || !bytes.Equal(elliptic.Marshal(elliptic.P256(), privateX, privateY), publicBytes) {
+		return errors.New("web push VAPID public and private keys do not match")
+	}
+	if len([]byte(subject)) > 512 || !utf8.ValidString(subject) || !validWebPushSubject(subject) {
+		return errors.New("webPushSubject must be an email, mailto URL, or HTTPS URL")
+	}
+	return nil
+}
+
+func validWebPushSubject(subject string) bool {
+	if strings.HasPrefix(subject, "mailto:") {
+		_, err := mail.ParseAddress(strings.TrimPrefix(subject, "mailto:"))
+		return err == nil
+	}
+	if strings.HasPrefix(subject, "https://") {
+		u, err := url.Parse(subject)
+		return err == nil && u.Host != "" && u.User == nil && u.Fragment == ""
+	}
+	_, err := mail.ParseAddress(subject)
+	return err == nil
 }

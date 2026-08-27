@@ -1,7 +1,7 @@
 html, body, #root { width: 100%; height: var(--roaminal-viewport-height, 100%); min-height: 0; margin: 0; overflow: hidden; }
 body { background: var(--base); }
 .app-shell { display: flex; width: 100%; height: var(--roaminal-viewport-height, 100%); min-height: 0; }
-.sidebar-header, .topbar, .statusbar { display: flex; align-items: center; }
+.topbar, .statusbar { display: flex; align-items: center; }
 .brand-mark { width: 58px; height: 58px; border: 1px solid var(--cyan); display: grid; place-items: center; color: var(--cyan); font-size: 2rem; line-height: 1; }
 .brand-mark span { color: var(--yellow); animation: brand-cursor-blink 1.4s steps(1, end) infinite; }
 @keyframes brand-cursor-blink { 50% { opacity: 0; } }
@@ -32,4 +32,13 @@ body { background: var(--base); }
 .workspace-body { min-width: 0; min-height: 0; overflow: hidden; position: relative; flex: 1 1 auto; display: flex; flex-direction: column; }
 .workspace-mode-view { min-width: 0; min-height: 0; overflow: hidden; flex: 1 1 auto; display: flex; flex-direction: column; }
 .workspace-mode-view.inactive { display: none; }
+.workspace-tool-switcher { display: inline-flex; flex: 0 0 auto; align-items: stretch; border: 1px solid var(--border); }
+.workspace-tool-option { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-right: 1px solid var(--border); background: transparent; color: var(--muted); padding: 0 10px; font: inherit; font-size: .72rem; white-space: nowrap; }
+.workspace-tool-option:last-child { border-right: 0; }
+.workspace-tool-option:hover:not(:disabled), .workspace-tool-option:focus-visible { color: var(--text-bright); background: var(--hover-wash); outline: 0; }
+.workspace-tool-option.active { color: var(--text-bright); background: rgba(42,161,152,.16); box-shadow: inset 0 -2px var(--cyan); }
+.workspace-tool-option:disabled { cursor: not-allowed; opacity: .42; }
+.workspace-tool-option:focus-visible { box-shadow: inset 0 0 0 1px var(--cyan); }
+.app-shell:fullscreen, .app-shell:-webkit-full-screen { width: 100vw; height: 100vh; min-width: 0; min-height: 0; background: var(--base); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.fullscreen-mobile-exit { position: fixed; z-index: 20; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); background: var(--surface-1); border: 1px solid var(--border); }
 @media (prefers-reduced-motion: reduce) { .brand-mark span { animation: none; } }

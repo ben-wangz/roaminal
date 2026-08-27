@@ -78,6 +78,17 @@
       },
       "required": ["existingSecret", "passwordKey"]
     },
+    "webPush": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingSecret": {"type": "string"},
+        "vapidPublicKeyKey": {"type": "string", "minLength": 1},
+        "vapidPrivateKeyKey": {"type": "string", "minLength": 1},
+        "subjectKey": {"type": "string", "minLength": 1}
+      },
+      "required": ["existingSecret", "vapidPublicKeyKey", "vapidPrivateKeyKey", "subjectKey"]
+    },
     "persistence": {
       "type": "object",
       "additionalProperties": false,
@@ -228,7 +239,7 @@
     "extraVolumeMounts": {"type": "array", "items": {"type": "object"}},
     "extraDeploy": {"type": "array", "items": {"type": "object"}}
   },
-  "required": ["replicaCount", "image", "app", "auth", "persistence", "tmp", "ssh", "service", "ingress", "probes"],
+  "required": ["replicaCount", "image", "app", "auth", "webPush", "persistence", "tmp", "ssh", "service", "ingress", "probes"],
   "definitions": {
     "probe": {
       "type": "object",

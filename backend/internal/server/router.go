@@ -30,11 +30,21 @@ func (s *Server) newAPIRouter() http.Handler {
 		http.MethodPost: s.authenticatedRoute(s.heartbeatPost),
 	})
 	mux.Handle(api.HTTPPrefix+"/messages", methodRoute{
-		http.MethodGet: s.authenticatedRoute(s.listMessages),
+		http.MethodGet:    s.authenticatedRoute(s.listMessages),
+		http.MethodDelete: s.authenticatedRoute(s.clearMessages),
+	})
+	mux.Handle(api.HTTPPrefix+"/messages/{messageId}", methodRoute{
+		http.MethodDelete: s.authenticatedRoute(s.deleteMessage),
 	})
 	mux.Handle(api.HTTPPrefix+"/messages/read-state", methodRoute{
 		http.MethodPut: s.authenticatedRoute(s.markMessagesRead),
 	})
+	if s.notifications != nil {
+		mux.Handle(api.HTTPPrefix+"/notifications/config", protected(http.MethodGet, s.notificationConfig))
+		mux.Handle(api.HTTPPrefix+"/notifications/subscription", protected(http.MethodPut, s.registerNotificationSubscription))
+		mux.Handle(api.HTTPPrefix+"/notifications/subscription/{subscriptionId}", protected(http.MethodDelete, s.deleteNotificationSubscription))
+		mux.Handle(api.HTTPPrefix+"/notifications/subscriptions", protected(http.MethodDelete, s.deleteNotificationSubscriptions))
+	}
 	mux.Handle(api.HTTPPrefix+"/connection-instances", methodRoute{
 		http.MethodGet:  s.authenticatedRoute(s.listConnectionInstances),
 		http.MethodPost: s.authenticatedRoute(s.createConnectionInstance),

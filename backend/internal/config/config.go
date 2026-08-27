@@ -25,7 +25,7 @@ func defaults() Config {
 func Load(args []string) (Config, error) {
 	for _, arg := range args {
 		if arg == "--help" || arg == "-help" {
-			fmt.Fprintln(os.Stdout, "Roaminal - connection platform\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-connection-instances --max-clients-per-connection-instance --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --client-diagnostics --agent-webhook-base-url --agent-allow-insecure-webhook --agent-hooks-dir --debug/-d --accept-terms/-y")
+			fmt.Fprintln(os.Stdout, "Roaminal - connection platform\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-connection-instances --max-clients-per-connection-instance --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --client-diagnostics --agent-webhook-base-url --agent-allow-insecure-webhook --agent-hooks-dir --web-push-vapid-public-key --web-push-vapid-private-key --web-push-subject --debug/-d --accept-terms/-y")
 			return Config{}, ErrHelp
 		}
 	}

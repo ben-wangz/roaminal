@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -128,6 +129,129 @@ func TestMessageRepositoryPrunesBeforeDuplicateAppend(t *testing.T) {
 	}
 	if len(page.Messages) != 1 || page.Messages[0].Sequence != 2 || page.Revision != 3 {
 		t.Fatalf("duplicate append did not prune old messages: %+v", page)
+	}
+}
+
+func TestMessageRepositoryDeletesMessagesWithoutRewindingState(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRepositories(store).Messages
+	now := time.Now().UTC()
+	for index := 1; index <= 3; index++ {
+		if _, _, err := repository.AppendMessage(testMessageDraft(index, now)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := repository.MarkMessagesReadThrough(1); err != nil {
+		t.Fatal(err)
+	}
+	state, deleted, err := repository.DeleteMessage("message-002")
+	if err != nil || !deleted || state.LatestSequence != 3 || state.ReadThroughSequence != 1 || state.UnreadCount != 1 {
+		t.Fatalf("delete unread message: state=%+v deleted=%v err=%v", state, deleted, err)
+	}
+	state, deleted, err = repository.DeleteMessage("message-002")
+	if err != nil || deleted || state.Revision != 5 || state.UnreadCount != 1 {
+		t.Fatalf("repeat delete: state=%+v deleted=%v err=%v", state, deleted, err)
+	}
+	state, deleted, err = repository.DeleteMessage("message-001")
+	if err != nil || !deleted || state.ReadThroughSequence != 1 || state.UnreadCount != 1 {
+		t.Fatalf("delete read message: state=%+v deleted=%v err=%v", state, deleted, err)
+	}
+	page, err := repository.ListMessages(100, 0)
+	if err != nil || len(page.Messages) != 1 || page.Messages[0].MessageID != "message-003" {
+		t.Fatalf("remaining messages: page=%+v err=%v", page, err)
+	}
+}
+
+func TestMessageRepositoryClearsMessagesAndContinuesSequence(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRepositories(store).Messages
+	now := time.Now().UTC()
+	for index := 1; index <= 2; index++ {
+		if _, _, err := repository.AppendMessage(testMessageDraft(index, now)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, deletedCount, err := repository.ClearMessages()
+	if err != nil || deletedCount != 2 || state.LatestSequence != 2 || state.ReadThroughSequence != 2 || state.UnreadCount != 0 {
+		t.Fatalf("clear messages: state=%+v deleted=%d err=%v", state, deletedCount, err)
+	}
+	clearedRevision := state.Revision
+	state, deletedCount, err = repository.ClearMessages()
+	if err != nil || deletedCount != 0 || state.Revision != clearedRevision {
+		t.Fatalf("clear empty store: state=%+v deleted=%d err=%v", state, deletedCount, err)
+	}
+	record, duplicate, err := repository.AppendMessage(testMessageDraft(3, now))
+	if err != nil || duplicate || record.Sequence != 3 {
+		t.Fatalf("sequence after clear: record=%+v duplicate=%v err=%v", record, duplicate, err)
+	}
+}
+
+func TestMessageRepositorySerializesConcurrentMutations(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := NewRepositories(store).Messages
+	now := time.Now().UTC()
+	for index := 1; index <= 40; index++ {
+		if _, _, err := repository.AppendMessage(testMessageDraft(index, now)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const appended = 40
+	start := make(chan struct{})
+	results := make(chan error, appended+2)
+	var group sync.WaitGroup
+	group.Add(appended + 2)
+	for index := 41; index <= 80; index++ {
+		go func(index int) {
+			defer group.Done()
+			<-start
+			_, _, appendErr := repository.AppendMessage(testMessageDraft(index, now))
+			results <- appendErr
+		}(index)
+	}
+	go func() {
+		defer group.Done()
+		<-start
+		_, _, deleteErr := repository.DeleteMessage("message-001")
+		results <- deleteErr
+	}()
+	go func() {
+		defer group.Done()
+		<-start
+		_, _, clearErr := repository.ClearMessages()
+		results <- clearErr
+	}()
+	close(start)
+	group.Wait()
+	close(results)
+	for mutationErr := range results {
+		if mutationErr != nil {
+			t.Fatalf("concurrent message mutation failed: %v", mutationErr)
+		}
+	}
+
+	page, err := repository.ListMessages(100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := repository.MessageState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.LatestSequence != 80 || state.LatestSequence != 80 || state.ReadThroughSequence > state.LatestSequence {
+		t.Fatalf("concurrent mutations broke monotonic state: page=%+v state=%+v", page, state)
+	}
+	if len(page.Messages) > 80 {
+		t.Fatalf("concurrent mutations created duplicate records: %d", len(page.Messages))
 	}
 }
 

@@ -30,14 +30,16 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	idGenerator := identity.UUIDGenerator{}
 	messageService := messages.New(persistence.NewRepositories(store).Messages, idGenerator)
 	now := time.Now().UTC()
-	if _, _, err := messageService.AppendMessage(domain.MessageDraft{
+	record, _, err := messageService.AppendMessage(domain.MessageDraft{
 		Kind: "codex_turn_completed", Severity: "success", AgentType: "codex", PresentationKey: "codex_turn_finished",
 		OccurredAt: now, ReceivedAt: now, EndpointKey: "private-endpoint", FallbackLabel: "user@example.test:22 / tmux:roaminal",
 		TmuxSessionName: "roaminal", TmuxSessionID: "$0", TmuxSessionCreated: 10, ConnectionInstanceIDs: []string{"instance-1"},
 		IdempotencyKey: "private-event\x00codex_turn_completed",
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
+	messageID := record.MessageID
 	service := New(Dependencies{Config: cfg, Version: "0.3.0", BootID: "boot", Auth: authManager, Messages: messageService})
 	unauthorized := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/messages", nil)
@@ -45,6 +47,13 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	service.Handler().ServeHTTP(unauthorized, request)
 	if unauthorized.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized status = %d, want 401", unauthorized.Code)
+	}
+	unauthorizedDelete := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodDelete, "http://roaminal.test/api/v2/messages/"+messageID, nil)
+	request.Header.Set("Origin", "http://roaminal.test")
+	service.Handler().ServeHTTP(unauthorizedDelete, request)
+	if unauthorizedDelete.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized delete status = %d, want 401", unauthorizedDelete.Code)
 	}
 	challenge, err := authManager.Challenge()
 	if err != nil {
@@ -62,6 +71,7 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("list status = %d: %s", response.Code, response.Body.String())
 	}
+	encoded := response.Body.String()
 	var page messages.Page
 	if err := json.NewDecoder(response.Body).Decode(&page); err != nil {
 		t.Fatal(err)
@@ -69,7 +79,6 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	if len(page.Messages) != 1 || page.Messages[0].Text != "Codex turn finished" || page.Messages[0].Read {
 		t.Fatalf("unexpected message page: %+v", page)
 	}
-	encoded := response.Body.String()
 	for _, forbidden := range []string{"private-endpoint", "private-event", "$0", "endpointKey", "idempotencyKey", "tmuxSessionId"} {
 		if strings.Contains(encoded, forbidden) {
 			t.Fatalf("message response leaked %q: %s", forbidden, encoded)
@@ -97,5 +106,45 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	_ = json.NewDecoder(invalid.Body).Decode(&errorBody)
 	if invalid.Code != http.StatusBadRequest || errorBody.Code != "message_read_state_invalid" {
 		t.Fatalf("invalid read state status=%d code=%q", invalid.Code, errorBody.Code)
+	}
+	request = httptest.NewRequest(http.MethodDelete, "http://roaminal.test/api/v2/messages/"+messageID, nil)
+	request.Header.Set("Origin", "http://roaminal.test")
+	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	response = httptest.NewRecorder()
+	service.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("delete status = %d: %s", response.Code, response.Body.String())
+	}
+	encoded = response.Body.String()
+	var deleted struct {
+		MessageID string `json:"messageId"`
+		Deleted   bool   `json:"deleted"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&deleted); err != nil {
+		t.Fatal(err)
+	}
+	if deleted.MessageID != messageID || !deleted.Deleted {
+		t.Fatalf("unexpected delete result: %+v", deleted)
+	}
+	for _, forbidden := range []string{"private-endpoint", "private-event", "$0", "endpointKey", "idempotencyKey", "tmuxSessionId"} {
+		if strings.Contains(encoded, forbidden) {
+			t.Fatalf("delete response leaked %q: %s", forbidden, encoded)
+		}
+	}
+	request = httptest.NewRequest(http.MethodDelete, "http://roaminal.test/api/v2/messages/"+messageID, nil)
+	request.Header.Set("Origin", "http://roaminal.test")
+	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	response = httptest.NewRecorder()
+	service.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"deleted":false`) {
+		t.Fatalf("repeat delete response status=%d body=%s", response.Code, response.Body.String())
+	}
+	request = httptest.NewRequest(http.MethodDelete, "http://roaminal.test/api/v2/messages", nil)
+	request.Header.Set("Origin", "http://roaminal.test")
+	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
+	response = httptest.NewRecorder()
+	service.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"deletedCount":0`) {
+		t.Fatalf("clear response status=%d body=%s", response.Code, response.Body.String())
 	}
 }

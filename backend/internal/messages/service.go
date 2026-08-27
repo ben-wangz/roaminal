@@ -17,11 +17,13 @@ var (
 	ErrStoreUnavailable = errors.New("message store unavailable")
 	ErrCursorInvalid    = errors.New("message cursor invalid")
 	ErrReadStateInvalid = errors.New("message read state invalid")
+	ErrMessageIDInvalid = errors.New("message id invalid")
 )
 
 type Service struct {
 	repository ports.MessageRepository
 	ids        ports.IDGenerator
+	notifier   ports.MessageNotifier
 }
 
 type Item struct {
@@ -51,8 +53,27 @@ type State struct {
 	UnreadCount    int    `json:"unreadCount"`
 }
 
+type DeleteResult struct {
+	MessageID      string `json:"messageId"`
+	Deleted        bool   `json:"deleted"`
+	Revision       uint64 `json:"revision"`
+	LatestSequence uint64 `json:"latestSequence"`
+	UnreadCount    int    `json:"unreadCount"`
+}
+
+type ClearResult struct {
+	DeletedCount   int    `json:"deletedCount"`
+	Revision       uint64 `json:"revision"`
+	LatestSequence uint64 `json:"latestSequence"`
+	UnreadCount    int    `json:"unreadCount"`
+}
+
 func New(repository ports.MessageRepository, ids ports.IDGenerator) *Service {
-	return &Service{repository: repository, ids: ids}
+	return NewWithNotifier(repository, ids, nil)
+}
+
+func NewWithNotifier(repository ports.MessageRepository, ids ports.IDGenerator, notifier ports.MessageNotifier) *Service {
+	return &Service{repository: repository, ids: ids, notifier: notifier}
 }
 
 func (s *Service) AppendMessage(draft domain.MessageDraft) (domain.MessageRecord, bool, error) {
@@ -82,6 +103,9 @@ func (s *Service) AppendMessage(draft domain.MessageDraft) (domain.MessageRecord
 		return record, true, nil
 	}
 	log.Printf("level=INFO event=agent_message_appended message_id=%q kind=%q sequence=%d target_session=%q matching_connection_count=%d duration_ms=%d", record.MessageID, record.Kind, record.Sequence, record.TmuxSessionName, len(record.ConnectionInstanceIDs), duration)
+	if s.notifier != nil {
+		s.notifier.Notify(record)
+	}
 	return record, false, nil
 }
 
@@ -133,6 +157,40 @@ func (s *Service) State() (State, error) {
 		return State{}, fmt.Errorf("%w: %v", ErrStoreUnavailable, err)
 	}
 	return state(result), nil
+}
+
+func (s *Service) DeleteMessage(messageID string) (DeleteResult, error) {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return DeleteResult{}, ErrMessageIDInvalid
+	}
+	if s == nil || s.repository == nil {
+		return DeleteResult{}, ErrStoreUnavailable
+	}
+	started := time.Now()
+	result, deleted, err := s.repository.DeleteMessage(messageID)
+	duration := time.Since(started).Milliseconds()
+	if err != nil {
+		log.Printf("level=INFO event=message_delete_failed code=%q duration_ms=%d error_type=%T", ErrStoreUnavailable.Error(), duration, err)
+		return DeleteResult{}, fmt.Errorf("%w: %v", ErrStoreUnavailable, err)
+	}
+	log.Printf("level=INFO event=message_deleted deleted=%t revision=%d duration_ms=%d", deleted, result.Revision, duration)
+	return DeleteResult{MessageID: messageID, Deleted: deleted, Revision: result.Revision, LatestSequence: result.LatestSequence, UnreadCount: result.UnreadCount}, nil
+}
+
+func (s *Service) ClearMessages() (ClearResult, error) {
+	if s == nil || s.repository == nil {
+		return ClearResult{}, ErrStoreUnavailable
+	}
+	started := time.Now()
+	result, deletedCount, err := s.repository.ClearMessages()
+	duration := time.Since(started).Milliseconds()
+	if err != nil {
+		log.Printf("level=INFO event=message_clear_failed code=%q duration_ms=%d error_type=%T", ErrStoreUnavailable.Error(), duration, err)
+		return ClearResult{}, fmt.Errorf("%w: %v", ErrStoreUnavailable, err)
+	}
+	log.Printf("level=INFO event=messages_cleared deleted_count=%d revision=%d duration_ms=%d", deletedCount, result.Revision, duration)
+	return ClearResult{DeletedCount: deletedCount, Revision: result.Revision, LatestSequence: result.LatestSequence, UnreadCount: result.UnreadCount}, nil
 }
 
 func item(record domain.MessageRecord, readThrough uint64) Item {

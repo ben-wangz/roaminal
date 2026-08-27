@@ -17,11 +17,12 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
 4. Start a long command that emits Roaminal execution markers. The status area
    reports Running and then clears/shows completion once. Normal commands that
    do not use the shell integration remain usable.
-5. Grant browser Notification permission in a disposable context and complete
-   one integrated command while the page is not foregrounded. Exactly one
-   `Roaminal / Command completed` notification is created. With permission
-   denied/default, completion still works and no permission prompt or exception
-   is triggered by Roaminal.
+5. In Appearance, explicitly enable System notifications in a disposable
+   context, grant browser Notification permission, and complete one integrated
+   command while the page is not foregrounded. Exactly one
+   `Roaminal / Command completed` notification is created. Before the explicit
+   Enable action, or with permission denied/default, completion still works and
+   no notification or permission prompt is triggered by Roaminal.
 6. Create a second connection. Rapidly alternate focus and send unique markers
    to each; no input or output crosses runtimes, and only one main xterm is
    mounted at a time.

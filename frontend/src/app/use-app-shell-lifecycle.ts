@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject, type RefObject } from 'react';
+import { useEffect, type MutableRefObject } from 'react';
 import type { AuthState } from '../auth/auth-storage';
 import { saveStoredConnection, type ConnectionView } from './connection-view';
 import { ConnectionInstanceController } from '../connections/connection-instance-controller';
@@ -10,9 +10,6 @@ type Params = {
   view: ConnectionView;
   viewRef: MutableRefObject<ConnectionView>;
   controller: ConnectionInstanceController;
-  sidebarOpen: boolean;
-  virtualKeyboardOpen: boolean;
-  sidebarOpenButton: RefObject<HTMLButtonElement | null>;
   mainRuntime: DisposableRuntimeRef;
   previewRuntimeRef: DisposableRuntimeRef;
 };
@@ -22,9 +19,6 @@ export function useAppShellLifecycle({
   view,
   viewRef,
   controller,
-  sidebarOpen,
-  virtualKeyboardOpen,
-  sidebarOpenButton,
   mainRuntime,
   previewRuntimeRef,
 }: Params): void {
@@ -36,9 +30,6 @@ export function useAppShellLifecycle({
     if (auth) return;
     controller.reset();
   }, [auth, controller]);
-  useEffect(() => {
-    if (!sidebarOpen && !virtualKeyboardOpen) sidebarOpenButton.current?.focus();
-  }, [sidebarOpen, sidebarOpenButton, virtualKeyboardOpen]);
   useEffect(
     () => () => {
       mainRuntime.current?.dispose();

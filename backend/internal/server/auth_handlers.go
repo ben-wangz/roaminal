@@ -66,7 +66,16 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	sessionID, _ := s.auth.Authenticate(bearer(r))
+	if sessionID == "" {
+		sessionID, _ = s.auth.SessionIDForRefresh(body.RefreshToken)
+	}
 	_ = s.auth.Logout(body.RefreshToken, bearer(r))
+	if s.notifications != nil && sessionID != "" {
+		if err := s.notifications.DeleteAll(r.Context(), sessionID); err != nil {
+			logNotificationCleanup("logout", err)
+		}
+	}
 	writeSuccess(w)
 }
 
@@ -80,12 +89,28 @@ func (s *Server) revokeAuthSession(w http.ResponseWriter, r *http.Request, _ str
 		}
 		return
 	}
+	if s.notifications != nil {
+		if err := s.notifications.DeleteAll(r.Context(), id); err != nil {
+			logNotificationCleanup("revoke", err)
+		}
+	}
 	writeSuccess(w)
 }
-func (s *Server) logoutOthers(w http.ResponseWriter, _ *http.Request, sessionID string) {
+func (s *Server) logoutOthers(w http.ResponseWriter, r *http.Request, sessionID string) {
+	otherSessions := s.auth.List(sessionID)
 	if err := s.auth.LogoutOthers(sessionID); err != nil {
 		writeError(w, 500, "internal error")
 		return
+	}
+	if s.notifications != nil {
+		for _, other := range otherSessions {
+			if other.ID == sessionID {
+				continue
+			}
+			if err := s.notifications.DeleteAll(r.Context(), other.ID); err != nil {
+				logNotificationCleanup("logout_others", err)
+			}
+		}
 	}
 	writeSuccess(w)
 }

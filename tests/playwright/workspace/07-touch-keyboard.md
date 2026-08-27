@@ -16,8 +16,9 @@ and phone landscape.
    existing IME fallback handles committed text without a mobile-only rewrite.
    Repeat after a visual viewport resize and while a focusout event is pending;
    no duplicate frame or input sent to an old runtime is allowed.
-3. Close the native keyboard and open the Virtual Keyboard from the topbar.
-   The dock is visible below the terminal and contains the Common mode by
+3. Close the native keyboard and open Virtual keyboard from the shared
+   workspace-tool selector. The surface is visible below the terminal and
+   contains the Common mode by
    default, including Esc, Tab, Enter, Ctrl+C, Paste, `|`, `~`, `/`, and
    `↑`/`↓`/`←`/`→`. Verify those buttons emit exact terminal sequences, labels
    are fully readable, and the dock does not overlap the terminal or safe-area
@@ -27,7 +28,8 @@ and phone landscape.
    and remote monitor are hidden while the xterm helper remains the only input
    path. The saved Virtual Keyboard preference and monitor disclosure state are
    restored after dismissal.
-5. Switch connection, open/close the sidebar, rotate portrait/landscape, and
+5. Switch connection, open/close the Connections surface, rotate
+   portrait/landscape, and
    resize the visual viewport. Verify the entire Roaminal frame ends above the
    emulated keyboard in both content-resize and overlay/visual-viewport
    geometry cases. Terminal fitting follows each viewport transition once; no

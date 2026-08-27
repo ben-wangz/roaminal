@@ -3,12 +3,13 @@ import { loadStoredConnection, type ConnectionView } from './connection-view';
 import type { AppPage } from './app-state';
 import type { Dialog } from './app-shell-view';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
+import type { WorkspaceTool } from './workspace-tool';
 
 export type AppControllerState = {
   view: ConnectionView;
   page: AppPage;
-  sidebarOpen: boolean;
-  virtualKeyboardOpen: boolean;
+  workspaceTool: WorkspaceTool;
+  workspaceToolOpen: boolean;
   previewConnectionInstanceId: string | null;
   search: boolean;
   dialog: Dialog;
@@ -40,8 +41,8 @@ class AppController {
 
   setView(view: ConnectionView): void { this.setState((current) => ({ ...current, view })); }
   setPage(page: AppPage): void { this.setState((current) => ({ ...current, page })); }
-  setSidebarOpen(sidebarOpen: boolean): void { this.setState((current) => ({ ...current, sidebarOpen })); }
-  setVirtualKeyboardOpen(virtualKeyboardOpen: boolean): void { this.setState((current) => ({ ...current, virtualKeyboardOpen })); }
+  setWorkspaceTool(workspaceTool: WorkspaceTool): void { this.setState((current) => ({ ...current, workspaceTool })); }
+  setWorkspaceToolOpen(workspaceToolOpen: boolean): void { this.setState((current) => ({ ...current, workspaceToolOpen })); }
   setPreviewConnectionInstanceId(previewConnectionInstanceId: string | null): void {
     this.setState((current) => ({ ...current, previewConnectionInstanceId }));
   }
@@ -51,12 +52,12 @@ class AppController {
 
 export function createAppController(): AppController {
   const initialView = loadStoredConnection(typeof window === 'undefined' ? null : window.localStorage);
-  const sidebarOpen = typeof window === 'undefined' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches;
+  const workspaceToolOpen = typeof window === 'undefined' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches;
   return new AppController({
     view: initialView,
     page: 'connections',
-    sidebarOpen,
-    virtualKeyboardOpen: false,
+    workspaceTool: 'connections',
+    workspaceToolOpen,
     previewConnectionInstanceId: null,
     search: false,
     dialog: null,
@@ -80,8 +81,8 @@ export function useAppController() {
     }));
   }, [controller]);
   const setPage = useCallback((next: SetStateAction<AppPage>) => setField('page', next), [setField]);
-  const setSidebarOpen = useCallback((next: SetStateAction<boolean>) => setField('sidebarOpen', next), [setField]);
-  const setVirtualKeyboardOpen = useCallback((next: SetStateAction<boolean>) => setField('virtualKeyboardOpen', next), [setField]);
+  const setWorkspaceTool = useCallback((next: SetStateAction<WorkspaceTool>) => setField('workspaceTool', next), [setField]);
+  const setWorkspaceToolOpen = useCallback((next: SetStateAction<boolean>) => setField('workspaceToolOpen', next), [setField]);
   const setPreviewConnectionInstanceId = useCallback((next: SetStateAction<string | null>) => setField('previewConnectionInstanceId', next), [setField]);
   const setSearch = useCallback((next: SetStateAction<boolean>) => setField('search', next), [setField]);
   const setDialog = useCallback((next: SetStateAction<Dialog>) => setField('dialog', next), [setField]);
@@ -92,8 +93,8 @@ export function useAppController() {
     setActiveView: setView,
     setView: (next: SetStateAction<ConnectionView>) => setField('view', next),
     setPage,
-    setSidebarOpen,
-    setVirtualKeyboardOpen,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
     setPreviewConnectionInstanceId,
     setSearch,
     setDialog,

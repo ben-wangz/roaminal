@@ -183,14 +183,15 @@ export class ClientDiagnostics {
     column?: number,
   ): void {
     if (this.disposed || !this.installed || !this.enabled && !this.configuring) return;
+    const origin = this.environment.window.location.origin;
     const event: DiagnosticEvent = {
       eventId: this.environment.randomUUID(),
       occurredAt: new Date(this.environment.now()).toISOString(),
       kind,
       message: redactText(serialized.message, 4096) || '[client diagnostic]',
       stack: serialized.stack ? redactText(serialized.stack, 16384) : undefined,
-      pagePath: normalizePath(this.environment.window.location.pathname),
-      sourcePath: normalizePath(source),
+      pagePath: normalizePath(this.environment.window.location.pathname, origin),
+      sourcePath: normalizePath(source, origin),
       line: Number.isFinite(line) && line !== undefined && line >= 0 ? Math.min(line, 0x7fffffff) : undefined,
       column: Number.isFinite(column) && column !== undefined && column >= 0 ? Math.min(column, 0x7fffffff) : undefined,
       operation,

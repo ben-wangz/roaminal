@@ -8,8 +8,9 @@ desktop. Run serially for byte-capture fixtures.
 1. Every local/SSH instance defaults to Common, regardless of `tmuxEnabled`.
    Manual mode choices are isolated per connection instance for the page
    lifetime and reset to Common after reload. The Virtual Keyboard is opened
-   from the main topbar. On desktop it replaces the connection sidebar as a
-   left panel; on tablet and phone it is placed below the Terminal workspace.
+   from the shared Connections/Virtual keyboard selector. On desktop it
+   replaces the connection surface as a left panel; on tablet and phone it is
+   placed below the Terminal workspace.
    Common, Tmux, and Codex are peer modes, and only the selected mode is
    rendered.
 2. Select Common and use a terminal byte-capture command/fixture.
@@ -38,10 +39,12 @@ desktop. Run serially for byte-capture fixtures.
 6. With `tmuxPrefixSource=unsupported`, prefix-dependent buttons (prefix,
    copy-mode, `o`, `d`, and `"`) are disabled with an explanatory tooltip;
    Common keys, PageUp, PageDown, and q remain usable.
-7. Opening Connections closes the Virtual Keyboard, and opening the Virtual
-   Keyboard closes Connections without changing the active connection. They
-   are never simultaneously expanded. Collapse/expand state follows the
-   login-scoped browser preference; switching to FileSystem hides the dock.
+7. The shared selector opens Connections or Virtual keyboard without changing
+   the active connection. They are never simultaneously expanded. The common
+   surface collapse control closes the selected tool; switching to FileSystem
+   selects Connections and hides the keyboard surface. The login-scoped
+   keyboard preference is restored after a native keyboard dismissal when the
+   keyboard tool was selected.
 8. When the native mobile keyboard is open, the Virtual Keyboard key content is
    hidden and the active xterm helper textarea is the only text-entry path;
    no application-owned composer or Send control is rendered. Closing the

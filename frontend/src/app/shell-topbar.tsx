@@ -1,16 +1,17 @@
 import { memo, type RefObject } from 'react';
-import { Bell, Keyboard, PanelLeftOpen, Search, Settings, ShieldCheck } from 'lucide-react';
+import { Bell, Keyboard, Maximize, Minimize, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-react';
 import { SystemStatus } from '../status/system-status';
 import type { Heartbeat } from '../status/heartbeat';
 import type { WorkspaceMode } from './workspace-page';
 import { messageBadgeLabel, messageButtonLabel } from '../messages/message-center';
+import type { WorkspaceTool } from './workspace-tool';
 
 type Props = {
   workspaceOpen: boolean;
-  sidebarOpen: boolean;
-  sidebarOpenButton: RefObject<HTMLButtonElement | null>;
-  virtualKeyboardOpen: boolean;
-  virtualKeyboardOpenButton: RefObject<HTMLButtonElement | null>;
+  workspaceTool: WorkspaceTool;
+  workspaceToolOpen: boolean;
+  connectionToolButton: RefObject<HTMLButtonElement | null>;
+  keyboardToolButton: RefObject<HTMLButtonElement | null>;
   workspaceMode: WorkspaceMode;
   connected: boolean;
   connectionName: string;
@@ -19,8 +20,7 @@ type Props = {
   connectionCount: number;
   latencyMs: number | null;
   persistenceDegraded: boolean;
-  onOpenSidebar: () => void;
-  onToggleVirtualKeyboard: () => void;
+  onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
   onToggleSearch: () => void;
   onOpenConnections: () => void;
   onOpenAppearance: () => void;
@@ -30,14 +30,18 @@ type Props = {
   messageButtonRef: RefObject<HTMLButtonElement | null>;
   onOpenAuthSessions: () => void;
   onSignOut: () => void;
+  fullscreenActive: boolean;
+  fullscreenSupported: boolean;
+  fullscreenPending: boolean;
+  onToggleFullscreen: () => void;
 };
 
 export const ShellTopbar = memo(function ShellTopbar({
   workspaceOpen,
-  sidebarOpen,
-  sidebarOpenButton,
-  virtualKeyboardOpen,
-  virtualKeyboardOpenButton,
+  workspaceTool,
+  workspaceToolOpen,
+  connectionToolButton,
+  keyboardToolButton,
   workspaceMode,
   connected,
   connectionName,
@@ -46,8 +50,7 @@ export const ShellTopbar = memo(function ShellTopbar({
   connectionCount,
   latencyMs,
   persistenceDegraded,
-  onOpenSidebar,
-  onToggleVirtualKeyboard,
+  onSelectWorkspaceTool,
   onToggleSearch,
   onOpenConnections,
   onOpenAppearance,
@@ -57,22 +60,44 @@ export const ShellTopbar = memo(function ShellTopbar({
   messageButtonRef,
   onOpenAuthSessions,
   onSignOut,
+  fullscreenActive,
+  fullscreenSupported,
+  fullscreenPending,
+  onToggleFullscreen,
 }: Props) {
   return (
     <header className="topbar">
-      {workspaceOpen && !sidebarOpen && (
-        <button
-          ref={sidebarOpenButton}
-          className="icon-button sidebar-open-button"
-          type="button"
-          onClick={onOpenSidebar}
-          aria-label="Open sidebar"
-          title="Open sidebar"
-          aria-expanded={false}
-          aria-controls="connection-sidebar"
-        >
-          <PanelLeftOpen aria-hidden="true" size={18} />
-        </button>
+      {workspaceOpen && (
+        <div className="workspace-tool-switcher" role="group" aria-label="Workspace tools" data-testid="workspace-tool-switcher">
+          <button
+            ref={connectionToolButton}
+            className={`workspace-tool-option ${workspaceTool === 'connections' ? 'active' : ''}`}
+            type="button"
+            onClick={() => onSelectWorkspaceTool('connections')}
+            aria-pressed={workspaceTool === 'connections'}
+            aria-expanded={workspaceTool === 'connections' && workspaceToolOpen}
+            aria-controls="workspace-tool-surface"
+            data-testid="workspace-tool-connections"
+          >
+            <PanelLeft aria-hidden="true" size={15} />
+            <span>Connections</span>
+          </button>
+          <button
+            ref={keyboardToolButton}
+            className={`workspace-tool-option ${workspaceTool === 'keyboard' ? 'active' : ''}`}
+            type="button"
+            disabled={workspaceMode !== 'terminal'}
+            onClick={() => onSelectWorkspaceTool('keyboard')}
+            aria-pressed={workspaceTool === 'keyboard'}
+            aria-expanded={workspaceTool === 'keyboard' && workspaceToolOpen}
+            aria-controls="workspace-tool-surface"
+            title={workspaceMode === 'terminal' ? 'Open Virtual keyboard' : 'Virtual keyboard is available in Terminal'}
+            data-testid="workspace-tool-keyboard"
+          >
+            <Keyboard aria-hidden="true" size={15} />
+            <span>Virtual keyboard</span>
+          </button>
+        </div>
       )}
       <SystemStatus
         connected={connected}
@@ -86,20 +111,6 @@ export const ShellTopbar = memo(function ShellTopbar({
       <div className="top-actions">
         {workspaceOpen && (
           <>
-            {workspaceMode === 'terminal' && (
-              <button
-                ref={virtualKeyboardOpenButton}
-                className="icon-button"
-                type="button"
-                onClick={onToggleVirtualKeyboard}
-                aria-label={virtualKeyboardOpen ? 'Collapse virtual keyboard' : 'Expand virtual keyboard'}
-                title={virtualKeyboardOpen ? 'Collapse virtual keyboard' : 'Expand virtual keyboard'}
-                aria-expanded={virtualKeyboardOpen}
-                data-testid="virtual-keyboard-toggle"
-              >
-                <Keyboard aria-hidden="true" size={17} />
-              </button>
-            )}
             <button
               className="icon-button"
               onClick={onToggleSearch}
@@ -129,6 +140,18 @@ export const ShellTopbar = memo(function ShellTopbar({
         </button>
         <button className="icon-button" type="button" onClick={onOpenAppearance} aria-label="Appearance" title="Appearance">
           <Settings aria-hidden="true" size={17} />
+        </button>
+        <button
+          className="icon-button"
+          type="button"
+          onClick={onToggleFullscreen}
+          disabled={fullscreenPending || (!fullscreenSupported && !fullscreenActive)}
+          aria-label={fullscreenActive ? 'Exit fullscreen' : fullscreenSupported ? 'Enter fullscreen' : 'Fullscreen unavailable'}
+          title={fullscreenActive ? 'Exit fullscreen' : fullscreenSupported ? 'Enter fullscreen' : 'Fullscreen unavailable'}
+          aria-pressed={fullscreenActive}
+          data-testid="fullscreen-toggle"
+        >
+          {fullscreenActive ? <Minimize aria-hidden="true" size={17} /> : <Maximize aria-hidden="true" size={17} />}
         </button>
         <button className="text-button" onClick={onOpenAuthSessions}>
           <ShieldCheck aria-hidden="true" size={15} /> Sessions

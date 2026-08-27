@@ -8,7 +8,8 @@ five standard projects plus dynamic resizing.
 1. Open a local connection and compare xterm columns/rows with sidebar/footer
    metadata and the heartbeat resize update. Values stay in supported bounds.
 2. Resize the desktop viewport through narrow/wide and short/tall dimensions,
-   hide/show the sidebar, open/close search, and show/hide the remote monitor.
+   collapse/open the shared workspace tool surface, switch between Connections
+   and Virtual keyboard, open/close search, and show/hide the remote monitor.
    After each stable layout, xterm fits once to available space and sends the
    converged geometry without an endless resize loop.
 3. Run `stty size` after each state. Reported PTY rows/columns match xterm.

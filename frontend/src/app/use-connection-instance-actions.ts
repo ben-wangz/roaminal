@@ -9,6 +9,7 @@ import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { AppPage } from './app-state';
 import type { ToastKind } from '../ui/toast';
 import { ConnectionInstanceController } from '../connections/connection-instance-controller';
+import type { WorkspaceTool } from './workspace-tool';
 
 type Params = {
   activeLaunchId: string | null;
@@ -21,8 +22,8 @@ type Params = {
   controller: ConnectionInstanceController;
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
-  setSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  setVirtualKeyboardOpen: Dispatch<SetStateAction<boolean>>;
+  workspaceTool: WorkspaceTool;
+  setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   showToast: (message: string, kind?: ToastKind) => void;
@@ -39,8 +40,8 @@ export function useConnectionInstanceActions({
   controller,
   setCurrentRuntime,
   setPage,
-  setSidebarOpen,
-  setVirtualKeyboardOpen,
+  workspaceTool,
+  setWorkspaceToolOpen,
   setSearch,
   setPreviewConnectionInstanceId,
   showToast,
@@ -87,9 +88,8 @@ export function useConnectionInstanceActions({
     setPage('workspace');
     setSearch(false);
     setPreviewConnectionInstanceId(null);
-    if (window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches) setSidebarOpen(false);
-    setVirtualKeyboardOpen(false);
-  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setSidebarOpen, setVirtualKeyboardOpen, viewRef]);
+    if (window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches && workspaceTool === 'connections') setWorkspaceToolOpen(false);
+  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceToolOpen, viewRef, workspaceTool]);
 
   const reorderConnectionInstances = useCallback(async (
     draggedID: string,

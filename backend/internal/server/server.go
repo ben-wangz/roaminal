@@ -16,6 +16,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
 	"github.com/ben-wangz/roaminal/backend/internal/messages"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
+	"github.com/ben-wangz/roaminal/backend/internal/notifications"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/workspace"
 )
@@ -41,6 +42,7 @@ type Server struct {
 	agentProvisioning agent.ProvisioningService
 	agentTelemetry    agent.TelemetryService
 	messages          *messages.Service
+	notifications     *notifications.Service
 }
 
 type Dependencies struct {
@@ -61,6 +63,7 @@ type Dependencies struct {
 	AgentProvisioning agent.ProvisioningService
 	AgentTelemetry    agent.TelemetryService
 	Messages          *messages.Service
+	Notifications     *notifications.Service
 }
 
 // New constructs the complete HTTP application graph once. Optional feature
@@ -85,6 +88,7 @@ func New(deps Dependencies) *Server {
 	s.agentProvisioning = deps.AgentProvisioning
 	s.agentTelemetry = deps.AgentTelemetry
 	s.messages = deps.Messages
+	s.notifications = deps.Notifications
 	s.api = s.newAPIRouter()
 	s.handler = http.HandlerFunc(s.serve)
 	return s

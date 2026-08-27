@@ -1,34 +1,38 @@
 import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
+import type { WorkspaceTool } from './workspace-tool';
 
 type Params = {
-  setSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  setVirtualKeyboardOpen: Dispatch<SetStateAction<boolean>>;
+  workspaceTool: WorkspaceTool;
+  setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
+  setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
 };
 
 export function useAppShellChromeActions({
-  setSidebarOpen,
-  setVirtualKeyboardOpen,
+  workspaceTool,
+  setWorkspaceTool,
+  setWorkspaceToolOpen,
   setPreviewConnectionInstanceId,
 }: Params) {
-  const toggleSidebar = useCallback(() => {
-    setSidebarOpen((value) => {
-      if (value) setPreviewConnectionInstanceId(null);
-      return !value;
+  const toggleConnectionsTool = useCallback(() => {
+    setWorkspaceTool('connections');
+    setWorkspaceToolOpen((value) => {
+      if (workspaceTool !== 'connections' || !value) return true;
+      setPreviewConnectionInstanceId(null);
+      return false;
     });
-    setVirtualKeyboardOpen(false);
-  }, [setPreviewConnectionInstanceId, setSidebarOpen, setVirtualKeyboardOpen]);
+  }, [setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen, workspaceTool]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (!matchesShortcut(event, SHORTCUTS[2])) return;
       event.preventDefault();
-      toggleSidebar();
+      toggleConnectionsTool();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [toggleSidebar]);
+  }, [toggleConnectionsTool]);
 
-  return { toggleSidebar };
+  return { toggleConnectionsTool };
 }

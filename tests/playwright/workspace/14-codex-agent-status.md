@@ -54,7 +54,9 @@ explicitly listed.
 
 Correlate every protected API response with the action that caused it. Fail on
 unexpected browser diagnostics, leaked event payload fields, duplicate upload
-or initialization operations, stale cross-instance state, or any command/fullscreen
-UI. Capture screenshots of `needs_trust`, `ready`, `running`, and `waiting`.
+or initialization operations, stale cross-instance state, automatic command
+execution, or automatic fullscreen entry. The independent fullscreen control
+is covered by its dedicated regression case. Capture screenshots of
+`needs_trust`, `ready`, `running`, and `waiting`.
 Delete only connection instances, tmux sessions, and remote files created by the
 case, then reset the disposable fixture home.

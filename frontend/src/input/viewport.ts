@@ -23,9 +23,13 @@ export function observeViewportHeight(): () => void {
   update();
   viewport?.addEventListener('resize', update);
   window.addEventListener('resize', update);
+  document.addEventListener('fullscreenchange', update);
+  document.addEventListener('webkitfullscreenchange', update);
   return () => {
     viewport?.removeEventListener('resize', update);
     window.removeEventListener('resize', update);
+    document.removeEventListener('fullscreenchange', update);
+    document.removeEventListener('webkitfullscreenchange', update);
     document.documentElement.style.removeProperty(VIEWPORT_HEIGHT_PROPERTY);
   };
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/identity"
 	"github.com/ben-wangz/roaminal/backend/internal/messages"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
+	"github.com/ben-wangz/roaminal/backend/internal/notifications"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 	"github.com/ben-wangz/roaminal/backend/internal/random"
 	"github.com/ben-wangz/roaminal/backend/internal/server"
@@ -105,6 +106,18 @@ func run(cfg config.Config) error {
 		_ = terminalWorker.Shutdown(context.Background())
 		return err
 	}
+	notificationService, err := notifications.New(fileRepositories.PushSubscriptions, idGenerator, notifications.Options{
+		PublicKey: cfg.WebPushVAPIDPublicKey, PrivateKey: cfg.WebPushVAPIDPrivateKey, Subject: cfg.WebPushSubject,
+		Clock: clockSource,
+	})
+	if err != nil {
+		_ = terminalWorker.Shutdown(context.Background())
+		return err
+	}
+	defer notificationService.Close()
+	if err := notificationService.Prune(context.Background(), authManager.IsSessionActive); err != nil {
+		log.Printf("level=INFO event=web_push_startup_prune_failed error_type=%T", err)
+	}
 	terminalRuntime = terminal.NewManagerWithRepositories(cfg, terminal.Repositories{Instances: fileRepositories.Connection, Audit: fileRepositories.Audit, Snapshots: fileRepositories.TerminalSnapshots, PersistenceDegraded: store.PersistenceDegraded}, terminalWorker, clockSource, idGenerator, bootID)
 	terminals := connection.NewManager(connection.Dependencies{
 		Config: cfg, Runtime: terminalRuntime, Clock: clockSource, IDs: idGenerator, Random: randomSource,
@@ -124,7 +137,7 @@ func run(cfg config.Config) error {
 		terminals.Shutdown(context.Background())
 		return err
 	}
-	messageService := messages.New(fileRepositories.Messages, idGenerator)
+	messageService := messages.NewWithNotifier(fileRepositories.Messages, idGenerator, notificationService)
 	agentService := agent.NewWithRepository(cfg, agent.OpenStore(store.Root), terminals, agent.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource, Messages: messageService})
 	serverDependencies := server.Dependencies{
 		Config: cfg, Version: buildinfo.Version, BootID: bootID, Auth: authManager, Workspace: workspace.New(fileRepositories.Workspace),
@@ -134,6 +147,7 @@ func run(cfg config.Config) error {
 		AgentProvisioning: agentService.Provisioning(),
 		AgentTelemetry:    agentService.Telemetry(),
 		Messages:          messageService,
+		Notifications:     notificationService,
 		IDs:               idGenerator, Clock: clockSource,
 	}
 	if err := serverDependencies.Validate(); err != nil {

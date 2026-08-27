@@ -1,4 +1,4 @@
-import type { AgentMessage, MessagePage } from './message-api';
+import type { AgentMessage, ClearMessagesResult, DeleteMessageResult, MessagePage } from './message-api';
 
 export type MessageNotice = {
   noticeId: string;
@@ -22,6 +22,9 @@ export type MessageControllerState = {
   keyboardOpen: boolean;
   hydrated: boolean;
   loading: boolean;
+  deletingMessageIds: string[];
+  clearPending: boolean;
+  clearConfirming: boolean;
 };
 
 type Listener = () => void;
@@ -39,14 +42,19 @@ const initialState: MessageControllerState = {
   keyboardOpen: false,
   hydrated: false,
   loading: false,
+  deletingMessageIds: [],
+  clearPending: false,
+  clearConfirming: false,
 };
 
 export class MessageController {
   private state: MessageControllerState = initialState;
   private readonly listeners = new Set<Listener>();
   private readonly seenIds = new Set<string>();
+  private readonly deletedIds = new Set<string>();
   private readonly noticeTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private summaryCounter = 0;
+  private minimumPageRevision = 0;
 
   getSnapshot = (): MessageControllerState => this.state;
 
@@ -66,8 +74,9 @@ export class MessageController {
     this.update((current) => current.loading === loading ? current : { ...current, loading });
   }
 
-  applyPage(page: MessagePage, options: { baseline?: boolean; older?: boolean } = {}): void {
-    const incoming = page.messages || [];
+  applyPage(page: MessagePage, options: { baseline?: boolean; older?: boolean } = {}): AgentMessage[] {
+    if (page.revision < this.minimumPageRevision) return [];
+    const incoming = (page.messages || []).filter((message) => !this.deletedIds.has(message.messageId));
     const newMessages = incoming.filter((message) => !this.seenIds.has(message.messageId));
     for (const message of incoming) this.seenIds.add(message.messageId);
     this.update((current) => {
@@ -99,6 +108,7 @@ export class MessageController {
       };
     });
     if (!options.baseline && !options.older && newMessages.length > 0) this.enqueueNotices(newMessages);
+    return newMessages;
   }
 
   applyReadState(readThroughSequence: number, state: { revision: number; latestSequence: number; unreadCount: number }): void {
@@ -135,8 +145,84 @@ export class MessageController {
     this.update((current) => ({ ...current, latestSequence: Math.max(current.latestSequence, latestSequence) }));
   }
 
-  togglePopover(): void { this.update((current) => ({ ...current, popoverOpen: !current.popoverOpen })); }
-  closePopover(): void { this.update((current) => current.popoverOpen ? { ...current, popoverOpen: false } : current); }
+  togglePopover(): void {
+    this.update((current) => ({ ...current, popoverOpen: !current.popoverOpen, clearConfirming: current.popoverOpen ? false : current.clearConfirming }));
+  }
+  closePopover(): void {
+    this.update((current) => current.popoverOpen || current.clearConfirming ? { ...current, popoverOpen: false, clearConfirming: false } : current);
+  }
+
+  beginDelete(messageId: string): boolean {
+    if (this.state.clearPending || this.state.deletingMessageIds.includes(messageId)) return false;
+    this.update((current) => ({ ...current, deletingMessageIds: [...current.deletingMessageIds, messageId] }));
+    return true;
+  }
+
+  finishDelete(messageId: string): void {
+    this.update((current) => ({ ...current, deletingMessageIds: current.deletingMessageIds.filter((id) => id !== messageId) }));
+  }
+
+  beginClearConfirmation(): void {
+    this.update((current) => current.clearPending || current.messages.length === 0 ? current : { ...current, clearConfirming: true });
+  }
+
+  cancelClearConfirmation(): void {
+    this.update((current) => current.clearConfirming ? { ...current, clearConfirming: false } : current);
+  }
+
+  beginClear(): boolean {
+    if (this.state.clearPending || this.state.messages.length === 0) return false;
+    this.update((current) => ({ ...current, clearPending: true, clearConfirming: false }));
+    return true;
+  }
+
+  finishClear(): void {
+    this.update((current) => ({ ...current, clearPending: false }));
+  }
+
+  applyDeletedMessage(result: DeleteMessageResult): void {
+    this.deletedIds.add(result.messageId);
+    this.minimumPageRevision = Math.max(this.minimumPageRevision, result.revision);
+    this.clearNoticeTimer(result.messageId);
+    for (const [noticeId, timer] of this.noticeTimers) {
+      if (noticeId.startsWith('message-summary-')) {
+        clearTimeout(timer);
+        this.noticeTimers.delete(noticeId);
+      }
+    }
+    this.update((current) => ({
+      ...current,
+      messages: current.messages.filter((message) => message.messageId !== result.messageId),
+      notices: current.notices.filter((notice) => notice.message?.messageId !== result.messageId && notice.summaryCount === undefined),
+      queuedMessageIds: current.queuedMessageIds.filter((id) => id !== result.messageId),
+      revision: Math.max(current.revision, result.revision),
+      latestSequence: Math.max(current.latestSequence, result.latestSequence),
+      unreadCount: result.unreadCount,
+      deletingMessageIds: current.deletingMessageIds.filter((id) => id !== result.messageId),
+    }));
+  }
+
+  applyClearedMessages(result: ClearMessagesResult): void {
+    this.minimumPageRevision = Math.max(this.minimumPageRevision, result.revision);
+    this.seenIds.clear();
+    this.deletedIds.clear();
+    for (const timer of this.noticeTimers.values()) clearTimeout(timer);
+    this.noticeTimers.clear();
+    this.update((current) => ({
+      ...current,
+      messages: [],
+      nextCursor: null,
+      revision: Math.max(current.revision, result.revision),
+      latestSequence: Math.max(current.latestSequence, result.latestSequence),
+      readThroughSequence: Math.max(current.readThroughSequence, result.latestSequence),
+      unreadCount: result.unreadCount,
+      notices: [],
+      queuedMessageIds: [],
+      clearPending: false,
+      clearConfirming: false,
+      deletingMessageIds: [],
+    }));
+  }
 
   setKeyboardOpen(open: boolean): void {
     if (open) {
@@ -166,7 +252,9 @@ export class MessageController {
     for (const timer of this.noticeTimers.values()) clearTimeout(timer);
     this.noticeTimers.clear();
     this.seenIds.clear();
+    this.deletedIds.clear();
     this.summaryCounter = 0;
+    this.minimumPageRevision = 0;
     this.update(() => ({ ...initialState, messages: [], notices: [], queuedMessageIds: [] }));
   }
 

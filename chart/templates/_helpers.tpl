@@ -82,6 +82,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if empty .Values.auth.existingSecret -}}
 {{- fail "auth.existingSecret is required; Roaminal does not accept passwords through values" -}}
 {{- end -}}
+{{- if .Values.webPush.existingSecret -}}
+{{- if empty .Values.webPush.vapidPublicKeyKey }}{{- fail "webPush.vapidPublicKeyKey is required when webPush.existingSecret is set" }}{{- end }}
+{{- if empty .Values.webPush.vapidPrivateKeyKey }}{{- fail "webPush.vapidPrivateKeyKey is required when webPush.existingSecret is set" }}{{- end }}
+{{- if empty .Values.webPush.subjectKey }}{{- fail "webPush.subjectKey is required when webPush.existingSecret is set" }}{{- end }}
+{{- end -}}
 {{- if not .Values.app.acceptTerms -}}
 {{- fail "app.acceptTerms must be explicitly true before installing Roaminal" -}}
 {{- end -}}
@@ -107,7 +112,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if hasKey $.Values.commonLabels $label }}{{- fail (printf "commonLabels cannot override %s" $label) }}{{- end }}
 {{- if hasKey $.Values.podLabels $label }}{{- fail (printf "podLabels cannot override %s" $label) }}{{- end }}
 {{- end }}
-{{- $reservedEnv := list "ROAMINAL_HOST" "ROAMINAL_PORT" "ROAMINAL_PASSWORD" "ROAMINAL_WEBSOCKET_PING_INTERVAL" "ROAMINAL_SCROLLBACK_LINES" "ROAMINAL_MAX_CONNECTION_INSTANCES" "ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE" "ROAMINAL_DEBUG" "ROAMINAL_ACCEPT_TERMS" "ROAMINAL_CWD" "ROAMINAL_AUTH_ACCESS_TTL" "ROAMINAL_AUTH_REFRESH_TTL" "ROAMINAL_AUTH_MAX_ATTEMPTS" -}}
+{{- $reservedEnv := list "ROAMINAL_HOST" "ROAMINAL_PORT" "ROAMINAL_PASSWORD" "ROAMINAL_WEBSOCKET_PING_INTERVAL" "ROAMINAL_SCROLLBACK_LINES" "ROAMINAL_MAX_CONNECTION_INSTANCES" "ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE" "ROAMINAL_DEBUG" "ROAMINAL_ACCEPT_TERMS" "ROAMINAL_CWD" "ROAMINAL_AUTH_ACCESS_TTL" "ROAMINAL_AUTH_REFRESH_TTL" "ROAMINAL_AUTH_MAX_ATTEMPTS" "ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY" "ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY" "ROAMINAL_WEB_PUSH_SUBJECT" -}}
 {{- range .Values.extraEnv }}
 {{- if has .name $reservedEnv }}{{- fail (printf "extraEnv cannot override reserved variable %s" .name) }}{{- end }}
 {{- end }}

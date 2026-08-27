@@ -1,30 +1,24 @@
-import { ChevronDown, Keyboard } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
-import { commonKeyboardKeys } from './common-keyboard-model';
 import { CommonKeyboard } from './common-keyboard';
 import { ContextualKeyGrid } from './contextual-keyboard';
-import { contextualKeys, type ContextualMode } from './contextual-keyboard-model';
+import type { ContextualMode } from './contextual-keyboard-model';
 
 type Props = {
-  open: boolean;
   instance: ConnectionInstanceSummary | null;
   runtime: TerminalRuntime | null;
   mode: ContextualMode;
   nativeKeyboardOpen: boolean;
-  onToggle: () => void;
   onModeChange: (mode: ContextualMode) => void;
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
 };
 
 export function VirtualKeyboardDock({
-  open,
   instance,
   runtime,
   mode,
   nativeKeyboardOpen,
-  onToggle,
   onModeChange,
   onToast,
 }: Props) {
@@ -44,10 +38,6 @@ export function VirtualKeyboardDock({
         : instance?.lifecycle !== 'live'
           ? 'Connection is not live'
           : '';
-  const keyCount = useMemo(
-    () => mode === 'common' ? commonKeyboardKeys().length : contextualKeys(instance, mode).length,
-    [instance, mode],
-  );
   const sendKey = (value: string) => {
     if (!enabled || !runtime) return;
     runtime.input(value);
@@ -67,16 +57,8 @@ export function VirtualKeyboardDock({
     }
   };
 
-  if (!open) return null;
-
   return (
-    <section className="virtual-keyboard-dock" aria-label="Virtual keyboard" data-testid="virtual-keyboard-dock">
-      <header className="virtual-keyboard-header">
-        <div className="virtual-keyboard-title"><Keyboard size={16} aria-hidden="true" /><strong>Virtual keyboard</strong><span>{keyCount} keys</span></div>
-        <button className="icon-button" type="button" onClick={onToggle} aria-label="Collapse virtual keyboard" title="Collapse virtual keyboard" aria-expanded="true">
-          <ChevronDown size={17} aria-hidden="true" />
-        </button>
-      </header>
+    <div className="virtual-keyboard-content" aria-label="Virtual keyboard" data-testid="virtual-keyboard-dock">
       <div className="virtual-keyboard-mode" role="group" aria-label="Virtual keyboard mode">
         {(['common', 'tmux', 'codex'] as const).map((value) => (
           <button key={value} type="button" aria-pressed={mode === value} className={mode === value ? 'active' : ''} onClick={() => onModeChange(value)}>
@@ -95,6 +77,6 @@ export function VirtualKeyboardDock({
           )}
         </section>
       </div>
-    </section>
+    </div>
   );
 }

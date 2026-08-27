@@ -8,14 +8,14 @@ describe('app controller', () => {
     const unsubscribe = controller.subscribe(() => snapshots.push(controller.getSnapshot().page));
 
     controller.setPage('workspace');
-    controller.setSidebarOpen(false);
-    controller.setVirtualKeyboardOpen(true);
+    controller.setWorkspaceTool('keyboard');
+    controller.setWorkspaceToolOpen(true);
     controller.setPreviewConnectionInstanceId('instance-1');
 
     expect(controller.getSnapshot()).toMatchObject({
       page: 'workspace',
-      sidebarOpen: false,
-      virtualKeyboardOpen: true,
+      workspaceTool: 'keyboard',
+      workspaceToolOpen: true,
       previewConnectionInstanceId: 'instance-1',
     });
     expect(snapshots).toEqual(['workspace', 'workspace', 'workspace', 'workspace']);

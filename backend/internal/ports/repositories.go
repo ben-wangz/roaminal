@@ -51,3 +51,13 @@ type UploadRepository interface {
 	SaveUpload(context.Context, domain.UploadJobRecord) error
 	DeleteUpload(context.Context, string) error
 }
+
+// PushSubscriptionRepository stores browser delivery endpoints and their
+// encryption keys. Implementations must keep this data private and durable.
+type PushSubscriptionRepository interface {
+	ListPushSubscriptions(context.Context) ([]domain.PushSubscriptionRecord, error)
+	UpsertPushSubscription(context.Context, domain.PushSubscriptionRecord) (domain.PushSubscriptionRecord, error)
+	DeletePushSubscription(context.Context, string, string) (bool, error)
+	DeletePushSubscriptionsForAuthSession(context.Context, string) (int, error)
+	DeletePushSubscriptionByID(context.Context, string) (bool, error)
+}

@@ -6,6 +6,28 @@ import (
 	"time"
 )
 
+// IsSessionActive reports whether an authentication session can still be used
+// for an authenticated resource. It is used by durable resource cleanup and
+// does not mutate the session store.
+func (m *Manager) IsSessionActive(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entry, ok := m.refresh[sessionID]
+	return ok && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint
+}
+
+func (m *Manager) SessionIDForRefresh(refreshToken string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	hash := hashToken(strings.TrimSpace(refreshToken))
+	for sessionID, entry := range m.refresh {
+		if refreshToken != "" && hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint {
+			return sessionID, true
+		}
+	}
+	return "", false
+}
+
 func (m *Manager) Logout(refreshToken, accessToken string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -15,6 +15,8 @@ type MessageRepository interface {
 	ListMessages(limit int, before uint64) (domain.MessagePage, error)
 	MarkMessagesReadThrough(uint64) (domain.MessageState, error)
 	MessageState() (domain.MessageState, error)
+	DeleteMessage(string) (domain.MessageState, bool, error)
+	ClearMessages() (domain.MessageState, int, error)
 }
 
 // MessageAppender is the small dependency used by Agent telemetry. Keeping
@@ -22,4 +24,10 @@ type MessageRepository interface {
 // HTTP or browser presentation concerns.
 type MessageAppender interface {
 	AppendMessage(domain.MessageDraft) (domain.MessageRecord, bool, error)
+}
+
+// MessageNotifier receives only newly persisted records. Implementations must
+// return quickly and perform best-effort delivery asynchronously.
+type MessageNotifier interface {
+	Notify(domain.MessageRecord)
 }

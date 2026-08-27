@@ -19,6 +19,8 @@ license notices in their module distributions:
 
 - `github.com/creack/pty v1.1.24` - MIT
 - `github.com/coder/websocket v1.8.15` - MIT
+- `github.com/marknefedov/go-webpush/v2 v2.0.0` - MIT
+- `github.com/golang-jwt/jwt/v5 v5.3.1` (transitive Web Push dependency) - MIT
 - `gopkg.in/yaml.v3 v3.0.1` - MIT
 
 ## Direct JavaScript dependencies

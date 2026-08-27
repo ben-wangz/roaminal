@@ -9,13 +9,16 @@ Viewports: all five standard projects and 320 x 568.
    SSH REMOTE workspace, search, Sessions dialog, action menu, and confirmation
    dialog at applicable viewports. No text/control overlap, clipped buttons,
    incoherent nested scroll, or horizontal page overflow is allowed.
-2. At width `<=800`, sidebar begins closed and inert. Open sidebar has a backdrop,
-   traps focus, closes through backdrop/Escape/Close, and returns focus to Open
-   sidebar. Selection closes the overlay; no hover preview is created.
-3. Above 800px, toggle sidebar from its real icon control. Main terminal expands
-   and refits, the Open sidebar button restores it, and `aria-expanded`,
-   `aria-controls`, `aria-hidden`, and inert state remain consistent.
-4. In Terminal mode, open and collapse the Virtual Keyboard from the topbar.
+2. At width `<=800`, the Connections surface begins closed and inert. Opening
+   Connections from the shared selector shows a backdrop, traps focus, closes
+   through backdrop/Escape/Close, and returns focus to the Connections selector.
+   Selection closes the overlay; no hover preview is created.
+3. Above 800px, open and collapse the shared workspace tool surface from its
+   real selector/header controls. Main terminal expands and refits when the
+   surface is collapsed, and `aria-expanded`, `aria-controls`, `aria-hidden`,
+   and inert state remain consistent.
+4. In Terminal mode, open and collapse Virtual keyboard from the shared
+   selector/header controls.
    Above 800px it replaces the connection sidebar as a left-side panel; at
    `<=800px` it is below the main Terminal workspace. It never expands the
    connection sidebar at the same time, and its key labels fit at 320px.
@@ -33,10 +36,11 @@ Viewports: all five standard projects and 320 x 568.
    allowed, and focus returns to a sensible trigger. For action menus verify
    menu keyboard behavior from PW-WORK-003.
 8. Verify Ctrl/Meta+Shift+T opens Connection manager, Ctrl/Meta+F opens terminal
-   search only with an active connection, and Ctrl/Meta+Shift+S toggles sidebar.
+   search only with an active connection, and Ctrl/Meta+Shift+S toggles the
+   Connections tool surface.
    Extra Alt or wrong Shift combinations must not trigger them.
-9. Emulate `prefers-reduced-motion: reduce`; sidebar, monitor, and preview transitions do
-   not depend on animation for correctness.
+9. Emulate `prefers-reduced-motion: reduce`; workspace surface, monitor, and
+   preview transitions do not depend on animation for correctness.
 
 ## Pass gate
 

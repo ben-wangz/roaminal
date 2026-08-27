@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
-import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { loadVirtualKeyboardPreference, saveVirtualKeyboardPreference } from '../input/virtual-keyboard-storage';
 import type { AppPage } from './app-state';
 import type { WorkspaceMode } from './workspace-page';
+import type { WorkspaceTool } from './workspace-tool';
 
 type Params = {
   loginSessionId: string;
   page: AppPage;
   workspaceMode: WorkspaceMode;
-  sidebarOpen: boolean;
-  virtualKeyboardOpen: boolean;
-  setVirtualKeyboardOpen: Dispatch<SetStateAction<boolean>>;
-  setSidebarOpen: Dispatch<SetStateAction<boolean>>;
+  workspaceTool: WorkspaceTool;
+  workspaceToolOpen: boolean;
+  nativeKeyboardOpen: boolean;
+  setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
+  setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
 };
 
@@ -19,45 +20,62 @@ export function useVirtualKeyboardState({
   loginSessionId,
   page,
   workspaceMode,
-  sidebarOpen,
-  virtualKeyboardOpen,
-  setVirtualKeyboardOpen,
-  setSidebarOpen,
+  workspaceTool,
+  workspaceToolOpen,
+  nativeKeyboardOpen,
+  setWorkspaceTool,
+  setWorkspaceToolOpen,
   setPreviewConnectionInstanceId,
-}: Params): { virtualKeyboardOpenButton: MutableRefObject<HTMLButtonElement | null>; toggleVirtualKeyboard: () => void } {
+}: Params): { selectVirtualKeyboard: () => void; collapseVirtualKeyboard: () => void } {
   const [preference, setPreference] = useState<boolean | null>(null);
-  const virtualKeyboardOpenButton = useRef<HTMLButtonElement>(null);
+  const wasNativeKeyboardOpen = useRef(false);
 
   useEffect(() => {
     if (!loginSessionId) {
       setPreference(null);
       return;
     }
-    const saved = loadVirtualKeyboardPreference(window.localStorage, loginSessionId);
-    setPreference(saved ?? !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches);
+    setPreference(loadVirtualKeyboardPreference(window.localStorage, loginSessionId));
   }, [loginSessionId]);
 
-  const setPreferenceAndState = useCallback(
+  const savePreference = useCallback(
     (open: boolean) => {
       setPreference(open);
-      setVirtualKeyboardOpen(open);
       if (loginSessionId) saveVirtualKeyboardPreference(window.localStorage, loginSessionId, open);
     },
-    [loginSessionId, setVirtualKeyboardOpen],
+    [loginSessionId],
   );
-  const toggleVirtualKeyboard = useCallback(() => {
-    setSidebarOpen(false);
+  const selectVirtualKeyboard = useCallback(() => {
+    if (page !== 'workspace' || workspaceMode !== 'terminal') return;
     setPreviewConnectionInstanceId(null);
-    setPreferenceAndState(!virtualKeyboardOpen);
-  }, [setPreferenceAndState, setPreviewConnectionInstanceId, setSidebarOpen, virtualKeyboardOpen]);
+    setWorkspaceTool('keyboard');
+    setWorkspaceToolOpen(true);
+    savePreference(true);
+  }, [page, savePreference, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen, workspaceMode]);
+  const collapseVirtualKeyboard = useCallback(() => {
+    if (workspaceTool === 'keyboard' && workspaceToolOpen) savePreference(false);
+    setWorkspaceToolOpen(false);
+  }, [savePreference, setWorkspaceToolOpen, workspaceTool, workspaceToolOpen]);
 
   useEffect(() => {
-    if (page !== 'workspace' || workspaceMode !== 'terminal' || sidebarOpen || preference !== true) {
-      if (virtualKeyboardOpen) setVirtualKeyboardOpen(false);
+    if (page === 'workspace' && workspaceMode === 'terminal') return;
+    if (workspaceTool === 'keyboard') {
+      setWorkspaceTool('connections');
+      setWorkspaceToolOpen(false);
+    }
+    savePreference(false);
+  }, [page, savePreference, setWorkspaceTool, setWorkspaceToolOpen, workspaceMode, workspaceTool]);
+
+  useEffect(() => {
+    if (nativeKeyboardOpen) {
+      wasNativeKeyboardOpen.current = true;
       return;
     }
-    if (!virtualKeyboardOpen) setVirtualKeyboardOpen(true);
-  }, [page, preference, setVirtualKeyboardOpen, sidebarOpen, virtualKeyboardOpen, workspaceMode]);
+    if (wasNativeKeyboardOpen.current && preference === true && page === 'workspace' && workspaceMode === 'terminal' && workspaceTool === 'keyboard' && !workspaceToolOpen) {
+      setWorkspaceToolOpen(true);
+    }
+    wasNativeKeyboardOpen.current = false;
+  }, [nativeKeyboardOpen, page, preference, setWorkspaceToolOpen, workspaceMode, workspaceTool, workspaceToolOpen]);
 
-  return { virtualKeyboardOpenButton, toggleVirtualKeyboard };
+  return { selectVirtualKeyboard, collapseVirtualKeyboard };
 }

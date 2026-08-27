@@ -10,8 +10,8 @@ or credentials.
 
 1. Open the fixture SSH connection instance and click its folder extension. The
    main workspace body is replaced by FileSystem; no Terminal/FileSystem tab
-   bar is rendered, and no new window, browser fullscreen request, command
-   action, or terminal action is created. The root shows `Active pane` when
+   bar is rendered, and no new window, automatic browser fullscreen request,
+   command action, or terminal action is created. The root shows `Active pane` when
    tmux probing succeeds.
 2. Verify the root directory loads only its first level, directories appear
    before files, hidden files are visible by default, and the fallback status is
@@ -32,7 +32,8 @@ or credentials.
 5. Resize the tree/preview divider with pointer and arrow-key input on desktop.
    Verify it stays within the documented bounds. On phone portrait, verify the
    page switches between tree and preview views inside the page and does not
-   call either Fullscreen API.
+   call either Fullscreen API. The explicit topbar fullscreen control remains
+   independent and is not part of FileSystem navigation.
 6. Right-click the root, a directory, and a file. The menu contains only copy
    absolute path, copy root-relative path, refresh, and for directories the one
    unified upload action. Clipboard values contain plain paths without quotes,
@@ -90,7 +91,9 @@ or credentials.
 All expected protected API responses are correlated with the action that caused
 them. Fail on unexpected console/page errors, a request containing an absolute
 client-supplied operation path or arbitrary command, leaked file content in
-diagnostics, duplicate upload jobs, stale cross-instance state, or any full
-screen/new-window behavior. The browser may report one `net::ERR_ABORTED` for
+diagnostics, duplicate upload jobs, stale cross-instance state, or any
+automatic fullscreen/new-window behavior. An explicit user activation of the
+independent fullscreen control is allowed only in its dedicated regression
+case. The browser may report one `net::ERR_ABORTED` for
 a `blob:` document while an image/video/PDF preview is being closed; treat only
 that document-teardown case as expected, and fail all other aborted requests.
