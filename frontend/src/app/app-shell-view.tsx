@@ -1,107 +1,14 @@
-import type { RefObject } from 'react';
 import { Minimize } from 'lucide-react';
-import type { AuthSessionSummary } from '../auth/auth-session-ui';
 import { connectionDisplayName } from '../status/connection-label';
-import type { ToastKind, ToastState } from '../ui/toast';
-import { TerminalRuntime } from '../terminal/terminal-runtime';
-import type { TerminalPreviewRuntime } from '../terminal/terminal-preview';
-import type { ContextualMode } from '../input/contextual-keyboard-model';
 import { ConnectionManager } from '../connections/connection-manager';
-import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import type { ConnectionInstanceLayout, InstanceMovePlacement } from '../connections/connection-instance-groups';
-import type { Heartbeat } from '../status/heartbeat';
-import type { ConnectionView } from './connection-view';
 import { AppearanceSettings } from '../appearance/appearance-settings';
-import type { AppPage } from './app-state';
-import type { WorkspaceTool } from './workspace-tool';
-import type { FullscreenTarget } from './use-browser-fullscreen';
-import type { NotificationState } from '../status/notification-service';
-import type { TerminalAppearance } from '../appearance/appearance-model';
 import { ShellTopbar } from './shell-topbar';
-import { WorkspacePage, type WorkspaceMode } from './workspace-page';
+import { WorkspacePage } from './workspace-page';
 import { WorkspaceToolSurface } from '../ui/workspace-tool-surface';
 import { MessageNoticeStack, MessagePopover } from '../messages/message-center';
-import type { useMessages } from '../messages/use-messages';
-import { AppShellOverlays, type Dialog } from './app-shell-overlays';
+import { AppShellOverlays } from './app-shell-overlays';
+import type { AppShellViewProps } from './app-shell-view-props';
 export type { Dialog } from './app-shell-overlays';
-type Props = {
-  page: AppPage;
-  appearance: TerminalAppearance;
-  workspaceTool: WorkspaceTool;
-  workspaceToolOpen: boolean;
-  connectionToolButton: RefObject<HTMLButtonElement | null>;
-  keyboardToolButton: RefObject<HTMLButtonElement | null>;
-  nativeKeyboardOpen: boolean;
-  messageButtonRef: RefObject<HTMLButtonElement | null>;
-  messageCenter: ReturnType<typeof useMessages>;
-  connections: ConnectionInstanceSummary[];
-  connectionInstanceLayout: ConnectionInstanceLayout;
-  loginSessionId: string;
-  view: ConnectionView;
-  heartbeatState: Heartbeat | null;
-  heartbeatLatency: number | null;
-  heartbeatConnected: boolean;
-  currentConnection: ConnectionInstanceSummary | undefined;
-  activeInstance: ConnectionInstanceSummary | null;
-  currentRuntime: TerminalRuntime | null;
-  activeRuntimeId: string | null;
-  previewConnectionInstanceId: string | null;
-  previewRuntime: TerminalPreviewRuntime | null;
-  contextualMode: ContextualMode;
-  search: boolean;
-  executionStatus: string | null;
-  toast: ToastState | null;
-  dialog: Dialog;
-  dialogConnection: ConnectionInstanceSummary | undefined;
-  authSessions: AuthSessionSummary[];
-  currentAuthSessionId: string;
-  authSessionBusy: string | null;
-  onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
-  onCollapseWorkspaceTool: () => void;
-  onSelectConnection: (id: string) => void;
-  onNavigateToConnection: (id: string) => void;
-  onMessageTargetUnavailable: () => void;
-  onMoveConnectionInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
-  onReorderConnectionGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
-  onCreateConnectionGroup: (name: string) => Promise<boolean>;
-  onRenameConnectionGroup: (id: string, name: string) => Promise<boolean>;
-  onDeleteConnectionGroup: (id: string) => Promise<boolean>;
-  onMoveConnectionGroupMembers: (id: string) => Promise<void>;
-  onPreviewStart: (id: string) => void;
-  onPreviewEnd: (id: string) => void;
-  onAgent: (id: string) => void;
-  onOpenFileSystem: (id: string) => void;
-  onRename: (id: string) => void;
-  onAutomaticTitle: (id: string) => void;
-  onTerminate: (id: string) => void;
-  onContextualModeChange: (mode: ContextualMode) => void;
-  onToggleSearch: () => void;
-  onCloseSearch: () => void;
-  onOpenConnections: () => void;
-  onOpenAppearance: () => void;
-  onSignOut: () => void;
-  onOpenAuthSessions: () => void;
-  onOpenManager: () => void;
-  onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<void>;
-  onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;
-  onOpenWorkspace: () => void;
-  onSaveAppearance: (appearance: TerminalAppearance) => void;
-  onShowToast: (message: string, kind?: ToastKind) => void;
-  onRenameTitle: (id: string, title: string | null) => Promise<void>;
-  onTerminateConnection: (id: string) => Promise<void>;
-  onRevokeAuthSession: (id: string) => void;
-  onLogoutOtherAuthSessions: () => void;
-  onCloseDialog: () => void;
-  workspaceMode: WorkspaceMode;
-  appShellRef: RefObject<FullscreenTarget | null>;
-  fullscreenActive: boolean;
-  fullscreenSupported: boolean;
-  fullscreenPending: boolean;
-  onToggleFullscreen: () => void;
-  notificationState: NotificationState;
-  onEnableNotifications: () => Promise<void>;
-  onDisableNotifications: () => Promise<void>;
-};
 
 export function AppShellView({
   page,
@@ -180,7 +87,7 @@ export function AppShellView({
   notificationState,
   onEnableNotifications,
   onDisableNotifications,
-}: Props) {
+}: AppShellViewProps) {
   const workspaceOpen = page === 'workspace';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
   return (

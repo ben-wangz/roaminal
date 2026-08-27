@@ -1,54 +1,12 @@
 import type { AgentMessage, ClearMessagesResult, DeleteMessageResult, MessagePage } from './message-api';
+import { initialMessageControllerState, type MessageControllerState, type MessageNotice } from './message-controller-state';
 
-export type MessageNotice = {
-  noticeId: string;
-  message: AgentMessage | null;
-  text: string;
-  severity: 'info' | 'success' | 'error';
-  createdAt: number;
-  summaryCount?: number;
-};
-
-export type MessageControllerState = {
-  messages: AgentMessage[];
-  nextCursor: string | null;
-  revision: number;
-  latestSequence: number;
-  readThroughSequence: number;
-  unreadCount: number;
-  popoverOpen: boolean;
-  notices: MessageNotice[];
-  queuedMessageIds: string[];
-  keyboardOpen: boolean;
-  hydrated: boolean;
-  loading: boolean;
-  deletingMessageIds: string[];
-  clearPending: boolean;
-  clearConfirming: boolean;
-};
+export type { MessageControllerState, MessageNotice } from './message-controller-state';
 
 type Listener = () => void;
 
-const initialState: MessageControllerState = {
-  messages: [],
-  nextCursor: null,
-  revision: 0,
-  latestSequence: 0,
-  readThroughSequence: 0,
-  unreadCount: 0,
-  popoverOpen: false,
-  notices: [],
-  queuedMessageIds: [],
-  keyboardOpen: false,
-  hydrated: false,
-  loading: false,
-  deletingMessageIds: [],
-  clearPending: false,
-  clearConfirming: false,
-};
-
 export class MessageController {
-  private state: MessageControllerState = initialState;
+  private state: MessageControllerState = initialMessageControllerState;
   private readonly listeners = new Set<Listener>();
   private readonly seenIds = new Set<string>();
   private readonly deletedIds = new Set<string>();
@@ -255,7 +213,7 @@ export class MessageController {
     this.deletedIds.clear();
     this.summaryCounter = 0;
     this.minimumPageRevision = 0;
-    this.update(() => ({ ...initialState, messages: [], notices: [], queuedMessageIds: [] }));
+    this.update(() => ({ ...initialMessageControllerState, messages: [], notices: [], queuedMessageIds: [] }));
   }
 
   private enqueueNotices(incoming: AgentMessage[]): void {

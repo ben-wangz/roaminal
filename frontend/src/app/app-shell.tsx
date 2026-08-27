@@ -24,8 +24,7 @@ import { useMessages } from '../messages/use-messages';
 import type { WorkspaceTool } from './workspace-tool';
 import { useBrowserFullscreen } from './use-browser-fullscreen';
 import { useBrowserNotifications } from '../status/use-browser-notifications';
-import { fetchMessages } from '../messages/message-api';
-import { resolveMessageTarget } from '../messages/message-center';
+import { useNotificationNavigation } from './use-notification-navigation';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
@@ -152,31 +151,16 @@ export function AppShell() {
     nativeKeyboardOpen: mobileKeyboard.keyboardOpen,
     onToast: showToast,
   });
-  const handleNotificationClick = useCallback(async (messageId: string) => {
-    let message = messageCenter.state.messages.find((item) => item.messageId === messageId);
-    if (!message && auth) {
-      try {
-        const page = await fetchMessages(auth);
-        message = page.messages.find((item) => item.messageId === messageId);
-      } catch {
-        // The durable Message Center remains the fallback when hydration fails.
-      }
-    }
-    if (!message) {
-      showToast('The connection for this message is no longer connected.', 'error');
-      return;
-    }
-    await messageCenter.markRead(message.sequence);
-    messageCenter.closePopover();
-    const target = resolveMessageTarget(message, connections, view.activeConnectionInstanceId);
-    if (!target.connectionInstanceId) {
-      showToast('The connection for this message is no longer connected.', 'error');
-      return;
-    }
-    setWorkspaceTool('connections');
-    setWorkspaceToolOpen(!window.matchMedia('(max-width: 800px)').matches);
-    onOpenTerminal(target.connectionInstanceId);
-  }, [auth, connections, messageCenter, onOpenTerminal, setWorkspaceTool, setWorkspaceToolOpen, showToast, view.activeConnectionInstanceId]);
+  const handleNotificationClick = useNotificationNavigation({
+    auth,
+    messageCenter,
+    connections,
+    activeConnectionInstanceId: view.activeConnectionInstanceId,
+    onOpenTerminal,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
+    onToast: showToast,
+  });
   const notifications = useBrowserNotifications(auth, (messageId) => { void handleNotificationClick(messageId); });
   const handleSelectWorkspaceTool = useCallback((tool: WorkspaceTool) => {
     if (tool === 'keyboard') {
