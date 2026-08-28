@@ -13,6 +13,7 @@ function message(overrides: Partial<AgentMessage> = {}): AgentMessage {
     receivedAt: new Date(1_700_000_000_000).toISOString(),
     connectionInstanceIds: ['instance-1'],
     fallbackLabel: 'coder@private.example:22 / tmux:private-session',
+    connectionLabel: 'pve-roaminal',
     read: false,
     ...overrides,
   };
@@ -65,7 +66,7 @@ describe('browser notification service', () => {
     await vi.waitFor(() => expect(worker.postMessage).toHaveBeenCalled(), { timeout: 1000 });
     expect(worker.postMessage).toHaveBeenCalledWith({
       type: 'roaminal-show-notification',
-      payload: { messageId: 'message-1', severity: 'success', body: 'Codex turn finished' },
+      payload: { messageId: 'message-1', severity: 'success', body: 'pve-roaminal: Codex turn finished' },
     });
     expect(JSON.stringify(worker.postMessage.mock.calls)).not.toContain('private.example');
     expect(JSON.stringify(worker.postMessage.mock.calls)).not.toContain('private-session');

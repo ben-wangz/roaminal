@@ -192,7 +192,7 @@ func (s *Service) AcceptEvent(token string, body []byte) (bool, error) {
 	matchingIDs := s.matchingConnectionInstances(endpointKey, targetName, event.Tmux.SessionName, record)
 	fallbackLabel := messageFallbackLabel(record, targetName)
 	if s.messages != nil {
-		if err := s.appendEventMessages(event, endpointKey, targetName, fallbackLabel, matchingIDs, now); err != nil {
+		if err := s.appendEventMessages(event, endpointKey, targetName, fallbackLabel, matchingIDs, record, now); err != nil {
 			return false, err
 		}
 	}

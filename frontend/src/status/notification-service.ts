@@ -199,10 +199,12 @@ function eligible(message: AgentMessage): boolean {
 
 export function notifyAgentMessage(message: AgentMessage): void {
   if (!eligible(message) || !deliveryEnabled() || pageIsActive()) return;
+  const connectionLabel = message.connectionLabel?.trim();
+  const safeLabel = connectionLabel && !(/[\u0000-\u001f\u007f]/.test(connectionLabel)) ? connectionLabel.slice(0, 128) : '';
   const payload: NotificationPayload = {
     messageId: message.messageId,
     severity: message.severity,
-    body: message.text,
+    body: safeLabel ? `${safeLabel}: ${message.text}` : message.text,
   };
   void serviceWorkerRegistration().then((registration) => {
     if (!registration) return;

@@ -8,7 +8,8 @@ desktop. Run serially for byte-capture fixtures.
 1. Every local/SSH instance defaults to Common, regardless of `tmuxEnabled`.
    Manual mode choices are isolated per connection instance for the page
    lifetime and reset to Common after reload. The Virtual Keyboard is opened
-   from the shared Connections/Virtual keyboard selector. On desktop it
+   from the shared icon-only Connections/Virtual keyboard buttons. The controls
+   use an active background rather than tab styling or visible text. On desktop it
    replaces the connection surface as a left panel; on tablet and phone it is
    placed below the Terminal workspace.
    Common, Tmux, and Codex are peer modes, and only the selected mode is
@@ -39,7 +40,7 @@ desktop. Run serially for byte-capture fixtures.
 6. With `tmuxPrefixSource=unsupported`, prefix-dependent buttons (prefix,
    copy-mode, `o`, `d`, and `"`) are disabled with an explanatory tooltip;
    Common keys, PageUp, PageDown, and q remain usable.
-7. The shared selector opens Connections or Virtual keyboard without changing
+7. The shared icon buttons open Connections or Virtual keyboard without changing
    the active connection. They are never simultaneously expanded. The common
    surface collapse control closes the selected tool; switching to FileSystem
    selects Connections and hides the keyboard surface. The login-scoped

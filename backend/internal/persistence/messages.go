@@ -124,6 +124,9 @@ func validateMessageDraft(draft domain.MessageDraft) error {
 	if draft.MessageID == "" || draft.IdempotencyKey == "" || draft.EndpointKey == "" || draft.FallbackLabel == "" || draft.TmuxSessionName == "" || draft.TmuxSessionID == "" || draft.TmuxSessionCreated < 0 {
 		return errors.New("message identity is incomplete")
 	}
+	if draft.ConnectionLabel != "" && !domain.IsSafeConnectionLabel(draft.ConnectionLabel) {
+		return errors.New("message connection label is invalid")
+	}
 	if draft.AgentType != "codex" {
 		return errors.New("unsupported message agent type")
 	}

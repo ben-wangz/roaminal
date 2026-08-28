@@ -69,6 +69,10 @@ disposable remote home. Viewports: desktop, tablet, phone, and 320 px.
    `message_cursor_invalid`; malformed read state returns
    `message_read_state_invalid`; a storage outage returns retryable
    `message_store_unavailable` without acknowledging the Agent event.
+   Browser notification bodies must contain only the safe connection label and
+   fixed presentation text; they must never use the endpoint/tmux fallback
+   label. If Service Worker deduplication storage is unavailable, verify that
+   no duplicate notification is shown and the durable row remains available.
 12. Verify Escape and outside pointer close the panel and return focus to the
     Bell, icon-only controls have accessible names and tooltips, status is not
     communicated by color alone, reduced motion is understandable, delete and

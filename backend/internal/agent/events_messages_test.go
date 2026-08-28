@@ -14,6 +14,12 @@ import (
 
 func TestAcceptEventCreatesDurableMessagesForReadyAndStop(t *testing.T) {
 	service, token := eventTestService(t)
+	if err := service.store.Update("endpoint-test", func(record *EndpointRecord) error {
+		record.Aliases = []string{"pve-roaminal"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	sink := &recordingMessageAppender{}
 	service.messages = sink
 	service.terms = &messageConnectionService{views: []ports.ConnectionInstanceView{
@@ -44,6 +50,9 @@ func TestAcceptEventCreatesDurableMessagesForReadyAndStop(t *testing.T) {
 	}
 	if got := len(sink.records[0].ConnectionInstanceIDs); got != 2 {
 		t.Fatalf("shared target was not attributed to both instances: %d", got)
+	}
+	if sink.records[0].ConnectionLabel != "pve-roaminal" || sink.records[1].ConnectionLabel != "pve-roaminal" {
+		t.Fatalf("unexpected safe connection label: %+v", sink.records)
 	}
 	if duplicate, err := service.AcceptEvent(token, makeEvent("Stop", "completed", 2)); err != nil || !duplicate {
 		t.Fatalf("replayed stop: duplicate=%v err=%v", duplicate, err)

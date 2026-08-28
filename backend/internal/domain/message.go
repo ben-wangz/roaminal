@@ -1,6 +1,27 @@
 package domain
 
-import "time"
+import (
+	"time"
+	"unicode"
+	"unicode/utf8"
+)
+
+const maxConnectionLabelBytes = 128
+
+// IsSafeConnectionLabel accepts the user-facing alias used by notifications.
+// Endpoint, port, tmux, and Agent identifiers must never be represented by
+// this field.
+func IsSafeConnectionLabel(value string) bool {
+	if value == "" || len([]byte(value)) > maxConnectionLabelBytes || !utf8.ValidString(value) {
+		return false
+	}
+	for _, character := range value {
+		if unicode.IsControl(character) {
+			return false
+		}
+	}
+	return true
+}
 
 // MessageDraft is the internal write contract for a durable Agent message.
 // Endpoint and event identifiers never cross the HTTP presentation boundary.
@@ -15,6 +36,7 @@ type MessageDraft struct {
 	ReceivedAt            time.Time `json:"receivedAt"`
 	EndpointKey           string    `json:"endpointKey"`
 	FallbackLabel         string    `json:"fallbackLabel"`
+	ConnectionLabel       string    `json:"connectionLabel,omitempty"`
 	TmuxSessionName       string    `json:"tmuxSessionName"`
 	TmuxSessionID         string    `json:"tmuxSessionId"`
 	TmuxSessionCreated    int64     `json:"tmuxSessionCreated"`

@@ -25,7 +25,7 @@ html[data-roaminal-keyboard="open"] .terminal-stage { padding: 0; }
   .terminal-stage { min-height: 0; }
   .auth-modal { padding: 22px; }
   .connection-list { padding-inline: 8px; }
-  .connection-card { min-height: 120px; }
+  .connection-card { min-height: 148px; }
   .appearance-page { padding: 20px 12px 34px; }
   .appearance-header { flex-direction: column; gap: 12px; }
   .appearance-header-actions { justify-content: flex-start; }

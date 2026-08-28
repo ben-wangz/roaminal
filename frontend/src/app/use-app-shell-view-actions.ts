@@ -7,8 +7,6 @@ import type { Dialog } from './app-shell-view';
 import type { WorkspaceTool } from './workspace-tool';
 
 type Params = {
-  workspaceMode: 'terminal' | 'filesystem';
-  onOpenTerminal: (id: string) => void;
   onOpenFileSystem: (id: string) => void;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<SetStateAction<Dialog>>;
@@ -23,8 +21,6 @@ type Params = {
 };
 
 export function useAppShellViewActions({
-  workspaceMode,
-  onOpenTerminal,
   onOpenFileSystem,
   setPreviewConnectionInstanceId,
   setDialog,
@@ -43,12 +39,8 @@ export function useAppShellViewActions({
     [setPreviewConnectionInstanceId],
   );
   const handleAgent = useCallback((id: string) => {
-    if (workspaceMode === 'filesystem') {
-      onOpenTerminal(id);
-      return;
-    }
     setDialog({ type: 'agent', connectionInstanceId: id });
-  }, [onOpenTerminal, setDialog, workspaceMode]);
+  }, [setDialog]);
   const handleOpenFileSystem = useCallback((id: string) => {
     setPreviewConnectionInstanceId(null);
     setWorkspaceTool('connections');

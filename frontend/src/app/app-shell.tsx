@@ -200,8 +200,6 @@ export function AppShell() {
     handleSaveAppearance,
     handleCloseDialog,
   } = useAppShellViewActions({
-    workspaceMode,
-    onOpenTerminal,
     onOpenFileSystem,
     setPreviewConnectionInstanceId,
     setDialog,

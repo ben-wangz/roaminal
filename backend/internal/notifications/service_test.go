@@ -19,7 +19,9 @@ func TestDisabledServiceDoesNotQueueNotifications(t *testing.T) {
 	if service.Configuration().Enabled {
 		t.Fatal("service without VAPID public key must be disabled")
 	}
-	service.Notify(completedRecord())
+	record := completedRecord()
+	record.ConnectionLabel = "pve-roaminal"
+	service.Notify(record)
 	if sender.calls() != 0 {
 		t.Fatal("disabled service sent a notification")
 	}
@@ -47,7 +49,9 @@ func TestServiceRegistersAndSendsSafePayload(t *testing.T) {
 	if registered.ID == "" || len(repo.records) != 1 {
 		t.Fatalf("unexpected registration: %+v records=%d", registered, len(repo.records))
 	}
-	service.Notify(completedRecord())
+	record := completedRecord()
+	record.ConnectionLabel = "pve-roaminal"
+	service.Notify(record)
 	if err := service.Wait(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +60,7 @@ func TestServiceRegistersAndSendsSafePayload(t *testing.T) {
 	if err := json.Unmarshal(call.payload, &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload["messageId"] != "message-1" || payload["body"] != "Codex turn finished" || payload["severity"] != "success" {
+	if payload["messageId"] != "message-1" || payload["body"] != "pve-roaminal: Codex turn finished" || payload["severity"] != "success" {
 		t.Fatalf("unexpected payload: %s", call.payload)
 	}
 	if string(call.payload) == input.Endpoint || string(call.payload) == input.AuthKey || string(call.payload) == input.P256dhKey {

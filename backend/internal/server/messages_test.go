@@ -33,6 +33,7 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	record, _, err := messageService.AppendMessage(domain.MessageDraft{
 		Kind: "codex_turn_completed", Severity: "success", AgentType: "codex", PresentationKey: "codex_turn_finished",
 		OccurredAt: now, ReceivedAt: now, EndpointKey: "private-endpoint", FallbackLabel: "user@example.test:22 / tmux:roaminal",
+		ConnectionLabel: "codespace",
 		TmuxSessionName: "roaminal", TmuxSessionID: "$0", TmuxSessionCreated: 10, ConnectionInstanceIDs: []string{"instance-1"},
 		IdempotencyKey: "private-event\x00codex_turn_completed",
 	})
@@ -78,6 +79,9 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	}
 	if len(page.Messages) != 1 || page.Messages[0].Text != "Codex turn finished" || page.Messages[0].Read {
 		t.Fatalf("unexpected message page: %+v", page)
+	}
+	if page.Messages[0].ConnectionLabel != "codespace" {
+		t.Fatalf("safe connection label missing from message page: %+v", page.Messages[0])
 	}
 	for _, forbidden := range []string{"private-endpoint", "private-event", "$0", "endpointKey", "idempotencyKey", "tmuxSessionId"} {
 		if strings.Contains(encoded, forbidden) {

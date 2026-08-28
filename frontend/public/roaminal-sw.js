@@ -13,8 +13,9 @@ function openDatabase() {
 }
 
 async function claimMessage(messageId) {
+  let db = null;
   try {
-    const db = await openDatabase();
+    db = await openDatabase();
     const claimed = await new Promise((resolve, reject) => {
       const now = Date.now();
       const transaction = db.transaction(MESSAGE_STORE, 'readwrite');
@@ -47,9 +48,11 @@ async function claimMessage(messageId) {
     db.close();
     return claimed;
   } catch {
-    // A storage failure must not prevent a best-effort notification.
+    // Without a persistent claim, a retried push can create a duplicate.
+    // The durable Message Center remains the recovery path.
+    try { db?.close(); } catch { /* ignore cleanup failure */ }
+    return false;
   }
-  return true;
 }
 
 async function showAgentNotification(payload) {

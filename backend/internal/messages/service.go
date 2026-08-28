@@ -36,6 +36,7 @@ type Item struct {
 	ReceivedAt            time.Time `json:"receivedAt"`
 	ConnectionInstanceIDs []string  `json:"connectionInstanceIds"`
 	FallbackLabel         string    `json:"fallbackLabel"`
+	ConnectionLabel       string    `json:"connectionLabel,omitempty"`
 	Read                  bool      `json:"read"`
 }
 
@@ -197,7 +198,7 @@ func item(record domain.MessageRecord, readThrough uint64) Item {
 	return Item{
 		MessageID: record.MessageID, Sequence: record.Sequence, Kind: record.Kind, Severity: record.Severity,
 		Text: presentationText(record.PresentationKey), OccurredAt: record.OccurredAt, ReceivedAt: record.ReceivedAt,
-		ConnectionInstanceIDs: append([]string{}, record.ConnectionInstanceIDs...), FallbackLabel: record.FallbackLabel,
+		ConnectionInstanceIDs: append([]string{}, record.ConnectionInstanceIDs...), FallbackLabel: record.FallbackLabel, ConnectionLabel: record.ConnectionLabel,
 		Read: record.Sequence <= readThrough,
 	}
 }

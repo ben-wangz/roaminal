@@ -13,6 +13,7 @@ export type AgentMessage = {
   receivedAt: string;
   connectionInstanceIds: string[];
   fallbackLabel: string;
+  connectionLabel?: string;
   read: boolean;
 };
 

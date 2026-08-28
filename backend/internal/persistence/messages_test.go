@@ -190,3 +190,19 @@ func TestMessageRepositoryClearsMessagesAndContinuesSequence(t *testing.T) {
 		t.Fatalf("sequence after clear: record=%+v duplicate=%v err=%v", record, duplicate, err)
 	}
 }
+
+func TestMessageRepositoryRejectsUnsafeConnectionLabel(t *testing.T) {
+	store, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := testMessageDraft(1, time.Now().UTC())
+	draft.ConnectionLabel = "remote\nendpoint"
+	if _, _, err := NewRepositories(store).Messages.AppendMessage(draft); err == nil {
+		t.Fatal("unsafe connection label was accepted")
+	}
+	draft.ConnectionLabel = string(make([]byte, 129))
+	if _, _, err := NewRepositories(store).Messages.AppendMessage(draft); err == nil {
+		t.Fatal("oversized connection label was accepted")
+	}
+}

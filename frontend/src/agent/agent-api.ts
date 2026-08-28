@@ -1,6 +1,8 @@
 import { api } from '../auth/auth-client';
 import type { AgentSummary, ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
+export type AgentVisualState = 'sleeping' | 'confusing' | 'singing-relax' | 'busy-working' | 'broken';
+
 export type AgentDetails = {
   agent: AgentSummary;
   endpoint?: { display?: string; user?: string; host?: string; port?: number };
@@ -57,7 +59,7 @@ export function agentSummary(connection: ConnectionInstanceSummary): AgentSummar
 }
 
 export function agentTitle(agent: AgentSummary): string {
-	if (agent.support !== 'supported') return `Codex Agent unavailable: ${agent.supportReason.replaceAll('_', ' ')}`;
+  if (agent.support !== 'supported') return `Codex Agent unavailable: ${agent.supportReason.replaceAll('_', ' ')}`;
   switch (agent.component) {
     case 'uninitialized':
       return 'Initialize Codex Agent';
@@ -70,4 +72,27 @@ export function agentTitle(agent: AgentSummary): string {
     default:
       return agent.activityLabel;
   }
+}
+
+export function agentVisualState(agent: AgentSummary): AgentVisualState {
+  if (agent.component === 'uninitialized') return 'sleeping';
+  if (agent.component === 'error' && agent.errorCode !== 'agent_status_unavailable') return 'broken';
+  if (agent.activity === 'failed') return 'broken';
+  if (agent.component === 'initializing' || agent.activity === 'running' || agent.activity === 'waiting') return 'busy-working';
+  if (agent.component === 'ready' && (agent.activity === 'idle' || agent.activity === 'completed')) return 'singing-relax';
+  return 'confusing';
+}
+
+export function agentVisualLabel(state: AgentVisualState): string {
+  switch (state) {
+    case 'sleeping': return 'Codex hook not initialized';
+    case 'confusing': return 'Codex hook status unknown';
+    case 'singing-relax': return 'Codex hook idle';
+    case 'busy-working': return 'Codex hook busy';
+    case 'broken': return 'Codex hook error';
+  }
+}
+
+export function agentVisualAsset(state: AgentVisualState): string {
+  return `/assets/agents/codex-${state}.svg`;
 }

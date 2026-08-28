@@ -119,6 +119,7 @@ export function AppShellView({
           onMoveConnectionGroupMembers={onMoveConnectionGroupMembers}
           onPreviewStart={onPreviewStart}
           onPreviewEnd={onPreviewEnd}
+          onOpenTerminal={onNavigateToConnection}
           onAgent={onAgent}
           onOpenFileSystem={onOpenFileSystem}
           onRename={onRename}

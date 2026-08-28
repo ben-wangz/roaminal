@@ -68,34 +68,35 @@ export const ShellTopbar = memo(function ShellTopbar({
   return (
     <header className="topbar">
       {workspaceOpen && (
-        <div className="workspace-tool-switcher" role="group" aria-label="Workspace tools" data-testid="workspace-tool-switcher">
+        <div className="workspace-tool-buttons" role="group" aria-label="Workspace tools" data-testid="workspace-tool-switcher">
           <button
             ref={connectionToolButton}
-            className={`workspace-tool-option ${workspaceTool === 'connections' ? 'active' : ''}`}
+            className={`workspace-tool-button ${workspaceTool === 'connections' ? 'active' : ''}`}
             type="button"
             onClick={() => onSelectWorkspaceTool('connections')}
+            aria-label="Connections"
+            title="Connections"
             aria-pressed={workspaceTool === 'connections'}
             aria-expanded={workspaceTool === 'connections' && workspaceToolOpen}
             aria-controls="workspace-tool-surface"
             data-testid="workspace-tool-connections"
           >
-            <PanelLeft aria-hidden="true" size={15} />
-            <span>Connections</span>
+            <PanelLeft aria-hidden="true" size={17} />
           </button>
           <button
             ref={keyboardToolButton}
-            className={`workspace-tool-option ${workspaceTool === 'keyboard' ? 'active' : ''}`}
+            className={`workspace-tool-button ${workspaceTool === 'keyboard' ? 'active' : ''}`}
             type="button"
             disabled={workspaceMode !== 'terminal'}
             onClick={() => onSelectWorkspaceTool('keyboard')}
+            aria-label="Virtual keyboard"
             aria-pressed={workspaceTool === 'keyboard'}
             aria-expanded={workspaceTool === 'keyboard' && workspaceToolOpen}
             aria-controls="workspace-tool-surface"
             title={workspaceMode === 'terminal' ? 'Open Virtual keyboard' : 'Virtual keyboard is available in Terminal'}
             data-testid="workspace-tool-keyboard"
           >
-            <Keyboard aria-hidden="true" size={15} />
-            <span>Virtual keyboard</span>
+            <Keyboard aria-hidden="true" size={17} />
           </button>
         </div>
       )}

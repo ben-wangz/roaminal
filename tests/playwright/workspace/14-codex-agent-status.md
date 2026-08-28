@@ -9,10 +9,13 @@ explicitly listed.
 1. Run the mandatory Helm deployment gate and browser diagnostics gate from the
    Playwright README. Use a fresh writable remote home whose fixture has `tmux`
    and `codex` on `PATH`.
-2. Create a live SSH connection with tmux enabled. The sidebar Agent button is
-   enabled with `data-agent-state="uninitialized"`; local and non-tmux
-   connections expose a native disabled Agent button with a reason tooltip.
-3. Open the Agent button. Verify the dialog names the connection, tmux session,
+2. Create a live SSH connection with tmux enabled. Verify every connection card
+   has a Terminal icon button that always opens Terminal, a Files icon when the
+   FileSystem capability is available, and a separate pixel-art Codex robot
+   status button. The robot uses `data-agent-state` and
+   `data-agent-activity`; `uninitialized` shows the sleeping artwork. Local and
+   non-tmux connections show the unknown/unavailable robot tooltip.
+3. Open the Codex robot status button. Verify the dialog names the connection, tmux session,
    resolved endpoint, `$HOME/.roaminal/`, `$HOME/.codex/hooks.json`, webhook
    URL, and metadata-only privacy boundary. Verify no initialization request or
    remote write occurs before confirmation.

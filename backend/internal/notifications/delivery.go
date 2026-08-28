@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
@@ -167,6 +168,9 @@ func notificationPayload(record domain.MessageRecord) ([]byte, error) {
 	body := "Codex turn finished"
 	if record.Kind == "codex_turn_failed" {
 		body = "Codex turn failed"
+	}
+	if label := strings.TrimSpace(record.ConnectionLabel); domain.IsSafeConnectionLabel(label) {
+		body = label + ": " + body
 	}
 	return json.Marshal(notificationPayloadData{MessageID: record.MessageID, Title: "Roaminal", Body: body, Severity: record.Severity})
 }

@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img">
+  <title>Busy working Codex robot, over-shoulder view</title>
+  <desc>A pixel art Codex robot seen from behind typing across multiple terminal screens while the hook is busy.</desc>
+  <g shape-rendering="crispEdges">
+    <!-- three-screen workstation -->
+    <rect x="18" y="54" width="156" height="198" fill="#001b22"/>
+    <rect x="30" y="66" width="132" height="174" fill="#073642"/>
+    <rect x="42" y="82" width="108" height="138" fill="#002b36"/>
+    <rect x="52" y="96" width="18" height="10" fill="#2aa198"/>
+    <rect x="70" y="106" width="12" height="10" fill="#2aa198"/>
+    <rect x="92" y="96" width="46" height="8" fill="#93a1a1"/>
+    <rect x="52" y="132" width="72" height="8" fill="#268bd2"/>
+    <rect x="52" y="158" width="88" height="8" fill="#586e75"/>
+    <rect x="52" y="184" width="38" height="8" fill="#859900"/>
+    <rect x="106" y="184" width="34" height="8" fill="#b58900"/>
+
+    <rect x="158" y="26" width="230" height="238" fill="#001b22"/>
+    <rect x="172" y="40" width="202" height="210" fill="#073642"/>
+    <rect x="186" y="56" width="174" height="174" fill="#002b36"/>
+    <rect x="200" y="72" width="22" height="12" fill="#2aa198"/>
+    <rect x="222" y="84" width="14" height="12" fill="#2aa198"/>
+    <rect x="250" y="72" width="86" height="8" fill="#93a1a1"/>
+    <rect x="200" y="108" width="116" height="8" fill="#268bd2"/>
+    <rect x="200" y="136" width="54" height="8" fill="#859900"/>
+    <rect x="264" y="136" width="72" height="8" fill="#586e75"/>
+    <rect x="200" y="164" width="94" height="8" fill="#93a1a1"/>
+    <rect x="304" y="164" width="32" height="8" fill="#b58900"/>
+    <rect x="200" y="192" width="34" height="8" fill="#2aa198"/>
+    <rect x="246" y="192" width="90" height="8" fill="#268bd2"/>
+
+    <rect x="374" y="66" width="122" height="180" fill="#001b22"/>
+    <rect x="386" y="78" width="98" height="156" fill="#073642"/>
+    <rect x="398" y="94" width="74" height="122" fill="#002b36"/>
+    <rect x="410" y="108" width="50" height="8" fill="#2aa198"/>
+    <rect x="410" y="132" width="30" height="8" fill="#859900"/>
+    <rect x="448" y="132" width="12" height="8" fill="#b58900"/>
+    <rect x="410" y="156" width="50" height="8" fill="#93a1a1"/>
+    <rect x="410" y="180" width="36" height="8" fill="#268bd2"/>
+
+    <!-- monitor stands -->
+    <rect x="88" y="252" width="18" height="36" fill="#586e75"/>
+    <rect x="54" y="282" width="86" height="12" fill="#001b22"/>
+    <rect x="264" y="264" width="20" height="34" fill="#586e75"/>
+    <rect x="220" y="292" width="108" height="12" fill="#001b22"/>
+    <rect x="430" y="246" width="16" height="36" fill="#586e75"/>
+    <rect x="400" y="278" width="76" height="12" fill="#001b22"/>
+
+    <!-- robot head from behind -->
+    <rect x="166" y="198" width="224" height="174" fill="#001b22"/>
+    <rect x="150" y="226" width="248" height="118" fill="#001b22"/>
+    <rect x="178" y="208" width="200" height="156" fill="#2aa198"/>
+    <rect x="162" y="236" width="224" height="100" fill="#2aa198"/>
+    <rect x="192" y="216" width="174" height="12" fill="#5fd0c4"/>
+    <rect x="178" y="244" width="12" height="68" fill="#5fd0c4"/>
+    <rect x="200" y="238" width="154" height="94" fill="#0b4b53"/>
+    <rect x="212" y="250" width="130" height="70" fill="#073642"/>
+    <rect x="226" y="264" width="102" height="10" fill="#2aa198"/>
+    <rect x="226" y="288" width="40" height="8" fill="#586e75"/>
+    <rect x="276" y="288" width="18" height="8" fill="#b58900"/>
+    <rect x="304" y="288" width="24" height="8" fill="#586e75"/>
+    <rect x="178" y="348" width="200" height="12" fill="#0b4b53"/>
+    <!-- side eye glancing to main monitor -->
+    <rect x="354" y="254" width="38" height="62" fill="#001b22"/>
+    <rect x="354" y="264" width="28" height="42" fill="#073642"/>
+    <rect x="364" y="276" width="18" height="18" fill="#268bd2"/>
+    <rect x="370" y="280" width="8" height="10" fill="#fdf6e3"/>
+
+    <!-- antenna pointing at active task -->
+    <rect x="270" y="160" width="12" height="42" fill="#001b22"/>
+    <rect x="274" y="164" width="8" height="36" fill="#2aa198"/>
+    <rect x="278" y="154" width="54" height="12" fill="#001b22"/>
+    <rect x="320" y="138" width="28" height="22" fill="#001b22"/>
+    <rect x="326" y="142" width="16" height="14" fill="#b58900"/>
+
+    <!-- shoulders and back -->
+    <rect x="224" y="360" width="104" height="28" fill="#001b22"/>
+    <rect x="238" y="360" width="76" height="20" fill="#586e75"/>
+    <rect x="144" y="382" width="264" height="78" fill="#001b22"/>
+    <rect x="164" y="394" width="224" height="58" fill="#0b4b53"/>
+    <rect x="184" y="394" width="184" height="14" fill="#2aa198"/>
+    <rect x="212" y="420" width="128" height="24" fill="#073642"/>
+    <rect x="230" y="428" width="92" height="8" fill="#002b36"/>
+
+    <!-- arms extending around camera toward keyboard -->
+    <rect x="92" y="376" width="82" height="42" fill="#001b22"/>
+    <rect x="104" y="386" width="68" height="24" fill="#0b4b53"/>
+    <rect x="68" y="408" width="54" height="56" fill="#001b22"/>
+    <rect x="78" y="416" width="36" height="42" fill="#2aa198"/>
+    <rect x="378" y="376" width="82" height="42" fill="#001b22"/>
+    <rect x="380" y="386" width="68" height="24" fill="#0b4b53"/>
+    <rect x="430" y="408" width="54" height="56" fill="#001b22"/>
+    <rect x="438" y="416" width="36" height="42" fill="#2aa198"/>
+
+    <!-- foreground keyboard and hands -->
+    <rect x="28" y="444" width="456" height="36" fill="#001b22"/>
+    <rect x="56" y="448" width="400" height="20" fill="#586e75"/>
+    <rect x="82" y="452" width="44" height="8" fill="#93a1a1"/>
+    <rect x="138" y="452" width="44" height="8" fill="#93a1a1"/>
+    <rect x="194" y="452" width="124" height="8" fill="#2aa198"/>
+    <rect x="330" y="452" width="44" height="8" fill="#93a1a1"/>
+    <rect x="386" y="452" width="44" height="8" fill="#93a1a1"/>
+    <rect x="52" y="424" width="84" height="36" fill="#001b22"/>
+    <rect x="66" y="432" width="56" height="20" fill="#5fd0c4"/>
+    <rect x="416" y="424" width="72" height="36" fill="#001b22"/>
+    <rect x="428" y="432" width="46" height="20" fill="#5fd0c4"/>
+    <rect x="30" y="410" width="42" height="8" fill="#2aa198"/>
+    <rect x="440" y="410" width="42" height="8" fill="#2aa198"/>
+  </g>
+</svg>

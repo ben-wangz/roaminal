@@ -36,6 +36,7 @@ type Props = {
   onMoveConnectionGroupMembers: (id: string) => Promise<void>;
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
+  onOpenTerminal: (id: string) => void;
   onAgent: (id: string) => void;
   onOpenFileSystem: (id: string) => void;
   onRename: (id: string) => void;
@@ -75,6 +76,7 @@ export function WorkspaceToolSurface({
   onMoveConnectionGroupMembers,
   onPreviewStart,
   onPreviewEnd,
+  onOpenTerminal,
   onAgent,
   onOpenFileSystem,
   onRename,
@@ -163,6 +165,7 @@ export function WorkspaceToolSurface({
             onMoveGroupMembers={onMoveConnectionGroupMembers}
             onPreviewStart={onPreviewStart}
             onPreviewEnd={onPreviewEnd}
+            onOpenTerminal={onOpenTerminal}
             onAgent={onAgent}
             onOpenFileSystem={onOpenFileSystem}
             workspaceMode={workspaceMode}

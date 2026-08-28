@@ -23,6 +23,7 @@ func TestServicePaginatesWithFixedPresentationAndIdempotency(t *testing.T) {
 	draft := domain.MessageDraft{
 		Kind: "codex_turn_completed", Severity: "success", AgentType: "codex", PresentationKey: "codex_turn_finished",
 		OccurredAt: now, ReceivedAt: now, EndpointKey: "private-key", FallbackLabel: "fallback",
+		ConnectionLabel: "remote-alias",
 		TmuxSessionName: "roaminal", TmuxSessionID: "$0", TmuxSessionCreated: 1, IdempotencyKey: "event-1",
 	}
 	first, duplicate, err := service.AppendMessage(draft)
@@ -51,6 +52,9 @@ func TestServicePaginatesWithFixedPresentationAndIdempotency(t *testing.T) {
 	}
 	if page.Messages[0].ConnectionInstanceIDs == nil {
 		t.Fatal("message connection instance ids must encode as an empty array")
+	}
+	if page.Messages[0].ConnectionLabel != "remote-alias" {
+		t.Fatalf("safe connection label was not returned: %+v", page.Messages[0])
 	}
 	older, err := service.List(1, page.NextCursor)
 	if err != nil || len(older.Messages) != 1 || older.Messages[0].Text != "Codex turn finished" || older.NextCursor != "" {

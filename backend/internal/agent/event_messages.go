@@ -16,10 +16,12 @@ func cloneCompletedTools(value map[string]time.Time) map[string]time.Time {
 	return result
 }
 
-func (s *Service) appendEventMessages(event webhookEvent, endpointKey, targetName, fallbackLabel string, matchingIDs []string, receivedAt time.Time) error {
+func (s *Service) appendEventMessages(event webhookEvent, endpointKey, targetName, fallbackLabel string, matchingIDs []string, record EndpointRecord, receivedAt time.Time) error {
+	connectionLabel := s.notificationConnectionLabel(matchingIDs, record)
 	draft := domain.MessageDraft{
 		Kind: "agent_reporting_ready", Severity: "info", AgentType: event.AgentType, PresentationKey: "codex_reporting_connected",
 		OccurredAt: event.OccurredAt.UTC(), ReceivedAt: receivedAt, EndpointKey: endpointKey, FallbackLabel: fallbackLabel,
+		ConnectionLabel: connectionLabel,
 		TmuxSessionName: targetName, TmuxSessionID: event.Tmux.SessionID, TmuxSessionCreated: event.Tmux.SessionCreated,
 		ConnectionInstanceIDs: matchingIDs,
 		IdempotencyKey:        strings.Join([]string{"agent_reporting_ready", endpointKey, event.Tmux.SessionID, strconv.FormatInt(event.Tmux.SessionCreated, 10), event.ComponentVersion}, "\x00"),
@@ -84,6 +86,35 @@ func (s *Service) matchingConnectionInstances(endpointKey, targetName, eventSess
 		}
 	}
 	return uniqueStrings(result)
+}
+
+func (s *Service) notificationConnectionLabel(matchingIDs []string, record EndpointRecord) string {
+	if s.terms != nil && len(matchingIDs) > 0 {
+		matched := make(map[string]struct{}, len(matchingIDs))
+		for _, id := range matchingIDs {
+			matched[id] = struct{}{}
+		}
+		for _, view := range s.terms.ConnectionInstanceViews() {
+			if _, ok := matched[view.ConnectionInstanceID]; !ok {
+				if _, ok = matched[view.ID]; !ok {
+					continue
+				}
+			}
+			if view.SourceHostAlias != nil {
+				alias := strings.TrimSpace(*view.SourceHostAlias)
+				if domain.IsSafeConnectionLabel(alias) {
+					return alias
+				}
+			}
+		}
+	}
+	for _, alias := range record.Aliases {
+		alias = strings.TrimSpace(alias)
+		if domain.IsSafeConnectionLabel(alias) {
+			return alias
+		}
+	}
+	return "Remote"
 }
 
 func uniqueStrings(values []string) []string {
