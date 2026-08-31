@@ -40,7 +40,7 @@ type Server struct {
 	filesystem        *filesystem.Service
 	diagnostics       *clientdiag.Sink
 	agentProvisioning agent.ProvisioningService
-	agentTelemetry    agent.TelemetryService
+	agentProjection   agent.ProjectionService
 	messages          *messages.Service
 	notifications     *notifications.Service
 }
@@ -61,7 +61,7 @@ type Dependencies struct {
 	Diagnostics       *clientdiag.Sink
 	FileSystem        *filesystem.Service
 	AgentProvisioning agent.ProvisioningService
-	AgentTelemetry    agent.TelemetryService
+	AgentProjection   agent.ProjectionService
 	Messages          *messages.Service
 	Notifications     *notifications.Service
 }
@@ -86,7 +86,7 @@ func New(deps Dependencies) *Server {
 	}
 	s.filesystem = deps.FileSystem
 	s.agentProvisioning = deps.AgentProvisioning
-	s.agentTelemetry = deps.AgentTelemetry
+	s.agentProjection = deps.AgentProjection
 	s.messages = deps.Messages
 	s.notifications = deps.Notifications
 	s.api = s.newAPIRouter()

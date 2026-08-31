@@ -90,12 +90,6 @@ func applyFile(c *Config, v fileConfig) error {
 	if v.FrontendDir != nil {
 		c.FrontendDir = *v.FrontendDir
 	}
-	if v.AgentWebhookBaseURL != nil {
-		c.AgentWebhookBaseURL = *v.AgentWebhookBaseURL
-	}
-	if v.AgentAllowInsecureWebhook != nil {
-		c.AgentAllowInsecureWebhook = *v.AgentAllowInsecureWebhook
-	}
 	if v.AgentHooksDir != nil {
 		c.AgentHooksDir = *v.AgentHooksDir
 	}

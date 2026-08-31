@@ -40,8 +40,6 @@ type Config struct {
 	FrontendDir                     string
 	Version                         string
 	PasswordGenerated               bool
-	AgentWebhookBaseURL             string
-	AgentAllowInsecureWebhook       bool
 	AgentHooksDir                   string
 	WebPushVAPIDPublicKey           string
 	WebPushVAPIDPrivateKey          string
@@ -64,8 +62,6 @@ type fileConfig struct {
 	AuthMaxAttempts                 *int    `json:"authMaxAttempts"`
 	ClientDiagnosticsEnabled        *bool   `json:"clientDiagnosticsEnabled"`
 	FrontendDir                     *string `json:"frontendDir"`
-	AgentWebhookBaseURL             *string `json:"agentWebhookBaseUrl"`
-	AgentAllowInsecureWebhook       *bool   `json:"agentAllowInsecureWebhook"`
 	AgentHooksDir                   *string `json:"agentHooksDir"`
 	WebPushVAPIDPublicKey           *string `json:"webPushVapidPublicKey"`
 	WebPushVAPIDPrivateKey          *string `json:"webPushVapidPrivateKey"`
@@ -77,6 +73,6 @@ var allowedFileKeys = map[string]bool{
 	"scrollbackLines": true, "maxConnectionInstances": true, "maxClientsPerConnectionInstance": true,
 	"debug": true, "acceptTerms": true, "initialCwd": true, "authAccessTTL": true,
 	"authRefreshTTL": true, "authMaxAttempts": true, "clientDiagnosticsEnabled": true, "frontendDir": true,
-	"agentWebhookBaseUrl": true, "agentAllowInsecureWebhook": true, "agentHooksDir": true,
+	"agentHooksDir":         true,
 	"webPushVapidPublicKey": true, "webPushVapidPrivateKey": true, "webPushSubject": true,
 }

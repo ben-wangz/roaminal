@@ -1,5 +1,4 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
-import { notifyRuntimeMessage } from '../status/notification-service';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ServerMessage } from '../terminal/terminal-protocol';
 import type { ConnectionView } from './connection-view';
@@ -81,9 +80,6 @@ export function useRuntimeMessages({
             break;
           case 'toast':
             showToast(effect.message, effect.kind);
-            break;
-          case 'notify':
-            notifyRuntimeMessage(effect.message);
             break;
         }
       }

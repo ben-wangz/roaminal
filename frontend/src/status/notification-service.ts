@@ -1,6 +1,6 @@
 import type { AgentMessage } from '../messages/message-api';
 import type { AuthState } from '../auth/auth-storage';
-import { deleteBrowserNotificationSubscriptions, fetchBrowserNotificationConfig, registerBrowserNotificationSubscription } from './notification-api';
+import { deleteBrowserNotificationSubscriptions, fetchBrowserNotificationConfig, fetchNotificationPreferences, registerBrowserNotificationSubscription, type NotificationPreference } from './notification-api';
 
 const ENABLED_KEY = 'roaminal_system_notifications_enabled';
 const STATE_EVENT = 'roaminal-notification-state-change';
@@ -26,6 +26,7 @@ const clickListeners = new Set<NotificationClickListener>();
 const deliveredClickIds = new Set<string>();
 let workerListenerInstalled = false;
 let pushRegistrationStatus: 'unknown' | 'enabled' | 'unavailable' = 'unknown';
+let notificationPreferences = new Map<string, NotificationPreference>();
 
 function dispatchStateChange(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(STATE_EVENT));
@@ -62,11 +63,6 @@ function deliveryEnabled(): boolean {
 
 function pageIsActive(): boolean {
   return document.visibilityState === 'visible' && document.hasFocus();
-}
-
-function notificationId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return `${prefix}-${crypto.randomUUID()}`;
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function notificationState(): NotificationState {
@@ -145,6 +141,32 @@ export async function disableBrowserNotifications(auth: AuthState | null = null)
   await closeAgentNotifications();
 }
 
+export function setNotificationPreferences(preferences: NotificationPreference[]): void {
+  notificationPreferences = new Map(preferences.map((preference) => [preference.connectionDefinitionId + '\x00' + preference.tmuxSessionName, preference]));
+}
+
+export function updateNotificationPreference(preference: NotificationPreference): void {
+  const key = preference.connectionDefinitionId + '\x00' + preference.tmuxSessionName;
+  notificationPreferences = new Map(notificationPreferences).set(key, preference);
+}
+
+export function clearNotificationPreferences(): void {
+  notificationPreferences = new Map();
+}
+
+export async function synchronizeNotificationPreferences(auth: AuthState | null): Promise<void> {
+  if (!auth) {
+    clearNotificationPreferences();
+    return;
+  }
+  try {
+    const result = await fetchNotificationPreferences(auth);
+    setNotificationPreferences(result.preferences || []);
+  } catch {
+    // Keep the last successful projection during a transient API failure.
+  }
+}
+
 function decodeApplicationServerKey(value: string): Uint8Array {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
@@ -194,11 +216,21 @@ export async function synchronizePushSubscription(auth: AuthState | null, regist
 }
 
 function eligible(message: AgentMessage): boolean {
-  return message.kind === 'codex_turn_completed' || message.kind === 'codex_turn_failed';
+  return message.kind === 'agent_state_transition' && message.agentStateFrom === 'running'
+    && (message.agentStateTo === 'relax' || message.agentStateTo === 'error');
+}
+
+function preferenceAllows(message: AgentMessage): boolean {
+  if (!message.tmuxSessionName || !message.connectionDefinitionIds?.length) return false;
+  return message.connectionDefinitionIds.some((definitionID) => {
+    const preference = notificationPreferences.get(definitionID + '\x00' + message.tmuxSessionName);
+    if (!preference?.enabled) return false;
+    return message.agentStateTo === 'relax' ? preference.runningToRelax : preference.runningToError;
+  });
 }
 
 export function notifyAgentMessage(message: AgentMessage): void {
-  if (!eligible(message) || !deliveryEnabled() || pageIsActive()) return;
+  if (!eligible(message) || !preferenceAllows(message) || !deliveryEnabled() || pageIsActive()) return;
   const connectionLabel = message.connectionLabel?.trim();
   const safeLabel = connectionLabel && !(/[\u0000-\u001f\u007f]/.test(connectionLabel)) ? connectionLabel.slice(0, 128) : '';
   const payload: NotificationPayload = {
@@ -217,17 +249,6 @@ export function notifyAgentMessage(message: AgentMessage): void {
       body: payload.body,
       tag: `roaminal-message-${payload.messageId}`,
       data: { messageId: payload.messageId },
-    }).catch(() => undefined);
-  });
-}
-
-export function notifyRuntimeMessage(body: string): void {
-  if (!body || !deliveryEnabled() || pageIsActive()) return;
-  void serviceWorkerRegistration().then((registration) => {
-    if (!registration) return;
-    void registration.showNotification('Roaminal', {
-      body: body.slice(0, 1024),
-      tag: notificationId('roaminal-runtime'),
     }).catch(() => undefined);
   });
 }

@@ -6,7 +6,7 @@ import (
 )
 
 func TestCompleteInitializationUpdatesJoinedTargets(t *testing.T) {
-	service := NewStoreTestService(t)
+	service := newStoreTestService(t)
 	target := Target{EndpointKey: "endpoint-test", SessionName: "first"}
 	operation := &Initialization{ID: "operation-1", Endpoint: Endpoint{Key: target.EndpointKey}, Status: "running"}
 	service.operations[operation.ID] = operation
@@ -41,7 +41,7 @@ func TestCompleteInitializationUpdatesJoinedTargets(t *testing.T) {
 }
 
 func TestFailInitializationPreservesReadyJoinedTarget(t *testing.T) {
-	service := NewStoreTestService(t)
+	service := newStoreTestService(t)
 	target := Target{EndpointKey: "endpoint-test", SessionName: "first"}
 	operation := &Initialization{ID: "operation-1", Endpoint: Endpoint{Key: target.EndpointKey}, Status: "running"}
 	service.operations[operation.ID] = operation

@@ -6,7 +6,7 @@ import (
 )
 
 // Agent initialization is intentionally logged with stable identifiers and
-// phase names. Payloads, tokens, webhook URLs, and remote command output are
+// phase names. Payloads, credentials, and remote command output are
 // never included in these records.
 func logAgentInfo(event, operationID, instanceID, fields string, values ...any) {
 	args := []any{event, operationID, instanceID}

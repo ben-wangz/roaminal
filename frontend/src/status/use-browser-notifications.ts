@@ -6,6 +6,7 @@ import {
   notificationState,
   notificationStateEventName,
   onNotificationMessageClick,
+  synchronizeNotificationPreferences,
   synchronizePushSubscription,
   type NotificationState,
 } from './notification-service';
@@ -24,6 +25,7 @@ export function useBrowserNotifications(auth: AuthState | null, onMessageClick?:
     document.addEventListener('visibilitychange', refresh);
     const unsubscribe = onMessageClick ? onNotificationMessageClick(onMessageClick) : undefined;
     refresh();
+    void synchronizeNotificationPreferences(auth);
     void synchronizePushSubscription(auth).then(refresh);
     return () => {
       window.removeEventListener(stateEvent, refresh);

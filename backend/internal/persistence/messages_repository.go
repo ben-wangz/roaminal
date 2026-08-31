@@ -165,6 +165,7 @@ func unreadMessageCount(file messageFile) int {
 
 func cloneMessageDraft(draft domain.MessageDraft) domain.MessageDraft {
 	draft.ConnectionInstanceIDs = append([]string(nil), draft.ConnectionInstanceIDs...)
+	draft.ConnectionDefinitionIDs = append([]string(nil), draft.ConnectionDefinitionIDs...)
 	return draft
 }
 

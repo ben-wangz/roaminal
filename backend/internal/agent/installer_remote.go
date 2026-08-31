@@ -14,8 +14,8 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func (s *Service) installRemote(ctx context.Context, operationID, id string, binary []byte, request installRequest) error {
-	suffix := fmt.Sprintf("%x", sha256.Sum256([]byte(request.Endpoint.Key+request.ReplacementToken)))[:32]
+func (s *Service) installRemote(ctx context.Context, operationID, id string, binary []byte, request localInstallRequest) error {
+	suffix := fmt.Sprintf("%x", sha256.Sum256([]byte(operationID+request.ComponentSHA256)))[:32]
 	uploadScript := "set -eu\numask 077\n" +
 		"mkdir -p \"$HOME/.roaminal\"\n" +
 		"tmp=\"$HOME/.roaminal/.upload-$1\"\n" +
@@ -52,8 +52,13 @@ func (s *Service) installRemote(ctx context.Context, operationID, id string, bin
 		return remoteAgentError("agent_install_failed", 502, "The remote Agent component installation failed.", err)
 	}
 	logAgentInfo("agent_component_install_completed", operationID, id, "duration_ms=%d", durationMillis(installStarted))
-	var response installResponse
-	if json.Unmarshal(result.Output, &response) != nil || response.EndpointKey != request.Endpoint.Key {
+	var response struct {
+		Provider         string `json:"provider"`
+		ComponentVersion string `json:"componentVersion"`
+		ComponentSHA256  string `json:"componentSha256"`
+		Hooks            string `json:"hooks"`
+	}
+	if json.Unmarshal(result.Output, &response) != nil || response.Provider != "codex" || response.ComponentVersion != request.ComponentVersion || response.ComponentSHA256 != request.ComponentSHA256 || response.Hooks != "configured" {
 		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
 	}
 	return nil
@@ -65,22 +70,16 @@ func helperInstallError(data []byte) error {
 		return nil
 	}
 	switch value.Code {
-	case "endpoint_conflict":
-		return errf("agent_endpoint_conflict", 409, "The remote Agent is bound to another SSH endpoint.", nil)
-	case "binding_changed":
-		return errf("agent_binding_conflict", 409, "The remote Agent binding changed during initialization.", nil)
 	case "component_downgrade":
 		return errf("agent_install_failed", 409, "The remote Agent component cannot be downgraded.", nil)
 	case "hooks_file_unsafe", "hooks_config_invalid":
 		return errf("agent_hooks_invalid", 409, "The existing Codex Hooks configuration is invalid or unsafe.", nil)
 	case "invalid_install_request", "invalid_component_checksum", "component_checksum_mismatch":
 		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
+	case "private_directory_unsafe", "installed_binary_unsafe", "installation_lock_timeout", "filesystem_permission_denied", "install_failed":
+		return errf("agent_install_failed", 502, "The remote Agent component installation failed.", nil)
 	}
 	switch value.Error {
-	case "endpoint_conflict":
-		return errf("agent_endpoint_conflict", 409, "The remote Agent is bound to another SSH endpoint.", nil)
-	case "binding_changed":
-		return errf("agent_binding_conflict", 409, "The remote Agent binding changed during initialization.", nil)
 	case "component downgrade":
 		return errf("agent_install_failed", 409, "The remote Agent component cannot be downgraded.", nil)
 	case "hooks file permissions are unsafe", "hooks must be an object", "hooks root must be an object":
@@ -109,10 +108,6 @@ func helperInstallDiagnostic(data []byte) string {
 		return "helper_install_failed"
 	}
 	switch value.Error {
-	case "endpoint_conflict":
-		return "endpoint_conflict"
-	case "binding_changed":
-		return "binding_changed"
 	case "component downgrade":
 		return "component_downgrade"
 	case "hooks file permissions are unsafe":
@@ -132,10 +127,9 @@ func helperInstallDiagnostic(data []byte) string {
 
 func isKnownHelperInstallCode(value string) bool {
 	switch value {
-	case "invalid_install_request", "invalid_component_checksum", "invalid_replacement_token",
-		"binding_changed", "endpoint_conflict", "component_downgrade", "private_directory_unsafe",
+	case "invalid_install_request", "invalid_component_checksum", "component_downgrade", "private_directory_unsafe",
 		"installed_binary_unsafe", "installation_lock_timeout", "hooks_file_unsafe", "hooks_config_invalid",
-		"component_checksum_mismatch", "replacement_token_missing", "filesystem_permission_denied", "install_failed":
+		"component_checksum_mismatch", "filesystem_permission_denied", "install_failed":
 		return true
 	default:
 		return false
@@ -154,20 +148,33 @@ func (s *Service) cleanupRemote(ctx context.Context, id, suffix string) {
 	_, _ = s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: "rm -f -- \"$HOME/.roaminal/.upload-$1\"\n", Args: []string{suffix}, Timeout: 3 * time.Second, OutputLimit: 256})
 }
 
-func (s *Service) verifyRemote(ctx context.Context, id, expectedFingerprint, endpointKey, componentSHA256 string) error {
+func (s *Service) verifyRemote(ctx context.Context, id, expectedVersion, componentSHA256 string) error {
 	result, err := s.terms.RunRemote(ctx, id, ports.RemoteCommand{Script: "set -eu\n\"$HOME/.roaminal/bin/roaminal-agent-hook\" probe\n", Timeout: 5 * time.Second, OutputLimit: 4096})
 	if err != nil {
 		return remoteAgentError("agent_verification_failed", 502, "The installed Agent component could not be verified.", err)
 	}
 	var response struct {
-		TokenFingerprint string `json:"tokenFingerprint"`
-		EndpointKey      string `json:"endpointKey"`
+		Configured       bool   `json:"configured"`
+		Provider         string `json:"provider"`
+		ComponentVersion string `json:"componentVersion"`
 		ComponentSHA256  string `json:"componentSha256"`
 		HooksConfigured  bool   `json:"hooksConfigured"`
 	}
-	if json.Unmarshal(result.Output, &response) != nil || response.TokenFingerprint != expectedFingerprint || response.EndpointKey != endpointKey || !response.HooksConfigured || response.ComponentSHA256 != componentSHA256 {
+	if json.Unmarshal(result.Output, &response) != nil || !response.Configured || response.Provider != "codex" || response.ComponentVersion != expectedVersion || !response.HooksConfigured || response.ComponentSHA256 != componentSHA256 {
 		return errf("agent_verification_failed", 502, "The installed Agent component could not be verified.", nil)
 	}
+	return nil
+}
+
+func (s *Service) verifyRemoteWithLogging(ctx context.Context, operationID, instanceID, expectedVersion, checksum string) error {
+	started := time.Now()
+	logAgentInfo("agent_component_verification_started", operationID, instanceID, "component_sha256=%q", checksum)
+	err := s.verifyRemote(ctx, instanceID, expectedVersion, checksum)
+	if err != nil {
+		logAgentInfo("agent_component_verification_failed", operationID, instanceID, "duration_ms=%d error_type=%T", durationMillis(started), err)
+		return err
+	}
+	logAgentInfo("agent_component_verification_completed", operationID, instanceID, "duration_ms=%d", durationMillis(started))
 	return nil
 }
 

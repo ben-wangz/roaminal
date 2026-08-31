@@ -19,7 +19,7 @@ type MessageRepository interface {
 	ClearMessages() (domain.MessageState, int, error)
 }
 
-// MessageAppender is the small dependency used by Agent telemetry. Keeping
+// MessageAppender is the small dependency used by Agent state projection. Keeping
 // it separate from the query methods prevents Agent code from depending on
 // HTTP or browser presentation concerns.
 type MessageAppender interface {

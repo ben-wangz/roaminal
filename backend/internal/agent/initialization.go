@@ -8,7 +8,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func (s *Service) StartInitialization(ctx context.Context, id, origin string) (Initialization, error) {
+func (s *Service) StartInitialization(ctx context.Context, id string) (Initialization, error) {
 	if s.store.Err() != nil {
 		return Initialization{}, errf("agent_store_unavailable", 503, "Agent state storage is unavailable.", s.store.Err())
 	}
@@ -36,10 +36,6 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 	if err != nil {
 		return Initialization{}, errf("agent_endpoint_unresolved", 422, "The SSH endpoint could not be normalized.", err)
 	}
-	webhookURL, webhookOrigin, err := s.webhookURL(origin)
-	if err != nil {
-		return Initialization{}, err
-	}
 	preflightCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	sessionID, sessionCreated, preflightErr := s.targetPreflight(preflightCtx, id, summary.TmuxSessionName)
 	cancel()
@@ -50,7 +46,6 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 		return Initialization{}, errf("agent_tmux_session_not_found", 409, "The configured tmux session could not be found.", preflightErr)
 	}
 	previousRecord, previousExists := s.store.Get(endpoint.Key)
-	webhookChanged := previousExists && previousRecord.WebhookOrigin != webhookOrigin
 	target := Target{EndpointKey: endpoint.Key, SessionName: summary.TmuxSessionName}
 	priorComponent := ""
 	if previousExists {
@@ -59,7 +54,7 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 			priorComponent = "ready"
 		}
 	}
-	if err := s.prepareTarget(id, summary, endpoint, target, sessionID, sessionCreated, webhookOrigin); err != nil {
+	if err := s.prepareTarget(id, summary, endpoint, target, sessionID, sessionCreated); err != nil {
 		return Initialization{}, errf("agent_store_unavailable", 503, "Agent state storage is unavailable.", err)
 	}
 	s.mu.Lock()
@@ -71,7 +66,6 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 			result.ConnectionInstanceID = id
 			result.TmuxSessionName = summary.TmuxSessionName
 			result.Endpoint = endpoint
-			result.WebhookURL = webhookURL
 			result.Joined = true
 			s.mu.Unlock()
 			logAgentInfo("agent_initialization_joined", operationID, id, "endpoint_key=%q tmux_session=%q", endpoint.Key, summary.TmuxSessionName)
@@ -84,14 +78,14 @@ func (s *Service) StartInitialization(ctx context.Context, id, origin string) (I
 		s.mu.Unlock()
 		return Initialization{}, errf("agent_install_failed", 502, "The Agent initialization could not start.", err)
 	}
-	operation := &Initialization{ID: operationID, ConnectionInstanceID: id, Endpoint: endpoint, TmuxSessionName: summary.TmuxSessionName, WebhookURL: webhookURL, Status: "running", StartedAt: s.now().UTC(), PriorComponent: priorComponent}
+	operation := &Initialization{ID: operationID, ConnectionInstanceID: id, Endpoint: endpoint, TmuxSessionName: summary.TmuxSessionName, Status: "running", StartedAt: s.now().UTC(), PriorComponent: priorComponent}
 	s.operations[operationID] = operation
 	s.endpointOps[endpoint.Key] = operationID
 	s.mu.Unlock()
 	logAgentInfo("agent_initialization_started", operationID, id, "endpoint_key=%q tmux_session=%q", endpoint.Key, summary.TmuxSessionName)
 	_ = s.setTargetInitialization(target, operationID)
 	result := *operation
-	go s.executeInitialization(operationID, id, summary, endpoint, target, webhookURL, webhookOrigin, webhookChanged, priorComponent, sessionID, sessionCreated)
+	go s.executeInitialization(operationID, id, summary, endpoint, target, priorComponent, sessionID, sessionCreated)
 	return result, nil
 }
 
@@ -107,7 +101,7 @@ func (s *Service) findSummary(id string) (ports.ConnectionInstanceView, bool) {
 	return ports.ConnectionInstanceView{}, false
 }
 
-func (s *Service) prepareTarget(id string, summary ports.ConnectionInstanceView, endpoint Endpoint, target Target, sessionID string, sessionCreated int64, origin string) error {
+func (s *Service) prepareTarget(id string, summary ports.ConnectionInstanceView, endpoint Endpoint, target Target, sessionID string, sessionCreated int64) error {
 	if err := s.store.Update(endpoint.Key, func(record *EndpointRecord) error {
 		if record.User == "" {
 			record.User, record.Host, record.Port = endpoint.User, endpoint.Host, endpoint.Port
@@ -116,7 +110,6 @@ func (s *Service) prepareTarget(id string, summary ports.ConnectionInstanceView,
 		if summary.SourceHostAlias != nil && !contains(record.Aliases, *summary.SourceHostAlias) {
 			record.Aliases = append(record.Aliases, *summary.SourceHostAlias)
 		}
-		record.WebhookOrigin = origin
 		record.InstallationState = "initializing"
 		state := record.Targets[target.SessionName]
 		state.SessionName = target.SessionName
@@ -124,6 +117,10 @@ func (s *Service) prepareTarget(id string, summary ports.ConnectionInstanceView,
 		state.SessionCreated = sessionCreated
 		state.Component = "initializing"
 		state.Activity = "unknown"
+		state.State = ""
+		state.StateIndex = 0
+		state.SyncStatus = "pending"
+		state.SyncError = ""
 		record.Targets[target.SessionName] = state
 		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
@@ -132,7 +129,6 @@ func (s *Service) prepareTarget(id string, summary ports.ConnectionInstanceView,
 	}
 	s.mu.Lock()
 	s.bindings[id] = target
-	delete(s.runtime, target.EndpointKey+"\x00"+target.SessionName)
 	s.mu.Unlock()
 	return nil
 }

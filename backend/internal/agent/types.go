@@ -18,7 +18,6 @@ type Endpoint struct {
 type DetailsResponse struct {
 	Agent           ports.AgentSummary `json:"agent"`
 	Endpoint        *Endpoint          `json:"endpoint,omitempty"`
-	WebhookURL      string             `json:"webhookUrl,omitempty"`
 	ComponentSHA256 string             `json:"componentSha256,omitempty"`
 }
 
@@ -35,7 +34,6 @@ type Initialization struct {
 	ConnectionInstanceID string     `json:"connectionInstanceId,omitempty"`
 	Endpoint             Endpoint   `json:"endpoint,omitempty"`
 	TmuxSessionName      string     `json:"tmuxSessionName,omitempty"`
-	WebhookURL           string     `json:"webhookUrl,omitempty"`
 	Status               string     `json:"status"`
 	Result               string     `json:"result,omitempty"`
 	Component            string     `json:"component,omitempty"`

@@ -9,7 +9,8 @@ import (
 func (s *Service) Summary(summary ports.ConnectionInstanceView) ports.AgentSummary {
 	result := ports.AgentSummary{
 		AgentType: "codex", Support: "unsupported", Component: "uninitialized",
-		Activity: "unknown", ActivityLabel: "Codex status unknown",
+		Activity: "unknown", ActivityLabel: "Codex status unknown", StateLabel: "Agent status unknown",
+		SyncStatus: "unavailable",
 	}
 	if summary.Type != "ssh" {
 		result.SupportReason = "local_connection"
@@ -24,11 +25,7 @@ func (s *Service) Summary(summary ports.ConnectionInstanceView) ports.AgentSumma
 		return result
 	}
 	if s.terms == nil {
-		result.SupportReason = "ssh_transport_unavailable"
-		return result
-	}
-	if _, err := s.terms.RemoteTransferInfo(summary.ID); err != nil {
-		result.SupportReason = "ssh_transport_unavailable"
+		result.SupportReason = "connection_service_unavailable"
 		return result
 	}
 	result.Support = "supported"
@@ -38,7 +35,7 @@ func (s *Service) Summary(summary ports.ConnectionInstanceView) ports.AgentSumma
 		result.ErrorMessage = "Agent state storage is unavailable."
 		return result
 	}
-	target, record, ok := s.targetFor(summary)
+	_, record, ok := s.targetFor(summary)
 	if !ok {
 		return result
 	}
@@ -47,12 +44,10 @@ func (s *Service) Summary(summary ports.ConnectionInstanceView) ports.AgentSumma
 		result.Component = "uninitialized"
 	}
 	result.ComponentVersion = record.ComponentVersion
-	if state, exists := s.runtimeState(target); exists {
-		result = s.summaryFromState(result, state)
-	} else if state, exists := record.Targets[target.SessionName]; exists {
+	if state, exists := record.Targets[summary.TmuxSessionName]; exists {
 		result = s.summaryFromState(result, state)
 	}
-	if result.Component == "initializing" && !s.endpointOperationRunning(target.EndpointKey) {
+	if result.Component == "initializing" && !s.endpointOperationRunningForSummary(summary) {
 		result.Component = "error"
 		result.InitializationID = ""
 		result.ErrorCode = "agent_initialization_interrupted"
@@ -61,17 +56,14 @@ func (s *Service) Summary(summary ports.ConnectionInstanceView) ports.AgentSumma
 	return result
 }
 
-func (s *Service) runtimeState(target Target) (TargetState, bool) {
+func (s *Service) endpointOperationRunningForSummary(summary ports.ConnectionInstanceView) bool {
+	target, _, ok := s.targetFor(summary)
+	if !ok {
+		return false
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	state, ok := s.runtime[target.EndpointKey+"\x00"+target.SessionName]
-	return state, ok
-}
-
-func (s *Service) endpointOperationRunning(endpointKey string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	operationID := s.endpointOps[endpointKey]
+	operationID := s.endpointOps[target.EndpointKey]
 	operation := s.operations[operationID]
 	return operation != nil && operation.Status == "running"
 }
@@ -91,11 +83,37 @@ func (s *Service) summaryFromState(result ports.AgentSummary, state TargetState)
 	result.InitializationID = state.InitializationID
 	result.ErrorCode = state.ErrorCode
 	result.ErrorMessage = state.ErrorMessage
-	if stale := s.staleActivity(state); stale != "" {
-		result.Activity = stale
-		result.ActivityLabel = activityLabel(stale)
+	if state.Provider != "" {
+		result.AgentType = state.Provider
 	}
+	result.State = state.State
+	result.StateLabel = stateLabel(state.State)
+	result.StateIndex = state.StateIndex
+	if !state.StateUpdatedAt.IsZero() {
+		result.StateUpdatedAt = state.StateUpdatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	result.SyncStatus = state.SyncStatus
+	if result.SyncStatus == "" {
+		result.SyncStatus = "unavailable"
+	}
+	if !state.LastSyncedAt.IsZero() {
+		result.LastSyncedAt = state.LastSyncedAt.UTC().Format(time.RFC3339Nano)
+	}
+	result.SyncError = state.SyncError
 	return result
+}
+
+func stateLabel(value string) string {
+	switch value {
+	case "running":
+		return "Agent running"
+	case "relax":
+		return "Agent idle"
+	case "error":
+		return "Agent error"
+	default:
+		return "Agent status unknown"
+	}
 }
 
 func activityLabel(value string) string {
@@ -113,30 +131,4 @@ func activityLabel(value string) string {
 	default:
 		return "Codex status unknown"
 	}
-}
-
-func (s *Service) staleActivity(state TargetState) string {
-	when := state.LastReceivedAt
-	if when.IsZero() {
-		when = state.LastEventAt
-	}
-	if when.IsZero() {
-		return ""
-	}
-	age := s.since(when)
-	switch state.Activity {
-	case "running", "waiting":
-		if age > 2*time.Hour {
-			return "stale"
-		}
-	case "completed":
-		if age > 30*time.Minute {
-			return "idle"
-		}
-	case "idle":
-		if age > 24*time.Hour {
-			return "stale"
-		}
-	}
-	return ""
 }

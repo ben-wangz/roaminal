@@ -108,7 +108,7 @@ func run(cfg config.Config) error {
 	}
 	notificationService, err := notifications.New(fileRepositories.PushSubscriptions, idGenerator, notifications.Options{
 		PublicKey: cfg.WebPushVAPIDPublicKey, PrivateKey: cfg.WebPushVAPIDPrivateKey, Subject: cfg.WebPushSubject,
-		Clock: clockSource,
+		Clock: clockSource, PreferenceRepository: fileRepositories.NotificationPreferences, UserKey: authManager.Fingerprint(),
 	})
 	if err != nil {
 		_ = terminalWorker.Shutdown(context.Background())
@@ -139,13 +139,15 @@ func run(cfg config.Config) error {
 	}
 	messageService := messages.NewWithNotifier(fileRepositories.Messages, idGenerator, notificationService)
 	agentService := agent.NewWithRepository(cfg, agent.OpenStore(store.Root), terminals, agent.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource, Messages: messageService})
+	agentService.Start(context.Background())
+	defer agentService.Close()
 	serverDependencies := server.Dependencies{
 		Config: cfg, Version: buildinfo.Version, BootID: bootID, Auth: authManager, Workspace: workspace.New(fileRepositories.Workspace),
 		Connections: terminals, Monitor: monitor.NewWithClock(clockSource), Worker: terminalWorker,
 		Static: static, Definitions: definitions, Diagnostics: diagnostics,
 		FileSystem:        filesystem.NewWithRepositories(terminals, connectionOptions, fileRepositories.Upload, cfg.StateDir, filesystem.Dependencies{Clock: clockSource, Random: randomSource}),
 		AgentProvisioning: agentService.Provisioning(),
-		AgentTelemetry:    agentService.Telemetry(),
+		AgentProjection:   agentService.Projection(),
 		Messages:          messageService,
 		Notifications:     notificationService,
 		IDs:               idGenerator, Clock: clockSource,

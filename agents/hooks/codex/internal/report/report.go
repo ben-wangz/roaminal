@@ -1,18 +1,13 @@
 package report
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
 	"strings"
-	"time"
 	"unicode"
 
 	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/model"
-	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/tmux"
 )
 
 func ReadInput(r io.Reader) (map[string]string, error) {
@@ -54,58 +49,22 @@ func KnownEvent(value string) bool {
 	}
 }
 
-func Activity(event, source string) string {
+// StateFor is the Codex provider adapter. Codex 0.147.0 has reliable activity
+// and completion hooks but no reliable task-failure hook, so terminal events
+// intentionally settle on relax unless a future provider event carries an
+// explicit failure signal.
+func StateFor(event, source, reason string) (string, bool) {
+	if !KnownEvent(event) {
+		return "", false
+	}
 	switch event {
-	case "PermissionRequest":
-		return "waiting"
-	case "Stop":
-		return "completed"
-	case "SessionEnd":
-		return "idle"
 	case "SessionStart":
-		if source == "compact" {
-			return "running"
-		}
-		return "idle"
+		_ = source
+		return model.StateRelax, true
+	case "Stop", "SessionEnd":
+		_ = reason
+		return model.StateRelax, true
 	default:
-		return "running"
+		return model.StateRunning, true
 	}
-}
-
-func EventID(event model.Event) string {
-	hash := sha256.New()
-	writePart := func(value string) {
-		var length [8]byte
-		binary.BigEndian.PutUint64(length[:], uint64(len(value)))
-		_, _ = hash.Write(length[:])
-		_, _ = hash.Write([]byte(value))
-	}
-	writePart("roaminal-agent-event-v1")
-	writePart(event.EndpointKey)
-	writePart(event.Tmux.SessionID)
-	var number [8]byte
-	binary.BigEndian.PutUint64(number[:], uint64(event.Tmux.SessionCreated))
-	_, _ = hash.Write(number[:])
-	binary.BigEndian.PutUint64(number[:], event.Sequence)
-	_, _ = hash.Write(number[:])
-	return base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
-}
-
-func NewEvent(input map[string]string, info tmux.Info, endpointKey, version string, sequence uint64) model.Event {
-	event := model.Event{
-		EndpointKey: endpointKey, SchemaVersion: model.SchemaVersion, AgentType: "codex",
-		ComponentVersion: version, EventName: input["hook_event_name"],
-		Activity: Activity(input["hook_event_name"], input["source"]), Sequence: sequence,
-		OccurredAt: time.Now().UTC(),
-		Tmux:       model.Tmux{SessionName: info.SessionName, SessionID: info.SessionID, SessionCreated: info.SessionCreated, PaneID: info.PaneID, SocketFingerprint: info.SocketFingerprint},
-		Codex: model.Codex{
-			SessionID:      input["session_id"],
-			TurnID:         input["turn_id"],
-			ToolUseID:      input["tool_use_id"],
-			AgentProcessID: tmux.AgentProcessID(input["session_id"]),
-		},
-		Event: model.EventSource{Source: input["source"], Reason: input["reason"]},
-	}
-	event.EventID = EventID(event)
-	return event
 }

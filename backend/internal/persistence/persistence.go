@@ -54,17 +54,18 @@ type AuthFile struct {
 type SnapshotHeader = domain.SnapshotHeader
 
 type Store struct {
-	Root           string
-	ConnectionsDir string
-	AuditDir       string
-	DiagnosticsDir string
-	Layout         Layout
-	degradedMu     sync.RWMutex
-	workspaceMu    sync.Mutex
-	messagesMu     sync.Mutex
-	pushMu         sync.Mutex
-	degradedIDs    map[string]struct{}
-	globalError    bool
+	Root                      string
+	ConnectionsDir            string
+	AuditDir                  string
+	DiagnosticsDir            string
+	Layout                    Layout
+	degradedMu                sync.RWMutex
+	workspaceMu               sync.Mutex
+	messagesMu                sync.Mutex
+	pushMu                    sync.Mutex
+	notificationPreferencesMu sync.Mutex
+	degradedIDs               map[string]struct{}
+	globalError               bool
 }
 
 var ErrAmbiguousStateLayout = errors.New("ambiguous state layout")

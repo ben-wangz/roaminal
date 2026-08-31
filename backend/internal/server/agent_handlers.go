@@ -1,9 +1,7 @@
 package server
 
 import (
-	"io"
 	"net/http"
-	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/agent"
 )
@@ -16,7 +14,7 @@ func (s *Server) agentSummary(w http.ResponseWriter, r *http.Request, _ string) 
 	id := r.PathValue("connectionInstanceId")
 	for _, summary := range s.terms.Summaries() {
 		if summary.ID == id {
-			writeJSON(w, http.StatusOK, s.agentProvisioning.Details(r.Context(), agentConnectionInstanceView(summary), strings.TrimSpace(r.Header.Get("Origin"))))
+			writeJSON(w, http.StatusOK, s.agentProvisioning.Details(r.Context(), agentConnectionInstanceView(summary)))
 			return
 		}
 	}
@@ -29,14 +27,14 @@ func (s *Server) startAgentInitialization(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if body == nil {
-		writeAgentError(w, &agent.Error{Code: "agent_event_invalid", Status: 400, Message: "Initialization accepts an empty JSON object."})
+		writeAgentError(w, &agent.Error{Code: "agent_initialization_invalid", Status: 400, Message: "Initialization accepts an empty JSON object."})
 		return
 	}
 	if s.agentProvisioning == nil {
 		writeAgentError(w, &agent.Error{Code: "agent_store_unavailable", Status: 503, Message: "Agent state storage is unavailable."})
 		return
 	}
-	result, err := s.agentProvisioning.StartInitialization(r.Context(), r.PathValue("connectionInstanceId"), strings.TrimSpace(r.Header.Get("Origin")))
+	result, err := s.agentProvisioning.StartInitialization(r.Context(), r.PathValue("connectionInstanceId"))
 	if err != nil {
 		writeAgentError(w, err)
 		return
@@ -61,45 +59,8 @@ func (s *Server) getAgentInitialization(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (s *Server) agentEvent(w http.ResponseWriter, r *http.Request) {
-	if s.agentTelemetry == nil {
-		writeAgentError(w, &agent.Error{Code: "agent_store_unavailable", Status: 503, Message: "Agent state storage is unavailable."})
-		return
-	}
-	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		writeAgentError(w, &agent.Error{Code: "agent_event_invalid", Status: 400, Message: "Content-Type must be application/json."})
-		return
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 64*1024+1))
-	if err != nil {
-		writeAgentError(w, &agent.Error{Code: "agent_event_invalid", Status: 400, Message: "The Agent event could not be read."})
-		return
-	}
-	duplicate, err := s.agentTelemetry.AcceptEvent(agentBearer(r), body)
-	if err != nil {
-		writeAgentError(w, err)
-		return
-	}
-	if duplicate {
-		writeJSON(w, http.StatusOK, agentEventResponse{Result: "duplicate"})
-		return
-	}
-	writeJSON(w, http.StatusAccepted, agentEventResponse{Result: "accepted"})
-}
-
-func agentBearer(r *http.Request) string {
-	value := strings.TrimSpace(r.Header.Get("Authorization"))
-	if !strings.HasPrefix(strings.ToLower(value), "bearer ") {
-		return ""
-	}
-	return strings.TrimSpace(value[7:])
-}
-
 func writeAgentError(w http.ResponseWriter, value error) {
 	if typed, ok := value.(*agent.Error); ok {
-		if typed.Code == "agent_event_rate_limited" {
-			w.Header().Set("Retry-After", "60")
-		}
 		writeCodedError(w, typed.Status, typed.Message, typed.Code, nil)
 		return
 	}

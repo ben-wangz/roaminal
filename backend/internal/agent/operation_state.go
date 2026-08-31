@@ -27,23 +27,6 @@ func (s *Service) setTargetInitialization(target Target, operationID string) err
 	})
 }
 
-func (s *Service) commitPending(endpointKey string, target Target, version, checksum string) error {
-	return s.store.Update(endpointKey, func(record *EndpointRecord) error {
-		record.ActiveTokenHash = record.PendingTokenHash
-		record.PendingTokenHash, record.PendingCreatedAt = "", ""
-		record.ComponentVersion, record.ComponentSHA256 = version, checksum
-		state := record.Targets[target.SessionName]
-		component := "needs_trust"
-		if record.InstallationState == "ready" || state.Component == "ready" {
-			component = "ready"
-		}
-		record.InstallationState = component
-		state.Component, state.ComponentVersion, state.Activity = component, version, "unknown"
-		record.Targets[target.SessionName] = state
-		return nil
-	})
-}
-
 func (s *Service) markTargetComponent(target Target, component, version string) error {
 	return s.store.Update(target.EndpointKey, func(record *EndpointRecord) error {
 		record.InstallationState = component
@@ -80,6 +63,12 @@ func (s *Service) completeInitialization(id string, target Target, result string
 		logAgentInfo("agent_initialization_completed", id, instanceID, "endpoint_key=%q result=%q component=%q changed=%t duration_ms=%d", endpointKey, result, component, changed, elapsed)
 	}
 	_ = s.store.Update(target.EndpointKey, func(record *EndpointRecord) error {
+		record.ActiveTokenHash = ""
+		record.PendingTokenHash = ""
+		record.PendingCreatedAt = ""
+		record.PreviousTokenHash = ""
+		record.PreviousTokenExpiresAt = ""
+		record.WebhookOrigin = ""
 		for name, state := range record.Targets {
 			if name != target.SessionName && state.InitializationID != id {
 				continue

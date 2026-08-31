@@ -12,21 +12,27 @@ fullscreen assertions.
    first navigation.
 2. On every app page with a topbar, verify one `fullscreen-toggle` control is
    present with an accessible label and maximize icon when inactive. If runtime
-   capability detection reports unsupported, the control is disabled with a
-   clear label and login, connection manager, Terminal, FileSystem, messages,
-   and input remain usable.
+   capability detection reports unsupported, the control remains visible,
+   carries `data-fullscreen-state="unsupported"`, is disabled, has an
+   unavailable visual marker and clear label, and login, connection manager,
+   Terminal, FileSystem, messages, and input remain usable. Verify that a
+   disabled control does not issue a fullscreen request.
 3. In a Chromium context where element fullscreen is permitted, enter and exit
    fullscreen through a real click. Verify the target is the complete
    `.app-shell`, the topbar, unified workspace tool surface, Monitor,
    Terminal/FileSystem body, and Message Center remain usable, and the control
    changes to the minimize state. Press Escape or trigger a native external
-   exit and verify the control synchronizes without an automatic re-entry.
+   exit and verify the control synchronizes without an automatic re-entry. A
+   rejected request or fullscreen error must clear the pending state and return
+   the control to its supported or unsupported state.
 4. Exercise fullscreen on Terminal and FileSystem, switch connection instances,
    open/collapse Connections and Virtual keyboard, and use Terminal input. No
    mode change, connection change, native keyboard opening, timer, or FileSystem
    preview action may request fullscreen. On phone layouts verify safe-area
    spacing and an in-app exit affordance when the normal topbar is hidden by the
-   native keyboard.
+   native keyboard. In an iPhone-sized emulated context, verify visibility and
+   runtime-driven state only; desktop Chromium emulation must not be reported
+   as proof of iPhone WebKit support.
 5. Open Appearance and inspect System notifications. Before an explicit Enable
    click, no permission prompt or Service Worker registration is created. Click
    Enable in a secure context, grant permission, and verify the state reflects
@@ -37,12 +43,16 @@ fullscreen assertions.
    does not attempt subscription registration. A denied permission produces a
    blocked state and does not repeatedly prompt; an insecure or unsupported
    context produces Unavailable while the Message Center remains usable.
-6. With notifications enabled and the page hidden or unfocused, create one
-   eligible `codex_turn_completed` and one `codex_turn_failed` message. Verify
-   one browser notification per durable `messageId`, safe title/body, and only
-   the message ID in notification data. `agent_reporting_ready` does not create
-   a browser notification. Replayed heartbeat/list responses and two open tabs
-   do not duplicate it; visible foreground delivery is suppressed.
+6. With notifications enabled and the page hidden or unfocused, configure one
+   connection's notification preference and create one `running -> relax`
+   transition. Verify one browser notification per durable `messageId`, safe
+   title/body, and only the message ID in notification data. Create a normal
+   `relax -> running` transition and verify it is shown in Message Center but
+   does not create a browser notification. Create `running -> error` only with
+   a provider fixture that explicitly supports the error capability; the
+   current Codex provider must not infer it. Replayed heartbeat/list responses
+   and two open tabs do not duplicate notifications; visible foreground
+   delivery is suppressed.
 7. Click a notification and verify the Service Worker focuses or opens the
    same-origin application and forwards only the message ID. A live target
    selects that connection's Terminal workspace and marks the message read. A

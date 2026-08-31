@@ -6,6 +6,14 @@ export type BrowserNotificationConfig = {
   publicKey?: string;
 };
 
+export type NotificationPreference = {
+  connectionDefinitionId: string;
+  tmuxSessionName: string;
+  enabled: boolean;
+  runningToRelax: boolean;
+  runningToError: boolean;
+};
+
 type PushSubscriptionRequest = {
   endpoint: string;
   keys: {
@@ -16,6 +24,17 @@ type PushSubscriptionRequest = {
 
 export function fetchBrowserNotificationConfig(auth: AuthState): Promise<BrowserNotificationConfig> {
   return api<BrowserNotificationConfig>('/notifications/config', {}, auth);
+}
+
+export function fetchNotificationPreferences(auth: AuthState): Promise<{ preferences: NotificationPreference[] }> {
+  return api<{ preferences: NotificationPreference[] }>('/notifications/preferences', {}, auth);
+}
+
+export function saveNotificationPreference(auth: AuthState, preference: NotificationPreference): Promise<NotificationPreference> {
+  return api<NotificationPreference>('/notifications/preferences', {
+    method: 'PUT',
+    body: JSON.stringify(preference),
+  }, auth);
 }
 
 export function registerBrowserNotificationSubscription(auth: AuthState, subscription: PushSubscriptionRequest): Promise<{ subscriptionId: string }> {

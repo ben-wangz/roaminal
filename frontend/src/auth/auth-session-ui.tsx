@@ -8,8 +8,8 @@ export function AuthSessionUI({ error, onLogin }: { error: string; onLogin: (pas
   const submit = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); try { await onLogin(password); } finally { setBusy(false); } };
   return <div className="auth-backdrop"><form className="auth-modal" onSubmit={submit}>
     <div className="brand-mark">r<span>&gt;</span></div><h1>Roaminal</h1><p className="auth-subtitle">Secure terminal access</p>
-    <label className="auth-username-label" htmlFor="username">Username</label><input id="username" className="auth-username" type="text" autoComplete="username" value="roaminal" readOnly tabIndex={-1} />
-    <label htmlFor="password">Password</label><input id="password" type="password" autoComplete="current-password" autoFocus value={password} onChange={(event) => setPassword(event.target.value)} />
+    <label className="auth-username-label" htmlFor="username">Username</label><input id="username" name="username" className="auth-username" type="text" autoComplete="username" value="roaminal" readOnly tabIndex={-1} />
+    <label htmlFor="password">Password</label><input id="password" name="password" type="password" autoComplete="current-password" autoFocus value={password} onChange={(event) => setPassword(event.target.value)} />
     {error && <div className="error-text" role="alert">{error}</div>}<button className="primary" disabled={busy || !password}>{busy ? 'Connecting...' : 'Connect'}</button>
   </form></div>;
 }

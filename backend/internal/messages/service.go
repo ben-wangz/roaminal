@@ -27,17 +27,21 @@ type Service struct {
 }
 
 type Item struct {
-	MessageID             string    `json:"messageId"`
-	Sequence              uint64    `json:"sequence"`
-	Kind                  string    `json:"kind"`
-	Severity              string    `json:"severity"`
-	Text                  string    `json:"text"`
-	OccurredAt            time.Time `json:"occurredAt"`
-	ReceivedAt            time.Time `json:"receivedAt"`
-	ConnectionInstanceIDs []string  `json:"connectionInstanceIds"`
-	FallbackLabel         string    `json:"fallbackLabel"`
-	ConnectionLabel       string    `json:"connectionLabel,omitempty"`
-	Read                  bool      `json:"read"`
+	MessageID               string    `json:"messageId"`
+	Sequence                uint64    `json:"sequence"`
+	Kind                    string    `json:"kind"`
+	Severity                string    `json:"severity"`
+	Text                    string    `json:"text"`
+	OccurredAt              time.Time `json:"occurredAt"`
+	ReceivedAt              time.Time `json:"receivedAt"`
+	ConnectionInstanceIDs   []string  `json:"connectionInstanceIds"`
+	FallbackLabel           string    `json:"fallbackLabel"`
+	ConnectionLabel         string    `json:"connectionLabel,omitempty"`
+	ConnectionDefinitionIDs []string  `json:"connectionDefinitionIds,omitempty"`
+	TmuxSessionName         string    `json:"tmuxSessionName"`
+	Read                    bool      `json:"read"`
+	AgentStateFrom          string    `json:"agentStateFrom,omitempty"`
+	AgentStateTo            string    `json:"agentStateTo,omitempty"`
 }
 
 type Page struct {
@@ -197,9 +201,12 @@ func (s *Service) ClearMessages() (ClearResult, error) {
 func item(record domain.MessageRecord, readThrough uint64) Item {
 	return Item{
 		MessageID: record.MessageID, Sequence: record.Sequence, Kind: record.Kind, Severity: record.Severity,
-		Text: presentationText(record.PresentationKey), OccurredAt: record.OccurredAt, ReceivedAt: record.ReceivedAt,
+		Text: presentationText(record.PresentationKey, record.AgentStateFrom, record.AgentStateTo), OccurredAt: record.OccurredAt, ReceivedAt: record.ReceivedAt,
 		ConnectionInstanceIDs: append([]string{}, record.ConnectionInstanceIDs...), FallbackLabel: record.FallbackLabel, ConnectionLabel: record.ConnectionLabel,
-		Read: record.Sequence <= readThrough,
+		ConnectionDefinitionIDs: append([]string{}, record.ConnectionDefinitionIDs...),
+		TmuxSessionName:         record.TmuxSessionName,
+		Read:                    record.Sequence <= readThrough,
+		AgentStateFrom:          record.AgentStateFrom, AgentStateTo: record.AgentStateTo,
 	}
 }
 
@@ -207,7 +214,7 @@ func state(value domain.MessageState) State {
 	return State{Revision: value.Revision, LatestSequence: value.LatestSequence, UnreadCount: value.UnreadCount}
 }
 
-func presentationText(key string) string {
+func presentationText(key, from, to string) string {
 	switch key {
 	case "codex_reporting_connected":
 		return "Codex reporting connected"
@@ -215,6 +222,11 @@ func presentationText(key string) string {
 		return "Codex turn finished"
 	case "codex_turn_failed":
 		return "Codex turn failed"
+	case "agent_state_transition":
+		if from != "" && to != "" {
+			return "Agent state: " + from + " -> " + to
+		}
+		return "Agent state changed"
 	default:
 		return "Agent message"
 	}

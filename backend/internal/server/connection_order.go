@@ -48,9 +48,9 @@ func (s *Server) reorderConnectionInstances(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	ordered := orderConnectionInstances(instances, order)
-	if s.agentTelemetry != nil {
+	if s.agentProjection != nil {
 		for index := range ordered {
-			ordered[index].Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(ordered[index]))
+			ordered[index].Agent = s.agentProjection.Summary(agentConnectionInstanceView(ordered[index]))
 		}
 	}
 	writeJSON(w, http.StatusOK, connectionInstanceCollectionResponse{ConnectionInstances: ordered, ConnectionInstanceLayout: layout})
@@ -60,11 +60,11 @@ func (s *Server) orderedConnectionInstances(sessionID string) []ports.Connection
 	instances := s.connectionInstanceSummaries()
 	layout := s.connectionInstanceLayout(sessionID)
 	instances = orderConnectionInstances(instances, flattenConnectionInstanceLayout(layout))
-	if s.agentTelemetry == nil {
+	if s.agentProjection == nil {
 		return instances
 	}
 	for index := range instances {
-		instances[index].Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(instances[index]))
+		instances[index].Agent = s.agentProjection.Summary(agentConnectionInstanceView(instances[index]))
 	}
 	return instances
 }

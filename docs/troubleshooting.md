@@ -53,19 +53,24 @@ the pane directory changed; resolve the root before listing or reading entries.
 
 Agent initialization requires a live SSH tmux connection and remote `tmux`
 and Codex. Check the Agent status response, then verify that the remote
-platform is Linux or macOS on `amd64` or
-`arm64`. The initialization operation ID and phase in
-the application log identify whether transport acquisition, platform detection,
-existing-component probing, upload, or installation failed. After a failed
-installation, inspect the remote component prerequisites and retry; repeated
-initialization for the same endpoint joins the active operation.
+platform is Linux or macOS on `amd64` or `arm64`. The initialization operation
+ID and phase in the application log identify whether transport acquisition,
+platform detection, existing-component probing, upload, or installation
+failed. After a failed installation, inspect the remote component prerequisites
+and retry; repeated initialization for the same endpoint joins the active
+operation.
 
-Once initialized, the remote hook must be executable and its private binding
-file must remain mode `0600`. Events are accepted only with the
-matching Agent token and valid tmux target identity. The message center reports
-accepted hook events and Codex completion events; a missing message should be
-correlated with the hook log, the endpoint/tmux binding, and the server's
-Agent-event response.
+Once initialized, the remote hook must be executable, its component metadata
+must remain mode `0600`, and its local state/log directories must remain private.
+The message center reports actual standard Agent state transitions, not every
+hook event. A missing transition should be correlated with
+`$HOME/.roaminal/logs/codex-hook.log`, the configured tmux session, and the
+server's `agent_state_sync_failed` log. The local hook log records the tmux
+session identity, state index allocation, and local I/O failures without
+recording credentials or terminal content. It keeps the current and one
+rotated segment within a combined 128 MiB budget and removes segments older
+than 48 hours. The hook uses an OS-managed per-tmux file lock; stale
+`tmux wait-for` locks from older component versions are no longer used.
 
 ## Browser diagnostics
 

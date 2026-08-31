@@ -31,6 +31,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
         <label>
           Host alias
           <input
+            id="connection-host-alias"
+            name="hostAlias"
             required
             pattern={'[A-Za-z0-9][\\-A-Za-z0-9._]{0,254}'}
             value={draft.hostAlias}
@@ -40,6 +42,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
         <label>
           HostName
           <input
+            id="connection-host-name"
+            name="hostName"
             value={draft.hostName}
             onChange={(event) => set('hostName', event.target.value)}
             placeholder="destination hostname"
@@ -48,11 +52,13 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
         <div className="form-grid">
           <label>
             User
-            <input value={draft.user} onChange={(event) => set('user', event.target.value)} />
+            <input id="connection-user" name="user" value={draft.user} onChange={(event) => set('user', event.target.value)} />
           </label>
           <label>
             Port
             <input
+              id="connection-port"
+              name="port"
               type="number"
               min="1"
               max="65535"
@@ -67,6 +73,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
             {keys.map((key) => (
               <label key={key.keyId}>
                 <input
+                  id={`connection-identity-${key.keyId}`}
+                  name="identityFile"
                   type="checkbox"
                   checked={draft.identities.includes(key.fileName)}
                   onChange={(event) =>
@@ -86,7 +94,7 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
         <div className="form-grid">
           <label>
             IdentitiesOnly
-            <select value={draft.identitiesOnly} onChange={(event) => set('identitiesOnly', event.target.value)}>
+            <select id="connection-identities-only" name="identitiesOnly" value={draft.identitiesOnly} onChange={(event) => set('identitiesOnly', event.target.value)}>
               <option value="">Unset</option>
               <option value="yes">yes</option>
               <option value="no">no</option>
@@ -95,6 +103,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
           <label>
             ServerAliveInterval
             <input
+              id="connection-server-alive-interval"
+              name="serverAliveInterval"
               type="number"
               min="0"
               max="4294967295"
@@ -107,6 +117,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
           <label>
             StrictHostKeyChecking
             <select
+              id="connection-strict-host-key-checking"
+              name="strictHostKeyChecking"
               value={draft.strictHostKeyChecking}
               onChange={(event) => set('strictHostKeyChecking', event.target.value)}
             >
@@ -117,6 +129,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
           <label>
             UserKnownHostsFile
             <select
+              id="connection-user-known-hosts-file"
+              name="userKnownHostsFile"
               value={draft.userKnownHostsFile}
               onChange={(event) => set('userKnownHostsFile', event.target.value)}
             >
@@ -130,6 +144,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
           {!optionsAvailable && <small className="field-help" role="alert">Roaminal tmux and FileSystem options are unavailable. Refresh the source before editing them.</small>}
           <label className="checkbox-row">
             <input
+              id="connection-tmux-enabled"
+              name="tmuxEnabled"
               disabled={!optionsAvailable}
               type="checkbox"
               checked={draft.tmuxEnabled}
@@ -140,6 +156,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
           <label>
             Tmux session name
             <input
+              id="connection-tmux-session-name"
+              name="tmuxSessionName"
               disabled={!optionsAvailable || !draft.tmuxEnabled}
               required={draft.tmuxEnabled}
               pattern={'[A-Za-z][A-Za-z0-9_\\-]{0,63}'}
@@ -153,6 +171,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
           <label>
             FileSystem fallback pwd
             <input
+              id="connection-filesystem-pwd"
+              name="filesystemPwd"
               disabled={!optionsAvailable}
               required
               value={draft.filesystemPwd}

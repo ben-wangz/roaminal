@@ -39,5 +39,12 @@ body { background: var(--base); }
 .workspace-tool-button:disabled { cursor: not-allowed; opacity: .42; }
 .workspace-tool-button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
 .app-shell:fullscreen, .app-shell:-webkit-full-screen { width: 100vw; height: 100vh; min-width: 0; min-height: 0; background: var(--base); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.fullscreen-toggle { position: relative; }
+.fullscreen-toggle:disabled { cursor: not-allowed; }
+.fullscreen-toggle.fullscreen-toggle-unsupported { color: var(--muted); opacity: .7; }
+.fullscreen-toggle.fullscreen-toggle-unsupported:hover { color: var(--muted); background: transparent; }
+.fullscreen-toggle.fullscreen-toggle-pending { cursor: wait; opacity: .72; }
+.fullscreen-icon { position: relative; width: 17px; height: 17px; display: inline-grid; place-items: center; }
+.fullscreen-unavailable-mark { position: absolute; right: -3px; bottom: -3px; padding: 1px; box-sizing: content-box; border-radius: 50%; background: var(--base); color: var(--warn-bright); }
 .fullscreen-mobile-exit { position: fixed; z-index: 20; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); background: var(--surface-1); border: 1px solid var(--border); }
 @media (prefers-reduced-motion: reduce) { .brand-mark span { animation: none; } }

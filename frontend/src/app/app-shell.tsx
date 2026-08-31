@@ -57,7 +57,10 @@ export function AppShell() {
       toastTimer.current = null;
     }, 4500);
   }, []);
-  const fullscreen = useBrowserFullscreen((message) => showToast(message, 'error'));
+  const handleFullscreenError = useCallback((message: string) => {
+    showToast(message, 'error');
+  }, [showToast]);
+  const fullscreen = useBrowserFullscreen(handleFullscreenError);
   const actions = useAppShellActions({
     auth,
     setAuth,

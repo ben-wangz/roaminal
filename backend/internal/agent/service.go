@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -12,44 +13,29 @@ import (
 )
 
 type Service struct {
-	cfg            config.Config
-	terms          ConnectionService
-	store          ports.AgentRepository
-	mu             sync.Mutex
-	bindings       map[string]Target
-	operations     map[string]*Initialization
-	endpointOps    map[string]string
-	endpointLock   map[string]*sync.Mutex
-	rate           map[string]eventRate
-	runtime        map[string]TargetState
-	runtimeTargets map[string]string
-	completedTools map[string]map[string]time.Time
-	eventIDs       map[string]map[string]time.Time
-	eventLocks     map[string]*sync.Mutex
-	endpointCache  map[string]endpointCacheEntry
-	clock          ports.Clock
-	ids            ports.IDGenerator
-	random         ports.RandomSource
-	messages       ports.MessageAppender
+	cfg          config.Config
+	terms        ConnectionService
+	store        ports.AgentRepository
+	mu           sync.Mutex
+	bindings     map[string]Target
+	operations   map[string]*Initialization
+	endpointOps  map[string]string
+	endpointLock map[string]*sync.Mutex
+	clock        ports.Clock
+	ids          ports.IDGenerator
+	random       ports.RandomSource
+	messages     ports.MessageAppender
+	syncInterval time.Duration
+	syncCancel   context.CancelFunc
+	syncWait     sync.WaitGroup
 }
 
 type Dependencies struct {
-	Clock    ports.Clock
-	IDs      ports.IDGenerator
-	Random   ports.RandomSource
-	Messages ports.MessageAppender
-}
-
-type eventRate struct {
-	LastTokens time.Time
-	Tokens     float64
-}
-
-type endpointCacheEntry struct {
-	Alias       string
-	SourceState string
-	Key         string
-	ExpiresAt   time.Time
+	Clock        ports.Clock
+	IDs          ports.IDGenerator
+	Random       ports.RandomSource
+	Messages     ports.MessageAppender
+	SyncInterval time.Duration
 }
 
 func NewWithRepository(cfg config.Config, repository ports.AgentRepository, terms ConnectionService, dependencies ...Dependencies) *Service {
@@ -71,26 +57,14 @@ func NewWithRepository(cfg config.Config, repository ports.AgentRepository, term
 	if deps.IDs == nil {
 		deps.IDs = identity.UUIDGenerator{Random: deps.Random}
 	}
+	if deps.SyncInterval <= 0 {
+		deps.SyncInterval = time.Minute
+	}
 	return &Service{
 		cfg: cfg, terms: terms, store: repository, bindings: map[string]Target{},
 		operations: map[string]*Initialization{}, endpointOps: map[string]string{}, endpointLock: map[string]*sync.Mutex{},
-		rate: map[string]eventRate{}, runtime: map[string]TargetState{}, runtimeTargets: map[string]string{}, completedTools: map[string]map[string]time.Time{}, eventIDs: map[string]map[string]time.Time{}, eventLocks: map[string]*sync.Mutex{}, endpointCache: map[string]endpointCacheEntry{},
-		clock: deps.Clock, ids: deps.IDs, random: deps.Random, messages: deps.Messages,
+		clock: deps.Clock, ids: deps.IDs, random: deps.Random, messages: deps.Messages, syncInterval: deps.SyncInterval,
 	}
-}
-
-func (s *Service) eventLockFor(key string) *sync.Mutex {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.eventLocks == nil {
-		s.eventLocks = map[string]*sync.Mutex{}
-	}
-	if lock := s.eventLocks[key]; lock != nil {
-		return lock
-	}
-	lock := &sync.Mutex{}
-	s.eventLocks[key] = lock
-	return lock
 }
 
 func (s *Service) now() time.Time {

@@ -41,6 +41,13 @@ export type AgentSummary = {
   initializationId: string;
   errorCode: string;
   errorMessage: string;
+  state?: 'running' | 'relax' | 'error' | string;
+  stateLabel?: string;
+  stateIndex?: number;
+  stateUpdatedAt?: string;
+  syncStatus?: 'available' | 'pending' | 'missing' | 'tmux_missing' | 'stale' | 'invalid' | 'unavailable' | string;
+  lastSyncedAt?: string;
+  syncError?: string;
 };
 
 export type ServerMessage =

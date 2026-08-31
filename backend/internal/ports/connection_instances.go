@@ -3,7 +3,7 @@ package ports
 import "time"
 
 // AgentSummary is the application projection embedded in a connection
-// instance resource. Agent telemetry owns how this projection is derived;
+// instance resource. Agent state projection owns how this projection is derived;
 // terminal runtime code must not own its product contract.
 type AgentSummary struct {
 	AgentType        string `json:"agentType"`
@@ -18,6 +18,13 @@ type AgentSummary struct {
 	InitializationID string `json:"initializationId"`
 	ErrorCode        string `json:"errorCode"`
 	ErrorMessage     string `json:"errorMessage"`
+	State            string `json:"state"`
+	StateLabel       string `json:"stateLabel"`
+	StateIndex       uint64 `json:"stateIndex"`
+	StateUpdatedAt   string `json:"stateUpdatedAt"`
+	SyncStatus       string `json:"syncStatus"`
+	LastSyncedAt     string `json:"lastSyncedAt"`
+	SyncError        string `json:"syncError"`
 }
 
 // RemoteCapability describes whether an interactive SSH connection instance
@@ -31,7 +38,7 @@ type RemoteCapability struct {
 
 // TerminalInstanceSummary is the terminal feature's runtime projection. It is
 // deliberately separate from the connection-instance resource so terminal
-// code cannot own connection-level projections such as agent telemetry.
+// code cannot own connection-level projections such as agent state.
 type TerminalInstanceSummary struct {
 	ID                     string    `json:"-"`
 	ConnectionInstanceID   string    `json:"connectionInstanceId"`

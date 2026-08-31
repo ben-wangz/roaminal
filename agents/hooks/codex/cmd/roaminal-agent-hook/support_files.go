@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -37,8 +36,6 @@ func processStart(pid int) string {
 	}
 	return strings.TrimSpace(string(output))
 }
-
-func decodeToken(value string) ([]byte, error) { return base64.RawURLEncoding.DecodeString(value) }
 
 func readPrivateFile(path string, limit int64) ([]byte, error) {
 	info, err := os.Lstat(path)
@@ -79,15 +76,6 @@ func componentVersionGreater(current, requested string) bool {
 		return currentNumber > requestedNumber
 	}
 	return current > requested
-}
-
-func tokenFingerprint(value string) string {
-	raw, err := decodeToken(value)
-	if err != nil || len(raw) != 32 {
-		return ""
-	}
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:])
 }
 
 func validChecksum(value string) bool {

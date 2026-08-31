@@ -56,6 +56,7 @@ export function RenameTitleDialog({
         <label htmlFor="terminal-title">Title</label>
         <input
           id="terminal-title"
+          name="terminalTitle"
           ref={input}
           value={value}
           onChange={(event) => {

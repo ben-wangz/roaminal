@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Bell, Monitor, RotateCcw, Save } from 'lucide-react';
 import type { Terminal } from '@xterm/xterm';
 import { APPEARANCE_SCHEMA_VERSION, DEFAULT_APPEARANCE, FONT_CATALOG, MAX_FONT_SIZE, MIN_FONT_SIZE, type TerminalAppearance, fontFamily, normalizeFontSize } from './appearance-model';
@@ -15,7 +15,7 @@ type Props = {
   onDisableNotifications: () => Promise<void>;
 };
 
-function AppearanceSample({ appearance }: { appearance: TerminalAppearance }) {
+const AppearanceSample = memo(function AppearanceSample({ fontId, fontSize }: Pick<TerminalAppearance, 'fontId' | 'fontSize'>) {
   const elementRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   useEffect(() => {
@@ -28,8 +28,8 @@ function AppearanceSample({ appearance }: { appearance: TerminalAppearance }) {
         cursorBlink: false,
         rows: 9,
         cols: 72,
-        fontFamily: fontFamily(appearance.fontId),
-        fontSize: appearance.fontSize,
+        fontFamily: fontFamily(fontId),
+        fontSize,
         theme: { background: '#002b36', foreground: '#93a1a1', cursor: 'transparent', selectionBackground: '#586e75' },
       });
       terminal.open(elementRef.current);
@@ -44,9 +44,9 @@ function AppearanceSample({ appearance }: { appearance: TerminalAppearance }) {
       terminalRef.current?.dispose();
       terminalRef.current = null;
     };
-  }, [appearance]);
+  }, [fontId, fontSize]);
   return <div className="appearance-sample" ref={elementRef} aria-label="Terminal appearance preview" />;
-}
+});
 
 export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, hasWorkspace, notificationState, onEnableNotifications, onDisableNotifications }: Props) {
   const [draft, setDraft] = useState(appearance);
@@ -79,15 +79,15 @@ export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, ha
         <div className="appearance-controls">
           <label>
             <span>Terminal font</span>
-            <select value={draft.fontId} onChange={(event) => setDraft((current) => ({ ...current, fontId: event.target.value as TerminalAppearance['fontId'] }))}>
+            <select id="appearance-font" name="fontId" value={draft.fontId} onChange={(event) => setDraft((current) => ({ ...current, fontId: event.target.value as TerminalAppearance['fontId'] }))}>
               {(Object.keys(FONT_CATALOG) as TerminalAppearance['fontId'][]).map((id) => <option key={id} value={id}>{FONT_CATALOG[id].label}</option>)}
             </select>
           </label>
           <label className="appearance-size-field">
             <span>Terminal size</span>
             <div className="appearance-size-controls">
-              <input aria-label="Terminal font size" type="range" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} step={1} value={validSize ? draft.fontSize : MIN_FONT_SIZE} onChange={(event) => updateSize(event.target.value)} />
-              <input aria-label="Terminal font size in pixels" type="number" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} step={1} value={Number.isNaN(draft.fontSize) ? '' : draft.fontSize} onChange={(event) => updateSize(event.target.value)} />
+              <input id="appearance-font-size-range" name="fontSizeRange" aria-label="Terminal font size" type="range" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} step={1} value={validSize ? draft.fontSize : MIN_FONT_SIZE} onChange={(event) => updateSize(event.target.value)} />
+              <input id="appearance-font-size-pixels" name="fontSizePixels" aria-label="Terminal font size in pixels" type="number" min={MIN_FONT_SIZE} max={MAX_FONT_SIZE} step={1} value={Number.isNaN(draft.fontSize) ? '' : draft.fontSize} onChange={(event) => updateSize(event.target.value)} />
               <span aria-hidden="true">px</span>
             </div>
             {!validSize && <small className="appearance-error" role="alert">Enter an integer from {MIN_FONT_SIZE} to {MAX_FONT_SIZE}.</small>}
@@ -102,19 +102,19 @@ export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, ha
               <span className={`notification-state notification-state-${notificationState.status}`}>{notificationState.status === 'foreground-only' ? 'Foreground only' : notificationState.status[0].toUpperCase() + notificationState.status.slice(1)}</span>
             </header>
             {notificationState.status === 'enable' && <>
-              <p>Show Codex completion and failure messages outside the page.</p>
+              <p>Allow enabled connections to show state changes outside this page.</p>
               <button className="notification-toggle" type="button" role="switch" aria-checked="false" onClick={() => void onEnableNotifications()}>
                 <span className="notification-toggle-track" aria-hidden="true"><span /></span><span>Off</span>
               </button>
             </>}
             {notificationState.status === 'enabled' && <>
-              <p>Codex completion and failure messages can appear as browser notifications.</p>
+              <p>Enabled connection state changes can appear as browser notifications.</p>
               <button className="notification-toggle" type="button" role="switch" aria-checked="true" onClick={() => void onDisableNotifications()}>
                 <span className="notification-toggle-track" aria-hidden="true"><span /></span><span>On</span>
               </button>
             </>}
             {notificationState.status === 'foreground-only' && <>
-              <p>Browser notifications are enabled while this page is running. Background delivery is unavailable.</p>
+              <p>Enabled connection state changes appear while this page is running. Background delivery is unavailable.</p>
               <button className="notification-toggle" type="button" role="switch" aria-checked="true" onClick={() => void onDisableNotifications()}>
                 <span className="notification-toggle-track" aria-hidden="true"><span /></span><span>On</span>
               </button>
@@ -125,7 +125,7 @@ export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, ha
         </div>
         <div className="appearance-preview-region">
           <div className="appearance-preview-heading"><strong>Preview</strong><span>{FONT_CATALOG[draft.fontId].label} · {validSize ? draft.fontSize : MIN_FONT_SIZE}px</span></div>
-          <AppearanceSample appearance={{ ...draft, fontSize: validSize ? draft.fontSize : MIN_FONT_SIZE }} />
+          <AppearanceSample fontId={draft.fontId} fontSize={validSize ? draft.fontSize : MIN_FONT_SIZE} />
         </div>
       </form>
     </section>

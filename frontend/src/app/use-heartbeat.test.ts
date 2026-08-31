@@ -41,5 +41,6 @@ describe('sameConnectionSummaries', () => {
     } as NonNullable<ConnectionInstanceSummary['agent']>;
     expect(sameConnectionSummaries([instance('a', { agent })], [instance('a', { agent: { ...agent } })])).toBe(true);
     expect(sameConnectionSummaries([instance('a', { agent })], [instance('a', { agent: { ...agent, activity: 'waiting' } })])).toBe(false);
+    expect(sameConnectionSummaries([instance('a', { agent })], [instance('a', { agent: { ...agent, state: 'running', stateIndex: 2 } })])).toBe(false);
   });
 });

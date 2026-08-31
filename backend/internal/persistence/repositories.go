@@ -9,19 +9,20 @@ import (
 
 // Repositories exposes storage adapters through application-owned ports.
 type Repositories struct {
-	Auth              ports.AuthRepository
-	Connection        ports.ConnectionInstanceRepository
-	Audit             ports.AuditRepository
-	TerminalSnapshots ports.TerminalSnapshotRepository
-	Workspace         ports.WorkspaceLayoutRepository
-	Upload            ports.UploadRepository
-	Messages          ports.MessageRepository
-	PushSubscriptions ports.PushSubscriptionRepository
+	Auth                    ports.AuthRepository
+	Connection              ports.ConnectionInstanceRepository
+	Audit                   ports.AuditRepository
+	TerminalSnapshots       ports.TerminalSnapshotRepository
+	Workspace               ports.WorkspaceLayoutRepository
+	Upload                  ports.UploadRepository
+	Messages                ports.MessageRepository
+	PushSubscriptions       ports.PushSubscriptionRepository
+	NotificationPreferences ports.NotificationPreferenceRepository
 }
 
 func NewRepositories(store *Store) Repositories {
 	adapter := &repositoryAdapter{store: store}
-	return Repositories{Auth: adapter, Connection: adapter, Audit: adapter, TerminalSnapshots: adapter, Workspace: adapter, Upload: adapter, Messages: adapter, PushSubscriptions: adapter}
+	return Repositories{Auth: adapter, Connection: adapter, Audit: adapter, TerminalSnapshots: adapter, Workspace: adapter, Upload: adapter, Messages: adapter, PushSubscriptions: adapter, NotificationPreferences: adapter}
 }
 
 type repositoryAdapter struct{ store *Store }
@@ -193,6 +194,7 @@ var _ ports.AuditRepository = (*repositoryAdapter)(nil)
 var _ ports.TerminalSnapshotRepository = (*repositoryAdapter)(nil)
 var _ ports.WorkspaceLayoutRepository = (*repositoryAdapter)(nil)
 var _ ports.PushSubscriptionRepository = (*repositoryAdapter)(nil)
+var _ ports.NotificationPreferenceRepository = (*repositoryAdapter)(nil)
 
 func (a *repositoryAdapter) LoadUpload(ctx context.Context, id string) (domain.UploadJobRecord, error) {
 	if err := checkContext(ctx); err != nil {

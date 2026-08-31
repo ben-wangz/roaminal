@@ -5,12 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -55,6 +54,34 @@ func (c *Client) Discover(ctx context.Context) (Info, error) {
 		return Info{}, errors.New("tmux environment is not available")
 	}
 	return c.discoverAncestorPane(ctx)
+}
+
+// DiscoverSession resolves one explicitly configured session. It never falls
+// back to the caller's pane, which is important when a backend reads state for
+// a connection instance shared by several tmux sessions.
+func (c *Client) DiscoverSession(ctx context.Context, sessionName string) (Info, error) {
+	if !validIdentity(sessionName, 128) {
+		return Info{}, errors.New("invalid tmux session name")
+	}
+	value, err := c.run(ctx, "display-message", "-p", "-t", "="+sessionName+":", "#{session_name}\t#{session_id}\t#{session_created}\t#{pane_id}\t#{socket_path}")
+	if err != nil {
+		return Info{}, err
+	}
+	info, err := parseInfo(strings.Split(value, "\t"))
+	if err != nil {
+		return Info{}, err
+	}
+	if info.SessionName != sessionName {
+		return Info{}, errors.New("tmux session name mismatch")
+	}
+	return info, nil
+}
+
+// RuntimeID is an opaque, stable identifier for one tmux runtime. A reused
+// session name therefore gets a new state stream when its identity changes.
+func RuntimeID(info Info) string {
+	digest := sha256.Sum256([]byte(info.SessionID + "|" + strconv.FormatInt(info.SessionCreated, 10) + "|" + info.SocketFingerprint))
+	return hex.EncodeToString(digest[:])[:32]
 }
 
 func (c *Client) discoverPane(ctx context.Context, pane string) (Info, error) {
@@ -119,83 +146,24 @@ func validIdentity(value string, maxBytes int) bool {
 	return true
 }
 
-func (c *Client) withLock(ctx context.Context, info Info, fn func() error) error {
-	channel := "roaminal-agent-" + fmt.Sprintf("%x", sha256.Sum256([]byte(info.SessionID)))[:16]
-	if _, err := c.run(ctx, "wait-for", "-L", channel); err != nil {
+func tmuxLockPath(home string, info Info) string {
+	return filepath.Join(home, ".roaminal", "locks", "state-"+RuntimeID(info)+".lock")
+}
+
+// WithRuntimeLock serializes all local state updates for one tmux runtime.
+func WithRuntimeLock(ctx context.Context, home string, info Info, fn func() error) error {
+	if fn == nil {
+		return errors.New("runtime lock callback is nil")
+	}
+	if strings.TrimSpace(home) == "" {
+		return errors.New("home directory is empty")
+	}
+	lock, err := acquireTmuxLock(ctx, tmuxLockPath(home, info))
+	if err != nil {
 		return err
 	}
-	defer func() { _, _ = c.run(context.Background(), "wait-for", "-U", channel) }()
+	defer lock()
 	return fn()
-}
-
-func (c *Client) option(ctx context.Context, info Info, name string) (string, bool) {
-	value, err := c.run(ctx, "show-options", "-t", sessionTarget(info), "-v", name)
-	return value, err == nil
-}
-
-func (c *Client) setOption(ctx context.Context, info Info, name, value string) error {
-	_, err := c.run(ctx, "set-option", "-q", "-t", sessionTarget(info), name, value)
-	return err
-}
-
-func sessionTarget(info Info) string { return "=" + info.SessionName + ":" }
-
-func (c *Client) Claim(ctx context.Context, info Info, codexSessionID string) (bool, error) {
-	if strings.TrimSpace(codexSessionID) == "" {
-		return false, errors.New("codex session id is empty")
-	}
-	var claimed bool
-	err := c.withLock(ctx, info, func() error {
-		owner, exists := c.option(ctx, info, "@roaminal_agent_owner_v1")
-		if !exists || owner == "" {
-			claimed = true
-			return c.setOption(ctx, info, "@roaminal_agent_owner_v1", codexSessionID+"|"+ownerIdentity())
-		}
-		claimed = owner == codexSessionID+"|"+ownerIdentity()
-		if !claimed {
-			if !ownerAlive(owner) {
-				claimed = true
-				return c.setOption(ctx, info, "@roaminal_agent_owner_v1", codexSessionID+"|"+ownerIdentity())
-			}
-		}
-		return nil
-	})
-	return claimed, err
-}
-
-func (c *Client) NextSequence(ctx context.Context, info Info) (uint64, error) {
-	var result uint64
-	err := c.withLock(ctx, info, func() error {
-		value, ok := c.option(ctx, info, "@roaminal_agent_sequence_v1")
-		if ok {
-			parsed, err := strconv.ParseUint(value, 10, 64)
-			if err != nil || parsed == ^uint64(0) {
-				if err == nil {
-					err = errors.New("tmux sequence overflow")
-				}
-				return err
-			}
-			result = parsed + 1
-		} else {
-			result = 1
-		}
-		return c.setOption(ctx, info, "@roaminal_agent_sequence_v1", strconv.FormatUint(result, 10))
-	})
-	return result, err
-}
-
-func (c *Client) Release(ctx context.Context, info Info, codexSessionID string) error {
-	if codexSessionID == "" {
-		return nil
-	}
-	return c.withLock(ctx, info, func() error {
-		owner, exists := c.option(ctx, info, "@roaminal_agent_owner_v1")
-		if !exists || !strings.HasPrefix(owner, codexSessionID+"|") {
-			return nil
-		}
-		_, err := c.run(ctx, "set-option", "-q", "-u", "-t", sessionTarget(info), "@roaminal_agent_owner_v1")
-		return err
-	})
 }
 
 func (c *Client) Available(ctx context.Context) bool {
@@ -205,16 +173,4 @@ func (c *Client) Available(ctx context.Context) bool {
 
 func (c *Client) Deadline() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 2*time.Second)
-}
-
-func processAlive(pid int) bool {
-	if pid < 1 {
-		return false
-	}
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = process.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, syscall.EPERM)
 }

@@ -6,7 +6,7 @@ export type MessageSeverity = 'info' | 'success' | 'error';
 export type AgentMessage = {
   messageId: string;
   sequence: number;
-  kind: 'agent_reporting_ready' | 'codex_turn_completed' | 'codex_turn_failed';
+  kind: 'agent_reporting_ready' | 'codex_turn_completed' | 'codex_turn_failed' | 'agent_state_transition';
   severity: MessageSeverity;
   text: string;
   occurredAt: string;
@@ -14,6 +14,10 @@ export type AgentMessage = {
   connectionInstanceIds: string[];
   fallbackLabel: string;
   connectionLabel?: string;
+  connectionDefinitionIds?: string[];
+  tmuxSessionName?: string;
+  agentStateFrom?: 'running' | 'relax' | 'error' | string;
+  agentStateTo?: 'running' | 'relax' | 'error' | string;
   read: boolean;
 };
 

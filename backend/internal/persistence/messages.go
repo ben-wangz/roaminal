@@ -143,6 +143,10 @@ func validateMessageDraft(draft domain.MessageDraft) error {
 		if draft.Severity != "error" || draft.PresentationKey != "codex_turn_failed" {
 			return errors.New("invalid turn-failed presentation")
 		}
+	case "agent_state_transition":
+		if draft.PresentationKey != "agent_state_transition" || !validAgentState(draft.AgentStateFrom) || !validAgentState(draft.AgentStateTo) || draft.AgentStateFrom == draft.AgentStateTo || draft.AgentRuntimeID == "" || draft.AgentStateIndex == 0 {
+			return errors.New("invalid agent state transition presentation")
+		}
 	default:
 		return errors.New("unsupported message kind")
 	}
@@ -160,6 +164,10 @@ func validateMessageDraft(draft domain.MessageDraft) error {
 		seenInstances[id] = struct{}{}
 	}
 	return nil
+}
+
+func validAgentState(value string) bool {
+	return value == "running" || value == "relax" || value == "error"
 }
 
 func pruneMessageFile(file *messageFile, now time.Time) bool {

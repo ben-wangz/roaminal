@@ -41,6 +41,10 @@ func (s *Server) newAPIRouter() http.Handler {
 	})
 	if s.notifications != nil {
 		mux.Handle(api.HTTPPrefix+"/notifications/config", protected(http.MethodGet, s.notificationConfig))
+		mux.Handle(api.HTTPPrefix+"/notifications/preferences", methodRoute{
+			http.MethodGet: s.authenticatedRoute(s.listNotificationPreferences),
+			http.MethodPut: s.authenticatedRoute(s.updateNotificationPreference),
+		})
 		mux.Handle(api.HTTPPrefix+"/notifications/subscription", protected(http.MethodPut, s.registerNotificationSubscription))
 		mux.Handle(api.HTTPPrefix+"/notifications/subscription/{subscriptionId}", protected(http.MethodDelete, s.deleteNotificationSubscription))
 		mux.Handle(api.HTTPPrefix+"/notifications/subscriptions", protected(http.MethodDelete, s.deleteNotificationSubscriptions))
@@ -58,7 +62,6 @@ func (s *Server) newAPIRouter() http.Handler {
 		http.MethodPost: s.authenticatedRoute(s.startAgentInitialization),
 	})
 	mux.Handle(api.HTTPPrefix+"/agent/initializations/{initializationId}", protected(http.MethodGet, s.getAgentInitialization))
-	mux.Handle(api.HTTPPrefix+"/agent/events", plain(http.MethodPost, s.agentEvent))
 	mux.Handle(api.HTTPPrefix+"/connection-instances/order", protected(http.MethodPut, s.reorderConnectionInstances))
 	mux.Handle(api.HTTPPrefix+"/connection-instance-groups", methodRoute{
 		http.MethodGet:  s.authenticatedRoute(s.listConnectionInstanceGroups),

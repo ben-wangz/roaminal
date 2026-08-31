@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/hooks"
 	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/model"
 	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/report"
+	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/state"
 	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/tmux"
 )
 
@@ -29,6 +32,8 @@ func main() {
 		err = output(map[string]any{"schemaVersion": model.SchemaVersion, "componentVersion": buildinfo.Version, "binary": "roaminal-agent-hook", "os": runtime.GOOS, "arch": runtime.GOARCH})
 	case "probe":
 		err = probe()
+	case "read-state":
+		err = readState()
 	case "install":
 		err = install()
 	case "hook":
@@ -37,9 +42,13 @@ func main() {
 		err = errors.New("unknown command")
 	}
 	if err != nil {
+		report.LogDiagnostic(homeDir(), "agent_command_failed", map[string]string{"command": command, "error": safeError(err)})
 		failure := map[string]string{"error": safeError(err)}
 		if command == "install" {
 			failure["code"] = installErrorCode(err)
+		}
+		if command == "read-state" {
+			failure["code"] = stateErrorCode(err)
 		}
 		_ = json.NewEncoder(os.Stderr).Encode(failure)
 		os.Exit(1)
@@ -56,22 +65,19 @@ func homeDir() string {
 
 func configPath() string { return filepath.Join(homeDir(), ".roaminal", "agent.json") }
 
-func readConfig() (model.Config, error) {
+func readComponentConfig() (model.ComponentConfig, error) {
 	data, err := readPrivateFile(configPath(), 64*1024)
 	if err != nil {
-		return model.Config{}, err
+		return model.ComponentConfig{}, err
 	}
-	var cfg model.Config
+	var cfg model.ComponentConfig
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&cfg); err != nil {
-		return model.Config{}, err
+		return model.ComponentConfig{}, err
 	}
-	fingerprint := tokenFingerprint(cfg.Token)
-	if cfg.FormatVersion != model.SchemaVersion || cfg.AgentType != "codex" || cfg.Endpoint.Key == "" || cfg.WebhookURL == "" ||
-		cfg.Token == "" || fingerprint == "" || fingerprint != cfg.TokenFingerprint ||
-		cfg.ComponentVersion == "" || cfg.ComponentSHA256 == "" {
-		return model.Config{}, errors.New("invalid agent configuration")
+	if cfg.FormatVersion != model.SchemaVersion || cfg.Provider != model.ProviderCodex || cfg.ComponentVersion == "" || !validChecksum(cfg.ComponentSHA256) {
+		return model.ComponentConfig{}, errors.New("invalid component configuration")
 	}
 	return cfg, nil
 }
@@ -81,31 +87,26 @@ func install() error {
 	if err != nil || len(data) > 64*1024 {
 		return errors.New("install input too large")
 	}
-	var request model.InstallRequest
+	var request model.LocalInstallRequest
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
 		return err
 	}
-	if request.SchemaVersion != model.SchemaVersion || request.Endpoint.Key == "" || request.WebhookURL == "" || request.ComponentVersion == "" || request.ComponentSHA256 == "" || request.TmuxSessionName == "" {
+	if request.SchemaVersion != model.SchemaVersion || request.ComponentVersion == "" || !validChecksum(request.ComponentSHA256) {
 		return errors.New("invalid install request")
 	}
-	if !validChecksum(request.ComponentSHA256) {
-		return errors.New("invalid component checksum")
-	}
-	if request.ReplacementToken != "" {
-		if raw, err := decodeToken(request.ReplacementToken); err != nil || len(raw) != 32 {
-			return errors.New("invalid replacement token")
+	root := filepath.Join(homeDir(), ".roaminal")
+	for _, directory := range []string{
+		root, filepath.Join(root, "bin"), filepath.Join(root, "locks"),
+		filepath.Join(root, "state"), filepath.Join(root, "state", "agents"),
+		filepath.Join(root, "state", "agents", model.ProviderCodex), filepath.Join(root, "logs"),
+	} {
+		if err := ensurePrivateDir(directory); err != nil {
+			return err
 		}
 	}
-	root := filepath.Join(homeDir(), ".roaminal")
-	if err := ensurePrivateDir(root); err != nil {
-		return err
-	}
-	if err := ensurePrivateDir(filepath.Join(root, "bin")); err != nil {
-		return err
-	}
-	if err := ensurePrivateDir(filepath.Join(root, "locks")); err != nil {
+	if err := ensurePrivateDir(filepath.Join(homeDir(), ".codex")); err != nil {
 		return err
 	}
 	lock, err := acquireLock(filepath.Join(root, "locks", "install.lock"), 30*time.Second)
@@ -113,23 +114,9 @@ func install() error {
 		return err
 	}
 	defer lock()
-	current, currentErr := readConfig()
-	if currentErr == nil {
-		if request.ExpectedCurrentTokenFingerprint == "" {
-			return errors.New("binding_changed")
-		}
-		if current.Endpoint.Key != request.Endpoint.Key {
-			return errors.New("endpoint_conflict")
-		}
-		if current.TokenFingerprint != request.ExpectedCurrentTokenFingerprint {
-			return errors.New("binding_changed")
-		}
-	} else if !os.IsNotExist(currentErr) {
-		return currentErr
-	} else if request.ExpectedCurrentTokenFingerprint != "" {
-		return errors.New("binding_changed")
-	}
-	if currentErr == nil && current.ComponentVersion != "" && componentVersionGreater(current.ComponentVersion, request.ComponentVersion) {
+
+	current, currentErr := readComponentConfig()
+	if currentErr == nil && componentVersionGreater(current.ComponentVersion, request.ComponentVersion) {
 		return errors.New("component downgrade")
 	}
 	if checksum, checksumErr := executableChecksum(os.Args[0]); checksumErr != nil || checksum != request.ComponentSHA256 {
@@ -138,112 +125,170 @@ func install() error {
 	if err := installBinaryIfNeeded(filepath.Join(root, "bin", "roaminal-agent-hook"), request.ComponentSHA256); err != nil {
 		return err
 	}
-	if err := ensurePrivateDir(filepath.Join(homeDir(), ".codex")); err != nil {
-		return err
-	}
 	if err := hooks.InstallHooks(homeDir()); err != nil {
 		return err
 	}
-	token := request.ReplacementToken
-	if token == "" && currentErr == nil {
-		token = current.Token
+	config := model.ComponentConfig{
+		FormatVersion: model.SchemaVersion, Provider: model.ProviderCodex,
+		ComponentVersion: request.ComponentVersion, ComponentSHA256: request.ComponentSHA256,
+		InstalledAt: time.Now().UTC(),
 	}
-	if token == "" {
-		return errors.New("replacement token is required")
-	}
-	fingerprint := tokenFingerprint(token)
-	cfg := model.Config{
-		FormatVersion: model.SchemaVersion, AgentType: "codex", Endpoint: request.Endpoint, WebhookURL: request.WebhookURL,
-		Token: token, TokenFingerprint: fingerprint, ComponentVersion: request.ComponentVersion,
-		ComponentSHA256: request.ComponentSHA256, UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
-	}
-	if err := writeConfig(cfg); err != nil {
+	if err := writeComponentConfig(config); err != nil {
 		return err
 	}
 	return output(map[string]any{
 		"schemaVersion": model.SchemaVersion, "result": "installed",
-		"changed":          currentErr != nil || request.ReplacementToken != "",
-		"componentVersion": cfg.ComponentVersion, "componentSha256": cfg.ComponentSHA256,
-		"tokenFingerprint": fingerprint, "endpointKey": cfg.Endpoint.Key,
-		"hooks": "configured", "needsTrust": true,
+		"changed":          currentErr != nil || current.ComponentVersion != request.ComponentVersion || current.ComponentSHA256 != request.ComponentSHA256,
+		"componentVersion": config.ComponentVersion, "componentSha256": config.ComponentSHA256,
+		"provider": model.ProviderCodex, "hooks": "configured", "needsTrust": true,
+		"capabilities": model.StateCapabilities{Running: true, Relax: true, Error: false},
 	})
 }
 
 func probe() error {
-	cfg, err := readConfig()
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
+	config, configErr := readComponentConfig()
 	client, tmuxErr := tmux.New()
-	response := model.ProbeResponse{
-		SchemaVersion: model.SchemaVersion, ComponentVersion: buildinfo.Version,
-		OS: runtime.GOOS, Arch: runtime.GOARCH, TmuxAvailable: tmuxErr == nil,
-		CodexConfig:     fileExists(filepath.Join(homeDir(), ".codex", "hooks.json")),
-		HooksConfigured: hooks.Configured(homeDir()),
-	}
-	if err == nil {
-		response.TokenFingerprint = cfg.TokenFingerprint
-		response.EndpointKey = cfg.Endpoint.Key
-		response.ComponentSHA256 = cfg.ComponentSHA256
-	}
+	response := probeResponse(config, configErr, tmuxErr)
 	if client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		info, discoverErr := client.Discover(ctx)
 		cancel()
 		if discoverErr == nil {
-			return output(map[string]any{
-				"schemaVersion": response.SchemaVersion, "componentVersion": response.ComponentVersion,
-				"componentSha256": response.ComponentSHA256, "endpointKey": response.EndpointKey,
-				"os": response.OS, "arch": response.Arch, "tmuxAvailable": response.TmuxAvailable,
-				"codexConfig": response.CodexConfig, "hooksConfigured": response.HooksConfigured,
-				"tokenFingerprint": response.TokenFingerprint, "tmux": info,
-			})
+			response["tmux"] = info
+			response["runtimeId"] = tmux.RuntimeID(info)
 		}
 	}
 	return output(response)
 }
 
-func hook() error {
-	input, err := report.ReadInput(os.Stdin)
-	if err != nil {
-		return output(map[string]any{})
+func probeResponse(config model.ComponentConfig, configErr, tmuxErr error) map[string]any {
+	response := map[string]any{
+		"schemaVersion": model.SchemaVersion, "componentVersion": buildinfo.Version,
+		"provider": model.ProviderCodex,
+		"os":       runtime.GOOS, "arch": runtime.GOARCH, "tmuxAvailable": tmuxErr == nil,
+		"codexConfig":     fileExists(filepath.Join(homeDir(), ".codex", "hooks.json")),
+		"hooksConfigured": hooks.Configured(homeDir()), "configured": configErr == nil,
+		"capabilities": model.StateCapabilities{Running: true, Relax: true, Error: false},
 	}
-	if !report.KnownEvent(input["hook_event_name"]) {
-		return output(map[string]any{})
+	if configErr == nil {
+		response["componentVersion"] = config.ComponentVersion
+		response["componentSha256"] = config.ComponentSHA256
 	}
-	cfg, err := readConfig()
-	if err != nil {
-		return output(map[string]any{})
+	return response
+}
+
+func readState() error {
+	if len(os.Args) != 4 || os.Args[2] != "--session" || strings.TrimSpace(os.Args[3]) == "" {
+		return errors.New("read-state requires --session")
 	}
 	client, err := tmux.New()
 	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	info, err := client.DiscoverSession(ctx, os.Args[3])
+	if err != nil {
+		return fmt.Errorf("tmux session unavailable: %w", err)
+	}
+	file, err := state.Read(homeDir(), info)
+	if err != nil {
+		return err
+	}
+	return output(file)
+}
+
+func hook() error {
+	home := homeDir()
+	input, err := report.ReadInput(os.Stdin)
+	if err != nil {
+		report.LogDiagnostic(home, "hook_input_failed", map[string]string{"error": safeError(err)})
+		return output(map[string]any{})
+	}
+	eventName := input["hook_event_name"]
+	if !report.KnownEvent(eventName) {
+		report.LogDiagnostic(home, "hook_event_ignored", map[string]string{"event_name": eventName})
+		return output(map[string]any{})
+	}
+	report.LogDiagnostic(home, "hook_started", map[string]string{"event_name": eventName})
+	client, err := tmux.New()
+	if err != nil {
+		report.LogDiagnostic(home, "hook_tmux_unavailable", map[string]string{"event_name": eventName, "error": safeError(err)})
 		return output(map[string]any{})
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	info, err := client.Discover(ctx)
-	if err != nil {
-		cancel()
-		return output(map[string]any{})
-	}
-	claimed, err := client.Claim(ctx, info, input["session_id"])
-	if err != nil || !claimed {
-		cancel()
-		return output(map[string]any{})
-	}
-	sequence, err := client.NextSequence(ctx, info)
-	if err != nil {
-		cancel()
-		return output(map[string]any{})
-	}
-	event := report.NewEvent(input, info, cfg.Endpoint.Key, cfg.ComponentVersion, sequence)
-	if err := report.WriteSpool(homeDir(), event, info); err != nil {
-		cancel()
-		return output(map[string]any{})
-	}
-	report.Drain(ctx, cfg, homeDir(), info)
-	if input["hook_event_name"] == "SessionEnd" {
-		_ = client.Release(ctx, info, input["session_id"])
-	}
 	cancel()
+	if err != nil {
+		report.LogDiagnostic(home, "hook_tmux_discovery_failed", map[string]string{"event_name": eventName, "error": safeError(err)})
+		return output(map[string]any{})
+	}
+	report.LogDiagnostic(home, "hook_tmux_discovered", map[string]string{
+		"event_name": eventName, "session_name": info.SessionName, "session_id": info.SessionID,
+		"session_created": formatInt(info.SessionCreated), "pane_id": info.PaneID,
+		"socket_fingerprint": info.SocketFingerprint, "runtime_id": tmux.RuntimeID(info),
+	})
+	standardState, ok := report.StateFor(eventName, input["source"], input["reason"])
+	if !ok {
+		report.LogDiagnostic(home, "hook_event_ignored", map[string]string{"event_name": eventName})
+		return output(map[string]any{})
+	}
+	record := model.StateRecord{
+		Timestamp: time.Now().UTC(), State: standardState, EventName: eventName,
+		Source: input["source"], Reason: input["reason"], ProviderSessionID: input["session_id"],
+		TurnID: input["turn_id"], ToolUseID: input["tool_use_id"],
+	}
+	updated, err := state.Update(home, info, installedComponentVersion(home), record)
+	if err != nil {
+		report.LogDiagnostic(home, "hook_state_update_failed", map[string]string{
+			"event_name": eventName, "state": standardState, "runtime_id": tmux.RuntimeID(info), "error": safeError(err),
+		})
+		return output(map[string]any{})
+	}
+	report.LogDiagnostic(home, "hook_state_updated", map[string]string{
+		"event_name": eventName, "state": standardState, "runtime_id": updated.RuntimeID,
+		"index": formatUint(updated.LatestIndex),
+	})
 	return output(map[string]any{})
 }
+
+func installedComponentVersion(home string) string {
+	config, err := readPrivateComponentConfig(home)
+	if err == nil && config.ComponentVersion != "" {
+		return config.ComponentVersion
+	}
+	return buildinfo.Version
+}
+
+func readPrivateComponentConfig(home string) (model.ComponentConfig, error) {
+	data, err := readPrivateFile(filepath.Join(home, ".roaminal", "agent.json"), 64*1024)
+	if err != nil {
+		return model.ComponentConfig{}, err
+	}
+	var config model.ComponentConfig
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&config); err != nil || config.Provider != model.ProviderCodex || config.FormatVersion != model.SchemaVersion {
+		return model.ComponentConfig{}, errors.New("invalid component configuration")
+	}
+	return config, nil
+}
+
+func stateErrorCode(err error) string {
+	if strings.Contains(strings.ToLower(err.Error()), "tmux session") {
+		return "tmux_session_missing"
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return "state_missing"
+	}
+	if errors.Is(err, state.ErrRuntimeMismatch) {
+		return "state_runtime_mismatch"
+	}
+	if errors.Is(err, state.ErrInvalidState) {
+		return "state_invalid"
+	}
+	return "state_read_failed"
+}
+
+func formatInt(value int64) string   { return strconv.FormatInt(value, 10) }
+func formatUint(value uint64) string { return strconv.FormatUint(value, 10) }

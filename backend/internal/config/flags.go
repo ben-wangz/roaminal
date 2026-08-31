@@ -34,7 +34,7 @@ func applyArgs(c *Config, args []string) error {
 		key, value, hasValue := strings.Cut(arg, "=")
 		if !hasValue {
 			switch key {
-			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-webhook-base-url", "--agent-allow-insecure-webhook", "--agent-hooks-dir", "--web-push-vapid-public-key", "--web-push-vapid-private-key", "--web-push-subject":
+			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-hooks-dir", "--web-push-vapid-public-key", "--web-push-vapid-private-key", "--web-push-subject":
 				if i+1 >= len(args) {
 					return fmt.Errorf("missing value for %s", key)
 				}
@@ -107,14 +107,6 @@ func applyArgs(c *Config, args []string) error {
 				return fmt.Errorf("client diagnostics: %w", err)
 			}
 			c.ClientDiagnosticsEnabled = b
-		case "--agent-webhook-base-url":
-			c.AgentWebhookBaseURL = value
-		case "--agent-allow-insecure-webhook":
-			b, err := parseBool(value)
-			if err != nil {
-				return fmt.Errorf("agent insecure webhook: %w", err)
-			}
-			c.AgentAllowInsecureWebhook = b
 		case "--agent-hooks-dir":
 			c.AgentHooksDir = value
 		case "--web-push-vapid-public-key":
@@ -188,12 +180,6 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := set("ROAMINAL_CLIENT_DIAGNOSTICS_ENABLED", func(v string) error { b, err := parseBool(v); c.ClientDiagnosticsEnabled = b; return err }); err != nil {
-		return err
-	}
-	if err := set("ROAMINAL_AGENT_WEBHOOK_BASE_URL", func(v string) error { c.AgentWebhookBaseURL = v; return nil }); err != nil {
-		return err
-	}
-	if err := set("ROAMINAL_AGENT_ALLOW_INSECURE_WEBHOOK", func(v string) error { b, err := parseBool(v); c.AgentAllowInsecureWebhook = b; return err }); err != nil {
 		return err
 	}
 	if err := set("ROAMINAL_AGENT_HOOKS_DIR", func(v string) error { c.AgentHooksDir = v; return nil }); err != nil {

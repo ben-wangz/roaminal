@@ -1,26 +1,33 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentMessage } from '../messages/message-api';
-import { notificationState, notifyAgentMessage, notifyRuntimeMessage } from './notification-service';
+import { clearNotificationPreferences, notificationState, notifyAgentMessage, setNotificationPreferences } from './notification-service';
 
 function message(overrides: Partial<AgentMessage> = {}): AgentMessage {
   return {
     messageId: 'message-1',
     sequence: 1,
-    kind: 'codex_turn_completed',
+    kind: 'agent_state_transition',
     severity: 'success',
-    text: 'Codex turn finished',
+    text: 'Agent state: running -> relax',
     occurredAt: new Date(1_700_000_000_000).toISOString(),
     receivedAt: new Date(1_700_000_000_000).toISOString(),
     connectionInstanceIds: ['instance-1'],
     fallbackLabel: 'coder@private.example:22 / tmux:private-session',
     connectionLabel: 'pve-roaminal',
+    connectionDefinitionIds: ['definition-1'],
+    tmuxSessionName: 'team',
+    agentStateFrom: 'running',
+    agentStateTo: 'relax',
     read: false,
     ...overrides,
   };
 }
 
 describe('browser notification service', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    clearNotificationPreferences();
+    vi.unstubAllGlobals();
+  });
 
   it('requires explicit opt-in and sends only safe presentation text', async () => {
     vi.stubGlobal('window', undefined);
@@ -56,6 +63,9 @@ describe('browser notification service', () => {
     });
 
     const candidate = message();
+    setNotificationPreferences([{
+      connectionDefinitionId: 'definition-1', tmuxSessionName: 'team', enabled: true, runningToRelax: true, runningToError: true,
+    }]);
     expect(notificationState().status).toBe('enable');
     notifyAgentMessage(candidate);
     await Promise.resolve();
@@ -66,12 +76,15 @@ describe('browser notification service', () => {
     await vi.waitFor(() => expect(worker.postMessage).toHaveBeenCalled(), { timeout: 1000 });
     expect(worker.postMessage).toHaveBeenCalledWith({
       type: 'roaminal-show-notification',
-      payload: { messageId: 'message-1', severity: 'success', body: 'pve-roaminal: Codex turn finished' },
+      payload: { messageId: 'message-1', severity: 'success', body: 'pve-roaminal: Agent state: running -> relax' },
     });
     expect(JSON.stringify(worker.postMessage.mock.calls)).not.toContain('private.example');
     expect(JSON.stringify(worker.postMessage.mock.calls)).not.toContain('private-session');
 
-    notifyRuntimeMessage('Command completed');
-    await vi.waitFor(() => expect(registration.showNotification).toHaveBeenCalledWith('Roaminal', expect.objectContaining({ body: 'Command completed' })), { timeout: 1000 });
+    const callsAfterAllowedTransition = worker.postMessage.mock.calls.length;
+    notifyAgentMessage(message({ agentStateFrom: 'relax', agentStateTo: 'running' }));
+    notifyAgentMessage(message({ kind: 'codex_turn_completed', agentStateFrom: undefined, agentStateTo: undefined }));
+    await Promise.resolve();
+    expect(worker.postMessage.mock.calls.length).toBe(callsAfterAllowedTransition);
   });
 });

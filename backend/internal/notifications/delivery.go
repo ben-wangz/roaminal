@@ -47,6 +47,15 @@ func (s *Service) worker() {
 
 func (s *Service) dispatch(job notificationJob) {
 	started := s.clock.Now()
+	preferences, err := s.preferencesFor(s.context)
+	if err != nil {
+		log.Printf("level=INFO event=web_push_preference_list_failed error_type=%T", err)
+		return
+	}
+	if !allowsPreference(job.record, preferences) {
+		log.Printf("level=INFO event=web_push_delivery_suppressed message_id=%q reason=%q", job.record.MessageID, "notification_preference")
+		return
+	}
 	records, err := s.repository.ListPushSubscriptions(s.context)
 	if err != nil {
 		log.Printf("level=INFO event=web_push_delivery_list_failed error_type=%T", err)
@@ -69,6 +78,21 @@ func (s *Service) dispatch(job notificationJob) {
 		delivered++
 	}
 	log.Printf("level=INFO event=web_push_delivery_completed subscriptions=%d delivered=%d failed=%d removed=%d duration_ms=%d", len(records), delivered, failed, removed, s.clock.Since(started).Milliseconds())
+}
+
+func (s *Service) preferencesFor(ctx context.Context) (map[string]domain.NotificationPreference, error) {
+	if s.preferences == nil || s.userKey == "" {
+		return nil, ErrPreferenceStoreUnavailable
+	}
+	values, err := s.preferences.ListNotificationPreferences(ctx, s.userKey)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]domain.NotificationPreference, len(values))
+	for _, value := range values {
+		result[value.ConnectionDefinitionID+"\x00"+value.TmuxSessionName] = value
+	}
+	return result, nil
 }
 
 func (s *Service) sendWithRetry(payload []byte, record domain.PushSubscriptionRecord) (SendOutcome, error) {
@@ -154,7 +178,26 @@ func (s *Service) Close() error {
 }
 
 func eligible(kind string) bool {
-	return kind == "codex_turn_completed" || kind == "codex_turn_failed"
+	return kind == "agent_state_transition"
+}
+
+func allowsPreference(record domain.MessageRecord, preferences map[string]domain.NotificationPreference) bool {
+	if record.Kind != "agent_state_transition" || record.AgentStateFrom != "running" {
+		return false
+	}
+	for _, definitionID := range record.ConnectionDefinitionIDs {
+		preference, ok := preferences[definitionID+"\x00"+record.TmuxSessionName]
+		if !ok || !preference.Enabled {
+			continue
+		}
+		if record.AgentStateTo == "relax" && preference.RunningToRelax {
+			return true
+		}
+		if record.AgentStateTo == "error" && preference.RunningToError {
+			return true
+		}
+	}
+	return false
 }
 
 type notificationPayloadData struct {
@@ -165,10 +208,7 @@ type notificationPayloadData struct {
 }
 
 func notificationPayload(record domain.MessageRecord) ([]byte, error) {
-	body := "Codex turn finished"
-	if record.Kind == "codex_turn_failed" {
-		body = "Codex turn failed"
-	}
+	body := "Agent state: " + record.AgentStateFrom + " -> " + record.AgentStateTo
 	if label := strings.TrimSpace(record.ConnectionLabel); domain.IsSafeConnectionLabel(label) {
 		body = label + ": " + body
 	}

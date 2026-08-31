@@ -149,7 +149,7 @@ func (s *Service) existingProbe(ctx context.Context, id string) (remoteProbe, er
 	}
 	var value remoteProbe
 	if json.Unmarshal(result.Output, &value) == nil {
-		value.Configured = value.TokenFingerprint != ""
+		value.Configured = value.Configured || value.ComponentSHA256 != ""
 		return value, nil
 	}
 	if strings.Contains(string(result.Output), "__configured__") {

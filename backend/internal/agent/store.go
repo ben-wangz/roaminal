@@ -2,23 +2,20 @@ package agent
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 // Agent state has its own component schema; the enclosing persistence schema
-// version does not change the hook/telemetry record format.
+// version does not change the persisted Agent projection format. Legacy
+// webhook fields are accepted only so an existing 0.2 store can be opened and
+// cleaned after the local component is confirmed.
 const agentStoreSchemaVersion = 1
 
 type fileState struct {
@@ -121,30 +118,6 @@ func (s *Store) Update(key string, fn func(*EndpointRecord) error) error {
 	return nil
 }
 
-func (s *Store) FindToken(token string, now time.Time) (string, EndpointRecord, bool) {
-	hash := tokenHash(token)
-	if len(hash) != 64 {
-		return "", EndpointRecord{}, false
-	}
-	digest, err := hex.DecodeString(hash)
-	if err != nil {
-		return "", EndpointRecord{}, false
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for key, record := range s.state.Endpoints {
-		for _, candidate := range []string{record.ActiveTokenHash, record.PendingTokenHash} {
-			if equalHash(digest, candidate) {
-				return key, cloneRecord(record), true
-			}
-		}
-		if !expired(record.PreviousTokenExpiresAt, now) && equalHash(digest, record.PreviousTokenHash) {
-			return key, cloneRecord(record), true
-		}
-	}
-	return "", EndpointRecord{}, false
-}
-
 func (s *Store) saveLocked() error {
 	s.state.FormatVersion = agentStoreSchemaVersion
 	data, err := json.MarshalIndent(s.state, "", "  ")
@@ -182,28 +155,6 @@ func (s *Store) saveLocked() error {
 	}
 	defer directory.Close()
 	return directory.Sync()
-}
-
-func tokenHash(token string) string {
-	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) != 32 {
-		return ""
-	}
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:])
-}
-
-func equalHash(raw []byte, encoded string) bool {
-	candidate, err := hex.DecodeString(encoded)
-	return err == nil && len(candidate) == len(raw) && subtle.ConstantTimeCompare(raw, candidate) == 1
-}
-
-func expired(value string, now time.Time) bool {
-	if value == "" {
-		return true
-	}
-	when, err := time.Parse(time.RFC3339Nano, value)
-	return err != nil || !now.Before(when)
 }
 
 func cloneRecord(value EndpointRecord) EndpointRecord {

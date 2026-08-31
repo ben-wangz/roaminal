@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/model"
 )
 
 func TestInstallBinaryIfNeededRepairsOwnerPermissions(t *testing.T) {
@@ -62,5 +64,15 @@ func TestInstallErrorCodeClassifiesStableFailures(t *testing.T) {
 		if got := installErrorCode(errors.New(test.message)); got != test.want {
 			t.Fatalf("installErrorCode(%q) = %q, want %q", test.message, got, test.want)
 		}
+	}
+}
+
+func TestProbeResponseIncludesProviderForBackendVerification(t *testing.T) {
+	response := probeResponse(model.ComponentConfig{ComponentVersion: "1", ComponentSHA256: "checksum"}, nil, nil)
+	if response["provider"] != model.ProviderCodex {
+		t.Fatalf("probe provider = %#v, want %q", response["provider"], model.ProviderCodex)
+	}
+	if response["componentVersion"] != "1" || response["componentSha256"] != "checksum" {
+		t.Fatalf("probe component metadata = %#v", response)
 	}
 }

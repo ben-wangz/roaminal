@@ -13,3 +13,16 @@ type PushSubscriptionRecord struct {
 	CreatedAt               time.Time `json:"createdAt"`
 	UpdatedAt               time.Time `json:"updatedAt"`
 }
+
+// NotificationPreference is the durable preference for one
+// connection-definition/tmux-session pair. UserKey is an internal stable
+// identity and is never returned by an HTTP handler.
+type NotificationPreference struct {
+	UserKey                string    `json:"userKey"`
+	ConnectionDefinitionID string    `json:"connectionDefinitionId"`
+	TmuxSessionName        string    `json:"tmuxSessionName"`
+	Enabled                bool      `json:"enabled"`
+	RunningToRelax         bool      `json:"runningToRelax"`
+	RunningToError         bool      `json:"runningToError"`
+	UpdatedAt              time.Time `json:"updatedAt"`
+}

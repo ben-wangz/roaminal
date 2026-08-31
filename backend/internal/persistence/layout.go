@@ -74,6 +74,9 @@ func newStore(root string) (*Store, error) {
 	if err := store.initializePushSubscriptions(); err != nil {
 		return nil, err
 	}
+	if err := store.initializeNotificationPreferences(); err != nil {
+		return nil, err
+	}
 	return store, nil
 }
 
@@ -104,6 +107,11 @@ func stateRootHasData(root string) (bool, error) {
 		return false, err
 	}
 	if _, err := os.Stat(filepath.Join(root, "push-subscriptions.json")); err == nil {
+		return true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if _, err := os.Stat(filepath.Join(root, "notification-preferences.json")); err == nil {
 		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, err

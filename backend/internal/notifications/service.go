@@ -14,9 +14,11 @@ import (
 )
 
 var (
-	ErrUnavailable         = errors.New("web push is unavailable")
-	ErrStoreUnavailable    = errors.New("web push subscription store unavailable")
-	ErrInvalidSubscription = errors.New("web push subscription is invalid")
+	ErrUnavailable                = errors.New("web push is unavailable")
+	ErrStoreUnavailable           = errors.New("web push subscription store unavailable")
+	ErrInvalidSubscription        = errors.New("web push subscription is invalid")
+	ErrInvalidPreference          = errors.New("notification preference is invalid")
+	ErrPreferenceStoreUnavailable = errors.New("notification preference store unavailable")
 )
 
 const (
@@ -40,15 +42,17 @@ type SendOutcome struct {
 }
 
 type Options struct {
-	PublicKey     string
-	PrivateKey    string
-	Subject       string
-	Sender        Sender
-	Clock         ports.Clock
-	QueueSize     int
-	RetryAttempts int
-	RetryDelay    time.Duration
-	SendTimeout   time.Duration
+	PublicKey            string
+	PrivateKey           string
+	Subject              string
+	Sender               Sender
+	PreferenceRepository ports.NotificationPreferenceRepository
+	UserKey              string
+	Clock                ports.Clock
+	QueueSize            int
+	RetryAttempts        int
+	RetryDelay           time.Duration
+	SendTimeout          time.Duration
 }
 
 type ConfigResponse struct {
@@ -66,18 +70,36 @@ type SubscriptionResult struct {
 	ID string `json:"subscriptionId"`
 }
 
+type Preference struct {
+	ConnectionDefinitionID string `json:"connectionDefinitionId"`
+	TmuxSessionName        string `json:"tmuxSessionName"`
+	Enabled                bool   `json:"enabled"`
+	RunningToRelax         bool   `json:"runningToRelax"`
+	RunningToError         bool   `json:"runningToError"`
+}
+
+type PreferenceInput struct {
+	ConnectionDefinitionID string
+	TmuxSessionName        string
+	Enabled                bool
+	RunningToRelax         bool
+	RunningToError         bool
+}
+
 type notificationJob struct {
 	record  domain.MessageRecord
 	payload []byte
 }
 
 type Service struct {
-	repository ports.PushSubscriptionRepository
-	ids        ports.IDGenerator
-	clock      ports.Clock
-	sender     Sender
-	publicKey  string
-	enabled    bool
+	repository  ports.PushSubscriptionRepository
+	preferences ports.NotificationPreferenceRepository
+	userKey     string
+	ids         ports.IDGenerator
+	clock       ports.Clock
+	sender      Sender
+	publicKey   string
+	enabled     bool
 
 	queue         chan notificationJob
 	retryAttempts int
@@ -131,6 +153,8 @@ func New(repository ports.PushSubscriptionRepository, ids ports.IDGenerator, opt
 	enabled := sender != nil && hasPublicKey
 	service := &Service{
 		repository:    repository,
+		preferences:   options.PreferenceRepository,
+		userKey:       strings.TrimSpace(options.UserKey),
 		ids:           ids,
 		clock:         options.Clock,
 		sender:        sender,

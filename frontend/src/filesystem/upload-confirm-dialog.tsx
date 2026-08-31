@@ -28,15 +28,15 @@ export function UploadConfirmDialog({ target, onClose, onConfirm }: Props) {
           <div className="upload-source-actions">
             <button className="secondary" type="button" onClick={() => fileInput.current?.click()}>Choose files</button>
             <button className="secondary" type="button" onClick={() => folderInput.current?.click()}>Choose folder</button>
-            <input ref={fileInput} type="file" multiple hidden onChange={choose} />
-            <input ref={folderInput} type="file" hidden onChange={choose} {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)} />
+            <input id="upload-files" name="files" ref={fileInput} type="file" multiple hidden onChange={choose} />
+            <input id="upload-folder" name="folder" ref={folderInput} type="file" hidden onChange={choose} {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)} />
             <p>Select local files or a folder. No data is sent before confirmation.</p>
           </div>
         ) : (
           <>
             <div className="upload-summary"><strong>{files.length} file{files.length === 1 ? '' : 's'}</strong><span>{formatSize(total)}</span><button className="text-button" type="button" onClick={() => setFiles([])}>Choose again</button></div>
             <ul className="upload-file-list">{files.slice(0, 8).map((item) => <li key={item.relativePath} title={item.relativePath}>{item.relativePath}</li>)}{files.length > 8 && <li>and {files.length - 8} more...</li>}</ul>
-            <label>Conflict policy<select value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><option value="refuse">Do not overwrite</option><option value="overwrite">Overwrite existing files</option><option value="update-if-newer">Only update newer files</option></select></label>
+            <label>Conflict policy<select id="upload-conflict-policy" name="conflictPolicy" value={policy} onChange={(event) => setPolicy(event.target.value as typeof policy)}><option value="refuse">Do not overwrite</option><option value="overwrite">Overwrite existing files</option><option value="update-if-newer">Only update newer files</option></select></label>
           </>
         )}
         <footer><button className="text-button" type="button" onClick={onClose}>Cancel</button><button className="primary" type="button" disabled={!files.length} onClick={() => onConfirm(files, policy)}>Confirm upload</button></footer>

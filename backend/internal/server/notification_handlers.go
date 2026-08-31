@@ -17,8 +17,45 @@ type notificationSubscriptionRequest struct {
 	} `json:"keys"`
 }
 
+type notificationPreferenceRequest struct {
+	ConnectionDefinitionID string `json:"connectionDefinitionId"`
+	TmuxSessionName        string `json:"tmuxSessionName"`
+	Enabled                bool   `json:"enabled"`
+	RunningToRelax         bool   `json:"runningToRelax"`
+	RunningToError         bool   `json:"runningToError"`
+}
+
+type notificationPreferenceCollectionResponse struct {
+	Preferences []notifications.Preference `json:"preferences"`
+}
+
 func (s *Server) notificationConfig(w http.ResponseWriter, _ *http.Request, _ string) {
 	writeJSON(w, http.StatusOK, s.notifications.Configuration())
+}
+
+func (s *Server) listNotificationPreferences(w http.ResponseWriter, r *http.Request, _ string) {
+	preferences, err := s.notifications.Preferences(r.Context())
+	if err != nil {
+		writeNotificationError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, notificationPreferenceCollectionResponse{Preferences: preferences})
+}
+
+func (s *Server) updateNotificationPreference(w http.ResponseWriter, r *http.Request, _ string) {
+	var body notificationPreferenceRequest
+	if err := decodeJSON(w, r, &body); err != nil {
+		return
+	}
+	preference, err := s.notifications.SetPreference(r.Context(), notifications.PreferenceInput{
+		ConnectionDefinitionID: body.ConnectionDefinitionID, TmuxSessionName: body.TmuxSessionName,
+		Enabled: body.Enabled, RunningToRelax: body.RunningToRelax, RunningToError: body.RunningToError,
+	})
+	if err != nil {
+		writeNotificationError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preference)
 }
 
 func (s *Server) registerNotificationSubscription(w http.ResponseWriter, r *http.Request, sessionID string) {
@@ -61,6 +98,10 @@ func writeNotificationError(w http.ResponseWriter, err error) {
 		writeCodedErrorWithRetry(w, http.StatusServiceUnavailable, "Browser notifications are not configured.", "notifications_unavailable", nil, &retryable)
 	case errors.Is(err, notifications.ErrStoreUnavailable):
 		writeCodedError(w, http.StatusServiceUnavailable, "Browser notification storage is unavailable.", "notification_store_unavailable", nil)
+	case errors.Is(err, notifications.ErrInvalidPreference):
+		writeCodedError(w, http.StatusBadRequest, "The notification preference is invalid.", "notification_preference_invalid", nil)
+	case errors.Is(err, notifications.ErrPreferenceStoreUnavailable):
+		writeCodedError(w, http.StatusServiceUnavailable, "Notification preference storage is unavailable.", "notification_preference_store_unavailable", nil)
 	default:
 		writeError(w, http.StatusInternalServerError, "internal error")
 	}

@@ -221,6 +221,8 @@ export function ConnectionManager({ connections, onConnect, onGenerated, onOpenW
             <label className="manager-search">
               <span>Filter</span>
               <input
+                id="connection-manager-filter"
+                name="connectionFilter"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Alias or destination"

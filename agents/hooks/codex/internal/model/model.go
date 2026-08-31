@@ -4,47 +4,62 @@ import "time"
 
 const SchemaVersion = 1
 
-type Config struct {
-	FormatVersion    int      `json:"formatVersion"`
-	AgentType        string   `json:"agentType"`
-	Endpoint         Endpoint `json:"endpoint"`
-	WebhookURL       string   `json:"webhookUrl"`
-	Token            string   `json:"token"`
-	TokenFingerprint string   `json:"tokenFingerprint"`
-	ComponentVersion string   `json:"componentVersion"`
-	ComponentSHA256  string   `json:"componentSha256"`
-	UpdatedAt        string   `json:"updatedAt"`
+const (
+	ProviderCodex   = "codex"
+	StateRunning    = "running"
+	StateRelax      = "relax"
+	StateError      = "error"
+	MaxStateRecords = 128
+)
+
+// ComponentConfig is local installation metadata. It deliberately contains
+// no Roaminal endpoint, connection instance, URL, or credential.
+type ComponentConfig struct {
+	FormatVersion    int       `json:"formatVersion"`
+	Provider         string    `json:"provider"`
+	ComponentVersion string    `json:"componentVersion"`
+	ComponentSHA256  string    `json:"componentSha256"`
+	InstalledAt      time.Time `json:"installedAt"`
 }
 
-type InstallRequest struct {
-	SchemaVersion                   int      `json:"schemaVersion"`
-	Endpoint                        Endpoint `json:"endpoint"`
-	WebhookURL                      string   `json:"webhookUrl"`
-	ExpectedCurrentTokenFingerprint string   `json:"expectedCurrentTokenFingerprint"`
-	ReplacementToken                string   `json:"replacementToken,omitempty"`
-	ComponentVersion                string   `json:"componentVersion"`
-	ComponentSHA256                 string   `json:"componentSha256"`
-	TmuxSessionName                 string   `json:"tmuxSessionName"`
+type StateCapabilities struct {
+	Running bool `json:"running"`
+	Relax   bool `json:"relax"`
+	Error   bool `json:"error"`
 }
 
-type Endpoint struct {
-	Key  string `json:"key"`
-	User string `json:"user"`
-	Host string `json:"host"`
-	Port int    `json:"port"`
+type StateRecord struct {
+	Index             uint64    `json:"index"`
+	Timestamp         time.Time `json:"timestamp"`
+	State             string    `json:"state"`
+	EventName         string    `json:"eventName,omitempty"`
+	Source            string    `json:"source,omitempty"`
+	Reason            string    `json:"reason,omitempty"`
+	ProviderSessionID string    `json:"providerSessionId,omitempty"`
+	TurnID            string    `json:"turnId,omitempty"`
+	ToolUseID         string    `json:"toolUseId,omitempty"`
 }
 
-type ProbeResponse struct {
+type StateFile struct {
+	SchemaVersion    int               `json:"schemaVersion"`
+	Provider         string            `json:"provider"`
+	ComponentVersion string            `json:"componentVersion"`
+	Capabilities     StateCapabilities `json:"capabilities"`
+	Tmux             Tmux              `json:"tmux"`
+	RuntimeID        string            `json:"runtimeId"`
+	State            string            `json:"state"`
+	LatestIndex      uint64            `json:"latestIndex"`
+	Records          []StateRecord     `json:"records"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+}
+
+// LocalInstallRequest is the only install contract sent by Roaminal. It has no
+// connection or network identity because the installed component is shared by
+// the user's local Codex configuration.
+type LocalInstallRequest struct {
 	SchemaVersion    int    `json:"schemaVersion"`
 	ComponentVersion string `json:"componentVersion"`
-	ComponentSHA256  string `json:"componentSha256,omitempty"`
-	EndpointKey      string `json:"endpointKey,omitempty"`
-	OS               string `json:"os"`
-	Arch             string `json:"arch"`
-	TmuxAvailable    bool   `json:"tmuxAvailable"`
-	CodexConfig      bool   `json:"codexConfig"`
-	HooksConfigured  bool   `json:"hooksConfigured"`
-	TokenFingerprint string `json:"tokenFingerprint,omitempty"`
+	ComponentSHA256  string `json:"componentSha256"`
 }
 
 type Tmux struct {
@@ -53,31 +68,4 @@ type Tmux struct {
 	SessionCreated    int64  `json:"sessionCreated"`
 	PaneID            string `json:"paneId"`
 	SocketFingerprint string `json:"socketFingerprint"`
-}
-
-type Codex struct {
-	SessionID      string `json:"sessionId,omitempty"`
-	TurnID         string `json:"turnId,omitempty"`
-	ToolUseID      string `json:"toolUseId,omitempty"`
-	AgentProcessID string `json:"agentProcessId,omitempty"`
-}
-
-type EventSource struct {
-	Source string `json:"source,omitempty"`
-	Reason string `json:"reason,omitempty"`
-}
-
-type Event struct {
-	EndpointKey      string      `json:"-"`
-	SchemaVersion    int         `json:"schemaVersion"`
-	AgentType        string      `json:"agentType"`
-	ComponentVersion string      `json:"componentVersion"`
-	EventID          string      `json:"eventId"`
-	EventName        string      `json:"eventName"`
-	Activity         string      `json:"activity"`
-	Sequence         uint64      `json:"sequence"`
-	OccurredAt       time.Time   `json:"occurredAt"`
-	Tmux             Tmux        `json:"tmux"`
-	Codex            Codex       `json:"codex,omitempty"`
-	Event            EventSource `json:"event,omitempty"`
 }

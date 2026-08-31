@@ -28,12 +28,12 @@ describe('agentTitle', () => {
 
   it('uses activity labels for a ready component and explains unsupported state', () => {
     expect(agentTitle(agent({ activityLabel: 'Codex turn finished' }))).toBe('Codex turn finished');
-		expect(agentTitle(agent({ support: 'unsupported', supportReason: 'tmux_disabled' }))).toBe('Codex Agent unavailable: tmux disabled');
+    expect(agentTitle(agent({ support: 'unsupported', supportReason: 'tmux_disabled' }))).toBe('Codex Agent unavailable: tmux disabled');
   });
 });
 
 describe('agentVisualState', () => {
-  it('maps setup and telemetry states to robot artwork', () => {
+  it('maps setup and Agent states to robot artwork', () => {
     expect(agentVisualState(agent({ component: 'uninitialized' }))).toBe('sleeping');
     expect(agentVisualState(agent({ component: 'ready', activity: 'unknown' }))).toBe('confusing');
     expect(agentVisualState(agent({ component: 'ready', activity: 'idle' }))).toBe('singing-relax');
@@ -41,7 +41,7 @@ describe('agentVisualState', () => {
     expect(agentVisualState(agent({ component: 'error', errorCode: 'agent_install_failed' }))).toBe('broken');
   });
 
-  it('keeps unavailable telemetry distinct from an installation error', () => {
+  it('keeps unavailable Agent state distinct from an installation error', () => {
     expect(agentVisualState(agent({ component: 'error', errorCode: 'agent_status_unavailable' }))).toBe('confusing');
     expect(agentVisualLabel('busy-working')).toBe('Codex hook busy');
     expect(agentVisualAsset('broken')).toBe('/assets/agents/codex-broken.svg');

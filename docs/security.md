@@ -23,14 +23,13 @@ connections, credential prompts, forwarding, and user-supplied remote
 commands; collector output is bounded, parsed from an allowlist, and never
 persisted. Metrics remain unknown when cgroup ownership cannot be established.
 
-Agent initialization binds an endpoint normalized from SSH user, host, and
-port, then identifies the tmux target by its session name and tmux identity.
-The remote hook stores its bearer token in
-`$HOME/.roaminal/agent.json` with mode `0600`; the backend stores token
-hashes, not raw tokens. Agent events use a strict bounded schema with
-sequence/deduplication checks. Webhook URLs use HTTPS by default; insecure HTTP
-requires an explicit configuration opt-in and is limited to loopback unless
-that policy is deliberately relaxed.
+Agent initialization normalizes the SSH endpoint in the backend and identifies
+the tmux target by its session name and runtime identity. The remote hook stores
+only private component metadata and per-runtime Agent state under
+`$HOME/.roaminal/`, with state and lock files at `0600`. It performs no network
+access and receives no endpoint, connection, or credential configuration. The
+backend reads state only through the live SSH connection instance, validates the
+tmux identity and monotonic index, and persists only the latest projection.
 
 FileSystem access is limited to backend-controlled probes and transfers below
 the resolved root. It has no arbitrary remote-command endpoint.

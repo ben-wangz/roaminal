@@ -73,7 +73,3 @@ type unavailableDefinitionCollectionResponse struct {
 	TmuxOptionsSource connectionoptions.Source `json:"tmuxOptionsSource"`
 	Definitions       []sshconfig.Definition   `json:"definitions"`
 }
-
-type agentEventResponse struct {
-	Result string `json:"result"`
-}

@@ -6,7 +6,6 @@ export type AgentVisualState = 'sleeping' | 'confusing' | 'singing-relax' | 'bus
 export type AgentDetails = {
   agent: AgentSummary;
   endpoint?: { display?: string; user?: string; host?: string; port?: number };
-  webhookUrl?: string;
   componentSha256?: string;
 };
 
@@ -15,7 +14,6 @@ export type AgentInitialization = {
   connectionInstanceId?: string;
   endpoint?: { display?: string };
   tmuxSessionName?: string;
-  webhookUrl?: string;
   status: 'running' | 'completed' | 'failed' | string;
   result?: string;
   component?: string;
@@ -70,15 +68,21 @@ export function agentTitle(agent: AgentSummary): string {
     case 'error':
       return 'Codex Agent setup error';
     default:
-      return agent.activityLabel;
+      return agent.stateLabel || agent.activityLabel;
   }
 }
 
 export function agentVisualState(agent: AgentSummary): AgentVisualState {
   if (agent.component === 'uninitialized') return 'sleeping';
   if (agent.component === 'error' && agent.errorCode !== 'agent_status_unavailable') return 'broken';
+  if (agent.component === 'initializing') return 'busy-working';
+  const syncStatus = agent.syncStatus || '';
+	if (agent.component === 'ready' && ['pending', 'missing', 'tmux_missing', 'stale', 'invalid', 'unavailable'].includes(syncStatus)) return 'confusing';
+  if (agent.state === 'running') return 'busy-working';
+  if (agent.state === 'relax') return 'singing-relax';
+  if (agent.state === 'error') return 'broken';
   if (agent.activity === 'failed') return 'broken';
-  if (agent.component === 'initializing' || agent.activity === 'running' || agent.activity === 'waiting') return 'busy-working';
+  if (agent.activity === 'running' || agent.activity === 'waiting') return 'busy-working';
   if (agent.component === 'ready' && (agent.activity === 'idle' || agent.activity === 'completed')) return 'singing-relax';
   return 'confusing';
 }

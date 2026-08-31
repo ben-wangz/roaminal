@@ -14,6 +14,8 @@ export function TerminalSearch({ runtime, onClose }: { runtime: TerminalRuntime;
   return (
     <div className="search-bar">
       <input
+        id="terminal-search-query"
+        name="terminalSearchQuery"
         autoFocus
         value={query}
         onChange={(event) => setQuery(event.target.value)}
@@ -24,14 +26,14 @@ export function TerminalSearch({ runtime, onClose }: { runtime: TerminalRuntime;
         placeholder="Search terminal"
       />
       <label>
-        <input type="checkbox" checked={caseSensitive} onChange={(event) => setCaseSensitive(event.target.checked)} />{' '}
+        <input id="terminal-search-case-sensitive" name="caseSensitive" type="checkbox" checked={caseSensitive} onChange={(event) => setCaseSensitive(event.target.checked)} />{' '}
         Aa
       </label>
       <label>
-        <input type="checkbox" checked={whole} onChange={(event) => setWhole(event.target.checked)} /> Ab
+        <input id="terminal-search-whole-word" name="wholeWord" type="checkbox" checked={whole} onChange={(event) => setWhole(event.target.checked)} /> Ab
       </label>
       <label>
-        <input type="checkbox" checked={regex} onChange={(event) => setRegex(event.target.checked)} /> .*{' '}
+        <input id="terminal-search-regex" name="regex" type="checkbox" checked={regex} onChange={(event) => setRegex(event.target.checked)} /> .*{' '}
       </label>
       <button onClick={() => find(false)} aria-label="Previous result">
         ↑

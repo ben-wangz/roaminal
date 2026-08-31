@@ -2,7 +2,6 @@ package ports
 
 import (
 	"context"
-	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
@@ -13,7 +12,6 @@ type AgentRepository interface {
 	Snapshot() map[string]domain.AgentEndpointRecord
 	Get(string) (domain.AgentEndpointRecord, bool)
 	Update(string, func(*domain.AgentEndpointRecord) error) error
-	FindToken(string, time.Time) (string, domain.AgentEndpointRecord, bool)
 }
 
 // Repositories are application-facing ports. Storage details such as JSON
@@ -60,4 +58,13 @@ type PushSubscriptionRepository interface {
 	DeletePushSubscription(context.Context, string, string) (bool, error)
 	DeletePushSubscriptionsForAuthSession(context.Context, string) (int, error)
 	DeletePushSubscriptionByID(context.Context, string) (bool, error)
+}
+
+// NotificationPreferenceRepository stores per-user connection notification
+// settings. UserKey is supplied by the authenticated application boundary and
+// is never exposed to provider hooks.
+type NotificationPreferenceRepository interface {
+	ListNotificationPreferences(context.Context, string) ([]domain.NotificationPreference, error)
+	GetNotificationPreference(context.Context, string, string, string) (domain.NotificationPreference, bool, error)
+	UpsertNotificationPreference(context.Context, domain.NotificationPreference) (domain.NotificationPreference, error)
 }

@@ -1,13 +1,12 @@
 # API
 
 JSON requests use `Content-Type: application/json`, are limited to 1 MiB, and
-reject unknown fields. Agent events are limited to 64 KiB; FileSystem uploads
-use multipart form data and are limited to 10 GiB of file content plus
-multipart overhead. Browser requests must use the current page Origin, except
-for the token-authenticated Agent event endpoint. The public endpoints are
-`/healthz`, `/api/v2/version`, the authentication
-challenge/login/refresh/logout routes, and Agent events; other API endpoints
-require `Authorization: Bearer <access-token>`. Errors use
+reject unknown fields. FileSystem uploads use multipart form data and are
+limited to 10 GiB of file content plus multipart overhead. Browser requests
+must use the current page Origin. The public endpoints are `/healthz`,
+`/api/v2/version`, and the authentication challenge/login/refresh/logout
+routes; other API endpoints require `Authorization: Bearer <access-token>`.
+Errors use
 `{"error":"message","code":"stable_code","retryable":false}` and may include `field`, `requestId`, and bounded `details`.
 
 | Method | Path | Purpose |
@@ -22,6 +21,7 @@ require `Authorization: Bearer <access-token>`. Errors use
 | GET | `/api/v2/messages` | Read the authenticated operator's Agent message history |
 | PUT | `/api/v2/messages/read-state` | Advance the account-wide Agent message read cursor |
 | GET | `/api/v2/notifications/config` | Read authenticated Web Push availability and the public VAPID key |
+| GET/PUT | `/api/v2/notifications/preferences` | Read or update per-connection browser notification preferences |
 | PUT | `/api/v2/notifications/subscription` | Register or replace the current browser's Web Push subscription |
 | DELETE | `/api/v2/notifications/subscription/:subscriptionId` | Remove one current-session Web Push subscription |
 | DELETE | `/api/v2/notifications/subscriptions` | Remove all current-session Web Push subscriptions |
@@ -53,7 +53,6 @@ require `Authorization: Bearer <access-token>`. Errors use
 | DELETE | `/api/v2/ssh-keys/:keyId` | Delete a writable managed key pair |
 | POST | `/api/v2/ssh-key-generations` | Generate an absent Ed25519/RSA key |
 | POST | `/api/v2/client-diagnostics` | Submit an authenticated bounded browser error batch |
-| POST | `/api/v2/agent/events` | Receive a Codex hook event with an Agent token |
 
 Connection-instance responses use `connectionInstanceId` as their only
 instance identifier. Active lists do not include retired or exited instances.
@@ -77,19 +76,23 @@ ControlMaster. Remote-monitor responses expose status, freshness, RTT, and
 scoped CPU, memory, uptime, load, and disk values.
 
 Heartbeat responses include a top-level `messageState` projection with the
-current message revision, latest sequence, and unread count. Message history
-is newest-first and accepts an opaque `before` cursor; it is retained for at
-most 500 records or seven days. Read state is advanced monotonically with
+current message revision, latest sequence, and unread count. Each connection
+instance also contains the latest cached Agent projection and synchronization
+metadata. Heartbeat never performs remote Agent reads. Message history is
+newest-first and accepts an opaque `before` cursor; it is retained for at most
+500 records or seven days. Read state is advanced monotonically with
 `{"readThroughSequence":123}`. Message responses contain presentation-safe
-metadata only; credentials, Agent tokens, endpoint keys, and webhook URLs are
-not returned.
+metadata only; provider session IDs, tmux socket fingerprints, credentials,
+endpoint keys, and remote state history are not returned.
 
-Web Push sends only newly persisted Codex completion or failure messages. The
-server keeps subscription endpoints and encryption keys in private state and
-never returns them. The browser's single notification switch controls local
-delivery and removes all subscriptions for the current authentication session
-when turned off. If VAPID configuration is absent, the config endpoint reports
-Web Push disabled and the browser may still offer foreground-only notifications.
+Web Push sends only newly persisted Agent state transitions allowed by the
+matching connection preference: `running -> relax` or `running -> error`. The
+message center shows all standard state transitions. The server keeps
+subscription endpoints and encryption keys in private state and never returns
+them. The browser's global notification switch controls local delivery and
+removes all subscriptions for the current authentication session when turned
+off. If VAPID configuration is absent, the config endpoint reports Web Push
+disabled.
 
 ## FileSystem
 
@@ -116,21 +119,23 @@ an active upload.
 Agent initialization is supported for live SSH tmux connection instances with
 remote `tmux` and Codex. Endpoint identity is normalized from SSH user, host,
 and port. Each tmux target is further identified by its session name and tmux
-session identity. Repeated or concurrent initialization for the same endpoint
-joins the existing operation; the binding and token state are persisted by the
-backend.
+runtime identity. Repeated or concurrent initialization for the same endpoint
+joins the existing operation; the latest Agent projection and synchronization
+metadata are persisted by the backend.
 
 The remote component supports Linux and macOS on `amd64` and `arm64`. It
 installs the hook binary at `$HOME/.roaminal/bin/roaminal-agent-hook`, the
-Codex hook configuration under `$HOME/.codex/hooks.json`, and private binding
-configuration under `$HOME/.roaminal/agent.json`. The hook posts strict,
-deduplicated events to `/api/v2/agent/events` using its endpoint token.
-Agent summaries expose component state and Codex activity separately; activity
-is one of `running`, `waiting`, `completed`, `idle`, `stale`, or
-`unknown`. The first accepted event for an endpoint/tmux target and
-component version creates an `agent_reporting_ready` message; each accepted
-`Stop` creates a `codex_turn_completed` message. Duplicate events do not
-create messages.
+Codex hook configuration under `$HOME/.codex/hooks.json`, and private local
+component metadata under `$HOME/.roaminal/agent.json`. The hook writes only
+the current tmux runtime's local state file under
+`$HOME/.roaminal/state/agents/codex/`; it does not access the network. The
+backend synchronizer reads state only through live connection instances and
+stores one latest snapshot per tmux target. Standard Agent states are
+`running`, `relax`, and provider-capability-gated `error`; synchronization
+failures remain separate from Agent state and expose distinct `missing`,
+`tmux_missing`, `stale`, `invalid`, and `unavailable` synchronization statuses.
+Actual state changes create one
+idempotent `agent_state_transition` message; ordinary hook events do not.
 
 `POST /api/v2/client-diagnostics` accepts at most 20 redacted error events in a
 256 KiB JSON body and returns `204` when accepted. It requires the current

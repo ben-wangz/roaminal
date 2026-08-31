@@ -9,8 +9,9 @@ ssh/        -> /home/roaminal/.ssh
 ```
 
 `state/` stores authentication sessions, per-login-session workspace
-layouts, Agent endpoint bindings and token hashes, message history, upload
-records, active connection metadata and snapshots, and archived
+layouts, Agent endpoint projections and latest per-tmux state snapshots,
+message history, notification preferences, upload records, active connection
+metadata and snapshots, and archived
 metadata/snapshots under `audit/connection-instances/`. It also contains
 bounded browser diagnostics and temporary upload staging. When a connection
 exits, its active files are archived and removed; archive data is not

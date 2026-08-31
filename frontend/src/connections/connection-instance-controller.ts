@@ -237,7 +237,10 @@ function sameConnectionSummary(left: ConnectionInstanceSummary, right: Connectio
   return a.agentType === b.agentType && a.support === b.support && a.supportReason === b.supportReason
     && a.component === b.component && a.componentVersion === b.componentVersion && a.activity === b.activity
     && a.activityLabel === b.activityLabel && a.lastEventName === b.lastEventName && a.lastEventAt === b.lastEventAt
-    && a.initializationId === b.initializationId && a.errorCode === b.errorCode && a.errorMessage === b.errorMessage;
+    && a.initializationId === b.initializationId && a.errorCode === b.errorCode && a.errorMessage === b.errorMessage
+    && a.state === b.state && a.stateLabel === b.stateLabel && a.stateIndex === b.stateIndex
+    && a.stateUpdatedAt === b.stateUpdatedAt && a.syncStatus === b.syncStatus && a.lastSyncedAt === b.lastSyncedAt
+    && a.syncError === b.syncError;
 }
 
 function sameLayout(left: ConnectionInstanceLayout, right: ConnectionInstanceLayout): boolean {

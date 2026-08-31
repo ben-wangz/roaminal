@@ -15,8 +15,7 @@ export type TerminalEventEffect =
   | { type: 'clear-launch' }
   | { type: 'navigate'; page: AppPage }
   | { type: 'close-search' }
-  | { type: 'toast'; message: string; kind?: ToastKind }
-  | { type: 'notify'; message: string };
+  | { type: 'toast'; message: string; kind?: ToastKind };
 
 export type TerminalEventResult = {
   state: TerminalEventState;
@@ -95,7 +94,7 @@ export function reduceTerminalMessage(
     if (message.phase === 'completed') {
       return {
         state: { ...state, executionStatus: null },
-        effects: [{ type: 'toast', message: 'Command completed', kind: 'success' }, { type: 'notify', message: 'Command completed' }],
+        effects: [{ type: 'toast', message: 'Command completed', kind: 'success' }],
       };
     }
   }

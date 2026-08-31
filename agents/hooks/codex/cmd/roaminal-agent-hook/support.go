@@ -14,12 +14,12 @@ import (
 	"github.com/ben-wangz/roaminal/agents/hooks/codex/internal/model"
 )
 
-func writeConfig(cfg model.Config) error {
+func writeComponentConfig(cfg model.ComponentConfig) error {
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return atomicWrite(configPath(), append(data, '\n'), 0600)
+	return atomicWrite(filepath.Join(homeDir(), ".roaminal", "agent.json"), append(data, '\n'), 0600)
 }
 
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
@@ -56,7 +56,11 @@ func atomicWrite(path string, data []byte, mode os.FileMode) error {
 func ensurePrivateDir(path string) error {
 	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
-		return os.Mkdir(path, 0700)
+		err = os.Mkdir(path, 0700)
+		if err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		info, err = os.Lstat(path)
 	}
 	if err != nil {
 		return err

@@ -27,6 +27,8 @@ export function SSHKeyGenerationDialog({ value, existingAlgorithms, busy, onChan
         <label>
           Algorithm
           <select
+            id="ssh-key-algorithm"
+            name="algorithm"
             value={value.algorithm}
             onChange={(event) =>
               onChange({
@@ -49,6 +51,8 @@ export function SSHKeyGenerationDialog({ value, existingAlgorithms, busy, onChan
           <label>
             RSA bits
             <select
+              id="ssh-key-rsa-bits"
+              name="rsaBits"
               value={value.rsaBits || 3072}
               onChange={(event) => onChange({ ...value, rsaBits: Number(event.target.value) })}
             >
@@ -61,6 +65,8 @@ export function SSHKeyGenerationDialog({ value, existingAlgorithms, busy, onChan
         <label>
           Filename
           <input
+            id="ssh-key-filename"
+            name="fileName"
             required
             value={value.fileName}
             onChange={(event) => onChange({ ...value, fileName: event.target.value })}
@@ -69,6 +75,8 @@ export function SSHKeyGenerationDialog({ value, existingAlgorithms, busy, onChan
         <label>
           Comment <span className="optional">optional</span>
           <input
+            id="ssh-key-comment"
+            name="comment"
             maxLength={255}
             value={value.comment}
             onChange={(event) => onChange({ ...value, comment: event.target.value })}

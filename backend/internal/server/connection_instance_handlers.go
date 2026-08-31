@@ -30,8 +30,8 @@ func (s *Server) getConnectionInstance(w http.ResponseWriter, r *http.Request, _
 	}
 	for _, item := range s.terms.Summaries() {
 		if item.ID == id {
-			if s.agentTelemetry != nil {
-				item.Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(item))
+			if s.agentProjection != nil {
+				item.Agent = s.agentProjection.Summary(agentConnectionInstanceView(item))
 			}
 			writeJSON(w, http.StatusOK, item)
 			return
@@ -68,8 +68,8 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	if s.agentTelemetry != nil {
-		result.Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(result))
+	if s.agentProjection != nil {
+		result.Agent = s.agentProjection.Summary(agentConnectionInstanceView(result))
 	}
 	writeJSON(w, http.StatusCreated, result)
 }
@@ -182,8 +182,8 @@ func (s *Server) updateConnectionTitle(w http.ResponseWriter, r *http.Request, _
 		}
 		return
 	}
-	if s.agentTelemetry != nil {
-		result.Agent = s.agentTelemetry.Summary(agentConnectionInstanceView(result))
+	if s.agentProjection != nil {
+		result.Agent = s.agentProjection.Summary(agentConnectionInstanceView(result))
 	}
 	writeJSON(w, http.StatusOK, result)
 }
