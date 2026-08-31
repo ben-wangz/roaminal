@@ -4,8 +4,10 @@ Priority: P0. Capabilities: core. Viewports: desktop and phone portrait.
 
 ## Procedure and assertions
 
-1. Open a live card's Terminal actions. The first menu item is focused; menu
-   semantics, `aria-expanded`, outside-click close, Escape focus restoration,
+1. Open a live card's Terminal actions while the separate Agent robot status
+   button is visible. The action menu and every menu item remain above the
+   artwork and clickable; the first menu item is focused; menu semantics,
+   `aria-expanded`, outside-click close, Escape focus restoration,
    ArrowUp/ArrowDown/Home/End wrapping, and viewport-safe menu placement work.
 2. The live menu contains `Rename title...` and `Close connection...`; it never
    contains a tab-close command. Select Rename.

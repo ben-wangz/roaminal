@@ -67,7 +67,7 @@
 .connection-metadata { display: grid; gap: 3px; min-width: 0; padding-right: 106px; color: var(--muted); font-size: .67rem; line-height: 1.25; }
 .connection-metadata > span, .connection-metadata > time { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connection-path { color: var(--text); }
-.connection-actions { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; align-items: center; gap: 2px; }
+.connection-actions { position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; align-items: center; gap: 2px; }
 .extension-button, .connection-action-trigger, .connection-drag-handle { width: 28px; height: 28px; display: inline-grid; place-items: center; border: 0; background: transparent; color: var(--muted); }
 .connection-drag-handle { cursor: grab; }
 .connection-drag-handle:active { cursor: grabbing; }
