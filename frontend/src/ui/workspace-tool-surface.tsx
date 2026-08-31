@@ -27,6 +27,7 @@ type Props = {
   connectionToolButton: RefObject<HTMLButtonElement | null>;
   keyboardToolButton: RefObject<HTMLButtonElement | null>;
   onCollapse: () => void;
+  onAddConnection: () => void;
   onSelectConnection: (id: string) => void;
   onMoveConnectionInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
   onReorderConnectionGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
@@ -67,6 +68,7 @@ export function WorkspaceToolSurface({
   connectionToolButton,
   keyboardToolButton,
   onCollapse,
+  onAddConnection,
   onSelectConnection,
   onMoveConnectionInstance,
   onReorderConnectionGroup,
@@ -172,6 +174,7 @@ export function WorkspaceToolSurface({
             onRename={onRename}
             onAutomaticTitle={onAutomaticTitle}
             onTerminate={onTerminate}
+            onAddConnection={onAddConnection}
           />
         ) : (
           <VirtualKeyboardDock

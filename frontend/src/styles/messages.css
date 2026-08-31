@@ -19,7 +19,7 @@
 }
 .message-popover {
   position: absolute;
-  top: 64px;
+  top: 8px;
   right: 12px;
   z-index: 46;
   width: min(380px, calc(100% - 24px));
@@ -83,8 +83,8 @@
 .message-live-region { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .message-live-region-error { left: -1px; }
 @container main-panel (max-width: 1130px) {
-  .message-popover { top: 90px; max-height: min(520px, calc(100% - 102px)); }
-  .message-notice-stack { top: 94px; }
+  .message-popover { top: 8px; max-height: min(520px, calc(100% - 20px)); }
+  .message-notice-stack { top: 8px; }
 }
 @container main-panel (max-width: 800px) {
   .message-popover { position: fixed; top: calc(90px + env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); width: auto; max-height: calc(var(--roaminal-viewport-height, 100vh) - 98px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
@@ -93,5 +93,9 @@
   .message-popover-header.confirming { flex-wrap: wrap; gap: 4px; }
   .message-popover-header.confirming .message-popover-header-actions { flex: 1 1 100%; justify-content: space-between; }
   .message-popover-header.confirming .message-clear-confirmation { flex: 1 1 auto; justify-content: flex-start; }
+}
+@media (max-width: 800px) {
+  .app-shell.workspace-open .message-popover { top: calc(134px + env(safe-area-inset-top)); max-height: calc(var(--roaminal-viewport-height, 100vh) - 142px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  .app-shell.workspace-open .message-notice-stack { top: calc(138px + env(safe-area-inset-top)); }
 }
 @media (prefers-reduced-motion: reduce) { .message-popover, .message-notice { transition: none; } }

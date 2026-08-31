@@ -51,7 +51,7 @@ type DefinitionRowProps = {
   definition: ConnectionDefinition;
   editable: boolean;
   connections: ConnectionInstanceSummary[];
-  onConnect: (id: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<void>;
+  onConnect: (id: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<boolean>;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;

@@ -167,13 +167,22 @@ export function AppShell() {
   const notifications = useBrowserNotifications(auth, (messageId) => { void handleNotificationClick(messageId); });
   const handleSelectWorkspaceTool = useCallback((tool: WorkspaceTool) => {
     if (tool === 'keyboard') {
+      if (workspaceTool === 'keyboard' && workspaceToolOpen) {
+        collapseVirtualKeyboard();
+        return;
+      }
       selectVirtualKeyboard();
+      return;
+    }
+    if (workspaceTool === 'connections' && workspaceToolOpen) {
+      setWorkspaceToolOpen(false);
+      setPreviewConnectionInstanceId(null);
       return;
     }
     setPreviewConnectionInstanceId(null);
     setWorkspaceTool('connections');
     setWorkspaceToolOpen(true);
-  }, [selectVirtualKeyboard, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen]);
+  }, [collapseVirtualKeyboard, selectVirtualKeyboard, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen, workspaceTool, workspaceToolOpen]);
   const handleCollapseWorkspaceTool = useCallback(() => {
     if (workspaceTool === 'keyboard') collapseVirtualKeyboard();
     else setWorkspaceToolOpen(false);
@@ -202,6 +211,8 @@ export function AppShell() {
     handleOpenWorkspace,
     handleSaveAppearance,
     handleCloseDialog,
+    handleAddConnection,
+    handleHelp,
   } = useAppShellViewActions({
     onOpenFileSystem,
     setPreviewConnectionInstanceId,
@@ -252,6 +263,8 @@ export function AppShell() {
       authSessionBusy={actions.authSessionBusy}
       onSelectWorkspaceTool={handleSelectWorkspaceTool}
       onCollapseWorkspaceTool={handleCollapseWorkspaceTool}
+      onHelp={handleHelp}
+      onAddConnection={handleAddConnection}
       onSelectConnection={actions.selectConnectionInstance}
       onNavigateToConnection={onOpenTerminal}
       onMessageTargetUnavailable={() => showToast('The connection for this message is no longer connected.', 'error')}

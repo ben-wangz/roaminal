@@ -7,6 +7,7 @@ import type { ConnectionView } from './connection-view';
 import { reconcileConnections } from './connection-view';
 import type { ToastKind } from '../ui/toast';
 import { ConnectionInstanceController } from '../connections/connection-instance-controller';
+import type { Dialog } from './app-shell-overlays';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -16,7 +17,7 @@ type Params = {
   controller: ConnectionInstanceController;
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setActiveView: (next: ConnectionView) => void;
-  setDialog: Dispatch<SetStateAction<{ type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null>>;
+  setDialog: Dispatch<SetStateAction<Dialog>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   mainRuntime: MutableRefObject<TerminalRuntime | null>;

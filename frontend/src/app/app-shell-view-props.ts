@@ -51,6 +51,8 @@ export type AppShellViewProps = {
   authSessionBusy: string | null;
   onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
   onCollapseWorkspaceTool: () => void;
+  onHelp: () => void;
+  onAddConnection: () => void;
   onSelectConnection: (id: string) => void;
   onNavigateToConnection: (id: string) => void;
   onMessageTargetUnavailable: () => void;
@@ -75,7 +77,7 @@ export type AppShellViewProps = {
   onSignOut: () => void;
   onOpenAuthSessions: () => void;
   onOpenManager: () => void;
-  onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<void>;
+  onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<boolean>;
   onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;
   onOpenWorkspace: () => void;
   onSaveAppearance: (appearance: TerminalAppearance) => void;

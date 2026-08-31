@@ -4,6 +4,7 @@ import type { AuthState } from '../auth/auth-storage';
 import type { AuthSessionSummary } from '../auth/auth-session-ui';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ToastKind } from '../ui/toast';
+import type { Dialog } from './app-shell-overlays';
 
 type Params = {
   auth: AuthState | null;
@@ -13,9 +14,7 @@ type Params = {
   previewRuntimeRef: MutableRefObject<{ dispose(): void } | null>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   pauseHeartbeat: () => Promise<void>;
-  setDialog: Dispatch<
-    SetStateAction<{ type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null>
-  >;
+  setDialog: Dispatch<SetStateAction<Dialog>>;
   showToast: (message: string, kind?: ToastKind) => void;
 };
 

@@ -6,11 +6,6 @@ vi.mock('../input/mobile-mode', () => ({ useMobileMode: () => false }));
 
 const baseProps = {
   workspaceOpen: false,
-  workspaceTool: 'connections' as const,
-  workspaceToolOpen: false,
-  connectionToolButton: { current: null },
-  keyboardToolButton: { current: null },
-  workspaceMode: 'terminal' as const,
   connected: false,
   connectionName: '',
   connectionInstanceId: null,
@@ -18,7 +13,6 @@ const baseProps = {
   connectionCount: 0,
   latencyMs: null,
   persistenceDegraded: false,
-  onSelectWorkspaceTool: vi.fn(),
   onToggleSearch: vi.fn(),
   onOpenConnections: vi.fn(),
   onOpenAppearance: vi.fn(),
@@ -35,6 +29,20 @@ const baseProps = {
 } satisfies Parameters<typeof ShellTopbar>[0];
 
 describe('fullscreen top-bar control', () => {
+  it('does not render the removed workspace tool switcher', () => {
+    const html = renderToStaticMarkup(<ShellTopbar {...baseProps} />);
+    expect(html).not.toContain('workspace-tool-switcher');
+    expect(html).not.toContain('workspace-tool-connections');
+    expect(html).toContain('Roaminal');
+  });
+
+  it('keeps the workspace topbar free of a second tool switcher', () => {
+    const html = renderToStaticMarkup(<ShellTopbar {...baseProps} workspaceOpen />);
+    expect(html).not.toContain('workspace-tool-switcher');
+    expect(html).not.toContain('workspace-tool-keyboard');
+    expect(html).toContain('Connections');
+  });
+
   it('keeps an unsupported control visible and clearly marked', () => {
     const html = renderToStaticMarkup(
       <ShellTopbar {...baseProps} fullscreenActive={false} fullscreenSupported={false} fullscreenPending={false} />,

@@ -7,8 +7,9 @@ desktop, tablet portrait, and phone portrait.
 ## Procedure and assertions
 
 1. Local connection and Connection manager show no REMOTE band and issue no
-   remote-monitor requests. Selecting a live SSH instance adds a separate
-   `REMOTE <host-alias>` band below the top row and polls only that instance.
+   remote-monitor requests. Selecting a live SSH instance adds an active
+   connection context row followed by a separate `REMOTE <host-alias>` band
+   below the topbar and polls only that instance.
    It is expanded by default on desktop and collapsed by default on tablet and
    phone; the collapsed band still exposes REMOTE, host alias, status, and a
    keyboard-reachable disclosure button.

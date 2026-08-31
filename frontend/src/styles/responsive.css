@@ -1,25 +1,41 @@
 /* 800px breakpoint mirrored in input/viewport.ts (SIDEBAR_BREAKPOINT_QUERY). */
 @media (max-width: 800px) {
   .app-shell { flex-direction: column; }
-  .workspace-tool-surface.workspace-tool-connections { position: fixed; inset: 0 auto 0 0; width: min(300px, 88vw); flex-basis: min(300px, 88vw); transform: translateX(-100%); box-shadow: 12px 0 28px rgba(0,0,0,.32); }
+  .app-shell-workspace { position: relative; flex-direction: column; }
+  .workspace-tool-rail { position: relative; top: auto; left: auto; right: auto; width: 100%; height: 44px; flex: 0 0 44px; flex-basis: 44px; flex-direction: row; justify-content: center; gap: 8px; padding: 3px max(8px, env(safe-area-inset-left)) 3px max(8px, env(safe-area-inset-right)); border-top: 1px solid var(--border); border-right: 0; border-bottom: 1px solid var(--border); }
+  .workspace-tool-rail-buttons { display: flex; gap: 4px; }
+  .workspace-tool-rail .workspace-tool-button { width: 36px; height: 36px; flex-basis: 36px; }
+  .workspace-tool-rail .workspace-tool-help { margin-top: 0; }
+  .workspace-tool-rail-collapse { display: none; }
+  /* Keep the drawer below the page chrome so opening Connections never hides
+     the topbar or the mobile workspace rail. */
+  .workspace-tool-surface.workspace-tool-connections { position: absolute; inset: 44px auto 0 0; width: min(300px, 88vw); flex-basis: min(300px, 88vw); transform: translateX(-100%); box-shadow: 12px 0 28px rgba(0,0,0,.32); }
   .workspace-tool-surface.workspace-tool-connections.open { transform: translateX(0); }
   .workspace-tool-surface.workspace-tool-connections.closed { width: min(300px, 88vw); flex-basis: min(300px, 88vw); overflow: visible; border-right: 1px solid var(--border); pointer-events: none; }
   .workspace-tool-surface.workspace-tool-keyboard { order: 2; flex: 0 0 auto; width: 100%; max-height: min(44vh, 360px); transform: none; transition: none; border-top: 1px solid var(--border); border-right: 0; background: var(--shade-2); }
   .workspace-tool-surface.workspace-tool-keyboard.closed { display: none; }
-  .workspace-tool-backdrop { position: fixed; inset: 0; z-index: 2; display: block; border: 0; background: rgba(0,43,54,.58); }
+  .workspace-tool-backdrop { position: absolute; inset: 44px 0 0; z-index: 2; display: block; border: 0; background: rgba(0,43,54,.58); }
   .main-panel { order: 1; width: 100%; }
   .terminal-stage { padding: 8px 8px 0; }
+  .workspace-context-bar { min-height: 52px; padding-inline: 10px; }
   .connection-card:hover .connection-card-overlay, .connection-card:focus-within .connection-card-overlay { transform: none; }
   .connection-card-preview { display: none; }
   .appearance-content { grid-template-columns: 1fr; gap: 18px; margin-top: 22px; }
   .appearance-header { align-items: flex-start; }
 }
 @media (min-width: 801px) { .main-panel.expanded { width: auto; } .workspace-tool-backdrop { display: none; } }
+@container app-shell (max-width: 1130px) {
+  .topbar { min-height: 82px; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
+}
 html[data-roaminal-keyboard="open"] .topbar,
 html[data-roaminal-keyboard="open"] .remote-monitor-band,
 html[data-roaminal-keyboard="open"] .workspace-tool-keyboard,
+html[data-roaminal-keyboard="open"] .workspace-tool-rail,
+html[data-roaminal-keyboard="open"] .workspace-context-bar,
 html[data-roaminal-keyboard="open"] .statusbar { display: none; }
 html[data-roaminal-keyboard="open"] .terminal-stage { padding: 0; }
+html[data-roaminal-keyboard="open"] .workspace-tool-surface.workspace-tool-connections,
+html[data-roaminal-keyboard="open"] .workspace-tool-backdrop { top: 0; }
 @media (max-width: 440px) {
   .topbar { padding-inline: 8px; }
   .terminal-stage { min-height: 0; }
@@ -31,23 +47,24 @@ html[data-roaminal-keyboard="open"] .terminal-stage { padding: 0; }
   .appearance-header-actions { justify-content: flex-start; }
   .appearance-size-controls { grid-template-columns: minmax(0, 1fr) 64px auto; }
 }
-/* Topbar monitor tiers key on the main panel's width (the sidebar shrinks
-   it), not the viewport, so the centered monitor never collides with the
-   label or top actions. */
-@container main-panel (max-width: 1130px) {
+/* Topbar monitor tiers key on the application width so the centered monitor
+   never collides with the brand or top actions. */
+@container app-shell (max-width: 1130px) {
   .topbar { min-height: 82px; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
   .status-monitor-shell { top: 61px; }
   .metric-detail { display: none; }
 }
-@container main-panel (max-width: 640px) {
+@container app-shell (max-width: 640px) {
   .status-host { display: none; }
 }
-@container main-panel (max-width: 560px) {
+@container app-shell (max-width: 560px) {
   .status-detail { display: none; }
   .status-metric { min-width: 52px; }
   .status-gauge { width: 52px; }
 }
-@container main-panel (max-width: 460px) {
+@container app-shell (max-width: 460px) {
+  .topbar-brand { min-width: 34px; }
+  .topbar-brand strong { display: none; }
   .connection-label { display: none; }
   .status-metric { min-width: 48px; }
   .status-gauge { width: 48px; }

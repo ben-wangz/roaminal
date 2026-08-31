@@ -43,6 +43,12 @@
 .dialog-form h2 { margin: 0; color: var(--text-bright); font-size: 1.05rem; }
 .dialog-form label { color: var(--muted); font-size: .75rem; }
 .dialog-form input { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; }
+.add-connection-dialog { width: min(480px, calc(100vw - 48px)); }
+.add-connection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.add-connection-heading h2 { margin: 0; }
+.add-connection-heading .dialog-copy { margin-top: 5px; }
+.add-connection-dialog select { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; }
+.add-connection-dialog select:focus-visible { border-color: var(--cyan); outline: 1px solid var(--cyan); outline-offset: 1px; }
 .dialog-copy { margin: 0; color: var(--text); font-size: .8rem; line-height: 1.5; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .danger-button { min-height: 38px; border: 1px solid var(--red); background: var(--red); color: #fff; padding: 0 12px; font-weight: 600; }

@@ -33,7 +33,6 @@
 .remote-monitor-status.status-unavailable, .remote-monitor-error { color: var(--danger-soft); }
 .remote-monitor-header-meta { flex: 0 0 auto; color: var(--muted); }
 .remote-monitor-header-actions { flex: 0 0 auto; }
-.remote-monitor-toggle { width: 26px; height: 26px; }
 .remote-monitor-error { font-size: .62rem; white-space: nowrap; }
 .remote-monitor-content { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(240px, .9fr); gap: 14px; min-width: 0; }
 .remote-monitor-resources, .remote-monitor-secondary { display: grid; min-width: 0; gap: 8px; }

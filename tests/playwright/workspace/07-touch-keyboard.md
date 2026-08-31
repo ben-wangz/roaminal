@@ -17,7 +17,7 @@ and phone landscape.
    Repeat after a visual viewport resize and while a focusout event is pending;
    no duplicate frame or input sent to an old runtime is allowed.
 3. Close the native keyboard and open Virtual keyboard from the shared
-   workspace-tool selector. The surface is visible below the terminal and
+   icon-only workspace rail. The surface is visible below the terminal and
    contains the Common mode by
    default, including Esc, Tab, Enter, Ctrl+C, Paste, `|`, `~`, `/`, and
    `↑`/`↓`/`←`/`→`. Verify those buttons emit exact terminal sequences, labels

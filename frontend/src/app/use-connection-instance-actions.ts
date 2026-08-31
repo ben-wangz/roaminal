@@ -46,14 +46,14 @@ export function useConnectionInstanceActions({
   setPreviewConnectionInstanceId,
   showToast,
 }: Params) {
-  const createConnection = useCallback(async (connectionDefinitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => {
+  const createConnection = useCallback(async (connectionDefinitionId: string, reuseFrom?: string, tmuxEnabled?: boolean): Promise<boolean> => {
     try {
       if (tmuxEnabled) {
         const launch = await startConnectionLaunch(connectionDefinitionId, reuseFrom);
         setCurrentRuntime(null);
         startLaunch(launch.launchId);
         setPage('workspace');
-        return;
+        return true;
       }
       clearLaunch();
       const session = await api<ConnectionInstanceSummary>('/connection-instances', {
@@ -67,8 +67,10 @@ export function useConnectionInstanceActions({
       ]);
       setActiveView(selectConnection(viewRef.current, session.connectionInstanceId));
       setPage('workspace');
+      return true;
     } catch (err) {
       showToast((err as Error).message, 'error');
+      return false;
     }
   }, [clearLaunch, controller, setActiveView, setCurrentRuntime, setPage, showToast, startLaunch, viewRef]);
 

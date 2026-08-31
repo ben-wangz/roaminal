@@ -1,19 +1,12 @@
 import { memo, type RefObject } from 'react';
-import { Ban, Bell, Keyboard, Maximize, Minimize, PanelLeft, Search, Settings, ShieldCheck } from 'lucide-react';
+import { Ban, Bell, Maximize, Minimize, Search, Settings, ShieldCheck } from 'lucide-react';
 import { SystemStatus } from '../status/system-status';
 import type { Heartbeat } from '../status/heartbeat';
-import type { WorkspaceMode } from './workspace-page';
 import { messageBadgeLabel, messageButtonLabel } from '../messages/message-center';
-import type { WorkspaceTool } from './workspace-tool';
 import { fullscreenControlState } from './use-browser-fullscreen';
 
 type Props = {
   workspaceOpen: boolean;
-  workspaceTool: WorkspaceTool;
-  workspaceToolOpen: boolean;
-  connectionToolButton: RefObject<HTMLButtonElement | null>;
-  keyboardToolButton: RefObject<HTMLButtonElement | null>;
-  workspaceMode: WorkspaceMode;
   connected: boolean;
   connectionName: string;
   connectionInstanceId: string | null;
@@ -21,7 +14,6 @@ type Props = {
   connectionCount: number;
   latencyMs: number | null;
   persistenceDegraded: boolean;
-  onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
   onToggleSearch: () => void;
   onOpenConnections: () => void;
   onOpenAppearance: () => void;
@@ -39,11 +31,6 @@ type Props = {
 
 export const ShellTopbar = memo(function ShellTopbar({
   workspaceOpen,
-  workspaceTool,
-  workspaceToolOpen,
-  connectionToolButton,
-  keyboardToolButton,
-  workspaceMode,
   connected,
   connectionName,
   connectionInstanceId,
@@ -51,7 +38,6 @@ export const ShellTopbar = memo(function ShellTopbar({
   connectionCount,
   latencyMs,
   persistenceDegraded,
-  onSelectWorkspaceTool,
   onToggleSearch,
   onOpenConnections,
   onOpenAppearance,
@@ -75,39 +61,10 @@ export const ShellTopbar = memo(function ShellTopbar({
       : 'Fullscreen unavailable in this browser';
   return (
     <header className="topbar">
-      {workspaceOpen && (
-        <div className="workspace-tool-buttons" role="group" aria-label="Workspace tools" data-testid="workspace-tool-switcher">
-          <button
-            ref={connectionToolButton}
-            className={`workspace-tool-button ${workspaceTool === 'connections' ? 'active' : ''}`}
-            type="button"
-            onClick={() => onSelectWorkspaceTool('connections')}
-            aria-label="Connections"
-            title="Connections"
-            aria-pressed={workspaceTool === 'connections'}
-            aria-expanded={workspaceTool === 'connections' && workspaceToolOpen}
-            aria-controls="workspace-tool-surface"
-            data-testid="workspace-tool-connections"
-          >
-            <PanelLeft aria-hidden="true" size={17} />
-          </button>
-          <button
-            ref={keyboardToolButton}
-            className={`workspace-tool-button ${workspaceTool === 'keyboard' ? 'active' : ''}`}
-            type="button"
-            disabled={workspaceMode !== 'terminal'}
-            onClick={() => onSelectWorkspaceTool('keyboard')}
-            aria-label="Virtual keyboard"
-            aria-pressed={workspaceTool === 'keyboard'}
-            aria-expanded={workspaceTool === 'keyboard' && workspaceToolOpen}
-            aria-controls="workspace-tool-surface"
-            title={workspaceMode === 'terminal' ? 'Open Virtual keyboard' : 'Virtual keyboard is available in Terminal'}
-            data-testid="workspace-tool-keyboard"
-          >
-            <Keyboard aria-hidden="true" size={17} />
-          </button>
-        </div>
-      )}
+      <div className="topbar-brand" aria-label="Roaminal">
+        <span className="brand-mark small" aria-hidden="true">r<span>&gt;</span></span>
+        <strong>Roaminal</strong>
+      </div>
       <SystemStatus
         connected={connected}
         connectionName={connectionName}

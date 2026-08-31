@@ -49,6 +49,8 @@ export function useAppShellViewActions({
   }, [onOpenFileSystem, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), [setDialog]);
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), [setDialog]);
+  const handleAddConnection = useCallback(() => setDialog({ type: 'add-connection' }), [setDialog]);
+  const handleHelp = useCallback(() => showToast('User manual is being prepared.'), [showToast]);
   const handleSelectConnectionsTool = useCallback(() => {
     setPreviewConnectionInstanceId(null);
     setWorkspaceTool('connections');
@@ -91,6 +93,8 @@ export function useAppShellViewActions({
     handleOpenFileSystem,
     handleRename,
     handleTerminate,
+    handleAddConnection,
+    handleHelp,
     handleSelectConnectionsTool,
     handleToggleSearch,
     handleCloseSearch,

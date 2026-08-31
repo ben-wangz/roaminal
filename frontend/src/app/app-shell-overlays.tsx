@@ -2,9 +2,10 @@ import { AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-sessio
 import { Toast, type ToastKind, type ToastState } from '../ui/toast';
 import { RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialogs';
 import { AgentDialog } from '../ui/agent-dialog';
+import { AddConnectionDialog } from '../ui/add-connection-dialog';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
-export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null;
+export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' | 'add-connection' } | null;
 
 type Props = {
   toast: ToastState | null;
@@ -19,6 +20,8 @@ type Props = {
   onRevokeAuthSession: (id: string) => void;
   onLogoutOtherAuthSessions: () => void;
   onCloseDialog: () => void;
+  connections: ConnectionInstanceSummary[];
+  onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<boolean>;
 };
 
 export function AppShellOverlays({
@@ -34,6 +37,8 @@ export function AppShellOverlays({
   onRevokeAuthSession,
   onLogoutOtherAuthSessions,
   onCloseDialog,
+  connections,
+  onCreateConnection,
 }: Props) {
   return (
     <>
@@ -59,6 +64,13 @@ export function AppShellOverlays({
           busy={authSessionBusy}
           onRevoke={onRevokeAuthSession}
           onLogoutOthers={onLogoutOtherAuthSessions}
+          onClose={onCloseDialog}
+        />
+      )}
+      {dialog?.type === 'add-connection' && (
+        <AddConnectionDialog
+          connections={connections}
+          onCreateConnection={onCreateConnection}
           onClose={onCloseDialog}
         />
       )}

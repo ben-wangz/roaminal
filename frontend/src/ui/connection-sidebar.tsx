@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, FolderOpen, FolderPlus, GripVertical, Search, Terminal, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, FolderOpen, FolderPlus, GripVertical, Plus, Search, Terminal, X } from 'lucide-react';
 import type { ConnectionInstanceLayout, InstanceMovePlacement } from '../connections/connection-instance-groups';
 import { groupedConnectionInstances, UNGROUPED_GROUP_ID } from '../connections/connection-instance-groups';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
@@ -35,6 +35,7 @@ type Props = {
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
+  onAddConnection: () => void;
 };
 
 export function shortConnectionId(id: string): string {
@@ -95,6 +96,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   onRename,
   onAutomaticTitle,
   onTerminate,
+  onAddConnection,
 }: Props) {
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed(loginSessionId));
@@ -199,8 +201,12 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
           })}
           {!groups.some(({ group, connections: groupConnections }) => !query || group.name.toLowerCase().includes(query) || groupConnections.some((connection) => matchesSearch(connection, group.name, query))) && <div className="connection-group-empty">No matching connections</div>}
         </div>
-        <div className="sidebar-footer">Connection workspace</div>
-    </div>
+        <div className="sidebar-footer">
+          <button className="primary connection-add-button" type="button" onClick={onAddConnection}>
+            <Plus size={15} aria-hidden="true" /> Add connection
+          </button>
+        </div>
+      </div>
   );
 
   function renderConnection(connection: ConnectionInstanceSummary, groupId: string) {

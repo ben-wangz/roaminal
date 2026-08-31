@@ -10,15 +10,15 @@ Viewports: all five standard projects and 320 x 568.
    dialog at applicable viewports. No text/control overlap, clipped buttons,
    incoherent nested scroll, or horizontal page overflow is allowed.
 2. At width `<=800`, the Connections surface begins closed and inert. Opening
-   Connections from the shared icon button shows a backdrop, traps focus, closes
+   Connections from the shared icon rail button shows a backdrop, traps focus, closes
    through backdrop/Escape/Close, and returns focus to the Connections button.
    Selection closes the overlay; no hover preview is created.
 3. Above 800px, open and collapse the shared workspace tool surface from its
-   icon buttons/header controls. Main terminal expands and refits when the
+   rail/header controls. Main terminal expands and refits when the
    surface is collapsed, and `aria-expanded`, `aria-controls`, `aria-hidden`,
    and inert state remain consistent.
-4. In Terminal mode, open and collapse Virtual keyboard from the shared
-   selector/header controls.
+4. In Terminal mode, open and collapse Virtual keyboard from the shared rail
+   or tool-header control.
    Above 800px it replaces the connection sidebar as a left-side panel; at
    `<=800px` it is below the main Terminal workspace. It never expands the
    connection sidebar at the same time, and its key labels fit at 320px.

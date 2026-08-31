@@ -1,17 +1,17 @@
-import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { formatAge, formatBytes, formatDuration, formatLoad, formatPercent } from './format';
 import { metricLevel, type MetricLevel } from './metric-history';
 import { Sparkline } from './sparkline';
 import { useRemoteMonitor } from './use-remote-monitor';
 import { displayStatusLabel, remoteMonitorDisplayStatus } from './remote-monitor-display';
-import { useMonitorDisclosure } from './use-monitor-disclosure';
 
-type Props = { instance: ConnectionInstanceSummary | null };
+type Props = {
+  instance: ConnectionInstanceSummary | null;
+  expanded: boolean;
+};
 
-export function RemoteMonitorBand({ instance }: Props) {
+export function RemoteMonitorBand({ instance, expanded }: Props) {
   const { snapshot, degraded, history, requesting } = useRemoteMonitor(instance);
-  const { expanded, setExpanded } = useMonitorDisclosure(instance?.connectionInstanceId || null);
   if (!instance || instance.type !== 'ssh' || instance.lifecycle !== 'live') return null;
   const metrics = snapshot?.metrics;
   const status = remoteMonitorDisplayStatus(snapshot, degraded, requesting);
@@ -29,7 +29,7 @@ export function RemoteMonitorBand({ instance }: Props) {
           <span className="remote-monitor-eyebrow">REMOTE</span>
           <strong title={host}>{host}</strong>
           <span className={`remote-monitor-status status-${status}`} role="status">
-          <span className="status-pulse" aria-hidden="true" />
+            <span className="status-pulse" aria-hidden="true" />
             {displayStatusLabel(status)}
           </span>
         </div>
@@ -41,17 +41,6 @@ export function RemoteMonitorBand({ instance }: Props) {
               {degraded && <span className="remote-monitor-error" role="status" aria-live="polite">probe unavailable</span>}
             </div>
           )}
-          <button
-            className="monitor-disclosure remote-monitor-toggle"
-            type="button"
-            onClick={() => setExpanded((value) => !value)}
-            aria-label={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
-            title={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
-            aria-expanded={expanded}
-            aria-controls="remote-monitor-metrics"
-          >
-            {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
-          </button>
         </div>
       </header>
       {expanded && <div className="remote-monitor-content" id="remote-monitor-metrics">

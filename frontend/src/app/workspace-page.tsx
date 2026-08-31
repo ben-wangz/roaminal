@@ -1,3 +1,5 @@
+import { useMonitorDisclosure } from '../status/use-monitor-disclosure';
+import { ChevronDown, ChevronUp, Terminal } from 'lucide-react';
 import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { TerminalViewport } from '../terminal/terminal-viewport';
@@ -35,9 +37,14 @@ export function WorkspacePage({
   const filesystemInstance = connections.find(
     (connection) => connection.connectionInstanceId === activeInstance?.connectionInstanceId,
   ) || null;
+  const monitorDisclosure = useMonitorDisclosure(activeInstance?.connectionInstanceId || null);
   return (
     <>
-      <RemoteMonitorBand instance={activeInstance} />
+      {activeInstance && <WorkspaceContextBar instance={activeInstance} expanded={monitorDisclosure.expanded} onToggleMonitor={() => monitorDisclosure.setExpanded((value) => !value)} />}
+      <RemoteMonitorBand
+        instance={activeInstance}
+        expanded={monitorDisclosure.expanded}
+      />
       <div className="workspace-body">
         <div
           className={`workspace-mode-view terminal-mode-view ${mode === 'terminal' ? 'active' : 'inactive'}`}
@@ -86,5 +93,42 @@ export function WorkspacePage({
         </div>
       </div>
     </>
+  );
+}
+
+function WorkspaceContextBar({
+  instance,
+  expanded,
+  onToggleMonitor,
+}: {
+  instance: ConnectionInstanceSummary;
+  expanded: boolean;
+  onToggleMonitor: () => void;
+}) {
+  const identity = instance.type === 'ssh' ? instance.sourceHostAlias || instance.title : instance.title || 'Local';
+  const typeLabel = instance.type === 'ssh' ? 'SSH' : 'Local';
+  return (
+    <section className="workspace-context-bar" aria-label="Active connection">
+      <div className="workspace-context-identity">
+        <span className="workspace-context-icon" aria-hidden="true"><Terminal size={17} /></span>
+        <div>
+          <strong title={identity}>{identity}</strong>
+          <span>{typeLabel}{instance.cwd ? ` | ${instance.cwd}` : ''}</span>
+        </div>
+      </div>
+      {instance.type === 'ssh' && instance.lifecycle === 'live' && (
+        <button
+          className="monitor-disclosure workspace-context-monitor-toggle"
+          type="button"
+          onClick={onToggleMonitor}
+          aria-label={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
+          title={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
+          aria-expanded={expanded}
+          aria-controls="remote-monitor-metrics"
+        >
+          {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+        </button>
+      )}
+    </section>
   );
 }

@@ -31,7 +31,7 @@ import type { ToastKind } from '../ui/toast';
 
 type Props = {
   connections: ConnectionInstanceSummary[];
-  onConnect: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<void>;
+  onConnect: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<boolean>;
   onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;
   onOpenWorkspace: () => void;
   onOpenAppearance: () => void;

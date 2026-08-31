@@ -13,6 +13,7 @@ import { ConnectionInstanceController } from '../connections/connection-instance
 import { useConnectionInstanceActions } from './use-connection-instance-actions';
 import { useAppShellChromeActions } from './use-app-shell-chrome-actions';
 import type { WorkspaceTool } from './workspace-tool';
+import type { Dialog } from './app-shell-overlays';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -39,9 +40,7 @@ type Params = {
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
-  setDialog: Dispatch<
-    SetStateAction<{ type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' } | null>
-  >;
+  setDialog: Dispatch<SetStateAction<Dialog>>;
   showToast: (message: string, kind?: ToastKind) => void;
 };
 
