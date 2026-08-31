@@ -108,7 +108,7 @@ func output(value any) error { return json.NewEncoder(os.Stdout).Encode(value) }
 
 func safeError(err error) string {
 	message := strings.TrimSpace(err.Error())
-	for _, marker := range []string{"token", "Bearer", "webhook"} {
+	for _, marker := range []string{"token", "Bearer", "credential"} {
 		if strings.Contains(strings.ToLower(message), strings.ToLower(marker)) {
 			return "agent operation failed"
 		}

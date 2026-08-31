@@ -18,19 +18,13 @@ desktop for preview, tablet/phone for selection.
    shows only that structural header and count. The group collapse state is
    restored after reload for the same login session and is independent in a
    second login session.
-4. Create a group inline, rename it inline, and verify names are trimmed,
-   case-insensitively unique, and persisted after reload. Drag a connection
-   within a group, from `Ungrouped` to a group, and back. Drop on a group body
-   appends the instance. Drag a group header, including `Ungrouped`, to change
-   group order. Repeat the same moves with the keyboard controls. A user group
-   accepts at most 10 instances; the 11th move is rejected, leaves the visible
-   order unchanged, and reports the capacity reason.
-5. Delete an empty group and verify it disappears. A non-empty group's delete
-   action is disabled; use `Move all to Ungrouped`, verify all members move in
-   their existing order, then delete the now-empty group. Create a new
-   connection and verify it always appends to `Ungrouped`, regardless of the
-   source definition or the last-used group. An exited instance disappears
-   from its group without moving other members.
+4. Verify the group header exposes only the collapse and group actions that are
+   valid for the current membership. Detailed group creation, persistence,
+   ordering, capacity, conflict, and deletion behavior is covered by
+   `PW-WORK-017`; this case must not use those mutations as a second owner.
+5. Create and retire a disposable connection instance only through the normal
+   connection lifecycle. Verify the sidebar reconciles the card without
+   changing the selected instance or corrupting the visible group sections.
 6. Type a title, ID, PWD, host alias, type, or group name into the sidebar
    search. Matching groups temporarily expand and non-matching cards are
    hidden. Clear the search and verify the previous collapse state returns;
@@ -50,10 +44,10 @@ desktop for preview, tablet/phone for selection.
    terminal with no duplicated trailing segment or wrapped remainder. The main
    terminal remains real-time.
 9. In Terminal mode, click Agent and verify its status or initialization dialog
-   opens without selecting another card. In FileSystem mode, click the Agent
-   control to return to Terminal; the same control must not lose access to the
-   Agent dialog, which remains available from Terminal mode. Click Files and
-   verify it enters FileSystem for that card without creating a connection.
+   opens without selecting another card. In FileSystem mode, click the Terminal
+   extension to return to Terminal; the Agent robot remains an Agent details
+   control and does not change workspace mode. Click Files and verify it enters
+   FileSystem for that card without creating a connection.
 10. On coarse-pointer or width `<=800`, no preview runtime is created by hover,
    focus, or touch. Selecting a card closes the overlay and opens that instance.
 

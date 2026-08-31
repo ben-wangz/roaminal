@@ -124,7 +124,7 @@ func pruneDiagnosticFiles(path, archive string, now time.Time, maxAge time.Durat
 
 func diagnosticValue(value string) string {
 	value = strings.TrimSpace(value)
-	if strings.Contains(strings.ToLower(value), "token") || strings.Contains(strings.ToLower(value), "bearer") || strings.Contains(strings.ToLower(value), "webhook") {
+	if strings.Contains(strings.ToLower(value), "token") || strings.Contains(strings.ToLower(value), "bearer") || strings.Contains(strings.ToLower(value), "credential") {
 		return "redacted"
 	}
 	return value

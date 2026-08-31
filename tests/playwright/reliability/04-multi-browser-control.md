@@ -19,7 +19,7 @@ Viewport: desktop.
    never claim control, resize the PTY, or consume client capacity indefinitely
    after hover ends.
 6. Close one browser context. The connection process and other browser remain
-   usable. Sign out/revoke one auth session without terminating the shared
+   usable. Sign out/revoke one login session without terminating the shared
    backend connection.
 
 ## Pass gate

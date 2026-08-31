@@ -5,7 +5,7 @@ instances. The Go service owns PTYs, OpenSSH transports, and HTTP/WebSocket
 access; a Node child process maintains the xterm.js shadow state. Connection
 definitions and SSH keys are read from `~/.ssh/config` and `~/.ssh/` rather
 than copied into application storage. Optional tmux attachment, local and
-remote monitoring, audit artifacts, and browser refresh re-attachment are
+remote monitor, audit artifacts, and browser refresh re-attachment are
 supported.
 
 Browser refresh persistence applies while the backend process is running. A
@@ -81,9 +81,9 @@ podman run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
 
 The Helm Chart in `chart/` is the deployment source of truth. It uses one
 `Recreate` Deployment, one unified RWO PVC with `state/`, `workspace/`, and
-`ssh/` directories, a `ClusterIP` Service, and `/healthz` probes. The former
+`ssh/` directories, a `ClusterIP` Service, and `/healthz` probes. The
 `deploy/kubernetes/` directory contains the migration pointer and an optional
-empty Helm values override; it is not a second Chart or raw-manifest path. The full rollout, TLS, proxy timeout, PVC
+empty Helm values override; it is not a second Chart or deployment source. The full rollout, TLS, proxy timeout, PVC
 permission, migration, and backup procedure is in [deployment](docs/deployment.md).
 
 Install a published Chart release with Helm and the repository override file:

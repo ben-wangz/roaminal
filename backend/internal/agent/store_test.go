@@ -53,20 +53,3 @@ func TestStoreUpdatePersistsAtomicallyAndReturnsClones(t *testing.T) {
 		t.Fatalf("agent store permissions = %o", info.Mode().Perm())
 	}
 }
-
-func TestStoreOpensLegacyWebhookMetadataForMigration(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, "agent-endpoints.json")
-	data := []byte(`{"formatVersion":1,"endpoints":{"legacy":{"user":"coder","host":"host.test","port":22,"activeTokenHash":"legacy-token","webhookOrigin":"https://legacy.invalid"}}}`)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	store := OpenStore(root)
-	if err := store.Err(); err != nil {
-		t.Fatalf("legacy store should remain readable: %v", err)
-	}
-	record, ok := store.Get("legacy")
-	if !ok || record.WebhookOrigin != "https://legacy.invalid" {
-		t.Fatalf("legacy metadata was not decoded: ok=%v record=%+v", ok, record)
-	}
-}

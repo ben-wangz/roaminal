@@ -84,7 +84,7 @@ func validatePushSubscriptionFile(file pushSubscriptionFile) error {
 			return errors.New("push subscription id is invalid")
 		}
 		if !uuidPattern.MatchString(record.AuthenticationSessionID) {
-			return errors.New("push subscription authentication session id is invalid")
+			return errors.New("push subscription login session id is invalid")
 		}
 		if _, exists := seenIDs[record.ID]; exists {
 			return errors.New("duplicate push subscription id")

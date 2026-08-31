@@ -1,6 +1,6 @@
 # API
 
-JSON requests use `Content-Type: application/json`, are limited to 1 MiB, and
+JSON API requests use `Content-Type: application/json`, are limited to 1 MiB, and
 reject unknown fields. FileSystem uploads use multipart form data and are
 limited to 10 GiB of file content plus multipart overhead. Browser requests
 must use the current page Origin. The public endpoints are `/healthz`,
@@ -11,9 +11,9 @@ Errors use
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/healthz` | Worker health (`503` while unavailable) |
+| GET | `/healthz` | Backend and terminal-worker health (`503` while unavailable) |
 | GET | `/api/v2/version` | Product, API version, process `bootId`, and diagnostic capability |
-| POST | `/api/v2/auth/challenge`, `/api/v2/auth/login`, `/api/v2/auth/refresh`, `/api/v2/auth/logout` | Authentication |
+| POST | `/api/v2/auth/challenge`, `/api/v2/auth/login`, `/api/v2/auth/refresh`, `/api/v2/auth/logout` | Login and session lifecycle |
 | GET | `/api/v2/auth/session`, `/api/v2/auth/sessions` | Current or all login sessions |
 | DELETE | `/api/v2/auth/sessions/:authSessionId` | Revoke one login session |
 | POST | `/api/v2/auth/logout-others` | Revoke other login sessions |
@@ -23,8 +23,8 @@ Errors use
 | GET | `/api/v2/notifications/config` | Read authenticated Web Push availability and the public VAPID key |
 | GET/PUT | `/api/v2/notifications/preferences` | Read or update per-connection browser notification preferences |
 | PUT | `/api/v2/notifications/subscription` | Register or replace the current browser's Web Push subscription |
-| DELETE | `/api/v2/notifications/subscription/:subscriptionId` | Remove one current-session Web Push subscription |
-| DELETE | `/api/v2/notifications/subscriptions` | Remove all current-session Web Push subscriptions |
+| DELETE | `/api/v2/notifications/subscription/:subscriptionId` | Remove one current login-session Web Push subscription |
+| DELETE | `/api/v2/notifications/subscriptions` | Remove all current login-session Web Push subscriptions |
 | GET/POST | `/api/v2/connection-instances` | List or create local/remote instances |
 | PUT | `/api/v2/connection-instances/order` | Save the current login session's sidebar order |
 | GET | `/api/v2/connection-instances/:connectionInstanceId` | Inspect an active instance |
@@ -90,7 +90,7 @@ matching connection preference: `running -> relax` or `running -> error`. The
 message center shows all standard state transitions. The server keeps
 subscription endpoints and encryption keys in private state and never returns
 them. The browser's global notification switch controls local delivery and
-removes all subscriptions for the current authentication session when turned
+removes all subscriptions for the current login session when turned
 off. If VAPID configuration is absent, the config endpoint reports Web Push
 disabled.
 
@@ -108,7 +108,7 @@ to detect a root change. Directory pagination snapshots are in-memory and
 short-lived. Paths are constrained below the resolved root; symlink content is
 not read through the API.
 
-Uploads are asynchronous multipart requests with a manifest and file parts.
+Uploads are asynchronous multipart requests with a file manifest and file parts.
 Conflict policies are `refuse` (default), `overwrite`, and `update-if-newer`.
 The server uses `rsync` when both sides support it and falls back to `scp`.
 Poll the upload resource until it reaches a terminal status; `DELETE` cancels
@@ -123,7 +123,7 @@ runtime identity. Repeated or concurrent initialization for the same endpoint
 joins the existing operation; the latest Agent projection and synchronization
 metadata are persisted by the backend.
 
-The remote component supports Linux and macOS on `amd64` and `arm64`. It
+The Agent component bundle supports Linux and macOS on `amd64` and `arm64`. It
 installs the hook binary at `$HOME/.roaminal/bin/roaminal-agent-hook`, the
 Codex hook configuration under `$HOME/.codex/hooks.json`, and private local
 component metadata under `$HOME/.roaminal/agent.json`. The hook writes only

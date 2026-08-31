@@ -7,7 +7,7 @@ Proxies must preserve WebSocket upgrades and allow one-hour read/send timeouts.
 Login uses a 30-second, single-use HMAC-SHA256 challenge. The browser retains
 access and refresh tokens only in origin-local storage. The server persists only
 refresh-token hashes and a password fingerprint; refresh rotates both tokens.
-Changing the password revokes prior refresh sessions.
+Changing the password revokes prior login sessions.
 
 State directories use `0700`; state files use `0600`, fsync, and atomic rename.
 Protect the authentication Secret and unified PVC as credential material: the
@@ -18,18 +18,19 @@ The container runs as UID/GID 1000 with a read-only root filesystem, no added
 capabilities, no privilege escalation, and no host/runtime socket. Never expose
 the worker protocol through a Service or production port-forward.
 
-Remote monitoring uses only an existing SSH ControlMaster. It disables new
+The remote monitor uses only an existing SSH ControlMaster. It disables new
 connections, credential prompts, forwarding, and user-supplied remote
 commands; collector output is bounded, parsed from an allowlist, and never
 persisted. Metrics remain unknown when cgroup ownership cannot be established.
 
 Agent initialization normalizes the SSH endpoint in the backend and identifies
-the tmux target by its session name and runtime identity. The remote hook stores
-only private component metadata and per-runtime Agent state under
-`$HOME/.roaminal/`, with state and lock files at `0600`. It performs no network
-access and receives no endpoint, connection, or credential configuration. The
-backend reads state only through the live SSH connection instance, validates the
-tmux identity and monotonic index, and persists only the latest projection.
+the tmux target by its session name and runtime identity. The installed Agent
+component stores only private component metadata and per-runtime Agent state
+files under `$HOME/.roaminal/`, with state and lock files at `0600`. It performs
+no network access and receives no endpoint, connection, or credential
+configuration. The backend reads state files only through the live SSH
+connection instance, validates the tmux identity and monotonic index, and
+persists only the latest projection.
 
 FileSystem access is limited to backend-controlled probes and transfers below
 the resolved root. It has no arbitrary remote-command endpoint.

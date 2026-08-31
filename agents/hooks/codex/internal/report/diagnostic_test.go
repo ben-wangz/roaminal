@@ -12,7 +12,7 @@ func TestLogDiagnosticWritesBoundedPrivateRecords(t *testing.T) {
 	home := t.TempDir()
 	LogDiagnostic(home, "hook_delivery_failed", map[string]string{
 		"sequence": "7",
-		"error":    "Bearer token webhook must not be retained",
+		"error":    "Bearer token credential must not be retained",
 	})
 	path := diagnosticLogPath(home)
 	data, err := os.ReadFile(path)
@@ -22,7 +22,7 @@ func TestLogDiagnosticWritesBoundedPrivateRecords(t *testing.T) {
 	if !strings.Contains(string(data), `event="hook_delivery_failed"`) || !strings.Contains(string(data), `sequence="7"`) {
 		t.Fatalf("unexpected diagnostic record: %s", data)
 	}
-	if strings.Contains(string(data), "Bearer") || strings.Contains(string(data), "webhook") || strings.Contains(string(data), "token") {
+	if strings.Contains(string(data), "Bearer") || strings.Contains(string(data), "credential") || strings.Contains(string(data), "token") {
 		t.Fatalf("diagnostic record retained sensitive value: %s", data)
 	}
 	info, err := os.Stat(path)

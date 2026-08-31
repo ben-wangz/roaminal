@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Prune removes subscriptions belonging to expired authentication sessions.
+// Prune removes subscriptions belonging to expired login sessions.
 // It is intentionally best effort at startup: notification availability must
 // not prevent the terminal service from starting.
 func (s *Service) Prune(ctx context.Context, active func(string) bool) error {

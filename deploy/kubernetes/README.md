@@ -1,20 +1,20 @@
-# Helm values and legacy migration
+# Helm values override and data migration
 
-The supported Kubernetes source is now [`chart/`](../../chart/), and published
-deployments use the OCI Chart from GHCR. The former raw manifests are
-intentionally retired so that deployment behavior is defined in one place.
+The supported Kubernetes source is [`chart/`](../../chart/), and published
+deployments use the OCI Chart from GHCR. Deployment behavior is defined by that
+Chart.
 
 [`values.yaml`](values.yaml) is the repository-level override file for Helm
 deployments. It is intentionally empty until this deployment needs to override
 a Chart default; an empty file changes nothing.
 
-For an existing raw-manifest installation, follow the migration procedure in
+For an existing older multi-volume installation, follow the migration procedure in
 [`docs/deployment.md`](../../docs/deployment.md) before installing the chart.
-The procedure explicitly backs up the three legacy PVCs, copies them into the
-single chart PVC under `state/`, `workspace/`, and `ssh/`, and leaves the legacy
+The procedure explicitly backs up the three source PVCs, copies them into the
+single Chart PVC under `state/`, `workspace/`, and `ssh/`, and leaves the source
 PVCs untouched until the operator verifies the result.
 
-Do not apply files from this directory as Kubernetes manifests. Use the values
+Do not apply files from this directory directly to Kubernetes. Use the values
 file with the published Chart, for example:
 
 ```sh
@@ -28,4 +28,4 @@ helm upgrade --install roaminal \
 ```
 
 This README remains the discoverable migration entry point for installations
-that still use the retired raw manifests.
+that still use the older multi-volume layout.

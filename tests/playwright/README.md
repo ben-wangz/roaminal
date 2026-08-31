@@ -8,7 +8,7 @@ The Markdown cases are the maintained browser regression specification.
 
 The system under test is exclusively a Kubernetes release installed from this
 repository's `chart/` Helm Chart. A locally started backend/frontend, Podman
-container, ad-hoc Pod, or retired `deploy/kubernetes/` manifest is not an
+container, ad-hoc Pod, or direct `deploy/kubernetes/` deployment is not an
 acceptable substitute because it does not exercise the Chart's init container,
 Secret wiring, unified PVC, probes, Service, security context, or lifecycle.
 
@@ -124,7 +124,7 @@ the first SSH/tmux case and reset it between cases that require a clean remote
 home. The fixture must accept an Ed25519 key owned by the test release, must
 not contain production data, and must be safe for shell exit, tmux session
 creation, and repeated connections. Tests that mutate `~/.ssh/config`,
-`~/.roaminal/ssh-connection-options.yaml`, SSH keys, auth sessions, or the
+`~/.roaminal/ssh-connection-options.yaml`, SSH keys, login sessions, or the
 connection count run serially unless every worker has its own release and PVC.
 
 Before a run, retain the Helm deployment-gate record together with the Roaminal
@@ -163,7 +163,9 @@ all assertions and cleanup observations finish:
 - `page.on('response')`: fail unexpected `4xx` and all `5xx`; an expected
   negative response must match method, path, status, and error body.
 - `page.on('websocket')`: record URL, frames, socket errors, and close. Verify
-  that every connection uses the expected same-origin `/ws/v2/connection-*` path.
+  that every connection uses one of the expected same-origin paths:
+  `/ws/v2/connection-instances/<connectionInstanceId>` or
+  `/ws/v2/connection-launches/<launchId>`.
 
 Before marking a case passed, explicitly assert that the collected diagnostics
 contain none of the following known regressions:
@@ -207,6 +209,11 @@ without explaining the originating request and expiry condition.
    assume a fixed numeric badge. A smoke case that only probes key inventory may
    report `SKIPPED` when no controlled key fixture is provisioned. The dedicated
    key cases remain `BLOCKED` until their fixture matrix is available.
+10. For every polled or lifecycle-owned endpoint, record the method, normalized
+    path, start/end time, and maximum concurrent request count. A stable app
+    must not create an uncontrolled request burst, leave a request in flight
+    after its owning view is unmounted or the test is cleaned up, or produce
+    `net::ERR_INSUFFICIENT_RESOURCES`.
 
 ## Coverage index
 
@@ -217,7 +224,7 @@ without explaining the originating request and expiry condition.
 | Connection definitions | [manager/filter](connections/01-manager-and-filter.md), [source capabilities](connections/02-ssh-config-source.md), [create/edit](connections/03-definition-create-edit.md), [copy/delete/ETag](connections/04-definition-copy-delete-etag.md) |
 | Connection lifecycle | [local](connections/05-local-connection.md), [SSH](connections/06-ssh-initial-connect.md), [reuse](connections/07-transport-reuse.md), [tmux](connections/08-tmux.md), [pending launch](connections/09-pending-launch.md), [exit/failover](connections/10-exit-and-failover.md), [source change](connections/11-source-change-draining.md) |
 | SSH keys | [inventory/copy](keys/01-inventory-and-copy.md), [generation](keys/02-generation.md), [delete/read-only](keys/03-delete-and-readonly.md) |
-| Workspace | [terminal I/O](workspace/01-terminal-io.md), [sidebar/preview](workspace/02-sidebar-selection-and-preview.md), [actions/titles](workspace/03-actions-and-titles.md), [display names](workspace/04-display-name.md), [search](workspace/05-search.md), [virtual keyboard](workspace/06-contextual-keyboard.md), [mobile input](workspace/07-touch-keyboard.md), [resize](workspace/08-resize.md), [local status](workspace/09-system-status.md), [remote monitor](workspace/10-remote-monitor.md), [responsive/a11y](workspace/11-responsive-and-accessibility.md), [terminal appearance](workspace/12-terminal-appearance.md), [browser capabilities](workspace/16-browser-capabilities.md) |
-| Reliability | [refresh recovery](reliability/01-refresh-recovery.md), [WebSocket reconnect](reliability/02-websocket-reconnect.md), [backend restart](reliability/03-backend-restart-persistence.md), [multi-browser control](reliability/04-multi-browser-control.md), [capacity/isolation](reliability/05-capacity-and-isolation.md), [client diagnostics](reliability/06-client-diagnostics.md), [0.3 HTTP/WebSocket contracts](reliability/07-v2-contracts.md) |
-| Agent | [Codex status and initialization](workspace/14-codex-agent-status.md), [message center](workspace/15-agent-messages.md), [browser capabilities](workspace/16-browser-capabilities.md) |
+| Workspace | [terminal I/O](workspace/01-terminal-io.md), [sidebar/preview](workspace/02-sidebar-selection-and-preview.md), [actions/titles](workspace/03-actions-and-titles.md), [display names](workspace/04-display-name.md), [search](workspace/05-search.md), [virtual keyboard](workspace/06-contextual-keyboard.md), [mobile input](workspace/07-touch-keyboard.md), [resize](workspace/08-resize.md), [local status](workspace/09-system-status.md), [remote monitor](workspace/10-remote-monitor.md), [responsive/a11y](workspace/11-responsive-and-accessibility.md), [terminal appearance](workspace/12-terminal-appearance.md), [FileSystem](workspace/13-filesystem.md), [Codex Agent status](workspace/14-codex-agent-status.md), [Agent messages](workspace/15-agent-messages.md), [browser capabilities](workspace/16-browser-capabilities.md), [connection-instance groups](workspace/17-connection-instance-groups.md), [Agent notification preferences](workspace/18-agent-notification-preferences.md) |
+| Reliability | [refresh recovery](reliability/01-refresh-recovery.md), [WebSocket reconnect](reliability/02-websocket-reconnect.md), [backend restart](reliability/03-backend-restart-persistence.md), [multi-browser control](reliability/04-multi-browser-control.md), [capacity/isolation](reliability/05-capacity-and-isolation.md), [client diagnostics](reliability/06-client-diagnostics.md), [0.3 HTTP/WebSocket contracts](reliability/07-v2-contracts.md), [client request stability](reliability/08-client-request-stability.md) |
+| Agent | [Codex status and initialization](workspace/14-codex-agent-status.md), [message center](workspace/15-agent-messages.md), [notification preferences](workspace/18-agent-notification-preferences.md), [browser capabilities](workspace/16-browser-capabilities.md) |
 | Security | [browser boundary](security/01-browser-security.md), [HTTP/WebSocket authorization](security/02-http-websocket-authorization.md), [HTTPS ingress WebSocket](security/03-https-ingress-websocket.md) |

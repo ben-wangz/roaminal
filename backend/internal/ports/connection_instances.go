@@ -29,7 +29,7 @@ type AgentSummary struct {
 
 // RemoteCapability describes whether an interactive SSH connection instance
 // currently has a reusable control transport for auxiliary features such as
-// FileSystem and remote monitoring.
+// FileSystem and the remote monitor.
 type RemoteCapability struct {
 	Status    string `json:"status"`
 	Retryable bool   `json:"retryable"`

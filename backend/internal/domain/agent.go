@@ -6,18 +6,10 @@ import "time"
 // runtime projections. It belongs to the agent repository boundary rather
 // than the HTTP representation.
 type AgentEndpointRecord struct {
-	User                   string   `json:"user"`
-	Host                   string   `json:"host"`
-	Port                   int      `json:"port"`
-	Aliases                []string `json:"aliases,omitempty"`
-	ActiveTokenHash        string   `json:"activeTokenHash,omitempty"`
-	PendingTokenHash       string   `json:"pendingTokenHash,omitempty"`
-	PendingCreatedAt       string   `json:"pendingCreatedAt,omitempty"`
-	PreviousTokenHash      string   `json:"previousTokenHash,omitempty"`
-	PreviousTokenExpiresAt string   `json:"previousTokenExpiresAt,omitempty"`
-	// Legacy webhook fields remain readable during the 0.3 migration. They
-	// are never used for authentication, delivery, or component configuration.
-	WebhookOrigin     string                      `json:"webhookOrigin,omitempty"`
+	User              string                      `json:"user"`
+	Host              string                      `json:"host"`
+	Port              int                         `json:"port"`
+	Aliases           []string                    `json:"aliases,omitempty"`
 	ComponentVersion  string                      `json:"componentVersion,omitempty"`
 	ComponentSHA256   string                      `json:"componentSha256,omitempty"`
 	InstallationState string                      `json:"installationState"`
@@ -45,8 +37,8 @@ type AgentTargetState struct {
 	ErrorCode        string    `json:"errorCode,omitempty"`
 	ErrorMessage     string    `json:"errorMessage,omitempty"`
 	// State fields are the provider-neutral projection populated by the local
-	// state synchronizer. The legacy activity fields remain readable so an
-	// existing repository can be migrated without losing diagnostics.
+	// state-file synchronizer. Activity fields are the presentation projection
+	// exposed with connection-instance responses.
 	RuntimeID         string    `json:"runtimeId,omitempty"`
 	SocketFingerprint string    `json:"socketFingerprint,omitempty"`
 	State             string    `json:"state,omitempty"`

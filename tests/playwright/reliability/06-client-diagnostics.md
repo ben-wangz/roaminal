@@ -72,7 +72,7 @@ global diagnostics gate.
    trigger a fresh marker, and verify delivery resumes.
 6. Inspect the Pod log for `client_diagnostic=` records and inspect the private
    state path with a read-only command. Locate the matching `pageId` and
-   `eventId`, verify the runtime version, boot ID, auth session, event kinds,
+   `eventId`, verify the runtime version, boot ID, login session, event kinds,
    and redaction. Do not print the complete file in the test report.
 7. Deploy a second disposable revision with
    `app.clientDiagnosticsEnabled=false`. Repeat the explicit Console error and

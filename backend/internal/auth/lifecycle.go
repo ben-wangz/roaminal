@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// IsSessionActive reports whether an authentication session can still be used
+// IsSessionActive reports whether a login session can still be used
 // for an authenticated resource. It is used by durable resource cleanup and
 // does not mutate the session store.
 func (m *Manager) IsSessionActive(sessionID string) bool {

@@ -1,4 +1,4 @@
-# PW-WORKSPACE-012: Terminal appearance preferences
+# PW-WORK-012: Terminal appearance preferences
 
 Priority: P1. Capabilities: core; repeat with SSH/tmux when fixtures are
 available. Viewports: all five standard projects; use desktop for lifecycle and
@@ -66,9 +66,16 @@ cross-tab assertions.
    in separate runs. The UI must restore defaults without a page error, console
    warning, failed request, blank sample, or external font request.
 10. Repeat the page, controls, sample, and 32px setting at desktop, tablet
-    landscape, tablet portrait, phone portrait, and phone landscape. Assert no
-    clipped text, overlapping controls, horizontal page overflow, blank xterm,
-    or inaccessible control. Verify screenshots at the saved final state.
+   landscape, tablet portrait, phone portrait, and phone landscape. Assert no
+   clipped text, overlapping controls, horizontal page overflow, blank xterm,
+   or inaccessible control. Verify screenshots at the saved final state.
+11. While the Appearance page is mounted, record the sample xterm element,
+    runtime identity, rendered grid, and WebSocket count. Trigger at least 30
+    heartbeat cycles, switch connection selection, open/close Message Center,
+    toggle notification state, and open/close unrelated dialogs. Assert the
+    sample keeps one runtime and stable rendered content/grid; only a font or
+    size draft change may change its metrics. No duplicate socket, disposed
+    runtime, blank sample, or continuous redraw/request loop is allowed.
 
 ## Cleanup and diagnostics
 

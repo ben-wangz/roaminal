@@ -63,12 +63,6 @@ func (s *Service) completeInitialization(id string, target Target, result string
 		logAgentInfo("agent_initialization_completed", id, instanceID, "endpoint_key=%q result=%q component=%q changed=%t duration_ms=%d", endpointKey, result, component, changed, elapsed)
 	}
 	_ = s.store.Update(target.EndpointKey, func(record *EndpointRecord) error {
-		record.ActiveTokenHash = ""
-		record.PendingTokenHash = ""
-		record.PendingCreatedAt = ""
-		record.PreviousTokenHash = ""
-		record.PreviousTokenExpiresAt = ""
-		record.WebhookOrigin = ""
 		for name, state := range record.Targets {
 			if name != target.SessionName && state.InitializationID != id {
 				continue

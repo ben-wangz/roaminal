@@ -8,7 +8,7 @@ workspace/  -> /workspace
 ssh/        -> /home/roaminal/.ssh
 ```
 
-`state/` stores authentication sessions, per-login-session workspace
+`state/` stores login sessions, per-login-session workspace
 layouts, Agent endpoint projections and latest per-tmux state snapshots,
 message history, notification preferences, upload records, active connection
 metadata and snapshots, and archived

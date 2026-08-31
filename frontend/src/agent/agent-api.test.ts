@@ -35,7 +35,9 @@ describe('agentTitle', () => {
 describe('agentVisualState', () => {
   it('maps setup and Agent states to robot artwork', () => {
     expect(agentVisualState(agent({ component: 'uninitialized' }))).toBe('sleeping');
+    expect(agentVisualState(agent({ support: 'unsupported', supportReason: 'tmux_disabled', component: 'uninitialized' }))).toBe('confusing');
     expect(agentVisualState(agent({ component: 'ready', activity: 'unknown' }))).toBe('confusing');
+    expect(agentVisualState(agent({ component: 'ready', syncStatus: 'stale' }))).toBe('confusing');
     expect(agentVisualState(agent({ component: 'ready', activity: 'idle' }))).toBe('singing-relax');
     expect(agentVisualState(agent({ component: 'ready', activity: 'running' }))).toBe('busy-working');
     expect(agentVisualState(agent({ component: 'error', errorCode: 'agent_install_failed' }))).toBe('broken');

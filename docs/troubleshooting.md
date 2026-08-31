@@ -19,7 +19,7 @@ startup error and is never moved automatically.
 Use the challenge returned immediately before login. Challenges expire after 30
 seconds and are single-use, including failed attempts. Refresh tokens rotate;
 discard the old token after a successful refresh. Changing the configured
-password or restarting with a generated password revokes old refresh sessions.
+password or restarting with a generated password revokes existing login sessions.
 
 ## WebSocket closes immediately
 
@@ -60,8 +60,9 @@ failed. After a failed installation, inspect the remote component prerequisites
 and retry; repeated initialization for the same endpoint joins the active
 operation.
 
-Once initialized, the remote hook must be executable, its component metadata
-must remain mode `0600`, and its local state/log directories must remain private.
+Once initialized, the installed Agent component must be executable, its
+component metadata must remain mode `0600`, and its local state/log directories
+must remain private.
 The message center reports actual standard Agent state transitions, not every
 hook event. A missing transition should be correlated with
 `$HOME/.roaminal/logs/codex-hook.log`, the configured tmux session, and the

@@ -29,11 +29,11 @@ podman run --rm --name roaminal -p 9846:9846 \
 
 The root `.containerignore` excludes Git metadata, dependency directories,
 frontend build output, test reports, and logs from the build context. The image
-contains the compiled Agent hook bundle under
+contains the compiled Agent component bundle under
 `/opt/roaminal/agents/hooks/codex`; do not depend on a host checkout at
 runtime.
 
-## Helm install
+## Kubernetes with Helm
 
 Helm 3.13+ and Kubernetes 1.25+ are required. Set `GHCR_USERNAME` and
 `GHCR_TOKEN` only for a private package.
@@ -65,9 +65,9 @@ Read-only SSH Secrets and projected volumes remain usable for connections, but
 SSH config edits and key operations require a writable source. State and
 workspace must always be writable by UID/GID 1000.
 
-## Legacy PVC migration
+## Migrating from an older multi-volume deployment
 
-The retired raw manifests used three PVCs. Back up those claims, stop the old
+Older deployments may use three PVCs. Back up those claims, stop the old
 Deployment, create a unified claim, and copy each old claim into `state/`,
 `workspace/`, or `ssh/` with a temporary root-owned copier Pod. Install the
 Chart with `persistence.existingClaim`, verify login and local/SSH connections,

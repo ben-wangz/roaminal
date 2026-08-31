@@ -56,8 +56,8 @@ The container root filesystem is read-only. The chart always mounts a writable
 `emptyDir` at `/tmp` for SSH multiplexing sockets; configure its medium and
 quota with `tmp.medium` and `tmp.sizeLimit` (the default quota is `64Mi`).
 
-Historical raw manifests used three PVCs. They cannot be adopted directly as
-one claim. Stop the old Deployment, back up all three claims, create the new
+Older multi-volume deployments used three PVCs. They cannot be adopted directly
+as one claim. Stop the old Deployment, back up all three claims, create the new
 claim, copy the old contents into the three logical directories, verify the
 result, and only then install this chart. Helm never performs that copy or
 deletes the old claims. The complete command-by-command procedure, including

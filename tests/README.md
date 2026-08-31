@@ -6,7 +6,7 @@ needed; there is no second checked-in executable E2E suite to keep in sync.
 
 All cases target a Kubernetes system deployed from Roaminal's `chart/` Helm
 Chart. They do not define acceptance coverage for `go run`, a frontend dev
-server, Podman, an ad-hoc Pod, or historical raw Kubernetes manifests. Before
+server, Podman, an ad-hoc Pod, or historical Kubernetes resources. Before
 testing, the agent must verify the release is fully deployed and ready. If it is
 not, follow the **Kubernetes with Helm** procedure in
 [the deployment guide](../docs/deployment.md#kubernetes-with-helm) before

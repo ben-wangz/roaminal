@@ -65,7 +65,7 @@ func (s *Service) acceptSnapshot(endpointKey string, target Target, view ports.C
 		value.SyncError = ""
 		value.Component = "ready"
 		value.ComponentVersion = snapshot.ComponentVersion
-		value.Activity = legacyActivity(snapshot.State)
+		value.Activity = activityForState(snapshot.State)
 		value.LastEventAt = snapshot.Records[len(snapshot.Records)-1].Timestamp.UTC()
 		value.LastEventName = snapshot.Records[len(snapshot.Records)-1].EventName
 		if transitionKey != "" {
@@ -172,7 +172,7 @@ func (s *Service) matchingConnectionDefinitions(instanceIDs []string, fallback p
 	return result
 }
 
-func legacyActivity(state string) string {
+func activityForState(state string) string {
 	switch state {
 	case "running":
 		return "running"

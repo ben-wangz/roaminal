@@ -1,4 +1,4 @@
-# PW-WS-014: Codex Agent status and initialization
+# PW-WORK-014: Codex Agent status and initialization
 
 Priority: P1. Capabilities: Kubernetes release, isolated SSH/tmux fixture, and
 disposable remote home. Viewport: desktop unless a responsive assertion is
@@ -13,8 +13,13 @@ explicitly listed.
    has a Terminal icon button that always opens Terminal, a Files icon when the
    FileSystem capability is available, and a separate pixel-art Codex robot
    status button. The robot uses `data-agent-state` and
-   `data-agent-activity`; `uninitialized` shows the sleeping artwork. Local and
-   non-tmux connections show the unknown/unavailable robot tooltip.
+   `data-agent-activity`; a supported uninitialized target shows the sleeping
+   artwork. Capture the five artwork states and verify their stable asset
+   names/accessible labels: sleeping for supported uninitialized, confusing for
+   unknown or unsupported/unavailable, singing-relax for idle, busy-working for
+   running/initializing, and broken for an explicit setup or Agent error. Local
+   and non-tmux connections must show confusing artwork with the
+   unknown/unavailable tooltip rather than sleeping.
 3. Open the Codex robot status button. Verify the dialog names the connection,
    tmux session, resolved endpoint for display, `$HOME/.roaminal/`, and
    `$HOME/.codex/hooks.json`. Explain that the installed hook writes local Agent

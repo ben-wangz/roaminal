@@ -29,7 +29,7 @@ func ValidateConnectionInstanceOrder(order []string) error {
 }
 
 // ValidateConnectionInstanceLayout bounds and validates a per-login-session
-// grouped sidebar layout. A nil layout is accepted for legacy auth files.
+// grouped sidebar layout. A nil layout is accepted for older auth files.
 func ValidateConnectionInstanceLayout(layout *ConnectionInstanceLayout) error {
 	return domain.ValidateConnectionInstanceLayout((*domain.ConnectionInstanceLayout)(layout))
 }

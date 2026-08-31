@@ -43,7 +43,7 @@ func TestHelperInstallDiagnosticUsesStableCodes(t *testing.T) {
 		t.Fatalf("diagnostic code = %q", got)
 	}
 	if got := helperInstallDiagnostic([]byte(`{"error":"private directory permissions are unsafe"}`)); got != "helper_install_failed" {
-		t.Fatalf("legacy diagnostic code = %q", got)
+		t.Fatalf("fallback diagnostic code = %q", got)
 	}
 	if got := helperInstallDiagnostic([]byte(`{"error":"anything","code":"/secret"}`)); got != "helper_install_failed" {
 		t.Fatalf("unknown diagnostic code = %q", got)

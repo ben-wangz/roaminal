@@ -28,10 +28,10 @@ Roaminal fields are accepted. Durations use Go syntax.
 
 Terms acknowledgement is required. Explicitly supplied empty passwords are an
 error; when no password is supplied a new random password is printed once at
-startup, so stable passwords are required for refresh sessions to survive a
+startup, so stable passwords are required for login sessions to survive a
 restart. Invalid values fail startup rather than being clamped.
 
-The state directory is `~/.roaminal`. It contains authentication sessions,
+The state directory is `~/.roaminal`. It contains login sessions,
 per-login-session `workspace-layouts.json`, Agent endpoint projections and
 latest per-tmux state snapshots, `messages.json`, `push-subscriptions.json`,
 notification preferences, upload records, active
@@ -42,10 +42,10 @@ Temporary upload staging is also below `uploads/`. SSH config and key material
 remain under `~/.ssh/`. When enabled, recent redacted browser diagnostics are
 stored below `diagnostics/` with bounded retention.
 
-The Agent hook asset directory is read-only input to Agent initialization and
-normally comes from the container image. The installed hook uses only the
-remote user's local `$HOME/.roaminal/` state, lock, and diagnostic paths; no
-Roaminal URL or Agent webhook configuration is required.
+The Agent component bundle directory is read-only input to Agent initialization
+and normally comes from the container image. The installed component uses only
+the remote user's local `$HOME/.roaminal/` state, lock, and diagnostic paths;
+no server URL or connection-specific configuration is required.
 
 Web Push is disabled unless `webPushVapidPublicKey`,
 `webPushVapidPrivateKey`, and `webPushSubject` are configured together. For

@@ -1,4 +1,4 @@
-# 0.3 HTTP and WebSocket contracts
+# PW-REL-007: 0.3 HTTP and WebSocket contracts
 
 This case verifies the public 0.3 transport boundary after the mandatory Helm
 deployment gate in `playwright/README.md` has passed. Use the dedicated release,
@@ -13,7 +13,7 @@ listeners before the first navigation.
    a non-empty `bootId`.
 3. Request the retired `GET /api/version` route. This is an expected negative
    response: assert exactly `404` and a static or empty body, and record it as
-   an intentional legacy-route check rather than a failed request.
+   an intentional retired-route check rather than a failed request.
 4. Confirm that the browser has made no `/api/` request other than `/api/v2/`
    during the case.
 
@@ -25,7 +25,7 @@ listeners before the first navigation.
    `retryable`.
 2. After authentication, send an invalid JSON mutation containing an unknown
    field to `PUT /api/v2/connection-instances/order`. Assert exactly `400` and
-   the same error envelope shape. Do not accept a legacy two-field error body.
+   the same error envelope shape. Do not accept an obsolete two-field error body.
 3. Verify that no access token, refresh token, terminal output, or password is
    present in the request/response diagnostics or trace.
 

@@ -22,8 +22,8 @@ algorithm. Viewport: desktop. Run serially and restore the fixture afterward.
 5. Cancel/fail generation once. No partial destination pair is visible, staging
    data is cleaned, and another generation can start.
 6. With an algorithm already present, click Generate for it. The UI rejects the
-   action before opening the dialog or creating a session and explains that the
-   existing key must be deleted first.
+   action before opening the dialog or creating a connection instance and
+   explains that the existing key must be deleted first.
 7. Attempt an existing filename or second concurrent generation and verify no
    overwrite occurs.
 

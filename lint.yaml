@@ -46,7 +46,7 @@ commands:
     cmd: "go"
     args: ["-C", "agents/hooks/codex", "vet", "./..."]
 
-  - name: "Codex hook bundle"
+  - name: "Codex component bundle"
     cmd: "sh"
     args:
       - "-c"

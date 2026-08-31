@@ -1,4 +1,4 @@
-# PW-WS-013: FileSystem tree, preview, and upload
+# PW-WORK-013: FileSystem tree, preview, and upload
 
 Priority: P1. Capabilities: one live SSH connection instance whose tmux session
 contains a disposable fixture directory with Markdown, text, image, video, PDF,
@@ -69,11 +69,12 @@ or credentials.
     FileSystem workspace is inactive or the document is hidden, and performs
     one overdue refresh on visibility resume without overlapping a manual
     refresh. Directory refreshes and preview reads do not reset the interval.
-11. Use the sidebar Agent control to return to Terminal, then the folder control
-   to enter FileSystem again. Repeat between two connection instances. Verify
-   only the selected mode occupies the main workspace body, each instance keeps
-   its own root, expanded paths, selection, preview, and upload status, and no
-   file data or root path from one instance appears in the other.
+11. Use the sidebar Terminal extension to return to Terminal, then the folder
+   control to enter FileSystem again. The Agent robot opens Agent details and
+   never changes the workspace mode. Repeat between two connection instances.
+   Verify only the selected mode occupies the main workspace body, each
+   instance keeps its own root, expanded paths, selection, preview, and upload
+   status, and no file data or root path from one instance appears in the other.
 12. Move the active tmux pane to another directory and trigger a tree/content
     request with the old root revision. Verify the UI clears the old tree,
     reloads the returned root, and shows a concise root-changed notice. Make a

@@ -1,4 +1,4 @@
-# PW-WS-015: Agent message center
+# PW-WORK-015: Agent message center
 
 Priority: P1. Capabilities: Kubernetes release, isolated SSH/tmux fixture, a
 fixture with the Roaminal Agent component installed and trusted, and a
@@ -45,6 +45,9 @@ disposable remote home. Viewports: desktop, tablet, phone, and 320 px.
    one is retired. Retire every associated instance, click the historical row,
    and verify the exact toast `The connection for this message is no longer
    connected.` appears without changing the active connection or workspace.
+   Deliver the same Service Worker click message repeatedly, including the
+   worker's retry delivery, and verify one navigation and one read-state
+   mutation for that message ID.
 8. Delete one history row with its trailing delete control and verify only
    that row disappears, its transient notice disappears, and the row remains
    absent after refresh. Open the clear control, verify the compact inline

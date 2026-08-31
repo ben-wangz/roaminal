@@ -22,9 +22,10 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
    is either the connection manager or the currently selected live workspace.
 4. Reload once. Authentication remains valid without showing the password form,
    and no second login challenge is issued.
-5. Inspect local storage: only the expected Roaminal auth state and active
-   connection selection may exist. No password, challenge proof, private key,
-   or terminal output may be stored.
+5. During this fresh-login phase, inspect local storage: only the expected
+   Roaminal auth state and active connection selection may exist. No password,
+   challenge proof, private key, terminal output, notification opt-in, or other
+   preference may be stored before the user explicitly enables that feature.
 6. On a separately reset release with a deliberately small
    `authMaxAttempts`, repeat invalid logins up to the configured limit. Each
    challenge is single-use and consumed by a failed attempt; after the limit,

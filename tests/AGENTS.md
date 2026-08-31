@@ -10,7 +10,7 @@ translating it into Playwright code.
 - If the designated release is absent, not `deployed`, or not ready, deploy or
   repair it by following the **Kubernetes with Helm** section of
   [`docs/deployment.md`](../docs/deployment.md#kubernetes-with-helm). Do not
-  substitute `go run`, a Vite server, Podman, retired raw manifests, or an
+  substitute `go run`, a Vite server, Podman, another deployment source, or an
   ad-hoc Pod. If deployment authority or required inputs are unavailable,
   report the run as `BLOCKED`, not passed or skipped.
 - Register browser diagnostics before the first navigation. A test is not
@@ -29,6 +29,6 @@ translating it into Playwright code.
 - Use the Helm-created Service URL directly. Do not create a port-forward.
 - Stateful and destructive cases require a dedicated Roaminal test release or
   an explicitly reset test dataset. Never modify unrelated Pods, SSH hosts,
-  Secrets, PVCs, or user sessions.
+  Secrets, PVCs, or login sessions.
 - Always execute cleanup, even after a failed assertion. Report cleanup
   failures separately because they can contaminate later cases.

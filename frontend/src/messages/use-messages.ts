@@ -77,7 +77,10 @@ export function useMessages({ auth, heartbeatState, nativeKeyboardOpen, onToast 
   useEffect(() => {
     if (!auth) return;
     if (heartbeatState !== null) controller.observeHeartbeat(heartbeatState.latestSequence);
-    if (!state.hydrated || (heartbeatState !== null && heartbeatState.revision !== state.revision)) void sync(false);
+    // The authentication effect owns the initial baseline request. Do not
+    // enqueue a second request from the first render while that baseline is
+    // still in flight.
+    if (state.hydrated && heartbeatState !== null && heartbeatState.revision !== state.revision) void sync(false);
   }, [auth, controller, heartbeatState, state.hydrated, state.revision, sync]);
 
   useEffect(() => {

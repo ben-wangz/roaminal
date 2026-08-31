@@ -12,10 +12,8 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-// Agent state has its own component schema; the enclosing persistence schema
-// version does not change the persisted Agent projection format. Legacy
-// webhook fields are accepted only so an existing 0.2 store can be opened and
-// cleaned after the local component is confirmed.
+// Agent endpoint projections use a dedicated persisted schema independent of
+// the main persistence schema.
 const agentStoreSchemaVersion = 1
 
 type fileState struct {

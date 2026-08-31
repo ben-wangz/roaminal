@@ -13,14 +13,14 @@ workloads.
    the Helm release to become ready at the same Service URL. Record that
    `/api/v2/version.bootId` changed.
 3. The old browser detects the changed boot ID and reloads without an exception.
-   Stable auth sessions remain valid because the password and state PVC did not
+   Stable login sessions remain valid because the password and state PVC did not
    change.
 4. Under the current connection-instance layout, pre-restart live processes are
    not resurrected: startup retires their metadata/snapshots to audit and the
    active list is empty, so the manager opens. Do not assert that SSH
    ControlMaster or local Bash survives a Pod restart.
-5. The workspace file, SSH config, SSH keys, auth-session record, and tmux add-on
-   YAML still exist. The old active instance directories are gone and one audit
+5. The workspace file, SSH config, SSH keys, login-session record, and tmux add-on
+   YAML still exist. The previous active instance directories are gone and one audit
    copy per instance exists without being exposed in UI/API.
 6. Start fresh local/SSH/tmux connections and verify full usability. A remote
    tmux server outside the Roaminal Pod may still retain its named session and

@@ -1,4 +1,4 @@
-# PW-WS-016: Browser fullscreen and system notifications
+# PW-WORK-016: Browser fullscreen and system notifications
 
 Priority: P1. Capabilities: core. Viewports: desktop, tablet portrait, phone
 portrait, and phone landscape. Use a fresh browser context for permission and
@@ -43,9 +43,10 @@ fullscreen assertions.
    does not attempt subscription registration. A denied permission produces a
    blocked state and does not repeatedly prompt; an insecure or unsupported
    context produces Unavailable while the Message Center remains usable.
-6. With notifications enabled and the page hidden or unfocused, configure one
-   connection's notification preference and create one `running -> relax`
-   transition. Verify one browser notification per durable `messageId`, safe
+6. With notifications enabled and the page hidden or unfocused, use the
+   preference controls covered in `PW-WORK-018` and create one
+   `running -> relax` transition. Verify one browser notification per durable
+   `messageId`, safe
    title/body, and only the message ID in notification data. Create a normal
    `relax -> running` transition and verify it is shown in Message Center but
    does not create a browser notification. Create `running -> error` only with

@@ -12,7 +12,7 @@ desktop.
    The process did not restart and a post-refresh command sees the same shell
    state where the underlying connection type supports it.
 3. Scrollback, title, PWD, dimensions, and sidebar order recover without
-   duplicated prompt/output. Old legacy local-storage keys for terminal tabs are
+   duplicated prompt/output. Obsolete local-storage keys for terminal tabs are
    removed and no tab UI returns.
 4. Reload rapidly five times, including once while a preview is connecting.
    Main/preview runtimes dispose cleanly, there is no early-open socket warning,

@@ -5,7 +5,7 @@ and phone landscape.
 
 ## Procedure and assertions
 
-1. Open a live local terminal at phone portrait width. The removed legacy
+1. Open a live local terminal at phone portrait width. The removed
    TouchKeyboard is absent. Tap the terminal stage and verify the xterm helper
    textarea becomes focused so the browser's native software keyboard opens.
    No `.mobile-terminal-composer`, application-owned input box, or Send control
