@@ -21,10 +21,10 @@ import { useAppController } from './app-controller';
 import { useConnectionInstanceController } from '../connections/connection-instance-controller';
 import { useMobileKeyboard } from '../input/use-mobile-keyboard';
 import { useMessages } from '../messages/use-messages';
-import type { WorkspaceTool } from './workspace-tool';
 import { useBrowserFullscreen } from './use-browser-fullscreen';
 import { useBrowserNotifications } from '../status/use-browser-notifications';
 import { useNotificationNavigation } from './use-notification-navigation';
+import { useWorkspaceToolActions } from './use-workspace-tool-actions';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
@@ -45,8 +45,6 @@ export function AppShell() {
     mainRuntime,
     previewRuntimeRef,
   );
-  const connectionToolButton = useRef<HTMLButtonElement>(null);
-  const keyboardToolButton = useRef<HTMLButtonElement>(null);
   const toastTimer = useRef<number | null>(null);
   useEffect(() => observeViewportHeight(), []);
   const showToast = useCallback((message: string, kind: ToastKind = 'info') => {
@@ -165,33 +163,20 @@ export function AppShell() {
     onToast: showToast,
   });
   const notifications = useBrowserNotifications(auth, (messageId) => { void handleNotificationClick(messageId); });
-  const handleSelectWorkspaceTool = useCallback((tool: WorkspaceTool) => {
-    if (tool === 'keyboard') {
-      if (workspaceTool === 'keyboard' && workspaceToolOpen) {
-        collapseVirtualKeyboard();
-        return;
-      }
-      selectVirtualKeyboard();
-      return;
-    }
-    if (workspaceTool === 'connections' && workspaceToolOpen) {
-      setWorkspaceToolOpen(false);
-      setPreviewConnectionInstanceId(null);
-      return;
-    }
-    setPreviewConnectionInstanceId(null);
-    setWorkspaceTool('connections');
-    setWorkspaceToolOpen(true);
-  }, [collapseVirtualKeyboard, selectVirtualKeyboard, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen, workspaceTool, workspaceToolOpen]);
-  const handleCollapseWorkspaceTool = useCallback(() => {
-    if (workspaceTool === 'keyboard') collapseVirtualKeyboard();
-    else setWorkspaceToolOpen(false);
-    setPreviewConnectionInstanceId(null);
-    window.requestAnimationFrame(() => {
-      const trigger = workspaceTool === 'connections' ? connectionToolButton : keyboardToolButton;
-      trigger.current?.focus();
-    });
-  }, [collapseVirtualKeyboard, connectionToolButton, keyboardToolButton, setPreviewConnectionInstanceId, setWorkspaceToolOpen, workspaceTool]);
+  const {
+    connectionToolButton,
+    keyboardToolButton,
+    handleSelectWorkspaceTool,
+    handleCollapseWorkspaceTool,
+  } = useWorkspaceToolActions({
+    workspaceTool,
+    workspaceToolOpen,
+    collapseVirtualKeyboard,
+    selectVirtualKeyboard,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
+    setPreviewConnectionInstanceId,
+  });
   const sidebarLayout = useMemo(() => normalizeConnectionInstanceLayout(connectionInstanceLayout, connections), [connectionInstanceLayout, connections]);
   const contextualMode = connectionController.contextualMode(activeInstance);
   const setContextualMode = useCallback((mode: Parameters<typeof connectionController.setContextualMode>[1]) => {
