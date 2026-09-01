@@ -29,15 +29,11 @@ export function VirtualKeyboardDock({
   const enabled = Boolean(
     runtime && !runtime.closedState() && runtime.connectedState() && instance?.lifecycle === 'live' && !nativeKeyboardOpen,
   );
-  const disabledReason = nativeKeyboardOpen
-    ? 'Close the browser keyboard to use virtual keys'
-    : !runtime
-      ? 'No active terminal'
-      : !runtime.connectedState()
-        ? 'Terminal is connecting'
-        : instance?.lifecycle !== 'live'
-          ? 'Connection is not live'
-          : '';
+  const disabledReason = enabled
+    ? ''
+    : nativeKeyboardOpen
+      ? 'Close the browser keyboard to use virtual keys'
+      : 'Virtual keys unavailable';
   const sendKey = (value: string) => {
     if (!enabled || !runtime) return;
     runtime.input(value);

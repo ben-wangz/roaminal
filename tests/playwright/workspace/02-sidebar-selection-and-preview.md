@@ -17,8 +17,8 @@ desktop for preview, tablet/phone for selection.
    connection name, safe endpoint, PWD, TERM, `COLS x ROWS`, and tmux context
    must belong to the selected instance. A reconnecting or exited instance must
    not retain the previous instance's footer values. Verify the Connections
-   rail badge follows the current instance total and the sidebar header does not
-   repeat it.
+   top-left rail badge follows the current relaxed-Agent projection and the
+   sidebar header does not repeat a connection total.
 3. Verify the sidebar renders the built-in `Ungrouped` section and any user
    groups as unframed sections, while each connection remains an individual
    card. The group header shows its name and member count; a collapsed group

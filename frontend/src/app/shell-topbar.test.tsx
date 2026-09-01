@@ -1,11 +1,20 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShellTopbar } from './shell-topbar';
 
 vi.mock('../input/mobile-mode', () => ({ useMobileMode: () => false }));
 
+const monitor = vi.hoisted(() => ({ resetKeys: [] as Array<string | null> }));
+vi.mock('../status/system-status', () => ({
+  SystemStatus: ({ resetKey }: { resetKey: string | null }) => {
+    monitor.resetKeys.push(resetKey);
+    return null;
+  },
+}));
+
 const baseProps = {
   workspaceOpen: false,
+  activeConnectionInstanceId: null,
   system: null,
   latencyMs: null,
   persistenceDegraded: false,
@@ -24,6 +33,19 @@ const baseProps = {
 } satisfies Parameters<typeof ShellTopbar>[0];
 
 describe('fullscreen top-bar control', () => {
+  beforeEach(() => {
+    monitor.resetKeys = [];
+  });
+
+  it('keys the mobile monitor reset to the active connection instance', () => {
+    renderToStaticMarkup(<ShellTopbar {...baseProps} workspaceOpen activeConnectionInstanceId="instance-a" />);
+    expect(monitor.resetKeys).toEqual(['instance-a']);
+
+    monitor.resetKeys = [];
+    renderToStaticMarkup(<ShellTopbar {...baseProps} workspaceOpen activeConnectionInstanceId="instance-b" />);
+    expect(monitor.resetKeys).toEqual(['instance-b']);
+  });
+
   it('does not render the removed workspace tool switcher', () => {
     const html = renderToStaticMarkup(<ShellTopbar {...baseProps} />);
     expect(html).not.toContain('workspace-tool-switcher');

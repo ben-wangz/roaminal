@@ -11,7 +11,7 @@ describe('workspace tool rail', () => {
         connectionToolButton={{ current: null }}
         keyboardToolButton={{ current: null }}
         filesToolButton={{ current: null }}
-        connectionCount={4}
+        agentRelaxCount={4}
         onSelectWorkspaceTool={vi.fn()}
         onCollapseWorkspaceTool={vi.fn()}
         onHelp={vi.fn()}
@@ -25,8 +25,9 @@ describe('workspace tool rail', () => {
     expect(html).toContain('data-testid="workspace-tool-help"');
     expect(html).toContain('data-testid="workspace-tool-collapse"');
     expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain('aria-label="Connections, 4"');
-    expect(html).toContain('data-testid="workspace-tool-connections-count">4</span>');
+    expect(html).toContain('aria-label="Connections, 4 idle agents"');
+    expect(html).toContain('data-testid="workspace-tool-connections-agent-relax-count">4</span>');
+    expect(html).not.toContain('workspace-tool-count-badge');
     expect(html).not.toContain('disabled=""');
     expect(html).not.toContain('Connections</button>');
   });
@@ -39,7 +40,7 @@ describe('workspace tool rail', () => {
         connectionToolButton={{ current: null }}
         keyboardToolButton={{ current: null }}
         filesToolButton={{ current: null }}
-        connectionCount={0}
+        agentRelaxCount={0}
         onSelectWorkspaceTool={vi.fn()}
         onCollapseWorkspaceTool={vi.fn()}
         onHelp={vi.fn()}

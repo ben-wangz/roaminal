@@ -32,7 +32,7 @@ portrait, phone portrait, and phone landscape.
    When open, verify the panel has a header without a repeated count,
    connection search, grouped connection-instance cards, and an `Add connection`
    action at the bottom. Verify the rail `PanelLeft` control owns the numeric
-   connection-instance count badge.
+   top-left Agent relax count badge.
    Verify panel scrolling is independent from the monitor and terminal and the
    terminal remains visible in the main panel.
 6. Click `Add connection` and verify a modal opens without leaving the

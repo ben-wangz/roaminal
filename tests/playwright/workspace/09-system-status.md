@@ -13,11 +13,12 @@ standard projects.
    Capacity/working-set/limit details are truthful for cgroup scope; unavailable
    values show `N/A`/`unlimited` rather than host `free` output or fabricated
    percentages.
-3. Create and close connections and verify the Connections rail badge follows
-   authoritative active instances. It must not count browser login sessions,
-   preview sockets, audit history, pending launch after cancellation, or remote
-   monitor probes; the sidebar header and local monitor must not repeat the
-   count.
+3. Change Agent projections across multiple connection instances and verify the
+   top-left Connections rail badge follows the number of instances whose Agent
+   artwork is `singing-relax`. It must not count non-relaxed Agents, browser
+   login sessions, preview sockets, audit history, pending launches, or remote
+   monitor probes; the sidebar header and local monitor must not repeat a
+   connection total.
 4. Stop heartbeat traffic briefly with a controlled route fault. The active
    Terminal footer remains the only visible connection-state owner and is not
    rewritten as a heartbeat state. Successful recovery updates retained local

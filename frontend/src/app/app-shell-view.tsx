@@ -8,6 +8,7 @@ import { WorkspaceToolRail } from '../ui/workspace-tool-rail';
 import { MessageNoticeStack, MessagePopover } from '../messages/message-center';
 import { AppShellOverlays } from './app-shell-overlays';
 import type { AppShellViewProps } from './app-shell-view-props';
+import { countRelaxedAgentConnections } from '../agent/agent-api';
 export type { Dialog } from './app-shell-overlays';
 
 export function AppShellView({
@@ -98,6 +99,7 @@ export function AppShellView({
     <div ref={appShellRef} className={`app-shell ${workspaceOpen ? 'workspace-open' : ''}`}>
       <ShellTopbar
         workspaceOpen={workspaceOpen}
+        activeConnectionInstanceId={activeInstance?.connectionInstanceId || null}
         messageUnreadCount={messageCenter.state.unreadCount}
         messagesOpen={messageCenter.state.popoverOpen}
         messageButtonRef={messageButtonRef}
@@ -119,7 +121,7 @@ export function AppShellView({
           <WorkspaceToolRail
             workspaceTool={workspaceTool}
             workspaceToolOpen={workspaceToolOpen}
-            connectionCount={connections.length}
+            agentRelaxCount={countRelaxedAgentConnections(connections)}
             connectionToolButton={connectionToolButton}
             keyboardToolButton={keyboardToolButton}
             filesToolButton={filesToolButton}

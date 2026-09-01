@@ -8,7 +8,7 @@ type Props = {
   connectionToolButton: RefObject<HTMLButtonElement | null>;
   keyboardToolButton: RefObject<HTMLButtonElement | null>;
   filesToolButton: RefObject<HTMLButtonElement | null>;
-  connectionCount: number;
+  agentRelaxCount: number;
   onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
   onCollapseWorkspaceTool: () => void;
   onHelp: () => void;
@@ -20,7 +20,7 @@ export const WorkspaceToolRail = memo(function WorkspaceToolRail({
   connectionToolButton,
   keyboardToolButton,
   filesToolButton,
-  connectionCount,
+  agentRelaxCount,
   onSelectWorkspaceTool,
   onCollapseWorkspaceTool,
   onHelp,
@@ -36,15 +36,15 @@ export const WorkspaceToolRail = memo(function WorkspaceToolRail({
           className={`workspace-tool-button ${connectionActive ? 'active' : ''}`}
           type="button"
           onClick={() => onSelectWorkspaceTool('connections')}
-          aria-label={`Connections, ${connectionCount}`}
-          title="Connections"
+          aria-label={`Connections, ${agentRelaxCount} idle agents`}
+          title={`Connections (${agentRelaxCount} idle agents)`}
           aria-pressed={connectionActive}
           aria-expanded={connectionActive && workspaceToolOpen}
           aria-controls="workspace-tool-surface"
           data-testid="workspace-tool-connections"
         >
           <PanelLeft aria-hidden="true" size={18} />
-          <span className="workspace-tool-count-badge" aria-hidden="true" data-testid="workspace-tool-connections-count">{connectionCount}</span>
+          <span className="workspace-tool-agent-relax-badge" aria-hidden="true" data-testid="workspace-tool-connections-agent-relax-count">{agentRelaxCount}</span>
         </button>
         <button
           ref={keyboardToolButton}

@@ -54,6 +54,9 @@ desktop. Run serially for byte-capture fixtures.
 9. During a pending launch, before WebSocket connection, after disconnection,
    and after exit, every applicable key is disabled and sends no frames to an
    old runtime. Reconnection enables them only for the current live instance.
+   The dock may show a generic `Virtual keys unavailable` message, but never
+   duplicates `Terminal is connecting`, `Connection is not live`, or another
+   Terminal lifecycle sentence owned by the footer.
 10. Every click returns focus to the active xterm without switching cards or
    resizing the layout.
 

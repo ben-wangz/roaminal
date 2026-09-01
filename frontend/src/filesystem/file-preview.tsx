@@ -1,9 +1,30 @@
-import { ArrowLeft, Download, FileQuestion, LoaderCircle, Search } from 'lucide-react';
+import { Download, FileQuestion, LoaderCircle, Search, SquareTerminal } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { loadMetadata, readContent } from './filesystem-api';
 import type { FileEntry, FileMetadata, FileSystemError, RootContext } from './filesystem-types';
 import { MarkdownPreview } from './markdown-preview';
 import { viewerFor, viewerLabel } from './viewer-registry';
+
+export type ImageDisplaySize = {
+  width: number;
+  height: number;
+  scale: number;
+};
+
+export function fitImageSize(
+  naturalWidth: number,
+  naturalHeight: number,
+  availableWidth: number,
+  availableHeight: number,
+): ImageDisplaySize | null {
+  if (![naturalWidth, naturalHeight, availableWidth, availableHeight].every((value) => Number.isFinite(value) && value > 0)) return null;
+  const scale = Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight);
+  return {
+    width: Math.max(1, Math.floor(naturalWidth * scale)),
+    height: Math.max(1, Math.floor(naturalHeight * scale)),
+    scale,
+  };
+}
 
 type Props = {
   instanceId: string;
@@ -41,6 +62,8 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
   const [source, setSource] = useState<string | null>(null);
   const [markdownSource, setMarkdownSource] = useState(false);
   const previewBodyRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [imageDisplaySize, setImageDisplaySize] = useState<ImageDisplaySize | null>(null);
   const loadedIdentityRef = useRef<string | null>(null);
   const lastRestoredScrollKeyRef = useRef<string | null>(null);
   const onRootChangedRef = useRef(onRootChanged);
@@ -55,6 +78,22 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
     ? `${previewIdentity}\u0000${kind === 'markdown' && !markdownSource ? 'rendered' : kind === 'markdown' ? 'source' : 'content'}`
     : null;
 
+  const updateImageDisplaySize = () => {
+    const image = imageRef.current;
+    const target = previewBodyRef.current;
+    if (!image || !target) return;
+    const style = window.getComputedStyle(target);
+    const horizontalPadding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+    const verticalPadding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const size = fitImageSize(
+      image.naturalWidth,
+      image.naturalHeight,
+      target.clientWidth - horizontalPadding,
+      target.clientHeight - verticalPadding,
+    );
+    if (size) setImageDisplaySize(size);
+  };
+
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -63,6 +102,7 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
       setMetadata(null);
       setData(null);
       setSource(null);
+      setImageDisplaySize(null);
       setMarkdownSource(false);
     }
     loadedIdentityRef.current = previewIdentity;
@@ -102,6 +142,25 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
       controller.abort();
     };
   }, [entryPath, instanceId, previewIdentity, rootRevision]);
+
+  useEffect(() => {
+    if (kind !== 'image' || !source) {
+      setImageDisplaySize(null);
+      return undefined;
+    }
+    const image = imageRef.current;
+    const target = previewBodyRef.current;
+    if (!image || !target) return undefined;
+    const update = () => updateImageDisplaySize();
+    update();
+    image.addEventListener('load', update);
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    resizeObserver?.observe(target);
+    return () => {
+      image.removeEventListener('load', update);
+      resizeObserver?.disconnect();
+    };
+  }, [kind, source]);
 
   useLayoutEffect(() => {
     const target = previewBodyRef.current;
@@ -159,15 +218,15 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
           <small>{metadata ? `${viewerLabel(kind || 'raw')} · ${formatSize(metadata.size)}` : entry.relativePath}</small>
         </div>
         <div className="filesystem-preview-actions">
-          <button autoFocus className="icon-button file-preview-back-terminal" type="button" onClick={onBackToTerminal} title="Back to Terminal" aria-label="Back to Terminal" data-testid="file-preview-back-terminal"><ArrowLeft size={16} aria-hidden="true" /></button>
+          <button autoFocus className="icon-button file-preview-back-terminal" type="button" onClick={onBackToTerminal} title="Back to Terminal" aria-label="Back to Terminal" data-testid="file-preview-back-terminal"><SquareTerminal size={17} aria-hidden="true" /></button>
           {kind === 'markdown' && <button className="icon-button" type="button" onClick={() => setMarkdownSource((value) => !value)} title={markdownSource ? 'Rendered markdown' : 'Markdown source'} aria-label={markdownSource ? 'Rendered markdown' : 'Markdown source'}><Search size={16} aria-hidden="true" /></button>}
           <button className="icon-button" type="button" onClick={() => void download()} title="Download" aria-label="Download"><Download size={16} aria-hidden="true" /></button>
         </div>
       </header>
-      <div ref={previewBodyRef} className="filesystem-preview-body">
+      <div ref={previewBodyRef} className={`filesystem-preview-body ${kind === 'image' ? 'filesystem-preview-body-image' : ''}`}>
         {!hasPreviewContent && loading && <div className="filesystem-loading"><LoaderCircle size={18} className="spin" aria-hidden="true" /> Loading preview</div>}
         {!hasPreviewContent && !loading && error && <div className="filesystem-error">{error}</div>}
-        {hasPreviewContent && kind === 'image' && source && <img className="filesystem-image-viewer" src={source} alt={entry.name} />}
+        {hasPreviewContent && kind === 'image' && source && <img ref={imageRef} className="filesystem-image-viewer" src={source} alt={entry.name} style={imageDisplaySize ? { width: `${imageDisplaySize.width}px`, height: `${imageDisplaySize.height}px` } : undefined} onLoad={updateImageDisplaySize} />}
         {hasPreviewContent && kind === 'video' && source && <video className="filesystem-video-viewer" src={source} controls preload="metadata" />}
         {hasPreviewContent && kind === 'pdf' && source && <iframe className="filesystem-pdf-viewer" src={source} title={entry.name} />}
         {hasPreviewContent && (kind === 'text' || (kind === 'markdown' && markdownSource)) && <pre className="filesystem-text-viewer">{text}</pre>}

@@ -7,6 +7,7 @@ import { fullscreenControlState } from './use-browser-fullscreen';
 
 type Props = {
   workspaceOpen: boolean;
+  activeConnectionInstanceId: string | null;
   system: Heartbeat['system'] | null;
   latencyMs: number | null;
   persistenceDegraded: boolean;
@@ -26,6 +27,7 @@ type Props = {
 
 export const ShellTopbar = memo(function ShellTopbar({
   workspaceOpen,
+  activeConnectionInstanceId,
   system,
   latencyMs,
   persistenceDegraded,
@@ -59,7 +61,7 @@ export const ShellTopbar = memo(function ShellTopbar({
         system={system}
         latencyMs={latencyMs}
         persistenceDegraded={persistenceDegraded}
-        resetKey={workspaceOpen ? 'workspace' : 'manager'}
+        resetKey={workspaceOpen ? activeConnectionInstanceId : 'manager'}
       />
       <div className="top-actions">
         {workspaceOpen && (

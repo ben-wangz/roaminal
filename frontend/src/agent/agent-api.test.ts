@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { agentTitle, agentVisualAsset, agentVisualLabel, agentVisualState } from './agent-api';
-import type { AgentSummary } from '../terminal/terminal-protocol';
+import { agentTitle, agentVisualAsset, agentVisualLabel, agentVisualState, countRelaxedAgentConnections } from './agent-api';
+import type { AgentSummary, ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
 const agent = (overrides: Partial<AgentSummary> = {}): AgentSummary => ({
   agentType: 'codex',
@@ -16,6 +16,19 @@ const agent = (overrides: Partial<AgentSummary> = {}): AgentSummary => ({
   errorCode: '',
   errorMessage: '',
   ...overrides,
+});
+
+const connection = (overrides: Partial<AgentSummary> = {}): ConnectionInstanceSummary => ({
+  connectionInstanceId: 'instance-1',
+  createdAt: '',
+  updatedAt: '',
+  title: 'connection',
+  titleMode: 'automatic',
+  cwd: '',
+  cols: 80,
+  rows: 24,
+  attention: false,
+  agent: agent(overrides),
 });
 
 describe('agentTitle', () => {
@@ -47,5 +60,16 @@ describe('agentVisualState', () => {
     expect(agentVisualState(agent({ component: 'error', errorCode: 'agent_status_unavailable' }))).toBe('confusing');
     expect(agentVisualLabel('busy-working')).toBe('Codex hook busy');
     expect(agentVisualAsset('broken')).toBe('/assets/agents/codex-broken.svg');
+  });
+});
+
+describe('countRelaxedAgentConnections', () => {
+  it('counts the same relaxed visual state used by connection cards', () => {
+    expect(countRelaxedAgentConnections([
+      connection({ state: 'relax' }),
+      connection({ state: 'running' }),
+      connection({ activity: 'idle', state: undefined }),
+      connection({ component: 'uninitialized' }),
+    ])).toBe(2);
   });
 });

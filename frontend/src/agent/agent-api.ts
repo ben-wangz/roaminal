@@ -101,3 +101,10 @@ export function agentVisualLabel(state: AgentVisualState): string {
 export function agentVisualAsset(state: AgentVisualState): string {
   return `/assets/agents/codex-${state}.svg`;
 }
+
+export function countRelaxedAgentConnections(connections: ConnectionInstanceSummary[]): number {
+  return connections.reduce(
+    (count, connection) => count + (agentVisualState(agentSummary(connection)) === 'singing-relax' ? 1 : 0),
+    0,
+  );
+}
