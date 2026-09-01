@@ -8,6 +8,7 @@ import { usePendingLaunch } from './use-pending-launch';
 import { AppShellView } from './app-shell-view';
 import { useAppShellActions } from './use-app-shell-actions';
 import { useAppShellViewActions } from './use-app-shell-view-actions';
+import { buildAppShellViewProps } from './app-shell-view-model';
 import { normalizeConnectionInstanceLayout } from '../connections/connection-instance-groups';
 import { browserAppearanceStorage, loadAppearance, type TerminalAppearance } from '../appearance/appearance-model';
 import { useAppearanceStorage } from '../appearance/use-appearance-storage';
@@ -30,7 +31,7 @@ export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
   const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setWorkspaceContent, setPreviewConnectionInstanceId, setSearch, setDialog } = appController;
-  const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, previewConnectionInstanceId, search, dialog } = appState;
+  const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, previewConnectionInstanceId } = appState;
   const [auth, setAuth] = useState(loadAuth());
   const { connections, layout: connectionInstanceLayout, heartbeat: heartbeatState, heartbeatLatency } = connectionState;
   const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
@@ -221,23 +222,7 @@ export function AppShell() {
   const setContextualMode = useCallback((mode: Parameters<typeof connectionController.setContextualMode>[1]) => {
     connectionController.setContextualMode(activeInstance, mode);
   }, [activeInstance, connectionController]);
-  const {
-    handlePreviewStart,
-    handlePreviewEnd,
-    handleAgent,
-    handleOpenFileTree,
-    handleRename,
-    handleTerminate,
-    handleToggleSearch,
-    handleCloseSearch,
-    handleOpenConnections,
-    handleOpenAppearance,
-    handleOpenWorkspace,
-    handleSaveAppearance,
-    handleCloseDialog,
-    handleAddConnection,
-    handleHelp,
-  } = useAppShellViewActions({
+  const viewActions = useAppShellViewActions({
     onOpenFileTree: openFileTree,
     setPreviewConnectionInstanceId,
     setDialog,
@@ -252,89 +237,36 @@ export function AppShell() {
     setAppearance,
   });
   if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
-  const dialogConnection = dialog && 'connectionInstanceId' in dialog ? connections.find((connection) => connection.connectionInstanceId === dialog.connectionInstanceId) : undefined;
-  return (
-    <AppShellView
-      page={page}
-      appearance={appearance}
-      workspaceTool={workspaceTool}
-      workspaceToolOpen={workspaceToolOpen}
-      connectionToolButton={connectionToolButton}
-      keyboardToolButton={keyboardToolButton}
-      filesToolButton={filesToolButton}
-      nativeKeyboardOpen={mobileKeyboard.keyboardOpen}
-      messageButtonRef={messageButtonRef}
-      messageCenter={messageCenter}
-      connections={connections}
-      connectionInstanceLayout={sidebarLayout}
-      loginSessionId={actions.currentAuthSessionId}
-      view={view}
-      heartbeatState={heartbeatState}
-      heartbeatLatency={heartbeatLatency}
-      currentConnection={activeInstance || undefined}
-      activeInstance={activeInstance}
-      currentRuntime={currentRuntime}
-      activeRuntimeId={activeRuntimeId}
-      previewConnectionInstanceId={previewConnectionInstanceId}
-      previewRuntime={previewRuntime}
-      contextualMode={contextualMode}
-      search={search}
-      executionStatus={activeExecutionStatus}
-      toast={toast}
-      dialog={dialog}
-      dialogConnection={dialogConnection}
-      authSessions={actions.authSessions}
-      currentAuthSessionId={actions.currentAuthSessionId}
-      authSessionBusy={actions.authSessionBusy}
-      onSelectWorkspaceTool={handleSelectWorkspaceTool}
-      onCollapseWorkspaceTool={handleCollapseWorkspaceTool}
-      onHelp={handleHelp}
-      onAddConnection={handleAddConnection}
-      onSelectConnection={actions.selectConnectionInstance}
-      onNavigateToConnection={openTerminal}
-      onMessageTargetUnavailable={() => showToast('The connection for this message is no longer connected.', 'error')}
-      onMoveConnectionInstance={actions.moveConnectionInstanceToGroup}
-      onReorderConnectionGroup={actions.reorderConnectionInstanceGroup}
-      onCreateConnectionGroup={actions.createConnectionInstanceGroup}
-      onRenameConnectionGroup={actions.renameConnectionInstanceGroup}
-      onDeleteConnectionGroup={actions.deleteConnectionInstanceGroup}
-      onMoveConnectionGroupMembers={actions.moveGroupMembersToUngrouped}
-      onPreviewStart={handlePreviewStart}
-      onPreviewEnd={handlePreviewEnd}
-      onAgent={handleAgent}
-      onOpenFileTree={handleOpenFileTree}
-      filesystem={filesystemWorkspace}
-      onRename={handleRename}
-      onAutomaticTitle={actions.resetTitle}
-      onTerminate={handleTerminate}
-      onContextualModeChange={setContextualMode}
-      onToggleSearch={handleToggleSearch}
-      onCloseSearch={handleCloseSearch}
-      onOpenConnections={handleOpenConnections}
-      onOpenAppearance={handleOpenAppearance}
-      onSignOut={actions.signOut}
-      onOpenAuthSessions={() => void actions.openAuthSessions()}
-      onOpenManager={handleOpenConnections}
-      onCreateConnection={actions.createConnection}
-      onGenerated={actions.acceptGenerated}
-      onOpenWorkspace={handleOpenWorkspace}
-      onSaveAppearance={handleSaveAppearance}
-      onShowToast={showToast}
-      onRenameTitle={actions.updateTitle}
-      onTerminateConnection={actions.terminateConnection}
-      onRevokeAuthSession={(id) => void actions.revokeAuthSession(id)}
-      onLogoutOtherAuthSessions={() => void actions.logoutOtherAuthSessions()}
-      onCloseDialog={handleCloseDialog}
-      workspaceContent={workspaceContent}
-      onBackToTerminal={handleBackToTerminal}
-      appShellRef={fullscreen.targetRef}
-      fullscreenActive={fullscreen.active}
-      fullscreenSupported={fullscreen.supported}
-      fullscreenPending={fullscreen.pending}
-      onToggleFullscreen={fullscreen.toggle}
-      notificationState={notifications.state}
-      onEnableNotifications={notifications.enable}
-      onDisableNotifications={notifications.disable}
-    />
-  );
+  const workspaceTools = { connectionToolButton, keyboardToolButton, filesToolButton };
+  const workspaceActions = { handleSelectWorkspaceTool, handleCollapseWorkspaceTool };
+  return <AppShellView {...buildAppShellViewProps({
+    appState,
+    appearance,
+    workspaceTools,
+    nativeKeyboardOpen: mobileKeyboard.keyboardOpen,
+    messageButtonRef,
+    messageCenter,
+    connections,
+    connectionInstanceLayout: sidebarLayout,
+    actions,
+    heartbeatState,
+    heartbeatLatency,
+    activeInstance,
+    currentRuntime,
+    activeRuntimeId,
+    previewConnectionInstanceId,
+    previewRuntime,
+    contextualMode,
+    executionStatus: activeExecutionStatus,
+    toast,
+    filesystem: filesystemWorkspace,
+    viewActions,
+    workspaceActions,
+    onNavigateToConnection: openTerminal,
+    onContextualModeChange: setContextualMode,
+    onBackToTerminal: handleBackToTerminal,
+    onShowToast: showToast,
+    fullscreen,
+    notifications,
+  })} />;
 }

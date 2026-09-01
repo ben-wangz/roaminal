@@ -10,7 +10,6 @@ import { ImeInputFallbackAddon } from './terminal-ime-fallback';
 
 export type TerminalRuntimeConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'terminated';
 export type TerminalGrid = { cols: number; rows: number };
-
 export class TerminalRuntime {
   terminal?: Terminal;
   search?: SearchAddon;
@@ -221,25 +220,14 @@ export class TerminalRuntime {
     this.messageListeners.clear();
   }
 
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+  private subscribeTo<T>(listeners: Set<T>, listener: T): () => void {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
   }
-
-  subscribeMessage(listener: (message: ServerMessage | null) => void): () => void {
-    this.messageListeners.add(listener);
-    return () => this.messageListeners.delete(listener);
-  }
-
-  subscribeConnection(listener: () => void): () => void {
-    this.connectionListeners.add(listener);
-    return () => this.connectionListeners.delete(listener);
-  }
-
-  subscribeGrid(listener: () => void): () => void {
-    this.gridListeners.add(listener);
-    return () => this.gridListeners.delete(listener);
-  }
+  subscribe(listener: () => void): () => void { return this.subscribeTo(this.listeners, listener); }
+  subscribeMessage(listener: (message: ServerMessage | null) => void): () => void { return this.subscribeTo(this.messageListeners, listener); }
+  subscribeConnection(listener: () => void): () => void { return this.subscribeTo(this.connectionListeners, listener); }
+  subscribeGrid(listener: () => void): () => void { return this.subscribeTo(this.gridListeners, listener); }
 
   connectedState(): boolean {
     return this.connected;
@@ -306,15 +294,7 @@ export class TerminalRuntime {
     this.stream?.claim();
   }
 
-  private emit(): void {
-    for (const listener of this.listeners) listener();
-  }
-
-  private emitConnection(): void {
-    for (const listener of this.connectionListeners) listener();
-  }
-
-  private emitGrid(): void {
-    for (const listener of this.gridListeners) listener();
-  }
+  private emit(): void { for (const listener of this.listeners) listener(); }
+  private emitConnection(): void { for (const listener of this.connectionListeners) listener(); }
+  private emitGrid(): void { for (const listener of this.gridListeners) listener(); }
 }
