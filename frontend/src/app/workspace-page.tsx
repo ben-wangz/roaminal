@@ -1,13 +1,13 @@
 import { useMonitorDisclosure } from '../status/use-monitor-disclosure';
-import { ChevronDown, ChevronUp, Terminal } from 'lucide-react';
 import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { TerminalViewport } from '../terminal/terminal-viewport';
 import { TerminalSearch } from '../terminal/terminal-search';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
-import { FileSystemWorkspace } from '../filesystem/filesystem-workspace';
-
-export type WorkspaceMode = 'terminal' | 'filesystem';
+import { FilePreviewWorkspace } from '../filesystem/file-preview-workspace';
+import type { FileSystemWorkspaceState } from '../filesystem/use-filesystem-workspace';
+import { TerminalFooter } from '../terminal/terminal-footer';
+import type { WorkspaceContent } from './workspace-content';
 
 type Props = {
   connections: ConnectionInstanceSummary[];
@@ -18,7 +18,9 @@ type Props = {
   executionStatus: string | null;
   onCloseSearch: () => void;
   onOpenManager: () => void;
-  mode: WorkspaceMode;
+  content: WorkspaceContent;
+  filesystem: FileSystemWorkspaceState;
+  onBackToTerminal: () => void;
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
 };
 
@@ -31,25 +33,33 @@ export function WorkspacePage({
   executionStatus,
   onCloseSearch,
   onOpenManager,
-  mode,
+  content,
+  filesystem,
+  onBackToTerminal,
   onToast,
 }: Props) {
-  const filesystemInstance = connections.find(
-    (connection) => connection.connectionInstanceId === activeInstance?.connectionInstanceId,
-  ) || null;
   const monitorDisclosure = useMonitorDisclosure(activeInstance?.connectionInstanceId || null);
+  const previewEntry = filesystem.instanceReady && filesystem.instanceId === activeInstance?.connectionInstanceId ? filesystem.previewEntry : null;
+  const previewActive = content === 'file-preview';
+  const handlePreviewRootChanged = () => {
+    void filesystem.reloadRoot(true);
+  };
+  const handleBackToTerminal = () => {
+    onBackToTerminal();
+    window.requestAnimationFrame(() => activeRuntime?.focus());
+  };
   return (
     <>
-      {activeInstance && <WorkspaceContextBar instance={activeInstance} expanded={monitorDisclosure.expanded} onToggleMonitor={() => monitorDisclosure.setExpanded((value) => !value)} />}
       <RemoteMonitorBand
         instance={activeInstance}
         expanded={monitorDisclosure.expanded}
+        onToggle={() => monitorDisclosure.setExpanded((value) => !value)}
       />
       <div className="workspace-body">
         <div
-          className={`workspace-mode-view terminal-mode-view ${mode === 'terminal' ? 'active' : 'inactive'}`}
-          aria-hidden={mode !== 'terminal'}
-          inert={mode !== 'terminal' || undefined}
+          className={`workspace-content-view terminal-content-view ${content === 'terminal' ? 'active' : 'inactive'}`}
+          aria-hidden={content !== 'terminal'}
+          inert={content !== 'terminal' || undefined}
         >
           {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={onCloseSearch} />}
           <section className="terminal-stage">
@@ -57,7 +67,7 @@ export function WorkspacePage({
               <TerminalViewport
                 key={activeRuntime.connectionInstanceId}
                 runtime={activeRuntime}
-                active={mode === 'terminal'}
+                active={content === 'terminal'}
               />
             ) : (
               <div className="empty-state">
@@ -69,66 +79,31 @@ export function WorkspacePage({
                 </button>
               </div>
             )}
+            {content === 'terminal' && (
+              <TerminalFooter
+                connections={connections}
+                currentConnection={currentConnection}
+                activeRuntime={activeRuntime}
+                executionStatus={executionStatus}
+              />
+            )}
           </section>
-          <footer className="statusbar">
-            <span>{currentConnection?.cwd || 'No connection'}</span>
-            <span className="execution-status" aria-live="polite">
-              {executionStatus || (currentConnection ? `${currentConnection.cols}x${currentConnection.rows}` : '')}
-            </span>
-          </footer>
         </div>
         <div
-          className={`workspace-mode-view filesystem-mode-view ${mode === 'filesystem' ? 'active' : 'inactive'}`}
-          aria-hidden={mode !== 'filesystem'}
-          inert={mode !== 'filesystem' || undefined}
+          className={`workspace-content-view file-preview-content-view ${previewActive ? 'active' : 'inactive'}`}
+          aria-hidden={!previewActive}
+          inert={!previewActive || undefined}
         >
-          {connections.length > 0 ? connections.map((connection) => (
-            <FileSystemWorkspace
-              key={connection.connectionInstanceId}
-              instance={connection}
-              active={mode === 'filesystem' && connection.connectionInstanceId === filesystemInstance?.connectionInstanceId}
-              onToast={onToast}
-            />
-          )) : <FileSystemWorkspace instance={null} active={mode === 'filesystem'} onToast={onToast} />}
+          <FilePreviewWorkspace
+            instanceId={filesystem.instanceId}
+            root={previewEntry ? filesystem.root : null}
+            entry={previewEntry}
+            onBackToTerminal={handleBackToTerminal}
+            onToast={onToast}
+            onRootChanged={handlePreviewRootChanged}
+          />
         </div>
       </div>
     </>
-  );
-}
-
-function WorkspaceContextBar({
-  instance,
-  expanded,
-  onToggleMonitor,
-}: {
-  instance: ConnectionInstanceSummary;
-  expanded: boolean;
-  onToggleMonitor: () => void;
-}) {
-  const identity = instance.type === 'ssh' ? instance.sourceHostAlias || instance.title : instance.title || 'Local';
-  const typeLabel = instance.type === 'ssh' ? 'SSH' : 'Local';
-  return (
-    <section className="workspace-context-bar" aria-label="Active connection">
-      <div className="workspace-context-identity">
-        <span className="workspace-context-icon" aria-hidden="true"><Terminal size={17} /></span>
-        <div>
-          <strong title={identity}>{identity}</strong>
-          <span>{typeLabel}{instance.cwd ? ` | ${instance.cwd}` : ''}</span>
-        </div>
-      </div>
-      {instance.type === 'ssh' && instance.lifecycle === 'live' && (
-        <button
-          className="monitor-disclosure workspace-context-monitor-toggle"
-          type="button"
-          onClick={onToggleMonitor}
-          aria-label={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
-          title={expanded ? 'Collapse remote monitor' : 'Expand remote monitor'}
-          aria-expanded={expanded}
-          aria-controls="remote-monitor-metrics"
-        >
-          {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
-        </button>
-      )}
-    </section>
   );
 }

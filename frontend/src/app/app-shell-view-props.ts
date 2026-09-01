@@ -10,10 +10,11 @@ import type { Heartbeat } from '../status/heartbeat';
 import type { ConnectionView } from './connection-view';
 import type { AppPage } from './app-state';
 import type { WorkspaceTool } from './workspace-tool';
+import type { WorkspaceContent } from './workspace-content';
 import type { FullscreenTarget } from './use-browser-fullscreen';
 import type { NotificationState } from '../status/notification-service';
 import type { TerminalAppearance } from '../appearance/appearance-model';
-import type { WorkspaceMode } from './workspace-page';
+import type { FileSystemWorkspaceState } from '../filesystem/use-filesystem-workspace';
 import type { useMessages } from '../messages/use-messages';
 import type { Dialog } from './app-shell-overlays';
 
@@ -24,6 +25,7 @@ export type AppShellViewProps = {
   workspaceToolOpen: boolean;
   connectionToolButton: RefObject<HTMLButtonElement | null>;
   keyboardToolButton: RefObject<HTMLButtonElement | null>;
+  filesToolButton: RefObject<HTMLButtonElement | null>;
   nativeKeyboardOpen: boolean;
   messageButtonRef: RefObject<HTMLButtonElement | null>;
   messageCenter: ReturnType<typeof useMessages>;
@@ -33,7 +35,6 @@ export type AppShellViewProps = {
   view: ConnectionView;
   heartbeatState: Heartbeat | null;
   heartbeatLatency: number | null;
-  heartbeatConnected: boolean;
   currentConnection: ConnectionInstanceSummary | undefined;
   activeInstance: ConnectionInstanceSummary | null;
   currentRuntime: TerminalRuntime | null;
@@ -65,7 +66,8 @@ export type AppShellViewProps = {
   onPreviewStart: (id: string) => void;
   onPreviewEnd: (id: string) => void;
   onAgent: (id: string) => void;
-  onOpenFileSystem: (id: string) => void;
+  onOpenFileTree: (id: string) => void;
+  filesystem: FileSystemWorkspaceState;
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
@@ -87,7 +89,8 @@ export type AppShellViewProps = {
   onRevokeAuthSession: (id: string) => void;
   onLogoutOtherAuthSessions: () => void;
   onCloseDialog: () => void;
-  workspaceMode: WorkspaceMode;
+  workspaceContent: WorkspaceContent;
+  onBackToTerminal: () => void;
   appShellRef: RefObject<FullscreenTarget | null>;
   fullscreenActive: boolean;
   fullscreenSupported: boolean;

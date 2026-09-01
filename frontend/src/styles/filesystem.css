@@ -1,12 +1,13 @@
-.filesystem-workspace { min-height: 0; flex: 1; display: flex; flex-direction: column; position: relative; }
+.filesystem-tree-tool-surface .filesystem-toolbar { flex: 0 0 auto; }
+.filesystem-tree-tool-surface .filesystem-tree-panel { min-height: 0; overflow: auto; background: color-mix(in oklab, var(--base1) 26%, transparent); }
+.filesystem-tree-tool-surface .filesystem-tree { min-height: 100%; }
 .filesystem-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 42px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: .72rem; }
-.filesystem-breadcrumb { min-width: 0; display: flex; align-items: center; overflow: auto; white-space: nowrap; }
+.filesystem-breadcrumb { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; overflow: auto; white-space: nowrap; }
 .filesystem-breadcrumb > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-.filesystem-breadcrumb button { max-width: 270px; overflow: hidden; text-overflow: ellipsis; border: 0; background: transparent; color: var(--text); padding: 3px 4px; }
+.filesystem-breadcrumb button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; border: 0; background: transparent; color: var(--text); padding: 3px 4px; }
 .filesystem-breadcrumb button:hover { color: var(--text-bright); background: var(--hover-wash); }
 .filesystem-root-status { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; color: var(--muted); }
 .filesystem-root-status[data-status='fallback'] { color: var(--warn-bright); }
-.filesystem-columns { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(240px, var(--filesystem-tree-width, 290px)) 6px minmax(0, 1fr); }
 .filesystem-tree-panel { min-width: 0; overflow: auto; background: color-mix(in oklab, var(--base1) 26%, transparent); }
 .filesystem-panel-heading { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 8px 0 12px; color: var(--text-bright); border-bottom: 1px solid var(--border-soft); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
 .filesystem-panel-actions { display: flex; align-items: center; gap: 2px; }
@@ -26,10 +27,11 @@
 .filesystem-tree-more-actions { display: inline-grid; flex: 0 0 24px; place-items: center; width: 24px; height: 24px; margin-left: auto; padding: 0; border: 1px solid transparent; background: transparent; color: var(--muted); opacity: 0; pointer-events: none; }
 .filesystem-tree-more-actions:hover, .filesystem-tree-more-actions:focus-visible { border-color: var(--cyan); color: var(--text-bright); }
 .filesystem-tree-row:focus-within .filesystem-tree-more-actions, .filesystem-tree-row.selected .filesystem-tree-more-actions, .filesystem-tree-root-row:focus-within .filesystem-tree-more-actions, .filesystem-tree-root-row.selected .filesystem-tree-more-actions { opacity: 1; pointer-events: auto; }
-.filesystem-preview-panel { min-width: 0; min-height: 0; overflow: hidden; }
-.filesystem-resizer { cursor: col-resize; border-inline: 1px solid transparent; background: var(--border-soft); }
-.filesystem-resizer:hover, .filesystem-resizer:focus { border-color: var(--cyan); background: color-mix(in oklab, var(--cyan) 45%, var(--border-soft)); outline: none; }
 .filesystem-preview { width: 100%; height: 100%; display: flex; flex-direction: column; }
+.file-preview-workspace { background: var(--base); }
+.file-preview-workspace > .filesystem-preview { min-height: 0; flex: 1 1 auto; }
+.file-preview-workspace > .filesystem-preview-empty { min-height: 0; flex: 1 1 auto; padding: 24px; }
+.file-preview-workspace .file-preview-back-terminal { margin-top: 8px; }
 .filesystem-preview-header { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border); }
 .filesystem-preview-heading { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .filesystem-preview-heading strong { color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -106,12 +108,6 @@
 @keyframes filesystem-spin { to { transform: rotate(360deg); } }
 @media (max-width: 800px) {
   .filesystem-toolbar { padding-inline: 8px; }
-  .filesystem-columns { grid-template-columns: 1fr; }
-  .filesystem-tree-panel { display: block; border-right: 0; }
-  .filesystem-resizer { display: none; }
-  .filesystem-preview-panel { display: none; }
-  .filesystem-workspace.previewing .filesystem-tree-panel { display: none; }
-  .filesystem-workspace.previewing .filesystem-preview-panel { display: block; }
 }
 @media (pointer: coarse), (max-width: 800px) {
   .filesystem-tree-more-actions { opacity: 1; pointer-events: auto; }

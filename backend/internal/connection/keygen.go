@@ -32,7 +32,7 @@ func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequ
 		_ = m.keys.DiscardGeneration(paths)
 		return Summary{}, err
 	}
-	return result, nil
+	return m.projectSummary(result), nil
 }
 
 func (m *Manager) finishKeyGeneration(id string, paths sshkey.GenerationPaths, status ports.TerminalExitStatus) {

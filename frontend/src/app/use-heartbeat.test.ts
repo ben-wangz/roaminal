@@ -23,6 +23,10 @@ describe('sameConnectionSummaries', () => {
   it('detects a changed field', () => {
     expect(sameConnectionSummaries([instance('a')], [instance('a', { attention: true })])).toBe(false);
     expect(sameConnectionSummaries([instance('a')], [instance('a', { cwd: '/tmp' })])).toBe(false);
+    expect(sameConnectionSummaries(
+      [instance('a', { remoteCapability: { status: 'transport_unavailable', retryable: true } })],
+      [instance('a', { remoteCapability: { status: 'available', retryable: false } })],
+    )).toBe(false);
   });
 
   it('detects added, removed, and reordered instances', () => {

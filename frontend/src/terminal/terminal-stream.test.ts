@@ -67,9 +67,11 @@ describe('TerminalStream', () => {
       onMessage: (message) => messages.push(message.type),
     });
     stream.connect();
+    expect(stream.connectionState()).toBe('connecting');
     const socket = FakeStreamWebSocket.current;
     expect(socket?.url).toContain('?role=observer');
     socket?.open();
+    expect(stream.connectionState()).toBe('connected');
     const envelope = { schemaVersion: 2, eventId: 'event-1', occurredAt: '2026-08-24T00:00:00Z' };
     socket?.message({ type: 'output', data: 'new', sequence: 2, ...envelope });
     socket?.message({ type: 'output', data: 'old', sequence: 1, ...envelope });

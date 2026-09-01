@@ -14,6 +14,8 @@ import (
 	"github.com/creack/pty"
 )
 
+const defaultTerminalType = "xterm-256color"
+
 func (m *Manager) Start(ctx context.Context) error {
 	metas, err := m.listPersistedInstances(ctx)
 	if err != nil {
@@ -69,15 +71,23 @@ func (m *Manager) startCommand(meta domain.ConnectionInstanceMeta, cwd string, a
 	if len(argv) == 0 {
 		return nil, errors.New("empty process argv")
 	}
+	meta.TerminalType = effectiveTerminalType(meta.TerminalType)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	cmd.Dir = cwd
-	cmd.Env = terminalEnvironment(os.Environ(), append([]string{"TERM=xterm-256color", "ROAMINAL_TERMINAL_ID=" + meta.ID}, extraEnv...))
+	cmd.Env = terminalEnvironment(os.Environ(), append([]string{"TERM=" + meta.TerminalType, "ROAMINAL_TERMINAL_ID=" + meta.ID}, extraEnv...))
 	file, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)})
 	if err != nil {
 		return nil, fmt.Errorf("start bash: %w", err)
 	}
 	return &Session{manager: m, meta: meta, cmd: cmd, pty: file, clients: make(map[*Client]struct{}), command: argv[0], readDone: make(chan struct{})}, nil
+}
+
+func effectiveTerminalType(value string) string {
+	if value = strings.TrimSpace(value); value != "" {
+		return value
+	}
+	return defaultTerminalType
 }
 
 func terminalEnvironment(base, overrides []string) []string {

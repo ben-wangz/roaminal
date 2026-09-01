@@ -58,9 +58,9 @@ type ConnectionInstanceView struct {
 }
 
 type EffectiveEndpoint struct {
-	User string
-	Host string
-	Port int
+	User string `json:"user"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
 }
 
 type RemoteCommand struct {

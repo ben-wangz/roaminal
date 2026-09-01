@@ -4,12 +4,14 @@ import type { AppPage } from './app-state';
 import type { Dialog } from './app-shell-view';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import type { WorkspaceTool } from './workspace-tool';
+import type { WorkspaceContent } from './workspace-content';
 
 export type AppControllerState = {
   view: ConnectionView;
   page: AppPage;
   workspaceTool: WorkspaceTool;
   workspaceToolOpen: boolean;
+  workspaceContent: WorkspaceContent;
   previewConnectionInstanceId: string | null;
   search: boolean;
   dialog: Dialog;
@@ -43,6 +45,7 @@ class AppController {
   setPage(page: AppPage): void { this.setState((current) => ({ ...current, page })); }
   setWorkspaceTool(workspaceTool: WorkspaceTool): void { this.setState((current) => ({ ...current, workspaceTool })); }
   setWorkspaceToolOpen(workspaceToolOpen: boolean): void { this.setState((current) => ({ ...current, workspaceToolOpen })); }
+  setWorkspaceContent(workspaceContent: WorkspaceContent): void { this.setState((current) => ({ ...current, workspaceContent })); }
   setPreviewConnectionInstanceId(previewConnectionInstanceId: string | null): void {
     this.setState((current) => ({ ...current, previewConnectionInstanceId }));
   }
@@ -58,6 +61,7 @@ export function createAppController(): AppController {
     page: 'connections',
     workspaceTool: 'connections',
     workspaceToolOpen,
+    workspaceContent: 'terminal',
     previewConnectionInstanceId: null,
     search: false,
     dialog: null,
@@ -83,6 +87,7 @@ export function useAppController() {
   const setPage = useCallback((next: SetStateAction<AppPage>) => setField('page', next), [setField]);
   const setWorkspaceTool = useCallback((next: SetStateAction<WorkspaceTool>) => setField('workspaceTool', next), [setField]);
   const setWorkspaceToolOpen = useCallback((next: SetStateAction<boolean>) => setField('workspaceToolOpen', next), [setField]);
+  const setWorkspaceContent = useCallback((next: SetStateAction<WorkspaceContent>) => setField('workspaceContent', next), [setField]);
   const setPreviewConnectionInstanceId = useCallback((next: SetStateAction<string | null>) => setField('previewConnectionInstanceId', next), [setField]);
   const setSearch = useCallback((next: SetStateAction<boolean>) => setField('search', next), [setField]);
   const setDialog = useCallback((next: SetStateAction<Dialog>) => setField('dialog', next), [setField]);
@@ -95,6 +100,7 @@ export function useAppController() {
     setPage,
     setWorkspaceTool,
     setWorkspaceToolOpen,
+    setWorkspaceContent,
     setPreviewConnectionInstanceId,
     setSearch,
     setDialog,

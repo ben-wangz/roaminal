@@ -1,30 +1,32 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { loadVirtualKeyboardPreference, saveVirtualKeyboardPreference } from '../input/virtual-keyboard-storage';
 import type { AppPage } from './app-state';
-import type { WorkspaceMode } from './workspace-page';
+import type { WorkspaceContent } from './workspace-content';
 import type { WorkspaceTool } from './workspace-tool';
 
 type Params = {
   loginSessionId: string;
   page: AppPage;
-  workspaceMode: WorkspaceMode;
+  workspaceContent: WorkspaceContent;
   workspaceTool: WorkspaceTool;
   workspaceToolOpen: boolean;
   nativeKeyboardOpen: boolean;
   setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
+  setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
 };
 
 export function useVirtualKeyboardState({
   loginSessionId,
   page,
-  workspaceMode,
+  workspaceContent,
   workspaceTool,
   workspaceToolOpen,
   nativeKeyboardOpen,
   setWorkspaceTool,
   setWorkspaceToolOpen,
+  setWorkspaceContent,
   setPreviewConnectionInstanceId,
 }: Params): { selectVirtualKeyboard: () => void; collapseVirtualKeyboard: () => void } {
   const [preference, setPreference] = useState<boolean | null>(null);
@@ -46,36 +48,37 @@ export function useVirtualKeyboardState({
     [loginSessionId],
   );
   const selectVirtualKeyboard = useCallback(() => {
-    if (page !== 'workspace' || workspaceMode !== 'terminal') return;
+    if (page !== 'workspace') return;
+    setWorkspaceContent('terminal');
     setPreviewConnectionInstanceId(null);
     setWorkspaceTool('keyboard');
     setWorkspaceToolOpen(true);
     savePreference(true);
-  }, [page, savePreference, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen, workspaceMode]);
+  }, [page, savePreference, setPreviewConnectionInstanceId, setWorkspaceContent, setWorkspaceTool, setWorkspaceToolOpen]);
   const collapseVirtualKeyboard = useCallback(() => {
     if (workspaceTool === 'keyboard' && workspaceToolOpen) savePreference(false);
     setWorkspaceToolOpen(false);
   }, [savePreference, setWorkspaceToolOpen, workspaceTool, workspaceToolOpen]);
 
   useEffect(() => {
-    if (page === 'workspace' && workspaceMode === 'terminal') return;
+    if (page === 'workspace' && workspaceContent === 'terminal') return;
     if (workspaceTool === 'keyboard') {
       setWorkspaceTool('connections');
       setWorkspaceToolOpen(false);
     }
     savePreference(false);
-  }, [page, savePreference, setWorkspaceTool, setWorkspaceToolOpen, workspaceMode, workspaceTool]);
+  }, [page, savePreference, setWorkspaceTool, setWorkspaceToolOpen, workspaceContent, workspaceTool]);
 
   useEffect(() => {
     if (nativeKeyboardOpen) {
       wasNativeKeyboardOpen.current = true;
       return;
     }
-    if (wasNativeKeyboardOpen.current && preference === true && page === 'workspace' && workspaceMode === 'terminal' && workspaceTool === 'keyboard' && !workspaceToolOpen) {
+    if (wasNativeKeyboardOpen.current && preference === true && page === 'workspace' && workspaceContent === 'terminal' && workspaceTool === 'keyboard' && !workspaceToolOpen) {
       setWorkspaceToolOpen(true);
     }
     wasNativeKeyboardOpen.current = false;
-  }, [nativeKeyboardOpen, page, preference, setWorkspaceToolOpen, workspaceMode, workspaceTool, workspaceToolOpen]);
+  }, [nativeKeyboardOpen, page, preference, setWorkspaceToolOpen, workspaceContent, workspaceTool, workspaceToolOpen]);
 
   return { selectVirtualKeyboard, collapseVirtualKeyboard };
 }

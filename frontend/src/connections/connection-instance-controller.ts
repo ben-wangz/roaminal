@@ -227,9 +227,13 @@ function sameConnectionSummary(left: ConnectionInstanceSummary, right: Connectio
   const scalarKeys: (keyof ConnectionInstanceSummary)[] = [
     'connectionInstanceId', 'connectionDefinitionId', 'type', 'purpose', 'lifecycle', 'sourceState',
     'sourceHostAlias', 'createdAt', 'updatedAt', 'title', 'titleMode', 'cwd', 'cols', 'rows',
-    'attention', 'generationStatus', 'generationError', 'tmuxEnabled', 'tmuxSessionName', 'tmuxPrefixKey', 'tmuxPrefixSource',
+    'attention', 'generationStatus', 'generationError', 'terminalType', 'tmuxEnabled', 'tmuxSessionName', 'tmuxPrefixKey', 'tmuxPrefixSource',
   ];
   if (scalarKeys.some((key) => left[key] !== right[key])) return false;
+  if (left.endpoint?.user !== right.endpoint?.user || left.endpoint?.host !== right.endpoint?.host || left.endpoint?.port !== right.endpoint?.port) return false;
+  if (left.remoteCapability?.status !== right.remoteCapability?.status
+    || left.remoteCapability?.retryable !== right.remoteCapability?.retryable
+    || left.remoteCapability?.reason !== right.remoteCapability?.reason) return false;
   const a = left.agent;
   const b = right.agent;
   if (a === b) return true;

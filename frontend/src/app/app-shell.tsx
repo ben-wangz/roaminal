@@ -14,7 +14,6 @@ import { useAppearanceStorage } from '../appearance/use-appearance-storage';
 import { useMainTerminalRuntime } from './use-main-terminal-runtime';
 import { useRuntimeMessages } from './use-runtime-messages';
 import type { ToastKind, ToastState } from '../ui/toast';
-import { useWorkspaceMode } from './use-workspace-mode';
 import { useVirtualKeyboardState } from './use-virtual-keyboard-state';
 import { useAppShellLifecycle } from './use-app-shell-lifecycle';
 import { useAppController } from './app-controller';
@@ -25,17 +24,20 @@ import { useBrowserFullscreen } from './use-browser-fullscreen';
 import { useBrowserNotifications } from '../status/use-browser-notifications';
 import { useNotificationNavigation } from './use-notification-navigation';
 import { useWorkspaceToolActions } from './use-workspace-tool-actions';
+import { useWorkspaceNavigation } from './use-workspace-navigation';
+import { useFilesystemWorkspace } from '../filesystem/use-filesystem-workspace';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
-  const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setPreviewConnectionInstanceId, setSearch, setDialog } = appController;
-  const { view, page, workspaceTool, workspaceToolOpen, previewConnectionInstanceId, search, dialog } = appState;
+  const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setWorkspaceContent, setPreviewConnectionInstanceId, setSearch, setDialog } = appController;
+  const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, previewConnectionInstanceId, search, dialog } = appState;
   const [auth, setAuth] = useState(loadAuth());
-  const { connections, layout: connectionInstanceLayout, heartbeat: heartbeatState, heartbeatLatency, heartbeatConnected } = connectionState;
+  const { connections, layout: connectionInstanceLayout, heartbeat: heartbeatState, heartbeatLatency } = connectionState;
   const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
   const [error, setError] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
+  const [executionStatusRuntime, setExecutionStatusRuntime] = useState<TerminalRuntime | null>(null);
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
   const connectionsOpen = workspaceTool === 'connections' && workspaceToolOpen;
@@ -80,16 +82,19 @@ export function AppShell() {
     workspaceTool,
     setWorkspaceTool,
     setWorkspaceToolOpen,
+    setWorkspaceContent,
     setSearch,
     setPreviewConnectionInstanceId,
     setDialog,
     showToast,
   });
-  const { workspaceMode, onOpenFileSystem, onOpenTerminal } = useWorkspaceMode({
-    view,
+  const { openFileTree, openTerminal } = useWorkspaceNavigation({
     viewRef,
     selectConnection: actions.selectConnectionInstance,
     setPage,
+    setWorkspaceContent,
+    setWorkspaceTool,
+    setWorkspaceToolOpen,
   });
   useAppShellLifecycle({
     auth,
@@ -124,25 +129,59 @@ export function AppShell() {
     setPage,
     setSearch,
     setExecutionStatus,
+    setExecutionStatusRuntime,
     showToast,
   });
   const activeRuntimeId = activeLaunchId || view.activeConnectionInstanceId;
   const activeInstance =
-    connections.find((connection) => connection.connectionInstanceId === view.activeConnectionInstanceId) || null;
+    connections.find((connection) => connection.connectionInstanceId === activeRuntimeId) || null;
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
+  const activeExecutionStatus = activeRuntime && executionStatusRuntime === activeRuntime ? executionStatus : null;
+  const fileSystemAvailable = Boolean(activeInstance && activeInstance.type === 'ssh' && activeInstance.lifecycle === 'live' && activeInstance.purpose === 'interactive');
+  const openFilePreview = useCallback(() => {
+    setWorkspaceContent('file-preview');
+    if (window.matchMedia('(max-width: 800px)').matches) setWorkspaceToolOpen(false);
+  }, [setWorkspaceContent, setWorkspaceToolOpen]);
+  const filesystemWorkspace = useFilesystemWorkspace({
+    instanceId: activeInstance?.connectionInstanceId || '',
+    active: page === 'workspace'
+      && fileSystemAvailable
+      && (workspaceContent === 'file-preview' || (workspaceTool === 'files' && workspaceToolOpen)),
+    onToast: showToast,
+    onOpenFile: openFilePreview,
+  });
+  const { instanceId: filesystemInstanceId, instanceReady: filesystemInstanceReady, previewEntry: filesystemPreviewEntry, setPreviewEntry } = filesystemWorkspace;
+  useEffect(() => {
+    const previewBelongsToActiveInstance = Boolean(
+      fileSystemAvailable
+      && filesystemInstanceReady
+      && filesystemInstanceId
+      && filesystemInstanceId === activeInstance?.connectionInstanceId
+      && filesystemPreviewEntry,
+    );
+    if (!previewBelongsToActiveInstance && workspaceContent === 'file-preview') setWorkspaceContent('terminal');
+  }, [activeInstance?.connectionInstanceId, fileSystemAvailable, filesystemInstanceId, filesystemInstanceReady, filesystemPreviewEntry, setWorkspaceContent, workspaceContent]);
+  useEffect(() => {
+    if (page !== 'workspace' && filesystemPreviewEntry) setPreviewEntry(null);
+  }, [filesystemPreviewEntry, page, setPreviewEntry]);
+  const handleBackToTerminal = () => {
+    setWorkspaceContent('terminal');
+    setPreviewEntry(null);
+  };
   const mobileKeyboard = useMobileKeyboard(
     activeRuntime,
-    page === 'workspace' && workspaceMode === 'terminal' && Boolean(activeRuntime),
+    page === 'workspace' && workspaceContent === 'terminal' && Boolean(activeRuntime),
   );
   const { selectVirtualKeyboard, collapseVirtualKeyboard } = useVirtualKeyboardState({
     loginSessionId: actions.currentAuthSessionId,
     page,
-    workspaceMode,
+    workspaceContent,
     workspaceTool,
     workspaceToolOpen,
     nativeKeyboardOpen: mobileKeyboard.keyboardOpen,
     setWorkspaceTool,
     setWorkspaceToolOpen,
+    setWorkspaceContent,
     setPreviewConnectionInstanceId,
   });
   const messageButtonRef = useRef<HTMLButtonElement>(null);
@@ -157,7 +196,7 @@ export function AppShell() {
     messageCenter,
     connections,
     activeConnectionInstanceId: view.activeConnectionInstanceId,
-    onOpenTerminal,
+    onOpenTerminal: openTerminal,
     setWorkspaceTool,
     setWorkspaceToolOpen,
     onToast: showToast,
@@ -166,6 +205,7 @@ export function AppShell() {
   const {
     connectionToolButton,
     keyboardToolButton,
+    filesToolButton,
     handleSelectWorkspaceTool,
     handleCollapseWorkspaceTool,
   } = useWorkspaceToolActions({
@@ -175,7 +215,6 @@ export function AppShell() {
     selectVirtualKeyboard,
     setWorkspaceTool,
     setWorkspaceToolOpen,
-    setPreviewConnectionInstanceId,
   });
   const sidebarLayout = useMemo(() => normalizeConnectionInstanceLayout(connectionInstanceLayout, connections), [connectionInstanceLayout, connections]);
   const contextualMode = connectionController.contextualMode(activeInstance);
@@ -186,7 +225,7 @@ export function AppShell() {
     handlePreviewStart,
     handlePreviewEnd,
     handleAgent,
-    handleOpenFileSystem,
+    handleOpenFileTree,
     handleRename,
     handleTerminate,
     handleToggleSearch,
@@ -199,11 +238,12 @@ export function AppShell() {
     handleAddConnection,
     handleHelp,
   } = useAppShellViewActions({
-    onOpenFileSystem,
+    onOpenFileTree: openFileTree,
     setPreviewConnectionInstanceId,
     setDialog,
     setWorkspaceTool,
     setWorkspaceToolOpen,
+    setWorkspaceContent,
     setSearch,
     setPage,
     cancelLaunch,
@@ -221,6 +261,7 @@ export function AppShell() {
       workspaceToolOpen={workspaceToolOpen}
       connectionToolButton={connectionToolButton}
       keyboardToolButton={keyboardToolButton}
+      filesToolButton={filesToolButton}
       nativeKeyboardOpen={mobileKeyboard.keyboardOpen}
       messageButtonRef={messageButtonRef}
       messageCenter={messageCenter}
@@ -230,8 +271,7 @@ export function AppShell() {
       view={view}
       heartbeatState={heartbeatState}
       heartbeatLatency={heartbeatLatency}
-      heartbeatConnected={heartbeatConnected}
-      currentConnection={connections.find((connection) => connection.connectionInstanceId === view.activeConnectionInstanceId)}
+      currentConnection={activeInstance || undefined}
       activeInstance={activeInstance}
       currentRuntime={currentRuntime}
       activeRuntimeId={activeRuntimeId}
@@ -239,7 +279,7 @@ export function AppShell() {
       previewRuntime={previewRuntime}
       contextualMode={contextualMode}
       search={search}
-      executionStatus={executionStatus}
+      executionStatus={activeExecutionStatus}
       toast={toast}
       dialog={dialog}
       dialogConnection={dialogConnection}
@@ -251,7 +291,7 @@ export function AppShell() {
       onHelp={handleHelp}
       onAddConnection={handleAddConnection}
       onSelectConnection={actions.selectConnectionInstance}
-      onNavigateToConnection={onOpenTerminal}
+      onNavigateToConnection={openTerminal}
       onMessageTargetUnavailable={() => showToast('The connection for this message is no longer connected.', 'error')}
       onMoveConnectionInstance={actions.moveConnectionInstanceToGroup}
       onReorderConnectionGroup={actions.reorderConnectionInstanceGroup}
@@ -262,7 +302,8 @@ export function AppShell() {
       onPreviewStart={handlePreviewStart}
       onPreviewEnd={handlePreviewEnd}
       onAgent={handleAgent}
-      onOpenFileSystem={handleOpenFileSystem}
+      onOpenFileTree={handleOpenFileTree}
+      filesystem={filesystemWorkspace}
       onRename={handleRename}
       onAutomaticTitle={actions.resetTitle}
       onTerminate={handleTerminate}
@@ -284,7 +325,8 @@ export function AppShell() {
       onRevokeAuthSession={(id) => void actions.revokeAuthSession(id)}
       onLogoutOtherAuthSessions={() => void actions.logoutOtherAuthSessions()}
       onCloseDialog={handleCloseDialog}
-      workspaceMode={workspaceMode}
+      workspaceContent={workspaceContent}
+      onBackToTerminal={handleBackToTerminal}
       appShellRef={fullscreen.targetRef}
       fullscreenActive={fullscreen.active}
       fullscreenSupported={fullscreen.supported}

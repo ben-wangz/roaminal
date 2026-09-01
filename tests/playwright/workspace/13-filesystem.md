@@ -8,19 +8,22 @@ or credentials.
 
 ## Procedure and assertions
 
-1. Open the fixture SSH connection instance and click its folder extension. The
-   main workspace body is replaced by FileSystem; no Terminal/FileSystem tab
-   bar is rendered, and no new window, automatic browser fullscreen request,
-   command action, or terminal action is created. The root shows `Active pane` when
-   tmux probing succeeds.
+1. Open the fixture SSH connection instance and click the Files rail icon (or
+   the connection card's Files action). The left tool surface changes to
+   the active instance's file tree while the right Terminal remains visible;
+   no Terminal/FileSystem tab bar, new window, automatic browser fullscreen
+   request, command action, or terminal action is created. The root shows
+   `Active pane` when tmux probing succeeds.
 2. Verify the root directory loads only its first level, directories appear
    before files, hidden files are visible by default, and the fallback status is
    explicit when tmux probing is unavailable. Toggle hidden files and verify only
    the tree visibility changes.
-3. Single-click a file. Selection changes but no stat/content request or preview
-   change occurs. Double-click Markdown and text files and verify the preview
-   pane opens with the correct viewer, source/rendered Markdown switching is
-   safe, and file content is never interpreted as executable HTML or a command.
+3. Single-click a file. Selection changes but no stat/content request or right
+   content change occurs. Double-click Markdown and text files and verify the
+   right Terminal content is replaced by the correct File preview viewer;
+   source/rendered Markdown switching is safe, the icon-only `Back to
+   Terminal` control is present, and file content is never interpreted as
+   executable HTML or a command. The left tree remains visible and unchanged.
 4. Double-click a directory to enter it. Verify lazy loading, expand/collapse,
    breadcrumb navigation, keyboard Enter activation, and the directory context
    menu's Refresh action. The Root row has no duplicate refresh button. A
@@ -29,11 +32,13 @@ or credentials.
    directory was removed remotely, its cached descendants, expansion state,
    selection, and preview are pruned. Confirm that a broken symlink is listed
    but cannot be read as file content.
-5. Resize the tree/preview divider with pointer and arrow-key input on desktop.
-   Verify it stays within the documented bounds. On phone portrait, verify the
-   page switches between tree and preview views inside the page and does not
-   call either Fullscreen API. The explicit topbar fullscreen control remains
-   independent and is not part of FileSystem navigation.
+5. On desktop, verify the Files tool occupies the same bounded left tool
+   surface as Connections and Virtual keyboard and the right preview fills the
+   primary work area. The old in-page tree/preview divider is not rendered.
+   On phone portrait, verify Files opens as the shared left drawer and the
+   preview uses the primary work area without calling either Fullscreen API.
+   The explicit topbar fullscreen control remains independent and is not part
+   of Files navigation.
 6. Right-click the root, a directory, and a file. The menu contains only copy
    absolute path, copy root-relative path, refresh, and for directories the one
    unified upload action. Clipboard values contain plain paths without quotes,
@@ -66,15 +71,17 @@ or credentials.
 10. Open the auto-refresh menu beside the global Refresh control. Verify the
     browser-wide preference offers Off, 30 seconds, 60 seconds, 2 minutes, and
     5 minutes, defaults to 60 seconds, persists after reload, pauses while the
-    FileSystem workspace is inactive or the document is hidden, and performs
-    one overdue refresh on visibility resume without overlapping a manual
-    refresh. Directory refreshes and preview reads do not reset the interval.
-11. Use the sidebar Terminal extension to return to Terminal, then the folder
-   control to enter FileSystem again. The Agent robot opens Agent details and
-   never changes the workspace mode. Repeat between two connection instances.
-   Verify only the selected mode occupies the main workspace body, each
-   instance keeps its own root, expanded paths, selection, preview, and upload
-   status, and no file data or root path from one instance appears in the other.
+    Files tool is inactive or the document is hidden, and performs one overdue
+    refresh on visibility resume without overlapping a manual refresh.
+    Directory refreshes and preview reads do not reset the interval.
+11. With the Files tool selected, activate a file and verify the right side
+   changes to File preview while the tree remains mounted. Click the icon-only
+   `Back to Terminal` control and verify only the right side returns to
+   Terminal; the Files tool, root, expanded paths, selection, and tree scroll
+   remain unchanged. The Agent robot opens Agent details and never changes
+   the right content accidentally. Repeat between two connection instances:
+   selecting another instance clears the stale preview target, binds one tree
+   to the new instance, and never shows cross-instance file data.
 12. Move the active tmux pane to another directory and trigger a tree/content
     request with the old root revision. Verify the UI clears the old tree,
     reloads the returned root, and shows a concise root-changed notice. Make a

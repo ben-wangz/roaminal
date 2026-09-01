@@ -28,9 +28,15 @@ export function reduceTerminalMessage(
   context: { activeLaunchId: string | null; runtimeId: string },
 ): TerminalEventResult {
   if (message.type === 'launch_published') {
+    const previous = state.connections.find(
+      (connection) => connection.connectionInstanceId === message.instance.connectionInstanceId,
+    );
+    const published = message.instance.endpoint || !previous?.endpoint
+      ? message.instance
+      : { ...message.instance, endpoint: previous.endpoint };
     const connections = [
       ...state.connections.filter((connection) => connection.connectionInstanceId !== message.instance.connectionInstanceId),
-      message.instance,
+      published,
     ];
     return {
       state: {
@@ -80,6 +86,7 @@ export function reduceTerminalMessage(
               sourceState: message.sourceState as ConnectionInstanceSummary['sourceState'],
               generationStatus: message.generationStatus,
               generationError: message.generationError,
+              ...(message.terminalType !== undefined ? { terminalType: message.terminalType } : {}),
             }
           : connection),
       },

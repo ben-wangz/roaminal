@@ -5,13 +5,15 @@ import type { AppPage } from './app-state';
 import type { ConnectionView } from './connection-view';
 import type { Dialog } from './app-shell-view';
 import type { WorkspaceTool } from './workspace-tool';
+import type { WorkspaceContent } from './workspace-content';
 
 type Params = {
-  onOpenFileSystem: (id: string) => void;
+  onOpenFileTree: (id: string) => void;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<SetStateAction<Dialog>>;
   setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
+  setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
   cancelLaunch: () => void;
@@ -21,11 +23,12 @@ type Params = {
 };
 
 export function useAppShellViewActions({
-  onOpenFileSystem,
+  onOpenFileTree,
   setPreviewConnectionInstanceId,
   setDialog,
   setWorkspaceTool,
   setWorkspaceToolOpen,
+  setWorkspaceContent,
   setSearch,
   setPage,
   cancelLaunch,
@@ -41,38 +44,33 @@ export function useAppShellViewActions({
   const handleAgent = useCallback((id: string) => {
     setDialog({ type: 'agent', connectionInstanceId: id });
   }, [setDialog]);
-  const handleOpenFileSystem = useCallback((id: string) => {
+  const handleOpenFileTree = useCallback((id: string) => {
     setPreviewConnectionInstanceId(null);
-    setWorkspaceTool('connections');
-    setWorkspaceToolOpen(!window.matchMedia('(max-width: 800px)').matches);
-    onOpenFileSystem(id);
-  }, [onOpenFileSystem, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen]);
+    onOpenFileTree(id);
+  }, [onOpenFileTree, setPreviewConnectionInstanceId]);
   const handleRename = useCallback((id: string) => setDialog({ type: 'rename', connectionInstanceId: id }), [setDialog]);
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), [setDialog]);
   const handleAddConnection = useCallback(() => setDialog({ type: 'add-connection' }), [setDialog]);
   const handleHelp = useCallback(() => showToast('User manual is being prepared.'), [showToast]);
-  const handleSelectConnectionsTool = useCallback(() => {
-    setPreviewConnectionInstanceId(null);
-    setWorkspaceTool('connections');
-    setWorkspaceToolOpen(true);
-  }, [setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleToggleSearch = useCallback(() => setSearch((value) => !value), [setSearch]);
   const handleCloseSearch = useCallback(() => setSearch(false), [setSearch]);
   const handleOpenConnections = useCallback(() => {
     cancelLaunch();
     setPreviewConnectionInstanceId(null);
+    setWorkspaceContent('terminal');
     setWorkspaceToolOpen(false);
     setWorkspaceTool('connections');
     setSearch(false);
     setPage('connections');
-  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceTool, setWorkspaceToolOpen]);
+  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceContent, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleOpenAppearance = useCallback(() => {
     setPreviewConnectionInstanceId(null);
+    setWorkspaceContent('terminal');
     setWorkspaceToolOpen(false);
     setWorkspaceTool('connections');
     setSearch(false);
     setPage('appearance');
-  }, [setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceTool, setWorkspaceToolOpen]);
+  }, [setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceContent, setWorkspaceTool, setWorkspaceToolOpen]);
   const handleOpenWorkspace = useCallback(() => {
     if (viewRef.current.activeConnectionInstanceId) setPage('workspace');
   }, [setPage, viewRef]);
@@ -90,12 +88,11 @@ export function useAppShellViewActions({
     handlePreviewStart,
     handlePreviewEnd,
     handleAgent,
-    handleOpenFileSystem,
+    handleOpenFileTree,
     handleRename,
     handleTerminate,
     handleAddConnection,
     handleHelp,
-    handleSelectConnectionsTool,
     handleToggleSearch,
     handleCloseSearch,
     handleOpenConnections,

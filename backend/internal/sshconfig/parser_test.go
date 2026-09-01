@@ -64,6 +64,37 @@ func TestRepositoryUpdateIsLosslessAndUsesETag(t *testing.T) {
 	_ = doc
 }
 
+func TestRepositoryCreateRejectsDuplicateHostAlias(t *testing.T) {
+	root := testRoot(t, "Host existing\n  HostName old.example\n")
+	repo := New(root)
+	_, etag, _, err := repo.Read(map[string]bool{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := "new.example"
+	if _, err := repo.Create(etag, nil, Edit{HostAlias: "existing", HostName: &value}); err == nil || err.Error() != "host alias already exists" {
+		t.Fatalf("expected duplicate alias error, got %v", err)
+	}
+}
+
+func testRoot(t *testing.T, config string) *sshfs.Root {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := sshfs.OpenAt(filepath.Join(dir, ".ssh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".ssh", "config"), []byte(config), 0o600); err != nil {
+		root.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { root.Close() })
+	return root
+}
+
 func TestValidAliasRequiresLeadingAsciiLetter(t *testing.T) {
 	valid := []string{"prod", "A1", "host.example", "host_name", "host-name", strings.Repeat("a", 255)}
 	invalid := []string{"", "1host", "_host", ".host", "-host", strings.Repeat("a", 256), "host/one", "host name", "éhost"}

@@ -1,4 +1,4 @@
-import { Download, FileQuestion, LoaderCircle, Search, X } from 'lucide-react';
+import { ArrowLeft, Download, FileQuestion, LoaderCircle, Search } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { loadMetadata, readContent } from './filesystem-api';
 import type { FileEntry, FileMetadata, FileSystemError, RootContext } from './filesystem-types';
@@ -9,7 +9,7 @@ type Props = {
   instanceId: string;
   root: RootContext;
   entry: FileEntry | null;
-  onClose: () => void;
+  onBackToTerminal: () => void;
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
   onRootChanged: () => void;
 };
@@ -33,7 +33,7 @@ function savePreviewScrollPosition(key: string | null, target: HTMLElement | nul
   }
 }
 
-export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootChanged }: Props) {
+export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast, onRootChanged }: Props) {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [data, setData] = useState<ArrayBuffer | null>(null);
   const [loading, setLoading] = useState(false);
@@ -159,9 +159,9 @@ export function FilePreview({ instanceId, root, entry, onClose, onToast, onRootC
           <small>{metadata ? `${viewerLabel(kind || 'raw')} · ${formatSize(metadata.size)}` : entry.relativePath}</small>
         </div>
         <div className="filesystem-preview-actions">
+          <button autoFocus className="icon-button file-preview-back-terminal" type="button" onClick={onBackToTerminal} title="Back to Terminal" aria-label="Back to Terminal" data-testid="file-preview-back-terminal"><ArrowLeft size={16} aria-hidden="true" /></button>
           {kind === 'markdown' && <button className="icon-button" type="button" onClick={() => setMarkdownSource((value) => !value)} title={markdownSource ? 'Rendered markdown' : 'Markdown source'} aria-label={markdownSource ? 'Rendered markdown' : 'Markdown source'}><Search size={16} aria-hidden="true" /></button>}
           <button className="icon-button" type="button" onClick={() => void download()} title="Download" aria-label="Download"><Download size={16} aria-hidden="true" /></button>
-          <button className="icon-button" type="button" onClick={onClose} title="Close preview" aria-label="Close preview"><X size={16} aria-hidden="true" /></button>
         </div>
       </header>
       <div ref={previewBodyRef} className="filesystem-preview-body">

@@ -27,6 +27,8 @@ type Manager struct {
 	clock         ports.Clock
 	ids           ports.IDGenerator
 	random        ports.RandomSource
+	endpointMu    sync.Mutex
+	endpointCache map[string]endpointCacheEntry
 }
 
 type Summary = ports.ConnectionInstanceSummary
@@ -128,7 +130,7 @@ func NewManager(deps Dependencies) *Manager {
 		randomSource = random.CryptoSource{}
 	}
 	idGenerator := deps.IDs
-	manager := &Manager{instances: NewInstanceService(deps.Runtime), configRepo: deps.ConfigRepo, keys: deps.Keys, options: deps.Options, sshPath: discover("ssh"), transportPool: newTransportPool(), clock: runtimeClock, ids: idGenerator, random: randomSource}
+	manager := &Manager{instances: NewInstanceService(deps.Runtime), configRepo: deps.ConfigRepo, keys: deps.Keys, options: deps.Options, sshPath: discover("ssh"), transportPool: newTransportPool(), clock: runtimeClock, ids: idGenerator, random: randomSource, endpointCache: make(map[string]endpointCacheEntry)}
 	manager.remoteMonitor = monitor.NewRemoteMonitorService(manager, monitor.Dependencies{Clock: runtimeClock, Random: randomSource})
 	runtimeID := ""
 	if deps.Runtime != nil {

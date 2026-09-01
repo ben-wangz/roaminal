@@ -110,6 +110,10 @@ func (m *Manager) PromotePending(id string, meta domain.ConnectionInstanceMeta) 
 	if meta.Rows == 0 {
 		meta.Rows = session.meta.Rows
 	}
+	if meta.TerminalType == "" {
+		meta.TerminalType = session.meta.TerminalType
+	}
+	meta.TerminalType = effectiveTerminalType(meta.TerminalType)
 	meta.Lifecycle = "live"
 	meta.SourceState = "current"
 	session.meta = meta

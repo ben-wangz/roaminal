@@ -21,6 +21,7 @@ type Params = {
   setPage: Dispatch<SetStateAction<AppPage>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setExecutionStatus: Dispatch<SetStateAction<string | null>>;
+  setExecutionStatusRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   showToast: (message: string, kind?: ToastKind) => void;
 };
 
@@ -39,17 +40,29 @@ export function useRuntimeMessages({
   setPage,
   setSearch,
   setExecutionStatus,
+  setExecutionStatusRuntime,
   showToast,
 }: Params): void {
+  const runtimeIdentityRef = useRef<{ id: string | null; runtime: TerminalRuntime | null }>({ id: null, runtime: null });
   const stateRef = useRef<TerminalEventState>({
     connections: controller.getSnapshot().connections,
     view: viewRef.current,
     connectionOrder: controller.getSnapshot().order,
     executionStatus,
   });
-  stateRef.current = { connections: controller.getSnapshot().connections, view: viewRef.current, connectionOrder: controller.getSnapshot().order, executionStatus };
+  const runtimeId = activeLaunchId || viewActiveConnectionInstanceId;
+  const runtimeChanged = runtimeIdentityRef.current.id !== runtimeId || runtimeIdentityRef.current.runtime !== currentRuntime;
+  if (runtimeChanged) {
+    runtimeIdentityRef.current = { id: runtimeId, runtime: currentRuntime };
+    stateRef.current = { connections: controller.getSnapshot().connections, view: viewRef.current, connectionOrder: controller.getSnapshot().order, executionStatus: null };
+  } else {
+    stateRef.current = { connections: controller.getSnapshot().connections, view: viewRef.current, connectionOrder: controller.getSnapshot().order, executionStatus };
+  }
   useEffect(() => {
-    const runtimeId = activeLaunchId || viewActiveConnectionInstanceId;
+    setExecutionStatus(null);
+    setExecutionStatusRuntime(null);
+  }, [currentRuntime, runtimeId, setExecutionStatus, setExecutionStatusRuntime]);
+  useEffect(() => {
     if (!currentRuntime || currentRuntime.connectionInstanceId !== runtimeId) return;
     return currentRuntime.subscribeMessage((message: ServerMessage | null) => {
       if (!message) return;
@@ -63,6 +76,7 @@ export function useRuntimeMessages({
         stateRef.current = next;
         setView(next.view);
         setExecutionStatus(next.executionStatus);
+        setExecutionStatusRuntime(next.executionStatus ? currentRuntime : null);
       }
       for (const effect of result.effects) {
         switch (effect.type) {
@@ -95,6 +109,8 @@ export function useRuntimeMessages({
     setSearch,
     setView,
     showToast,
+    setExecutionStatusRuntime,
+    runtimeId,
     viewActiveConnectionInstanceId,
     viewRef,
   ]);

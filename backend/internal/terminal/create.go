@@ -79,6 +79,7 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 	}
 	now := m.now().UTC()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.runtimeID, ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now}
+	meta.TerminalType = effectiveTerminalType(meta.TerminalType)
 	session, err := m.startSession(ctx, meta, cwd, true)
 	if err != nil {
 		return Summary{}, err

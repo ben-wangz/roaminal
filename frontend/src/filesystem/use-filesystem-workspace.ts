@@ -8,11 +8,12 @@ type Params = {
   instanceId: string;
   active: boolean;
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
+  onOpenFile?: (entry: FileEntry) => void;
 };
 
 export type FileSystemContextState = { entry: FileEntry; x: number; y: number } | null;
 
-export function useFilesystemWorkspace({ instanceId, active, onToast }: Params) {
+export function useFilesystemWorkspace({ instanceId, active, onToast, onOpenFile }: Params) {
   const [selected, setSelected] = useState<string | null>(null);
   const [previewEntry, setPreviewEntry] = useState<FileEntry | null>(null);
   const [currentPath, setCurrentPath] = useState('.');
@@ -71,7 +72,10 @@ export function useFilesystemWorkspace({ instanceId, active, onToast }: Params) 
       else await refresh.refreshDirectory(entry.relativePath);
       return;
     }
-    if (entry.type === 'file') setPreviewEntry(entry);
+    if (entry.type === 'file') {
+      setPreviewEntry(entry);
+      onOpenFile?.(entry);
+    }
   };
 
   const navigate = async (pathValue: string) => {
@@ -152,6 +156,8 @@ export function useFilesystemWorkspace({ instanceId, active, onToast }: Params) 
   }, [openMenuAt]);
 
   return {
+    instanceId,
+    active,
     ...tree,
     ...refresh,
     selected,
@@ -178,3 +184,5 @@ export function useFilesystemWorkspace({ instanceId, active, onToast }: Params) 
     openMenuAt,
   };
 }
+
+export type FileSystemWorkspaceState = ReturnType<typeof useFilesystemWorkspace>;

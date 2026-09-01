@@ -8,6 +8,9 @@ import { attachTerminalShortcutHandler } from './terminal-shortcuts';
 import { findTerminalMatch, type TerminalSearchOptions } from './terminal-search-guard';
 import { ImeInputFallbackAddon } from './terminal-ime-fallback';
 
+export type TerminalRuntimeConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'terminated';
+export type TerminalGrid = { cols: number; rows: number };
+
 export class TerminalRuntime {
   terminal?: Terminal;
   search?: SearchAddon;
@@ -16,6 +19,8 @@ export class TerminalRuntime {
   private element: HTMLElement | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private listeners = new Set<() => void>();
+  private connectionListeners = new Set<() => void>();
+  private gridListeners = new Set<() => void>();
   private messageListeners = new Set<(message: ServerMessage | null) => void>();
   private connected = false;
   private closed = false;
@@ -63,7 +68,10 @@ export class TerminalRuntime {
     this.search = new SearchAddon();
     attachTerminalShortcutHandler(this.terminal);
     this.terminal.onData((data) => this.input(data));
-    this.terminal.onResize(({ cols, rows }) => this.sendResize(cols, rows));
+    this.terminal.onResize(({ cols, rows }) => {
+      this.sendResize(cols, rows);
+      this.emitGrid();
+    });
     this.mount();
   }
 
@@ -145,6 +153,7 @@ export class TerminalRuntime {
       onStateChange: (connected) => {
         this.connected = connected;
         this.emit();
+        this.emitConnection();
         if (!connected || !this.terminal || !this.fit) return;
         this.claim();
         this.fitTerminal();
@@ -162,6 +171,7 @@ export class TerminalRuntime {
       this.closed = true;
       this.connected = false;
       terminal.options.disableStdin = true;
+      this.emitConnection();
     }
     if (message.type === 'snapshot') terminal.reset();
     if (message.type === 'snapshot' || message.type === 'output') terminal.write(message.data);
@@ -206,6 +216,8 @@ export class TerminalRuntime {
       });
     }
     this.listeners.clear();
+    this.connectionListeners.clear();
+    this.gridListeners.clear();
     this.messageListeners.clear();
   }
 
@@ -219,8 +231,29 @@ export class TerminalRuntime {
     return () => this.messageListeners.delete(listener);
   }
 
+  subscribeConnection(listener: () => void): () => void {
+    this.connectionListeners.add(listener);
+    return () => this.connectionListeners.delete(listener);
+  }
+
+  subscribeGrid(listener: () => void): () => void {
+    this.gridListeners.add(listener);
+    return () => this.gridListeners.delete(listener);
+  }
+
   connectedState(): boolean {
     return this.connected;
+  }
+
+  connectionState(): TerminalRuntimeConnectionState {
+    if (this.closed) return 'terminated';
+    return this.stream?.connectionState() || 'connecting';
+  }
+
+  grid(): TerminalGrid | null {
+    const terminal = this.terminal;
+    if (!terminal || !Number.isInteger(terminal.cols) || !Number.isInteger(terminal.rows) || terminal.cols < 1 || terminal.rows < 1) return null;
+    return { cols: terminal.cols, rows: terminal.rows };
   }
   closedState(): boolean {
     return this.closed;
@@ -257,6 +290,7 @@ export class TerminalRuntime {
     const fit = this.fit;
     if (this.disposed || !this.element || !terminal || !fit || !terminal.element?.parentElement || !terminal.dimensions) return;
     fit.fit();
+    this.emitGrid();
   }
   private deferTerminalDispose(terminal: Terminal): void {
     if (typeof window === 'undefined') {
@@ -274,5 +308,13 @@ export class TerminalRuntime {
 
   private emit(): void {
     for (const listener of this.listeners) listener();
+  }
+
+  private emitConnection(): void {
+    for (const listener of this.connectionListeners) listener();
+  }
+
+  private emitGrid(): void {
+    for (const listener of this.gridListeners) listener();
   }
 }

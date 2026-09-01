@@ -75,6 +75,8 @@ describe('AddConnectionDialog', () => {
     const select = renderer!.root.findByType('select');
     expect(select.props.name).toBe('connectionDefinition');
     expect(renderer!.root.findAllByType('option').map((option) => option.props.value)).toEqual(['', 'local', 'definition-1']);
+    expect(renderer!.root.findAllByType('option')[2].props.children).toBe('dev');
+    expect(renderer!.root.findAllByType('option')[2].props.children).not.toContain('dev.example.test');
 
     await act(async () => {
       select.props.onChange({ target: { value: 'definition-1' } });

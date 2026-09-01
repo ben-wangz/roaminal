@@ -53,7 +53,7 @@ func (m *Manager) summary(session *Session) Summary {
 }
 func (m *Manager) summaryLocked(session *Session) Summary {
 	session.meta.SyncEffectiveTitle()
-	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Attention: session.attention, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError, TmuxEnabled: session.meta.TmuxEnabled, TmuxSessionName: session.meta.TmuxSessionName, TmuxPrefixKey: session.meta.TmuxPrefixKey, TmuxPrefixSource: session.meta.TmuxPrefixSource}
+	return Summary{ID: session.meta.ID, ConnectionInstanceID: session.meta.ID, ConnectionDefinitionID: session.meta.ConnectionDefinitionID, Type: session.meta.Type, Purpose: session.meta.Purpose, Lifecycle: lifecycle(session), SourceState: session.meta.SourceState, SourceHostAlias: session.meta.SourceHostAlias, CreatedAt: session.meta.CreatedAt, UpdatedAt: session.meta.UpdatedAt, Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, TerminalType: effectiveTerminalType(session.meta.TerminalType), Attention: session.attention, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError, TmuxEnabled: session.meta.TmuxEnabled, TmuxSessionName: session.meta.TmuxSessionName, TmuxPrefixKey: session.meta.TmuxPrefixKey, TmuxPrefixSource: session.meta.TmuxPrefixSource}
 }
 func lifecycle(session *Session) string {
 	if session.ephemeral {
@@ -75,7 +75,7 @@ func titleMode(meta domain.ConnectionInstanceMeta) string {
 }
 func (s *Session) broadcastMetaLocked() {
 	s.meta.SyncEffectiveTitle()
-	s.broadcastMessageLocked(metaStreamMessage(MetaMessage{Title: s.meta.EffectiveTitle(), TitleMode: titleMode(s.meta), Cwd: s.meta.Cwd, Cols: s.meta.Cols, Rows: s.meta.Rows, SourceState: s.meta.SourceState, GenerationStatus: s.meta.GenerationStatus, GenerationError: s.meta.GenerationError}))
+	s.broadcastMessageLocked(metaStreamMessage(MetaMessage{Title: s.meta.EffectiveTitle(), TitleMode: titleMode(s.meta), Cwd: s.meta.Cwd, Cols: s.meta.Cols, Rows: s.meta.Rows, TerminalType: effectiveTerminalType(s.meta.TerminalType), SourceState: s.meta.SourceState, GenerationStatus: s.meta.GenerationStatus, GenerationError: s.meta.GenerationError}))
 }
 
 func (m *Manager) MarkSourceState(id, state string) error {

@@ -40,10 +40,11 @@ desktop. Run serially for byte-capture fixtures.
 6. With `tmuxPrefixSource=unsupported`, prefix-dependent buttons (prefix,
    copy-mode, `o`, `d`, and `"`) are disabled with an explanatory tooltip;
    Common keys, PageUp, PageDown, and q remain usable.
-7. The shared rail buttons open Connections or Virtual keyboard without changing
-   the active connection. They are never simultaneously expanded. The common
-   surface collapse control closes the selected tool; switching to FileSystem
-   selects Connections and hides the keyboard surface. The login-scoped
+7. The shared rail buttons open Connections, Files, or Virtual keyboard without
+   changing the active connection. They are never simultaneously expanded. The
+   common surface collapse control closes the selected tool; switching to Files
+   selects the Files surface and leaves Terminal content visible until a file
+   is activated. The login-scoped
    keyboard preference is restored after a native keyboard dismissal when the
    keyboard tool was selected.
 8. When the native mobile keyboard is open, the Virtual Keyboard key content is

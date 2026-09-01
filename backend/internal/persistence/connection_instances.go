@@ -25,7 +25,7 @@ func (s *Store) SaveConnectionInstance(meta ConnectionInstanceMeta) error {
 		return s.markConnectionInstanceError(meta.ID, err)
 	}
 	meta.FormatVersion = ConnectionFormatVersion
-	value := connectionMetaV2{FormatVersion: ConnectionFormatVersion, ID: meta.ID, BackendRuntimeID: meta.BackendRuntimeID, ConnectionDefinitionID: meta.ConnectionDefinitionID, Type: meta.Type, Purpose: meta.Purpose, SourceHostAlias: meta.SourceHostAlias, Lifecycle: meta.Lifecycle, SourceState: meta.SourceState, AutomaticTitle: meta.AutomaticTitle, TitleOverride: meta.TitleOverride, InitialCwd: meta.InitialCwd, Cwd: meta.Cwd, Cols: meta.Cols, Rows: meta.Rows, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt, ExitCode: meta.ExitCode, ExitSignal: meta.ExitSignal, ReuseFromConnectionInstanceID: meta.ReuseFromConnectionInstanceID, GenerationStatus: meta.GenerationStatus, GenerationError: meta.GenerationError, TmuxEnabled: meta.TmuxEnabled, TmuxSessionName: meta.TmuxSessionName, TmuxPrefixKey: meta.TmuxPrefixKey, TmuxPrefixSource: meta.TmuxPrefixSource}
+	value := connectionMetaV2{FormatVersion: ConnectionFormatVersion, ID: meta.ID, BackendRuntimeID: meta.BackendRuntimeID, ConnectionDefinitionID: meta.ConnectionDefinitionID, Type: meta.Type, Purpose: meta.Purpose, SourceHostAlias: meta.SourceHostAlias, Lifecycle: meta.Lifecycle, SourceState: meta.SourceState, AutomaticTitle: meta.AutomaticTitle, TitleOverride: meta.TitleOverride, InitialCwd: meta.InitialCwd, Cwd: meta.Cwd, Cols: meta.Cols, Rows: meta.Rows, TerminalType: meta.TerminalType, CreatedAt: meta.CreatedAt, UpdatedAt: meta.UpdatedAt, ExitCode: meta.ExitCode, ExitSignal: meta.ExitSignal, ReuseFromConnectionInstanceID: meta.ReuseFromConnectionInstanceID, GenerationStatus: meta.GenerationStatus, GenerationError: meta.GenerationError, TmuxEnabled: meta.TmuxEnabled, TmuxSessionName: meta.TmuxSessionName, TmuxPrefixKey: meta.TmuxPrefixKey, TmuxPrefixSource: meta.TmuxPrefixSource}
 	if err := os.MkdirAll(filepath.Dir(s.ConnectionInstancePath(meta.ID)), 0o700); err != nil {
 		return s.markConnectionInstanceError(meta.ID, err)
 	}
@@ -130,6 +130,7 @@ type connectionMetaV2 struct {
 	Cwd                           string    `json:"cwd"`
 	Cols                          int       `json:"cols"`
 	Rows                          int       `json:"rows"`
+	TerminalType                  string    `json:"terminalType"`
 	CreatedAt                     time.Time `json:"createdAt"`
 	UpdatedAt                     time.Time `json:"updatedAt"`
 	ExitCode                      *int      `json:"exitCode"`
@@ -164,7 +165,7 @@ func decodeConnectionInstanceMeta(data []byte) (ConnectionInstanceMeta, error) {
 		if err := decodeStrict(data, &current); err != nil {
 			return ConnectionInstanceMeta{}, err
 		}
-		meta := ConnectionInstanceMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, TmuxEnabled: current.TmuxEnabled, TmuxSessionName: current.TmuxSessionName, TmuxPrefixKey: current.TmuxPrefixKey, TmuxPrefixSource: current.TmuxPrefixSource}
+		meta := ConnectionInstanceMeta{FormatVersion: ConnectionFormatVersion, ID: current.ID, BackendRuntimeID: current.BackendRuntimeID, ConnectionDefinitionID: current.ConnectionDefinitionID, Type: current.Type, Purpose: current.Purpose, SourceHostAlias: current.SourceHostAlias, Lifecycle: current.Lifecycle, SourceState: current.SourceState, AutomaticTitle: current.AutomaticTitle, TitleOverride: current.TitleOverride, InitialCwd: current.InitialCwd, Cwd: current.Cwd, Cols: current.Cols, Rows: current.Rows, TerminalType: current.TerminalType, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt, ExitCode: current.ExitCode, ExitSignal: current.ExitSignal, ReuseFromConnectionInstanceID: current.ReuseFromConnectionInstanceID, GenerationStatus: current.GenerationStatus, GenerationError: current.GenerationError, TmuxEnabled: current.TmuxEnabled, TmuxSessionName: current.TmuxSessionName, TmuxPrefixKey: current.TmuxPrefixKey, TmuxPrefixSource: current.TmuxPrefixSource}
 		meta.SyncEffectiveTitle()
 		return meta, nil
 	default:

@@ -1,1 +1,1 @@
-export type WorkspaceTool = 'connections' | 'keyboard';
+export type WorkspaceTool = 'connections' | 'keyboard' | 'files';

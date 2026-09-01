@@ -13,6 +13,7 @@ import { ConnectionInstanceController } from '../connections/connection-instance
 import { useConnectionInstanceActions } from './use-connection-instance-actions';
 import { useAppShellChromeActions } from './use-app-shell-chrome-actions';
 import type { WorkspaceTool } from './workspace-tool';
+import type { WorkspaceContent } from './workspace-content';
 import type { Dialog } from './app-shell-overlays';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
@@ -38,6 +39,7 @@ type Params = {
   workspaceTool: WorkspaceTool;
   setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
+  setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<SetStateAction<Dialog>>;
@@ -65,6 +67,7 @@ export function useAppShellActions({
   workspaceTool,
   setWorkspaceTool,
   setWorkspaceToolOpen,
+  setWorkspaceContent,
   setSearch,
   setPreviewConnectionInstanceId,
   setDialog,
@@ -105,6 +108,7 @@ export function useAppShellActions({
     setDialog,
     setPreviewConnectionInstanceId,
     setSearch,
+    setWorkspaceContent,
     mainRuntime,
     previewRuntimeRef,
     controller,
@@ -125,6 +129,7 @@ export function useAppShellActions({
     setPage,
     workspaceTool,
     setWorkspaceToolOpen,
+    setWorkspaceContent,
     setSearch,
     setPreviewConnectionInstanceId,
     showToast,

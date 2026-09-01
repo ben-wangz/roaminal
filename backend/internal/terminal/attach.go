@@ -107,7 +107,7 @@ func (m *Manager) attachPendingMode(ctx context.Context, id string, reserved, pe
 		}
 	}
 	client.enqueue(session.stampInitialLocked(snapshotStreamMessage(string(snapshot))), false)
-	client.enqueue(session.stampInitialLocked(metaStreamMessage(MetaMessage{Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, Attention: session.attention, SourceState: session.meta.SourceState, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError})), false)
+	client.enqueue(session.stampInitialLocked(metaStreamMessage(MetaMessage{Title: session.meta.EffectiveTitle(), TitleMode: titleMode(session.meta), Cwd: session.meta.Cwd, Cols: session.meta.Cols, Rows: session.meta.Rows, TerminalType: effectiveTerminalType(session.meta.TerminalType), Attention: session.attention, SourceState: session.meta.SourceState, GenerationStatus: session.meta.GenerationStatus, GenerationError: session.meta.GenerationError})), false)
 	if closed {
 		client.enqueue(session.stampInitialLocked(terminatedStreamMessage(session.exitStatus)), false)
 	} else {

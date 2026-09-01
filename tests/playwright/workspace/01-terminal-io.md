@@ -12,8 +12,11 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
    instead of leaking, horizontal page overflow does not appear, and scrollback
    remains searchable.
 3. Run `cd` to a unique directory and set a shell title. Wait for heartbeat/meta
-   updates; sidebar PWD, footer PWD, document title, and automatic card title
-   reflect the new state without private marker bytes appearing in xterm output.
+   updates; the footer PWD, document title, and automatic card title reflect
+   the new state without private marker bytes appearing in xterm output. The
+   card keeps PWD only in its accessible detail path, while the footer exposes
+   the active Terminal state, connection name, safe endpoint, TERM, current
+   `COLS x ROWS`, and `tmux`/`ssh`/`local` context without stale values.
 4. Start a long command that emits Roaminal execution markers. The status area
    reports Running and then clears/shows completion once. Normal commands that
    do not use the shell integration remain usable.

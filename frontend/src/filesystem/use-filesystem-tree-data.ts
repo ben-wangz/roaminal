@@ -214,6 +214,11 @@ export function useFilesystemTreeData({
     setRootError(null);
   }, [globalController, instanceId, resetTree]);
 
+  // The effect above clears the previous instance's data after the first
+  // render that observes a new instance. Keep consumers from rendering that
+  // one stale render as if it belonged to the new connection instance.
+  const instanceReady = previousInstanceId.current === instanceId;
+
   useEffect(() => {
     activeRef.current = active;
     if (active) return;
@@ -224,6 +229,7 @@ export function useFilesystemTreeData({
   }, [active, globalController]);
 
   return {
+    instanceReady,
     root,
     rootError,
     entries,

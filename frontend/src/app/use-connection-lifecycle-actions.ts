@@ -8,6 +8,7 @@ import { reconcileConnections } from './connection-view';
 import type { ToastKind } from '../ui/toast';
 import { ConnectionInstanceController } from '../connections/connection-instance-controller';
 import type { Dialog } from './app-shell-overlays';
+import type { WorkspaceContent } from './workspace-content';
 
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
@@ -20,6 +21,7 @@ type Params = {
   setDialog: Dispatch<SetStateAction<Dialog>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
+  setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
   mainRuntime: MutableRefObject<TerminalRuntime | null>;
   previewRuntimeRef: DisposableRuntimeRef;
   viewRef: MutableRefObject<ConnectionView>;
@@ -35,6 +37,7 @@ export function useConnectionLifecycleActions({
   setDialog,
   setPreviewConnectionInstanceId,
   setSearch,
+  setWorkspaceContent,
   mainRuntime,
   previewRuntimeRef,
   viewRef,
@@ -60,6 +63,7 @@ export function useConnectionLifecycleActions({
   const terminateConnection = useCallback(async (id: string) => {
     try {
       controller.markRevision();
+      if (viewRef.current.activeConnectionInstanceId === id) setWorkspaceContent('terminal');
       if (mainRuntime.current?.connectionInstanceId === id) {
         mainRuntime.current.dispose();
         mainRuntime.current = null;
@@ -80,7 +84,7 @@ export function useConnectionLifecycleActions({
     } catch (err) {
       showToast((err as Error).message, 'error');
     }
-  }, [controller, mainRuntime, previewRuntimeRef, setActiveView, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setSearch, showToast, viewRef]);
+  }, [controller, mainRuntime, previewRuntimeRef, setActiveView, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setSearch, setWorkspaceContent, showToast, viewRef]);
 
   const onLogin = useCallback(async (password: string) => {
     try {

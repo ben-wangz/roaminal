@@ -142,7 +142,8 @@ func connectionSummary(item ports.TerminalInstanceSummary) Summary {
 		Type: item.Type, Purpose: item.Purpose, Lifecycle: item.Lifecycle, SourceState: item.SourceState,
 		SourceHostAlias: item.SourceHostAlias, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 		Title: item.Title, TitleMode: item.TitleMode, Cwd: item.Cwd, Cols: item.Cols, Rows: item.Rows,
-		Attention: item.Attention, GenerationStatus: item.GenerationStatus, GenerationError: item.GenerationError,
+		TerminalType: item.TerminalType,
+		Attention:    item.Attention, GenerationStatus: item.GenerationStatus, GenerationError: item.GenerationError,
 		TmuxEnabled: item.TmuxEnabled, TmuxSessionName: item.TmuxSessionName, TmuxPrefixKey: item.TmuxPrefixKey,
 		TmuxPrefixSource: item.TmuxPrefixSource,
 	}

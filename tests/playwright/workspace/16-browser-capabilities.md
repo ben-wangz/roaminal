@@ -15,19 +15,19 @@ fullscreen assertions.
    capability detection reports unsupported, the control remains visible,
    carries `data-fullscreen-state="unsupported"`, is disabled, has an
    unavailable visual marker and clear label, and login, connection manager,
-   Terminal, FileSystem, messages, and input remain usable. Verify that a
+   Terminal, Files, messages, and input remain usable. Verify that a
    disabled control does not issue a fullscreen request.
 3. In a Chromium context where element fullscreen is permitted, enter and exit
    fullscreen through a real click. Verify the target is the complete
    `.app-shell`, the topbar, unified workspace tool surface, Monitor,
-   Terminal/FileSystem body, and Message Center remain usable, and the control
+   Terminal/File preview body, and Message Center remain usable, and the control
    changes to the minimize state. Press Escape or trigger a native external
    exit and verify the control synchronizes without an automatic re-entry. A
    rejected request or fullscreen error must clear the pending state and return
    the control to its supported or unsupported state.
-4. Exercise fullscreen on Terminal and FileSystem, switch connection instances,
+4. Exercise fullscreen on Terminal and File preview, switch connection instances,
    open/collapse Connections and Virtual keyboard, and use Terminal input. No
-   mode change, connection change, native keyboard opening, timer, or FileSystem
+   content change, connection change, native keyboard opening, timer, or Files
    preview action may request fullscreen. On phone layouts verify safe-area
    spacing and an in-app exit affordance when the normal topbar is hidden by the
    native keyboard. In an iPhone-sized emulated context, verify visibility and

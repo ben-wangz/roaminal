@@ -46,8 +46,6 @@ export function useFilesystemRefresh({
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefreshDegraded, setAutoRefreshDegraded] = useState(false);
   const [autoRefreshSeconds, setAutoRefreshSeconds] = useState(readAutoRefreshSeconds);
-  const [treeWidth, setTreeWidth] = useState(290);
-  const resizeStart = useRef<{ x: number; width: number } | null>(null);
   const globalRefreshInFlight = useRef(false);
   const lastGlobalRefreshAt = useRef<number | null>(null);
 
@@ -183,29 +181,13 @@ export function useFilesystemRefresh({
     };
   }, [active, autoRefreshSeconds, instanceId, markAutoRefreshFailure, reloadRoot, refreshFileTree, rootRef]);
 
-  useEffect(() => {
-    const move = (event: PointerEvent) => {
-      if (resizeStart.current) setTreeWidth(Math.min(420, Math.max(240, resizeStart.current.width + event.clientX - resizeStart.current.x)));
-    };
-    const end = () => { resizeStart.current = null; document.body.style.cursor = ''; };
-    document.addEventListener('pointermove', move);
-    document.addEventListener('pointerup', end);
-    return () => {
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', end);
-    };
-  }, []);
-
   return {
     refreshing,
     autoRefreshDegraded,
     autoRefreshSeconds,
-    treeWidth,
-    resizeStart,
     reloadRoot,
     refreshFileTree,
     refreshDirectory,
     changeAutoRefresh,
-    setTreeWidth,
   };
 }

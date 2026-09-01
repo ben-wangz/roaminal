@@ -7,15 +7,10 @@ import { fullscreenControlState } from './use-browser-fullscreen';
 
 type Props = {
   workspaceOpen: boolean;
-  connected: boolean;
-  connectionName: string;
-  connectionInstanceId: string | null;
   system: Heartbeat['system'] | null;
-  connectionCount: number;
   latencyMs: number | null;
   persistenceDegraded: boolean;
   onToggleSearch: () => void;
-  onOpenConnections: () => void;
   onOpenAppearance: () => void;
   messageUnreadCount: number;
   messagesOpen: boolean;
@@ -31,15 +26,10 @@ type Props = {
 
 export const ShellTopbar = memo(function ShellTopbar({
   workspaceOpen,
-  connected,
-  connectionName,
-  connectionInstanceId,
   system,
-  connectionCount,
   latencyMs,
   persistenceDegraded,
   onToggleSearch,
-  onOpenConnections,
   onOpenAppearance,
   messageUnreadCount,
   messagesOpen,
@@ -66,13 +56,10 @@ export const ShellTopbar = memo(function ShellTopbar({
         <strong>Roaminal</strong>
       </div>
       <SystemStatus
-        connected={connected}
-        connectionName={connectionName}
         system={system}
-        connectionCount={connectionCount}
         latencyMs={latencyMs}
         persistenceDegraded={persistenceDegraded}
-        resetKey={workspaceOpen ? connectionInstanceId : 'manager'}
+        resetKey={workspaceOpen ? 'workspace' : 'manager'}
       />
       <div className="top-actions">
         {workspaceOpen && (
@@ -84,9 +71,6 @@ export const ShellTopbar = memo(function ShellTopbar({
               title="Search terminal"
             >
               <Search aria-hidden="true" size={17} />
-            </button>
-            <button className="text-button" onClick={onOpenConnections}>
-              Connections
             </button>
           </>
         )}

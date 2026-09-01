@@ -1,5 +1,4 @@
 import { Minimize } from 'lucide-react';
-import { connectionDisplayName } from '../status/connection-label';
 import { ConnectionManager } from '../connections/connection-manager';
 import { AppearanceSettings } from '../appearance/appearance-settings';
 import { ShellTopbar } from './shell-topbar';
@@ -18,6 +17,7 @@ export function AppShellView({
   workspaceToolOpen,
   connectionToolButton,
   keyboardToolButton,
+  filesToolButton,
   nativeKeyboardOpen,
   messageButtonRef,
   messageCenter,
@@ -27,7 +27,6 @@ export function AppShellView({
   view,
   heartbeatState,
   heartbeatLatency,
-  heartbeatConnected,
   currentConnection,
   activeInstance,
   currentRuntime,
@@ -59,7 +58,8 @@ export function AppShellView({
   onPreviewStart,
   onPreviewEnd,
   onAgent,
-  onOpenFileSystem,
+  onOpenFileTree,
+  filesystem,
   onRename,
   onAutomaticTitle,
   onTerminate,
@@ -81,7 +81,8 @@ export function AppShellView({
   onRevokeAuthSession,
   onLogoutOtherAuthSessions,
   onCloseDialog,
-  workspaceMode,
+  workspaceContent,
+  onBackToTerminal,
   appShellRef,
   fullscreenActive,
   fullscreenSupported,
@@ -100,16 +101,11 @@ export function AppShellView({
         messageUnreadCount={messageCenter.state.unreadCount}
         messagesOpen={messageCenter.state.popoverOpen}
         messageButtonRef={messageButtonRef}
-        connected={heartbeatConnected && Boolean(heartbeatState)}
-        connectionName={connectionDisplayName(currentConnection || null, connections)}
-        connectionInstanceId={activeInstance?.connectionInstanceId || null}
         system={heartbeatState?.system || null}
-        connectionCount={connections.length}
         latencyMs={heartbeatLatency}
         persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
         onToggleMessages={messageCenter.togglePopover}
         onToggleSearch={onToggleSearch}
-        onOpenConnections={onOpenConnections}
         onOpenAppearance={onOpenAppearance}
         onOpenAuthSessions={onOpenAuthSessions}
         onSignOut={onSignOut}
@@ -123,9 +119,10 @@ export function AppShellView({
           <WorkspaceToolRail
             workspaceTool={workspaceTool}
             workspaceToolOpen={workspaceToolOpen}
-            workspaceMode={workspaceMode}
+            connectionCount={connections.length}
             connectionToolButton={connectionToolButton}
             keyboardToolButton={keyboardToolButton}
+            filesToolButton={filesToolButton}
             onSelectWorkspaceTool={onSelectWorkspaceTool}
             onCollapseWorkspaceTool={onCollapseWorkspaceTool}
             onHelp={onHelp}
@@ -135,7 +132,7 @@ export function AppShellView({
           <WorkspaceToolSurface
             tool={workspaceTool}
             open={workspaceToolOpen}
-            workspaceMode={workspaceMode}
+            workspaceContent={workspaceContent}
             connections={connections}
             layout={connectionInstanceLayout}
             loginSessionId={loginSessionId}
@@ -148,6 +145,7 @@ export function AppShellView({
             nativeKeyboardOpen={nativeKeyboardOpen}
             connectionToolButton={connectionToolButton}
             keyboardToolButton={keyboardToolButton}
+            filesToolButton={filesToolButton}
             onCollapse={onCollapseWorkspaceTool}
             onAddConnection={onAddConnection}
             onSelectConnection={onSelectConnection}
@@ -161,7 +159,8 @@ export function AppShellView({
             onPreviewEnd={onPreviewEnd}
             onOpenTerminal={onNavigateToConnection}
             onAgent={onAgent}
-            onOpenFileSystem={onOpenFileSystem}
+            onOpenFileTree={onOpenFileTree}
+            filesystem={filesystem}
             onRename={onRename}
             onAutomaticTitle={onAutomaticTitle}
             onTerminate={onTerminate}
@@ -205,7 +204,9 @@ export function AppShellView({
               executionStatus={executionStatus}
               onCloseSearch={onCloseSearch}
               onOpenManager={onOpenManager}
-              mode={workspaceMode}
+              content={workspaceContent}
+              filesystem={filesystem}
+              onBackToTerminal={onBackToTerminal}
               onToast={onShowToast}
             />
           ) : page === 'connections' ? (

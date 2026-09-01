@@ -8,7 +8,7 @@ import { ConnectionActions, type ConnectionGroupMoveTarget } from './connection-
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import { useConnectionGroupReorder } from './use-connection-group-reorder';
 import { agentSummary, agentTitle, agentVisualAsset, agentVisualLabel, agentVisualState } from '../agent/agent-api';
-import type { WorkspaceMode } from '../app/workspace-page';
+import type { WorkspaceContent } from '../app/workspace-content';
 import { ConnectionGroupActions } from './connection-group-actions';
 import { loadCollapsed, saveCollapsed } from './connection-sidebar-storage';
 
@@ -30,8 +30,8 @@ type Props = {
   onPreviewEnd: (id: string) => void;
   onOpenTerminal: (id: string) => void;
   onAgent: (id: string) => void;
-  onOpenFileSystem: (id: string) => void;
-  workspaceMode: WorkspaceMode;
+  onOpenFileTree: (id: string) => void;
+  workspaceContent: WorkspaceContent;
   onRename: (id: string) => void;
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
@@ -51,16 +51,21 @@ export function sinceLabel(createdAt: string): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(hour % 12 || 12)}:${pad(date.getMinutes())} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
-function connectionStateLabel(connection: ConnectionInstanceSummary): string {
-  if (connection.attention) return 'Activity waiting';
+function connectionTypeLabel(connection: ConnectionInstanceSummary): string {
   if (connection.purpose === 'ssh_key_generation') return 'SSH key generation';
-  return connection.type === 'ssh' ? 'SSH connection' : 'Local connection';
+  return connection.type === 'ssh' ? 'SSH' : 'Local';
 }
 
-function connectionPathLabel(connection: ConnectionInstanceSummary): string | null {
+function connectionDetailLabel(connection: ConnectionInstanceSummary): string | null {
   if (connection.purpose === 'ssh_key_generation') return `TARGET: ${connection.title || 'key'}`;
-  const cwd = connection.cwd?.trim();
-  return cwd ? `PWD: ${cwd}` : null;
+  return null;
+}
+
+function connectionAccessibleDescription(connection: ConnectionInstanceSummary): string {
+  const lifecycle = connection.lifecycle || 'unknown';
+  const attention = connection.attention ? ' Attention is waiting.' : '';
+  const cwd = connection.cwd?.trim() || 'unavailable';
+  return `${connection.title || 'Connection'}. ${connectionTypeLabel(connection)}. Lifecycle ${lifecycle}.${attention} PWD ${cwd}.`;
 }
 
 function canPreview(): boolean {
@@ -91,8 +96,8 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   onPreviewEnd,
   onOpenTerminal,
   onAgent,
-  onOpenFileSystem,
-  workspaceMode,
+  onOpenFileTree,
+  workspaceContent,
   onRename,
   onAutomaticTitle,
   onTerminate,
@@ -168,7 +173,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   return (
     <div className="connection-sidebar-content">
         <div className="connection-sidebar-toolbar">
-          <strong>Connections <span>{connections.length}</span></strong>
+          <strong>Connections</strong>
           <button className="icon-button" type="button" aria-label="Create connection group" title="Create connection group" onClick={() => setCreatingGroup(true)}><FolderPlus size={15} aria-hidden="true" /></button>
         </div>
         <label className="connection-sidebar-search"><Search size={14} aria-hidden="true" /><input id="connection-sidebar-search" name="connectionSearch" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search connections" aria-label="Search connections" /></label>
@@ -211,9 +216,9 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
 
   function renderConnection(connection: ConnectionInstanceSummary, groupId: string) {
     const previewing = previewConnectionInstanceId === connection.connectionInstanceId && Boolean(previewRuntime);
-    const pathLabel = connectionPathLabel(connection);
+    const detailLabel = connectionDetailLabel(connection);
     const startPreview = () => {
-      if (workspaceMode === 'terminal' && !draggedConnectionInstanceId && !draggedGroupId && !reorderPending && canPreview()) onPreviewStart(connection.connectionInstanceId);
+      if (workspaceContent === 'terminal' && !draggedConnectionInstanceId && !draggedGroupId && !reorderPending && canPreview()) onPreviewStart(connection.connectionInstanceId);
     };
     const stopPreview = () => onPreviewEnd(connection.connectionInstanceId);
     const dropPlacement = dropTarget?.kind === 'instance' && dropTarget.id === connection.connectionInstanceId ? dropTarget.placement : null;
@@ -221,22 +226,24 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
     const agentState = agentVisualState(agent);
     const agentLabel = agentTitle(agent);
     const fileSystemAvailable = connection.type === 'ssh' && connection.lifecycle === 'live' && connection.purpose === 'interactive';
+    const accessibleDetailsId = `connection-details-${connection.connectionInstanceId}`;
     return (
       <article className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''} ${draggedConnectionInstanceId === connection.connectionInstanceId ? 'dragging' : ''} ${dropPlacement ? `drop-${dropPlacement}` : ''}`} data-connection-id={connection.connectionInstanceId} key={connection.connectionInstanceId} onMouseEnter={startPreview} onMouseLeave={stopPreview} onClick={() => onSelect(connection.connectionInstanceId)} onDragOver={(event) => dragOverInstance(event, connection.connectionInstanceId, groupId)} onDragLeave={(event) => dragLeave(event, connection.connectionInstanceId)} onDrop={(event) => dropInstance(event, connection.connectionInstanceId, groupId)} onFocus={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview(); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) stopPreview(); }}>
         <div className="connection-card-preview">{previewing && previewRuntime && <TerminalPreview runtime={previewRuntime} />}</div>
         <div className="connection-card-overlay">
-          <button className="connection-select" type="button" onClick={() => onSelect(connection.connectionInstanceId)} aria-current={connection.connectionInstanceId === active ? 'page' : undefined} title={connection.connectionInstanceId}><span className="connection-indicator" /><span className="connection-title-wrap"><b>{connection.title || 'Connection'}</b><small>{connectionStateLabel(connection)}</small></span></button>
-          <div className="connection-metadata"><span>ID: {shortConnectionId(connection.connectionInstanceId)}</span>{pathLabel && <span className="connection-path" title={connection.cwd}>{pathLabel}</span>}<time dateTime={connection.createdAt} title={connection.createdAt}>SINCE: {sinceLabel(connection.createdAt)}</time></div>
+          <button className="connection-select" type="button" onClick={() => onSelect(connection.connectionInstanceId)} aria-current={connection.connectionInstanceId === active ? 'page' : undefined} aria-describedby={accessibleDetailsId} title={connection.connectionInstanceId}><span className="connection-indicator" /><span className="connection-title-wrap"><b>{connection.title || 'Connection'}</b><small>{connectionTypeLabel(connection)}</small></span></button>
+          <div className="connection-metadata"><span>ID: {shortConnectionId(connection.connectionInstanceId)}</span>{detailLabel && <span className="connection-path" title={connection.cwd}>{detailLabel}</span>}<time dateTime={connection.createdAt} title={connection.createdAt}>SINCE: {sinceLabel(connection.createdAt)}</time></div>
         </div>
         <div className="connection-actions" aria-label="Connection extensions and actions">
           <button className="connection-drag-handle" type="button" draggable={!reorderPending && !query} aria-label={`Reorder ${connection.title || 'connection'}`} title={query ? 'Clear search to reorder connections' : 'Reorder connection'} onClick={(event) => event.stopPropagation()} onDragStart={(event) => startInstanceDrag(event, connection.connectionInstanceId)} onDragEnd={clearDrag} onKeyDown={(event) => moveInstanceWithKeyboard(event, connection.connectionInstanceId, groupId)}><GripVertical aria-hidden="true" size={15} /></button>
           <button className="extension-button terminal-extension" type="button" aria-label="Open Terminal" title="Open Terminal" onClick={(event) => { event.stopPropagation(); onOpenTerminal(connection.connectionInstanceId); }}><Terminal aria-hidden="true" size={15} /></button>
-          {fileSystemAvailable && <button className="extension-button" type="button" aria-label="Files extension" title="Open FileSystem" onClick={(event) => { event.stopPropagation(); onPreviewEnd(connection.connectionInstanceId); onOpenFileSystem(connection.connectionInstanceId); }}><FolderOpen aria-hidden="true" size={15} /></button>}
+          {fileSystemAvailable && <button className="extension-button" type="button" aria-label="Open Files" title="Open Files" onClick={(event) => { event.stopPropagation(); onPreviewEnd(connection.connectionInstanceId); onOpenFileTree(connection.connectionInstanceId); }}><FolderOpen aria-hidden="true" size={15} /></button>}
           <ConnectionActions connection={connection} moveTargets={groups.map(({ group, connections: members }): ConnectionGroupMoveTarget => ({ groupId: group.groupId, name: group.name, count: members.length, current: group.groupId === groupId, full: group.groupId !== UNGROUPED_GROUP_ID && members.length >= 10 && group.groupId !== groupId }))} onMoveToGroup={(targetGroupId) => { void onMoveInstance(connection.connectionInstanceId, targetGroupId, null, 'after'); }} onRename={() => onRename(connection.connectionInstanceId)} onAutomaticTitle={() => onAutomaticTitle(connection.connectionInstanceId)} onTerminate={() => onTerminate(connection.connectionInstanceId)} />
         </div>
         <button className={`connection-agent-status connection-agent-status-${agentState}`} type="button" aria-label={agentLabel} title={agentLabel} data-agent-state={agent.component} data-agent-activity={agent.activity} onClick={(event) => { event.stopPropagation(); onAgent(connection.connectionInstanceId); }}>
           <img src={agentVisualAsset(agentState)} alt={agentVisualLabel(agentState)} draggable={false} />
         </button>
+        <span id={accessibleDetailsId} className="connection-card-a11y">{connectionAccessibleDescription(connection)}</span>
       </article>
     );
   }

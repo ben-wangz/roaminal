@@ -102,7 +102,7 @@ export function AddConnectionDialog({ connections, onCreateConnection, onClose }
           <option value="local">Local</option>
           {availableDefinitions.map((definition) => (
             <option key={definition.connectionDefinitionId} value={definition.connectionDefinitionId}>
-              {definitionLabel(definition)}
+              {connectionName(definition)}
             </option>
           ))}
         </select>
@@ -126,7 +126,6 @@ export function AddConnectionDialog({ connections, onCreateConnection, onClose }
   );
 }
 
-function definitionLabel(definition: ConnectionDefinition): string {
-  const destination = [definition.user, definition.hostName || definition.hostAlias].filter(Boolean).join('@');
-  return destination && definition.port ? `${definition.hostAlias} (${destination}:${definition.port})` : definition.hostAlias || destination || 'SSH connection';
+function connectionName(definition: ConnectionDefinition): string {
+  return definition.hostAlias || 'SSH connection';
 }

@@ -56,6 +56,9 @@ Errors use
 
 Connection-instance responses use `connectionInstanceId` as their only
 instance identifier. Active lists do not include retired or exited instances.
+SSH instance projections may include an `endpoint` object containing only the
+effective `user`, `host`, and `port` used for safe Terminal footer display; it
+never contains credentials or raw SSH directives. Local instances omit it.
 Sidebar layout is scoped to the current login session. New instances enter
 `ungrouped`; named groups hold at most 10 instances, while `ungrouped` has no
 group limit. A non-empty named group cannot be deleted. The flat order endpoint
@@ -162,5 +165,7 @@ are owned by the login session that created them. Attach order is `snapshot`,
 ```
 
 Server messages are `snapshot`, `meta`, `status`, `output`, `execution`, and
-`pong`. Invalid messages close with `1008`, oversized messages with `1009`,
-and slow clients with `1013`.
+`pong`. The `meta` message includes the current `cwd`, `cols`, `rows`, and
+effective `terminalType`; the backend uses `xterm-256color` when no explicit
+terminal type is configured. Invalid messages close with `1008`, oversized
+messages with `1009`, and slow clients with `1013`.

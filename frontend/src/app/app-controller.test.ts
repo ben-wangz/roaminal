@@ -10,18 +10,20 @@ describe('app controller', () => {
     controller.setPage('workspace');
     controller.setWorkspaceTool('keyboard');
     controller.setWorkspaceToolOpen(true);
+    controller.setWorkspaceContent('file-preview');
     controller.setPreviewConnectionInstanceId('instance-1');
 
     expect(controller.getSnapshot()).toMatchObject({
       page: 'workspace',
       workspaceTool: 'keyboard',
       workspaceToolOpen: true,
+      workspaceContent: 'file-preview',
       previewConnectionInstanceId: 'instance-1',
     });
-    expect(snapshots).toEqual(['workspace', 'workspace', 'workspace', 'workspace']);
+    expect(snapshots).toEqual(['workspace', 'workspace', 'workspace', 'workspace', 'workspace']);
     unsubscribe();
     controller.setSearch(true);
-    expect(snapshots).toHaveLength(4);
+    expect(snapshots).toHaveLength(5);
   });
 
   it('supports functional field updates without exposing mutable state', () => {

@@ -29,6 +29,7 @@ type ConnectionInstanceMeta struct {
 	Cwd                           string    `json:"cwd"`
 	Cols                          int       `json:"cols"`
 	Rows                          int       `json:"rows"`
+	TerminalType                  string    `json:"terminalType,omitempty"`
 	CreatedAt                     time.Time `json:"createdAt"`
 	UpdatedAt                     time.Time `json:"updatedAt"`
 	BackendRuntimeID              string    `json:"backendRuntimeId,omitempty"`

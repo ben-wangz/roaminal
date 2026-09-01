@@ -34,6 +34,7 @@ type MetaMessage struct {
 	Cwd              string `json:"cwd"`
 	Cols             int    `json:"cols"`
 	Rows             int    `json:"rows"`
+	TerminalType     string `json:"terminalType"`
 	Attention        bool   `json:"attention,omitempty"`
 	SourceState      string `json:"sourceState,omitempty"`
 	GenerationStatus string `json:"generationStatus,omitempty"`

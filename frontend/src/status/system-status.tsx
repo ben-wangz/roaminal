@@ -6,20 +6,14 @@ import type { Heartbeat } from './heartbeat';
 import { useMonitorDisclosure } from './use-monitor-disclosure';
 
 type Props = {
-  connected: boolean;
-  connectionName: string;
   system: Heartbeat['system'] | null;
-  connectionCount: number;
   latencyMs: number | null;
   persistenceDegraded: boolean;
   resetKey: string | null;
 };
 
 export const SystemStatus = memo(function SystemStatus({
-  connected,
-  connectionName,
   system,
-  connectionCount,
   latencyMs,
   persistenceDegraded,
   resetKey,
@@ -31,26 +25,30 @@ export const SystemStatus = memo(function SystemStatus({
   const memoryWorkingSet = system?.memory.workingSetBytes ?? null;
   const memoryLimit = system?.memory.limitBytes ?? null;
   return (
-    <div className="system-status">
-      <span className={`connection-dot ${connected ? 'online' : 'offline'}`} />
-      <span className="connection-label">{connected ? 'Connected' : 'Reconnecting'}</span>
-      <span className="status-host" title={connectionName}>
-        {connectionName}
-      </span>
-      <button
-        className="monitor-disclosure status-monitor-toggle"
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        aria-label={expanded ? 'Collapse system monitor' : 'Expand system monitor'}
-        title={expanded ? 'Collapse system monitor' : 'Expand system monitor'}
-        aria-expanded={expanded}
-        aria-controls="system-monitor-metrics"
-      >
-        {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
-      </button>
-      <div className="status-monitor-shell">
-        {expanded && (
-          <span className="status-monitor" id="system-monitor-metrics">
+    <section
+      className={`system-status ${expanded ? 'is-expanded' : 'is-collapsed'}`}
+      aria-label="Local runtime monitor"
+      data-testid="local-monitor"
+      data-expanded={expanded}
+    >
+      <div className="system-status-summary">
+        <span className="system-status-scope">ROAMINAL</span>
+        <button
+          className="monitor-disclosure status-monitor-toggle"
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-label={expanded ? 'Collapse system monitor' : 'Expand system monitor'}
+          title={expanded ? 'Collapse system monitor' : 'Expand system monitor'}
+          aria-expanded={expanded}
+          aria-controls="system-monitor-metrics"
+          data-testid="local-monitor-toggle"
+        >
+          {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+        </button>
+      </div>
+      {expanded && (
+        <div className="status-monitor-shell">
+          <div className="status-monitor" id="system-monitor-metrics" data-testid="local-monitor-metrics">
             <Metric
               label="CPU"
               value={formatPercent(cpu)}
@@ -66,17 +64,16 @@ export const SystemStatus = memo(function SystemStatus({
               detail={formatMemory(memoryWorkingSet, memoryLimit)}
             />
             <span className="status-detail uptime">UP {formatDuration(system?.processUptimeSeconds ?? 0)}</span>
-            <span className="status-detail terminals">CONN {connectionCount}</span>
             <span className="status-detail rtt">RTT {latencyMs === null ? 'N/A' : `${latencyMs}ms`}</span>
             {persistenceDegraded && (
               <span className="status-warning" role="status">
                 Persistence degraded
               </span>
             )}
-          </span>
-        )}
-      </div>
-    </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 });
 
@@ -93,7 +90,7 @@ function Metric({
 }) {
   const clamped = progress === null ? null : Math.max(0, Math.min(100, progress));
   return (
-    <span className="status-metric" data-level={metricLevel(clamped)} title={`${label}: ${value} (${detail})`}>
+    <span className="status-metric" data-monitor-metric={label.toLowerCase()} data-level={metricLevel(clamped)} title={`${label}: ${value} (${detail})`}>
       <span className="metric-label">{label}</span>
       <span className="metric-value">{value}</span>
       <span

@@ -47,7 +47,7 @@
 .add-connection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .add-connection-heading h2 { margin: 0; }
 .add-connection-heading .dialog-copy { margin-top: 5px; }
-.add-connection-dialog select { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; }
+.add-connection-dialog select { width: 100%; min-width: 0; max-width: 100%; min-height: 40px; overflow: hidden; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; text-overflow: ellipsis; white-space: nowrap; }
 .add-connection-dialog select:focus-visible { border-color: var(--cyan); outline: 1px solid var(--cyan); outline-offset: 1px; }
 .dialog-copy { margin: 0; color: var(--text); font-size: .8rem; line-height: 1.5; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }

@@ -6,6 +6,7 @@ export type ConnectionInstanceSummary = {
   lifecycle?: 'live' | 'pending' | 'exited' | 'interrupted';
   sourceState?: 'current' | 'changed' | 'deleted';
   sourceHostAlias?: string;
+  endpoint?: ConnectionEndpoint;
   createdAt: string;
   updatedAt: string;
   title: string;
@@ -14,6 +15,7 @@ export type ConnectionInstanceSummary = {
   cols: number;
   rows: number;
   attention: boolean;
+  terminalType?: string;
   generationStatus?: string;
   generationError?: string;
   tmuxEnabled?: boolean;
@@ -26,6 +28,12 @@ export type ConnectionInstanceSummary = {
     reason?: string;
   };
   agent?: AgentSummary;
+};
+
+export type ConnectionEndpoint = {
+  user: string;
+  host: string;
+  port: number;
 };
 
 export type AgentSummary = {
@@ -52,7 +60,7 @@ export type AgentSummary = {
 
 export type ServerMessage =
   | StreamEnvelope & { type: 'snapshot'; data: string }
-  | StreamEnvelope & { type: 'meta'; title: string; titleMode: 'automatic' | 'custom'; cwd: string; cols: number; rows: number; attention?: boolean; sourceState?: string; generationStatus?: string; generationError?: string }
+  | StreamEnvelope & { type: 'meta'; title: string; titleMode: 'automatic' | 'custom'; cwd: string; cols: number; rows: number; attention?: boolean; sourceState?: string; generationStatus?: string; generationError?: string; terminalType?: string }
   | StreamEnvelope & { type: 'status'; status: 'ready' | 'terminated'; code?: number; signal?: number | null; exitStatus?: { exitCode: number | null; signal: number | null } | null }
   | StreamEnvelope & { type: 'output'; data: string }
   | StreamEnvelope & { type: 'execution'; phase: string; executionId: string; command?: string; entry?: unknown }
@@ -97,10 +105,22 @@ function isExitStatus(value: unknown): value is { exitCode: number | null; signa
   return item !== null && onlyKeys(item, ['exitCode', 'signal']) && (item.exitCode === null || numberValue(item.exitCode)) && (item.signal === null || numberValue(item.signal));
 }
 
+function isConnectionEndpoint(value: unknown): value is ConnectionEndpoint {
+  const item = record(value);
+  return item !== null
+    && onlyKeys(item, ['user', 'host', 'port'])
+    && stringValue(item.user)
+    && stringValue(item.host)
+    && numberValue(item.port)
+    && Number.isInteger(item.port)
+    && item.port >= 1
+    && item.port <= 65535;
+}
+
 function isConnectionInstanceSummary(value: unknown): value is ConnectionInstanceSummary {
   const item = record(value);
   if (!item || !stringValue(item.connectionInstanceId) || !stringValue(item.createdAt) || !stringValue(item.updatedAt) || !stringValue(item.title) || !stringValue(item.cwd) || !numberValue(item.cols) || !numberValue(item.rows) || typeof item.attention !== 'boolean') return false;
-  return optionalString(item.connectionDefinitionId) && optionalString(item.type) && optionalString(item.purpose) && optionalString(item.lifecycle) && optionalString(item.sourceState) && optionalString(item.sourceHostAlias) && optionalString(item.titleMode) && (item.agent === undefined || record(item.agent) !== null) && (item.remoteCapability === undefined || record(item.remoteCapability) !== null);
+  return optionalString(item.connectionDefinitionId) && optionalString(item.type) && optionalString(item.purpose) && optionalString(item.lifecycle) && optionalString(item.sourceState) && optionalString(item.sourceHostAlias) && (item.endpoint === undefined || isConnectionEndpoint(item.endpoint)) && optionalString(item.titleMode) && optionalString(item.terminalType) && (item.agent === undefined || record(item.agent) !== null) && (item.remoteCapability === undefined || record(item.remoteCapability) !== null);
 }
 
 function parseMessage(value: unknown): ServerMessage | null {
@@ -112,7 +132,7 @@ function parseMessage(value: unknown): ServerMessage | null {
     case 'output':
       return onlyKeys(message, ['type', 'data', ...envelopeKeys]) && hasEnvelope(message) && stringValue(message.data) ? message as ServerMessage : null;
     case 'meta':
-      if (!onlyKeys(message, ['type', 'title', 'titleMode', 'cwd', 'cols', 'rows', 'attention', 'sourceState', 'generationStatus', 'generationError', ...envelopeKeys]) || !hasEnvelope(message) || !stringValue(message.title) || (message.titleMode !== 'automatic' && message.titleMode !== 'custom') || !stringValue(message.cwd) || !numberValue(message.cols) || !numberValue(message.rows) || (message.attention !== undefined && typeof message.attention !== 'boolean') || !optionalString(message.sourceState) || !optionalString(message.generationStatus) || !optionalString(message.generationError)) return null;
+      if (!onlyKeys(message, ['type', 'title', 'titleMode', 'cwd', 'cols', 'rows', 'attention', 'sourceState', 'generationStatus', 'generationError', 'terminalType', ...envelopeKeys]) || !hasEnvelope(message) || !stringValue(message.title) || (message.titleMode !== 'automatic' && message.titleMode !== 'custom') || !stringValue(message.cwd) || !numberValue(message.cols) || !numberValue(message.rows) || (message.attention !== undefined && typeof message.attention !== 'boolean') || !optionalString(message.sourceState) || !optionalString(message.generationStatus) || !optionalString(message.generationError) || !optionalString(message.terminalType)) return null;
       return message as ServerMessage;
     case 'status':
       if (!onlyKeys(message, ['type', 'status', 'code', 'signal', 'exitStatus', ...envelopeKeys]) || !hasEnvelope(message) || (message.status !== 'ready' && message.status !== 'terminated') || (message.code !== undefined && !numberValue(message.code)) || (message.signal !== undefined && message.signal !== null && !numberValue(message.signal)) || (message.exitStatus !== undefined && message.exitStatus !== null && !isExitStatus(message.exitStatus))) return null;

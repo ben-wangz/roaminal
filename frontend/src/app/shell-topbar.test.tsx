@@ -6,15 +6,10 @@ vi.mock('../input/mobile-mode', () => ({ useMobileMode: () => false }));
 
 const baseProps = {
   workspaceOpen: false,
-  connected: false,
-  connectionName: '',
-  connectionInstanceId: null,
   system: null,
-  connectionCount: 0,
   latencyMs: null,
   persistenceDegraded: false,
   onToggleSearch: vi.fn(),
-  onOpenConnections: vi.fn(),
   onOpenAppearance: vi.fn(),
   messageUnreadCount: 0,
   messagesOpen: false,
@@ -40,7 +35,7 @@ describe('fullscreen top-bar control', () => {
     const html = renderToStaticMarkup(<ShellTopbar {...baseProps} workspaceOpen />);
     expect(html).not.toContain('workspace-tool-switcher');
     expect(html).not.toContain('workspace-tool-keyboard');
-    expect(html).toContain('Connections');
+    expect(html).not.toContain('>Connections<');
   });
 
   it('keeps an unsupported control visible and clearly marked', () => {

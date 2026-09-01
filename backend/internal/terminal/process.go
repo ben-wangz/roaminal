@@ -85,6 +85,7 @@ func (m *Manager) createProcess(ctx context.Context, meta domain.ConnectionInsta
 	if meta.SourceState == "" {
 		meta.SourceState = "current"
 	}
+	meta.TerminalType = effectiveTerminalType(meta.TerminalType)
 	m.mu.Lock()
 	if len(m.sessions)+len(m.pending)+m.createReservations >= m.connectionLimit() {
 		m.mu.Unlock()

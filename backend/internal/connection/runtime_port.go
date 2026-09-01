@@ -23,9 +23,18 @@ func (m *Manager) RuntimeID() string { return m.instances.RuntimeID() }
 func (m *Manager) Summaries() []Summary {
 	result := m.instances.Summaries()
 	for index := range result {
-		result[index].RemoteCapability = m.remoteCapability(result[index])
+		result[index] = m.projectSummary(result[index])
 	}
 	return result
+}
+
+func (m *Manager) projectSummary(summary Summary) Summary {
+	if summary.ID == "" {
+		return summary
+	}
+	summary.Endpoint = m.displayEndpoint(summary.SourceHostAlias, summary.Type)
+	summary.RemoteCapability = m.remoteCapability(summary)
+	return summary
 }
 
 func (m *Manager) remoteCapability(summary Summary) ports.RemoteCapability {
@@ -64,7 +73,8 @@ func (m *Manager) remoteCapability(summary Summary) ports.RemoteCapability {
 }
 
 func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summary, error) {
-	return m.instances.Create(ctx, cwd, cols, rows)
+	result, err := m.instances.Create(ctx, cwd, cols, rows)
+	return m.projectSummary(result), err
 }
 
 func (m *Manager) AttachReserved(ctx context.Context, id string) (ports.TerminalClient, error) {
@@ -118,15 +128,18 @@ func (m *Manager) TouchPending(id string) { m.instances.TouchPending(id) }
 func (m *Manager) PendingOwner(id string) string { return m.instances.PendingOwner(id) }
 
 func (m *Manager) PromotePending(id string, meta domain.ConnectionInstanceMeta) (Summary, error) {
-	return m.instances.PromotePending(id, meta)
+	result, err := m.instances.PromotePending(id, meta)
+	return m.projectSummary(result), err
 }
 
 func (m *Manager) CreatePendingProcessOwned(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit func(ports.TerminalExitStatus)) (Summary, error) {
-	return m.instances.CreatePendingProcessOwned(ctx, meta, argv, extraEnv, ownerID, onMarker, onExit)
+	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, extraEnv, ownerID, onMarker, onExit)
+	return m.projectSummary(result), err
 }
 
 func (m *Manager) CreateProcessWithExit(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit func(ports.TerminalExitStatus)) (Summary, error) {
-	return m.instances.CreateProcessWithExit(ctx, meta, argv, extraEnv, onExit)
+	result, err := m.instances.CreateProcessWithExit(ctx, meta, argv, extraEnv, onExit)
+	return m.projectSummary(result), err
 }
 
 func (m *Manager) MarkSourceState(id, state string) error {
@@ -138,7 +151,8 @@ func (m *Manager) MarkGenerationResult(id, state, detail string) error {
 }
 
 func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
-	return m.instances.SetTitle(id, title)
+	result, err := m.instances.SetTitle(id, title)
+	return m.projectSummary(result), err
 }
 
 func (m *Manager) AbortPending(ctx context.Context, id string) error {

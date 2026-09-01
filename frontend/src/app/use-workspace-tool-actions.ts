@@ -8,7 +8,6 @@ type Params = {
   selectVirtualKeyboard: () => void;
   setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
-  setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
 };
 
 export function useWorkspaceToolActions({
@@ -18,10 +17,10 @@ export function useWorkspaceToolActions({
   selectVirtualKeyboard,
   setWorkspaceTool,
   setWorkspaceToolOpen,
-  setPreviewConnectionInstanceId,
 }: Params) {
   const connectionToolButton = useRef<HTMLButtonElement>(null);
   const keyboardToolButton = useRef<HTMLButtonElement>(null);
+  const filesToolButton = useRef<HTMLButtonElement>(null);
 
   const handleSelectWorkspaceTool = useCallback((tool: WorkspaceTool) => {
     if (tool === 'keyboard') {
@@ -32,29 +31,29 @@ export function useWorkspaceToolActions({
       selectVirtualKeyboard();
       return;
     }
-    if (workspaceTool === 'connections' && workspaceToolOpen) {
+    if (tool === workspaceTool && workspaceToolOpen) {
       setWorkspaceToolOpen(false);
-      setPreviewConnectionInstanceId(null);
       return;
     }
-    setPreviewConnectionInstanceId(null);
-    setWorkspaceTool('connections');
+    setWorkspaceTool(tool);
     setWorkspaceToolOpen(true);
-  }, [collapseVirtualKeyboard, selectVirtualKeyboard, setPreviewConnectionInstanceId, setWorkspaceTool, setWorkspaceToolOpen, workspaceTool, workspaceToolOpen]);
+  }, [collapseVirtualKeyboard, selectVirtualKeyboard, setWorkspaceTool, setWorkspaceToolOpen, workspaceTool, workspaceToolOpen]);
 
   const handleCollapseWorkspaceTool = useCallback(() => {
     if (workspaceTool === 'keyboard') collapseVirtualKeyboard();
     else setWorkspaceToolOpen(false);
-    setPreviewConnectionInstanceId(null);
     window.requestAnimationFrame(() => {
-      const trigger = workspaceTool === 'connections' ? connectionToolButton : keyboardToolButton;
+      const trigger = workspaceTool === 'connections'
+        ? connectionToolButton
+        : workspaceTool === 'keyboard' ? keyboardToolButton : filesToolButton;
       trigger.current?.focus();
     });
-  }, [collapseVirtualKeyboard, setPreviewConnectionInstanceId, setWorkspaceToolOpen, workspaceTool]);
+  }, [collapseVirtualKeyboard, setWorkspaceToolOpen, workspaceTool]);
 
   return {
     connectionToolButton,
     keyboardToolButton,
+    filesToolButton,
     handleSelectWorkspaceTool,
     handleCollapseWorkspaceTool,
   };

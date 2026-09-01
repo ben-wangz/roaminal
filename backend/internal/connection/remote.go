@@ -13,7 +13,8 @@ import (
 )
 
 func (m *Manager) CreateRemote(ctx context.Context, definitionID string, cols, rows int, reuseFrom string) (Summary, error) {
-	return m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, "")
+	result, err := m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, "")
+	return m.projectSummary(result), err
 }
 
 func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, cols, rows int, reuseFrom, ownerID string) (Summary, error) {
@@ -102,7 +103,8 @@ func (m *Manager) CreateRemoteLaunchOwned(ctx context.Context, definitionID stri
 	if option, ok := m.tmuxOptionForAlias(alias); !ok || !option.Enabled {
 		return Summary{}, ErrTmuxNotEnabled
 	}
-	return m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, ownerID)
+	result, err := m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, ownerID)
+	return m.projectSummary(result), err
 }
 
 func (m *Manager) AbortRemoteLaunch(ctx context.Context, id string) error {

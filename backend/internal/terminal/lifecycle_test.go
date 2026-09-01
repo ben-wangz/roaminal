@@ -35,6 +35,15 @@ func TestTerminalEnvironmentPreservesUTF8Locale(t *testing.T) {
 	}
 }
 
+func TestEffectiveTerminalTypeUsesBackendDefault(t *testing.T) {
+	if got := effectiveTerminalType(""); got != defaultTerminalType {
+		t.Fatalf("empty terminal type = %q, want %q", got, defaultTerminalType)
+	}
+	if got := effectiveTerminalType(" screen-256color "); got != "screen-256color" {
+		t.Fatalf("explicit terminal type = %q, want trimmed value", got)
+	}
+}
+
 func countEnvironmentKey(environment []string, key string) int {
 	count := 0
 	for _, entry := range environment {

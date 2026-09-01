@@ -10,6 +10,7 @@ import type { AppPage } from './app-state';
 import type { ToastKind } from '../ui/toast';
 import { ConnectionInstanceController } from '../connections/connection-instance-controller';
 import type { WorkspaceTool } from './workspace-tool';
+import type { WorkspaceContent } from './workspace-content';
 
 type Params = {
   activeLaunchId: string | null;
@@ -24,6 +25,7 @@ type Params = {
   setPage: Dispatch<SetStateAction<AppPage>>;
   workspaceTool: WorkspaceTool;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
+  setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
   setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   showToast: (message: string, kind?: ToastKind) => void;
@@ -42,6 +44,7 @@ export function useConnectionInstanceActions({
   setPage,
   workspaceTool,
   setWorkspaceToolOpen,
+  setWorkspaceContent,
   setSearch,
   setPreviewConnectionInstanceId,
   showToast,
@@ -51,6 +54,7 @@ export function useConnectionInstanceActions({
       if (tmuxEnabled) {
         const launch = await startConnectionLaunch(connectionDefinitionId, reuseFrom);
         setCurrentRuntime(null);
+        setWorkspaceContent('terminal');
         startLaunch(launch.launchId);
         setPage('workspace');
         return true;
@@ -65,6 +69,7 @@ export function useConnectionInstanceActions({
         ...current.filter((item) => item.connectionInstanceId !== session.connectionInstanceId),
         session,
       ]);
+      setWorkspaceContent('terminal');
       setActiveView(selectConnection(viewRef.current, session.connectionInstanceId));
       setPage('workspace');
       return true;
@@ -72,7 +77,7 @@ export function useConnectionInstanceActions({
       showToast((err as Error).message, 'error');
       return false;
     }
-  }, [clearLaunch, controller, setActiveView, setCurrentRuntime, setPage, showToast, startLaunch, viewRef]);
+  }, [clearLaunch, controller, setActiveView, setCurrentRuntime, setPage, setWorkspaceContent, showToast, startLaunch, viewRef]);
 
   const acceptGenerated = useCallback(async (instance: ConnectionInstanceSummary) => {
     controller.markRevision();
@@ -80,18 +85,20 @@ export function useConnectionInstanceActions({
       ...current.filter((item) => item.connectionInstanceId !== instance.connectionInstanceId),
       instance,
     ]);
+    setWorkspaceContent('terminal');
     setActiveView(selectConnection(viewRef.current, instance.connectionInstanceId));
     setPage('workspace');
-  }, [controller, setActiveView, setPage, viewRef]);
+  }, [controller, setActiveView, setPage, setWorkspaceContent, viewRef]);
 
   const selectConnectionInstance = useCallback((id: string) => {
     if (viewRef.current.activeConnectionInstanceId !== id || activeLaunchId) setCurrentRuntime(null);
     setActiveView(selectConnection(viewRef.current, id));
     setPage('workspace');
     setSearch(false);
+    setWorkspaceContent('terminal');
     setPreviewConnectionInstanceId(null);
     if (window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches && workspaceTool === 'connections') setWorkspaceToolOpen(false);
-  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceToolOpen, viewRef, workspaceTool]);
+  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceContent, setWorkspaceToolOpen, viewRef, workspaceTool]);
 
   const reorderConnectionInstances = useCallback(async (
     draggedID: string,

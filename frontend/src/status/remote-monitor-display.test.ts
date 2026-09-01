@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayStatusLabel, remoteMonitorDisplayStatus } from './remote-monitor-display';
+import { remoteMonitorAccessibleStatusLabel, remoteMonitorDisplayStatus, remoteMonitorHealthStatus } from './remote-monitor-display';
 import type { RemoteMonitorSnapshot } from './remote-monitor';
 
 const snapshot = (status: RemoteMonitorSnapshot['status'] = 'available'): RemoteMonitorSnapshot => ({
@@ -26,6 +26,11 @@ describe('remote monitor display state', () => {
 
   it('preserves successful backend statuses and accessible labels', () => {
     expect(remoteMonitorDisplayStatus(snapshot('partial'), false, false)).toBe('partial');
-    expect(displayStatusLabel('available')).toBe('AVAILABLE');
+    expect(remoteMonitorHealthStatus('available')).toBe('available');
+    expect(remoteMonitorHealthStatus('warming')).toBe('stale');
+    expect(remoteMonitorHealthStatus('partial')).toBe('stale');
+    expect(remoteMonitorHealthStatus('unavailable')).toBe('unavailable');
+    expect(remoteMonitorAccessibleStatusLabel('available')).toBe('Available');
+    expect(remoteMonitorAccessibleStatusLabel('stale')).toBe('Stale');
   });
 });

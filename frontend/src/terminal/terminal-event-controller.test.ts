@@ -36,6 +36,17 @@ describe('terminal event controller', () => {
     expect(result.effects.map((effect) => effect.type)).toEqual(['detach-runtime', 'clear-launch', 'navigate']);
   });
 
+  it('retains the safe endpoint already known for the published instance', () => {
+    const existing = { ...instance('published'), endpoint: { user: 'coder', host: 'host.example', port: 2200 } };
+    const published = { ...instance('published'), endpoint: undefined };
+    const result = reduceTerminalMessage(
+      state([existing]),
+      stream({ type: 'launch_published', instance: published }),
+      { activeLaunchId: 'launch', runtimeId: 'launch' },
+    );
+    expect(result.state.connections[0].endpoint).toEqual(existing.endpoint);
+  });
+
   it('removes an exited instance and selects the next surviving instance', () => {
     const result = reduceTerminalMessage(state([instance('a'), instance('b'), instance('c')], 'b'), stream({ type: 'status', status: 'terminated' }), { activeLaunchId: null, runtimeId: 'b' });
     expect(result.state.connections.map((item) => item.connectionInstanceId)).toEqual(['a', 'c']);

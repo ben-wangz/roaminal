@@ -4,6 +4,8 @@ import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocke
 type Endpoint = 'connection-instances' | 'connection-launches';
 type Role = 'interactive' | 'observer';
 
+export type TerminalStreamConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'terminated';
+
 export type TerminalStreamOptions = {
   connectionInstanceId: string;
   endpoint: Endpoint;
@@ -22,6 +24,7 @@ export class TerminalStream {
   private reconnectTimer: number | null = null;
   private lastSequence = 0;
   private connected = false;
+  private hasConnected = false;
   private closed = false;
   private disposed = false;
 
@@ -42,6 +45,7 @@ export class TerminalStream {
     socket.onopen = () => {
       if (this.disposed || this.closed || this.socket !== socket) return;
       this.connected = true;
+      this.hasConnected = true;
       this.options.onStateChange?.(true);
     };
     socket.onmessage = (event) => {
@@ -72,6 +76,12 @@ export class TerminalStream {
   }
 
   connectedState(): boolean { return this.connected; }
+
+  connectionState(): TerminalStreamConnectionState {
+    if (this.closed) return 'terminated';
+    if (this.connected) return 'connected';
+    return this.hasConnected ? 'reconnecting' : 'connecting';
+  }
 
   send(message: ClientCommand): void {
     if (this.closed || this.socket?.readyState !== WebSocket.OPEN) return;

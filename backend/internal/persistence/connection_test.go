@@ -16,7 +16,7 @@ func TestConnectionInstanceLayoutUsesPerInstanceFiles(t *testing.T) {
 	}
 	id := "11111111-1111-4111-8111-111111111111"
 	now := time.Now().UTC()
-	meta := ConnectionInstanceMeta{ID: id, BackendRuntimeID: "runtime", ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, CreatedAt: now, UpdatedAt: now}
+	meta := ConnectionInstanceMeta{ID: id, BackendRuntimeID: "runtime", ConnectionDefinitionID: "local", Type: "local", Purpose: "interactive", Lifecycle: "live", SourceState: "current", InitialCwd: "/workspace", Cwd: "/workspace", Cols: 80, Rows: 24, TerminalType: "screen-256color", CreatedAt: now, UpdatedAt: now}
 	if err := store.SaveConnectionInstance(meta); err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestConnectionInstanceLayoutUsesPerInstanceFiles(t *testing.T) {
 		t.Fatalf("unexpected paths: %s %s", store.ConnectionInstancePath(id), store.ConnectionSnapshotPath(id))
 	}
 	loaded, err := store.LoadConnectionInstance(id)
-	if err != nil || loaded.ConnectionDefinitionID != "local" || loaded.Type != "local" {
+	if err != nil || loaded.ConnectionDefinitionID != "local" || loaded.Type != "local" || loaded.TerminalType != "screen-256color" {
 		t.Fatalf("loaded=%+v err=%v", loaded, err)
 	}
 }

@@ -5,13 +5,20 @@ desktop for preview, tablet/phone for selection.
 
 ## Procedure and assertions
 
-1. Verify every card has a title/state, stable shortened ID, optional PWD/TARGET,
-   machine-readable `time[datetime]`, formatted SINCE, extension buttons, and an
-   actions menu. There is no terminal/session tab strip.
-2. Click cards in a non-sequential order. The highlighted card, top connection
-   name, main viewport `data-connection-instance-id`, footer metadata, keyboard
-   mode, and REMOTE band all switch to the same instance. Highlight must never
-   move independently of the displayed xterm.
+1. Verify every card has a title/type, stable shortened ID, accessible lifecycle
+   and PWD detail, machine-readable `time[datetime]`, formatted SINCE,
+   extension buttons, and an actions menu. There is no terminal/session tab
+   strip and no prominent PWD row.
+2. Click cards in a non-sequential order. The highlighted card, main viewport
+   `data-connection-instance-id`, footer metadata, keyboard mode, and REMOTE
+   band all switch to the same instance. The topbar must not become a second
+   connection identity owner. Highlight must never move independently of the
+   displayed xterm. Assert the footer changes atomically: runtime state,
+   connection name, safe endpoint, PWD, TERM, `COLS x ROWS`, and tmux context
+   must belong to the selected instance. A reconnecting or exited instance must
+   not retain the previous instance's footer values. Verify the Connections
+   rail badge follows the current instance total and the sidebar header does not
+   repeat it.
 3. Verify the sidebar renders the built-in `Ungrouped` section and any user
    groups as unframed sections, while each connection remains an individual
    card. The group header shows its name and member count; a collapsed group
@@ -43,11 +50,13 @@ desktop for preview, tablet/phone for selection.
    grid, and after the stream settles its final visible line must match the main
    terminal with no duplicated trailing segment or wrapped remainder. The main
    terminal remains real-time.
-9. In Terminal mode, click Agent and verify its status or initialization dialog
-   opens without selecting another card. In FileSystem mode, click the Terminal
-   extension to return to Terminal; the Agent robot remains an Agent details
-   control and does not change workspace mode. Click Files and verify it enters
-   FileSystem for that card without creating a connection.
+9. In Terminal content, click Agent and verify its status or initialization
+   dialog opens without selecting another card. Click the Files action and
+   verify it selects the intended connection, opens the Files tool, and keeps
+   the right Terminal content until a file is activated; it must not create a
+   connection. Activate a file, verify the right content becomes File preview,
+   and use `Back to Terminal` to return without changing the active card or
+   tree state. The Agent robot remains an Agent details control throughout.
 10. On coarse-pointer or width `<=800`, no preview runtime is created by hover,
    focus, or touch. Selecting a card closes the overlay and opens that instance.
 
