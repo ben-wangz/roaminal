@@ -161,6 +161,61 @@ spec:
                 configMapKeyRef:
                   name: {{ include "roaminal.configMapName" . }}
                   key: clientDiagnosticsEnabled
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewCacheDir
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_TARGET_MIB
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewCacheTargetMiB
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_MAX_AGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewCacheMaxAge
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_CLEANUP_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewCacheCleanupInterval
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_CONVERSIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewMaxConversions
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_SOURCE_MIB
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewMaxSourceMiB
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_OUTPUT_MIB
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewMaxOutputMiB
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_STATIC_PIXELS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewMaxStaticPixels
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_FRAMES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewMaxFrames
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_ANIMATED_PIXELS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewMaxAnimatedPixels
+            - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CONVERSION_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: filesystemImagePreviewConversionTimeout
             - name: ROAMINAL_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -193,6 +248,8 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: filesystem-image-preview-cache
+              mountPath: /var/cache/roaminal/filesystem-image-previews
             - name: roaminal-data
               mountPath: /home/roaminal/.roaminal
               subPath: {{ .Values.persistence.paths.state }}
@@ -258,6 +315,14 @@ spec:
             {{- end }}
             {{- if .Values.tmp.sizeLimit }}
             sizeLimit: {{ .Values.tmp.sizeLimit | quote }}
+            {{- end }}
+        - name: filesystem-image-preview-cache
+          emptyDir:
+            {{- if .Values.filesystemImagePreview.cache.emptyDir.medium }}
+            medium: {{ .Values.filesystemImagePreview.cache.emptyDir.medium | quote }}
+            {{- end }}
+            {{- if .Values.filesystemImagePreview.cache.emptyDir.sizeLimit }}
+            sizeLimit: {{ .Values.filesystemImagePreview.cache.emptyDir.sizeLimit | quote }}
             {{- end }}
         - name: roaminal-data
           {{- if .Values.persistence.enabled }}

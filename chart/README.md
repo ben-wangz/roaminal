@@ -56,6 +56,20 @@ The container root filesystem is read-only. The chart always mounts a writable
 `emptyDir` at `/tmp` for SSH multiplexing sockets; configure its medium and
 quota with `tmp.medium` and `tmp.sizeLimit` (the default quota is `64Mi`).
 
+Image previews use a second writable `emptyDir` at the fixed path
+`/var/cache/roaminal/filesystem-image-previews`. Configure its quota with
+`filesystemImagePreview.cache.emptyDir.sizeLimit` (default `192Mi`) and its
+storage medium with `filesystemImagePreview.cache.emptyDir.medium`. The
+default quota is `128Mi` cache target plus one `32Mi` source, one `16Mi`
+encoded output, and `16Mi` overhead. Operators increasing preview concurrency
+or byte limits must increase the quota using
+`cache target + maxConversions * (maxSource + maxOutput) + 16Mi`.
+
+The remaining `filesystemImagePreview` fields mirror the backend limits and
+are rendered through the ConfigMap. The fixed mount path is not overridable,
+and this cache is never placed on the state PVC, workspace, SSH volume, or
+`/tmp`. Volume exhaustion degrades only image derivative generation.
+
 Older multi-volume deployments used three PVCs. They cannot be adopted directly
 as one claim. Stop the old Deployment, back up all three claims, create the new
 claim, copy the old contents into the three logical directories, verify the

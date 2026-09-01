@@ -1,17 +1,21 @@
 package server
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"io"
-	"mime"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
+	"github.com/ben-wangz/roaminal/backend/internal/imagepreview"
 )
 
 func (s *Server) filesystemContent(w http.ResponseWriter, r *http.Request, _ string) {
+	variant := r.URL.Query().Get("variant")
+	if variant != "" && variant != "preview" && variant != "original" {
+		writeCodedError(w, http.StatusBadRequest, "invalid filesystem content variant", "filesystem_variant_invalid", nil, "variant")
+		return
+	}
 	if s.filesystem == nil {
 		writeFilesystemError(w, filesystem.ErrUnsupported)
 		return
@@ -24,24 +28,37 @@ func (s *Server) filesystemContent(w http.ResponseWriter, r *http.Request, _ str
 		writeFilesystemError(w, err)
 		return
 	}
-	if entry.Type != "file" || entry.Size == nil {
+	if entry.Type != "file" || entry.Size == nil || entry.Symlink {
 		writeFilesystemError(w, filesystem.ErrContentUnavailable)
 		return
 	}
+	contentType := mimeTypeForEntry(entry.Name, entry.Type)
+	download := r.URL.Query().Get("download") == "1"
+	if variant == "preview" && !download {
+		s.filesystemImagePreview(w, r, id, pathValue, entry, root, contentType)
+		return
+	}
+
 	start, length, partial, rangeErr := contentRange(r.Header.Get("Range"), *entry.Size)
 	if rangeErr != nil {
 		writeFilesystemError(w, rangeErr)
 		return
 	}
-	contentType := mimeTypeForEntry(entry.Name, entry.Type)
 	if r.Header.Get("Range") == "" {
-		if r.URL.Query().Get("download") == "1" {
+		if variant == "original" || download {
 			length = *entry.Size
 		} else {
 			length = contentWindowLength(contentType, *entry.Size)
 		}
 		partial = length < *entry.Size
 	}
+	etag := `"` + consistencyToken(entry) + `"`
+	setContentHeaders(w, contentType, length, etag, variant == "original" && !download, entry.ModifiedAt)
+	if variant != "" && ifNoneMatch(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
 	stream, err := s.filesystem.OpenContent(r.Context(), id, pathValue, root.Revision, start, length)
 	if err != nil {
 		writeFilesystemError(w, err)
@@ -52,83 +69,90 @@ func (s *Server) filesystemContent(w http.ResponseWriter, r *http.Request, _ str
 		writeFilesystemError(w, filesystem.ErrContentUnavailable)
 		return
 	}
-	w.Header().Set("Accept-Ranges", "bytes")
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Length", strconv.FormatInt(stream.ContentLength, 10))
-	w.Header().Set("ETag", `"`+consistencyToken(entry)+`"`)
-	if entry.ModifiedAt != nil {
-		w.Header().Set("Last-Modified", entry.ModifiedAt.UTC().Format(http.TimeFormat))
-	}
 	if partial {
 		w.Header().Set("X-Roaminal-Content-Truncated", "true")
 	}
-	if r.URL.Query().Get("download") == "1" {
-		filename := strings.ReplaceAll(strings.ReplaceAll(entry.Name, `"`, ""), "\r", "")
-		filename = strings.ReplaceAll(filename, "\n", "")
-		if filename == "" {
-			filename = "download"
-		}
-		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	if download {
+		setAttachment(w, entry.Name)
 	}
-	status := http.StatusOK
-	if r.Header.Get("Range") != "" {
-		status = http.StatusPartialContent
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", stream.Start, stream.End, stream.TotalSize))
-	}
-	w.WriteHeader(status)
-	_, _ = io.CopyN(w, stream.Reader, stream.ContentLength)
+	writeContent(w, r, stream.Reader, stream.Start, stream.ContentLength, stream.TotalSize)
 }
 
-func contentRange(value string, size int64) (int64, int64, bool, error) {
-	if value == "" {
-		return 0, size, false, nil
+func (s *Server) filesystemImagePreview(w http.ResponseWriter, r *http.Request, id, pathValue string, entry filesystem.Entry, root filesystem.RootContext, contentType string) {
+	if s.imagePreview == nil {
+		writeImagePreviewError(w, imagepreview.ErrUnavailable)
+		return
 	}
-	if !strings.HasPrefix(value, "bytes=") || strings.Contains(value[6:], ",") {
-		return 0, 0, false, filesystem.ErrInvalidRange
+	sourceToken := consistencyToken(entry)
+	request := imagepreview.Request{
+		ConnectionInstanceID: id,
+		RootAbsolutePath:     root.AbsolutePath,
+		RootRevision:         root.Revision,
+		RelativePath:         entry.RelativePath,
+		MIMEType:             contentType,
+		SourceSize:           *entry.Size,
+		SourceToken:          sourceToken,
+		Open: func(ctx context.Context) (io.ReadCloser, error) {
+			stream, err := s.filesystem.OpenContent(ctx, id, pathValue, root.Revision, 0, *entry.Size)
+			if err != nil {
+				return nil, err
+			}
+			if consistencyToken(stream.Entry) != sourceToken {
+				_ = stream.Reader.Close()
+				return nil, filesystem.ErrContentUnavailable
+			}
+			return stream.Reader, nil
+		},
+		Validate: func(ctx context.Context) error {
+			next, nextRoot, err := s.filesystem.Stat(ctx, id, pathValue, root.Revision)
+			if err != nil {
+				return err
+			}
+			if nextRoot.Revision != root.Revision || consistencyToken(next) != sourceToken {
+				return filesystem.ErrContentUnavailable
+			}
+			return nil
+		},
 	}
-	value = strings.TrimSpace(strings.TrimPrefix(value, "bytes="))
-	parts := strings.Split(value, "-")
-	if len(parts) != 2 || size == 0 {
-		return 0, 0, false, filesystem.ErrInvalidRange
+	result, err := s.imagePreview.Open(r.Context(), request)
+	if err != nil {
+		writeImagePreviewError(w, err)
+		return
 	}
-	if parts[0] == "" {
-		suffix, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil || suffix <= 0 {
-			return 0, 0, false, filesystem.ErrInvalidRange
-		}
-		if suffix > size {
-			suffix = size
-		}
-		return size - suffix, suffix, true, nil
+	defer result.Reader.Close()
+	start, length, _, rangeErr := contentRange(r.Header.Get("Range"), result.Size)
+	if rangeErr != nil {
+		writeFilesystemError(w, rangeErr)
+		return
 	}
-	start, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil || start < 0 || start >= size {
-		return 0, 0, false, filesystem.ErrInvalidRange
+	if _, err := result.Reader.Seek(start, io.SeekStart); err != nil {
+		writeImagePreviewError(w, err)
+		return
 	}
-	end := size - 1
-	if parts[1] != "" {
-		end, err = strconv.ParseInt(parts[1], 10, 64)
-		if err != nil || end < start {
-			return 0, 0, false, filesystem.ErrInvalidRange
-		}
-		if end >= size {
-			end = size - 1
-		}
+	setContentHeaders(w, imagepreview.OutputContentType, length, result.ETag, false, entry.ModifiedAt)
+	w.Header().Set("X-Roaminal-Image-Variant", "preview")
+	if ifNoneMatch(r.Header.Get("If-None-Match"), result.ETag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
 	}
-	length := end - start + 1
-	if length > 8<<20 {
-		return 0, 0, false, filesystem.ErrContentTooLarge
-	}
-	return start, length, true, nil
+	writeContent(w, r, result.Reader, start, length, result.Size)
 }
 
-func contentWindowLength(contentType string, size int64) int64 {
-	limit := int64(8 << 20)
-	if strings.HasPrefix(contentType, "text/") || contentType == "application/json" || contentType == "application/xml" {
-		limit = 1 << 20
+func writeImagePreviewError(w http.ResponseWriter, err error) {
+	var rootChanged *filesystem.RootChangedError
+	if errors.As(err, &rootChanged) || errors.Is(err, filesystem.ErrContentUnavailable) || errors.Is(err, filesystem.ErrNoTransport) || errors.Is(err, filesystem.ErrTransportUnavailable) {
+		writeFilesystemError(w, err)
+		return
 	}
-	if size < limit {
-		return size
+	switch {
+	case errors.Is(err, imagepreview.ErrUnsupported):
+		writeCodedError(w, http.StatusUnsupportedMediaType, "filesystem image preview is unsupported", "filesystem_image_preview_unsupported", nil)
+	case errors.Is(err, imagepreview.ErrInvalid):
+		writeCodedError(w, http.StatusUnprocessableEntity, "filesystem image preview is unavailable", "filesystem_image_preview_unavailable", nil)
+	case errors.Is(err, imagepreview.ErrUnavailable), errors.Is(err, context.DeadlineExceeded):
+		retryable := true
+		writeCodedErrorWithRetry(w, http.StatusServiceUnavailable, "filesystem image preview is temporarily unavailable", "filesystem_image_preview_unavailable", nil, &retryable)
+	default:
+		writeCodedErrorWithRetry(w, http.StatusServiceUnavailable, "filesystem image preview is temporarily unavailable", "filesystem_image_preview_unavailable", nil, nil)
 	}
-	return limit
 }

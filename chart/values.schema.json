@@ -134,6 +134,39 @@
       },
       "required": ["medium", "sizeLimit"]
     },
+    "filesystemImagePreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "emptyDir": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "medium": {"type": "string", "enum": ["", "Memory"]},
+                "sizeLimit": {"type": "string", "minLength": 1}
+              },
+              "required": ["medium", "sizeLimit"]
+            }
+          },
+          "required": ["emptyDir"]
+        },
+        "cacheTargetMiB": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "cacheMaxAge": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
+        "cacheCleanupInterval": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
+        "maxConversions": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "maxSourceMiB": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "maxOutputMiB": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "maxStaticPixels": {"type": "integer", "minimum": 1, "maximum": 281474976710656},
+        "maxFrames": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "maxAnimatedPixels": {"type": "integer", "minimum": 1, "maximum": 281474976710656},
+        "conversionTimeout": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"}
+      },
+      "required": ["cache", "cacheTargetMiB", "cacheMaxAge", "cacheCleanupInterval", "maxConversions", "maxSourceMiB", "maxOutputMiB", "maxStaticPixels", "maxFrames", "maxAnimatedPixels", "conversionTimeout"]
+    },
     "ssh": {
       "type": "object",
       "additionalProperties": false,
@@ -239,7 +272,7 @@
     "extraVolumeMounts": {"type": "array", "items": {"type": "object"}},
     "extraDeploy": {"type": "array", "items": {"type": "object"}}
   },
-  "required": ["replicaCount", "image", "app", "auth", "webPush", "persistence", "tmp", "ssh", "service", "ingress", "probes"],
+  "required": ["replicaCount", "image", "app", "auth", "webPush", "persistence", "tmp", "filesystemImagePreview", "ssh", "service", "ingress", "probes"],
   "definitions": {
     "probe": {
       "type": "object",

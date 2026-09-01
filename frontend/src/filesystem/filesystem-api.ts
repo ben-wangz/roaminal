@@ -44,11 +44,19 @@ async function requestFilesystemJSON<T>(path: string, init: RequestInit = {}): P
 	}
 }
 
-function query(instanceId: string, endpoint: string, pathValue: string, revision?: string, download = false): string {
+export type ReadContentOptions = {
+  variant?: 'preview' | 'original';
+  download?: boolean;
+  range?: { start: number; end?: number };
+  signal?: AbortSignal;
+};
+
+function query(instanceId: string, endpoint: string, pathValue: string, revision?: string, options: ReadContentOptions = {}): string {
   const params = new URLSearchParams();
   params.set('path', pathValue || '.');
   if (revision) params.set('rootRevision', revision);
-  if (download) params.set('download', '1');
+  if (options.variant) params.set('variant', options.variant);
+  if (options.download) params.set('download', '1');
   return `/connection-instances/${encodeURIComponent(instanceId)}/filesystem/${endpoint}?${params.toString()}`;
 }
 
@@ -68,10 +76,10 @@ export async function loadMetadata(instanceId: string, pathValue: string, revisi
   return { ...body.entry, mimeType: body.mimeType, encoding: body.encoding, capabilities: body.capabilities, consistencyToken: body.consistencyToken };
 }
 
-export async function readContent(instanceId: string, pathValue: string, revision: string, range?: { start: number; end?: number }, download = false, signal?: AbortSignal): Promise<{ response: Response; data: ArrayBuffer }> {
+export async function readContent(instanceId: string, pathValue: string, revision: string, options: ReadContentOptions = {}): Promise<{ response: Response; data: ArrayBuffer }> {
   const headers = new Headers();
-  if (range) headers.set('Range', `bytes=${range.start}-${range.end ?? ''}`);
-  const response = await requestFilesystemResponse(query(instanceId, 'content', pathValue, revision, download), { headers, signal });
+  if (options.range) headers.set('Range', `bytes=${options.range.start}-${options.range.end ?? ''}`);
+  const response = await requestFilesystemResponse(query(instanceId, 'content', pathValue, revision, options), { headers, signal: options.signal });
   return { response, data: await response.arrayBuffer() };
 }
 

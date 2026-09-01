@@ -1,7 +1,8 @@
-import { Download, FileQuestion, LoaderCircle, Search, SquareTerminal } from 'lucide-react';
+import { Download, FileQuestion, LoaderCircle, ScanSearch, Search, SquareTerminal } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { loadMetadata, readContent } from './filesystem-api';
 import type { FileEntry, FileMetadata, FileSystemError, RootContext } from './filesystem-types';
+import { formatSize, getPreviewScrollPosition, savePreviewScrollPosition } from './file-preview-helpers';
 import { MarkdownPreview } from './markdown-preview';
 import { viewerFor, viewerLabel } from './viewer-registry';
 
@@ -35,37 +36,21 @@ type Props = {
   onRootChanged: () => void;
 };
 
-type ScrollPosition = {
-  top: number;
-  left: number;
-};
-
-const previewScrollPositions = new Map<string, ScrollPosition>();
-const MAX_PREVIEW_SCROLL_POSITIONS = 100;
-
-function savePreviewScrollPosition(key: string | null, target: HTMLElement | null): void {
-  if (!key || !target) return;
-  previewScrollPositions.delete(key);
-  previewScrollPositions.set(key, { top: target.scrollTop, left: target.scrollLeft });
-  while (previewScrollPositions.size > MAX_PREVIEW_SCROLL_POSITIONS) {
-    const oldest = previewScrollPositions.keys().next().value;
-    if (oldest === undefined) break;
-    previewScrollPositions.delete(oldest);
-  }
-}
-
 export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast, onRootChanged }: Props) {
   const [metadata, setMetadata] = useState<FileMetadata | null>(null);
   const [data, setData] = useState<ArrayBuffer | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [source, setSource] = useState<string | null>(null);
+  const [imageVariant, setImageVariant] = useState<'preview' | 'original' | null>(null);
+  const [originalLoading, setOriginalLoading] = useState(false);
   const [markdownSource, setMarkdownSource] = useState(false);
   const previewBodyRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageDisplaySize, setImageDisplaySize] = useState<ImageDisplaySize | null>(null);
   const loadedIdentityRef = useRef<string | null>(null);
   const lastRestoredScrollKeyRef = useRef<string | null>(null);
+  const imageRequestControllerRef = useRef<AbortController | null>(null);
   const onRootChangedRef = useRef(onRootChanged);
   onRootChangedRef.current = onRootChanged;
   const entryPath = entry?.type === 'file' ? entry.relativePath : null;
@@ -102,6 +87,8 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
       setMetadata(null);
       setData(null);
       setSource(null);
+      setImageVariant(null);
+      setOriginalLoading(false);
       setImageDisplaySize(null);
       setMarkdownSource(false);
     }
@@ -112,18 +99,40 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
       return undefined;
     }
     setLoading(true);
+    imageRequestControllerRef.current = controller;
     void (async () => {
       try {
         const next = await loadMetadata(instanceId, entryPath, rootRevision, controller.signal);
         if (!active) return;
         setMetadata(next);
         const kind = viewerFor(next);
-        if (kind === 'image' || kind === 'video' || kind === 'pdf') {
-          const result = await readContent(instanceId, entryPath, rootRevision, undefined, true, controller.signal);
+        if (kind === 'image') {
+          try {
+            const result = await readContent(instanceId, entryPath, rootRevision, { variant: 'preview', signal: controller.signal });
+            if (!active) return;
+            setImageVariant('preview');
+            setSource(URL.createObjectURL(new Blob([result.data], { type: result.response.headers.get('Content-Type') || 'image/webp' })));
+          } catch (previewReason) {
+            if (!active) return;
+            const previewError = (previewReason instanceof Error ? previewReason : new Error('Unable to load image preview')) as FileSystemError;
+            try {
+              const result = await readContent(instanceId, entryPath, rootRevision, { variant: 'original', signal: controller.signal });
+              if (!active) return;
+              setImageVariant('original');
+              setSource(URL.createObjectURL(new Blob([result.data], { type: next.mimeType })));
+            } catch (originalReason) {
+              if (!active) return;
+              const originalError = (originalReason instanceof Error ? originalReason : previewError) as FileSystemError;
+              if (originalError.code === 'filesystem_root_changed' && originalError.root) onRootChangedRef.current();
+              setError(originalError.message || previewError.message);
+            }
+          }
+        } else if (kind === 'video' || kind === 'pdf') {
+          const result = await readContent(instanceId, entryPath, rootRevision, { variant: 'original', signal: controller.signal });
           if (!active) return;
           setSource(URL.createObjectURL(new Blob([result.data], { type: next.mimeType })));
         } else {
-          const result = await readContent(instanceId, entryPath, rootRevision, undefined, false, controller.signal);
+          const result = await readContent(instanceId, entryPath, rootRevision, { signal: controller.signal });
           if (!active) return;
           setData(result.data);
         }
@@ -135,11 +144,14 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
         }
       } finally {
         if (active) setLoading(false);
+        if (imageRequestControllerRef.current === controller) imageRequestControllerRef.current = null;
       }
     })();
     return () => {
       active = false;
       controller.abort();
+      imageRequestControllerRef.current?.abort();
+      imageRequestControllerRef.current = null;
     };
   }, [entryPath, instanceId, previewIdentity, rootRevision]);
 
@@ -176,7 +188,7 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
   useLayoutEffect(() => {
     const target = previewBodyRef.current;
     if (!target || !scrollKey || loading) return;
-    const position = previewScrollPositions.get(scrollKey);
+    const position = getPreviewScrollPosition(scrollKey);
     if (position) {
       target.scrollTop = position.top;
       target.scrollLeft = position.left;
@@ -190,10 +202,39 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
   useEffect(() => () => { if (source) URL.revokeObjectURL(source); }, [source]);
 
   const hasPreviewContent = Boolean(metadata && (data !== null || source !== null || kind === 'raw'));
+  const viewOriginal = async () => {
+    if (!entry || !metadata || kind !== 'image' || !source || imageVariant === 'original' || originalLoading) return;
+    const controller = new AbortController();
+    imageRequestControllerRef.current?.abort();
+    imageRequestControllerRef.current = controller;
+    setOriginalLoading(true);
+    setError('');
+    try {
+      const result = await readContent(instanceId, entry.relativePath, root.revision, { variant: 'original', signal: controller.signal });
+      const nextSource = URL.createObjectURL(new Blob([result.data], { type: metadata.mimeType }));
+      if (imageRequestControllerRef.current !== controller) {
+        URL.revokeObjectURL(nextSource);
+        return;
+      }
+      setImageVariant('original');
+      setSource(nextSource);
+    } catch (reason) {
+      if (controller.signal.aborted) return;
+      const originalError = (reason instanceof Error ? reason : new Error('Unable to load original image')) as FileSystemError;
+      if (originalError.code === 'filesystem_root_changed' && originalError.root) onRootChanged();
+      setError(originalError.message);
+      onToast('Unable to load original image.', 'error');
+    } finally {
+      if (imageRequestControllerRef.current === controller) {
+        imageRequestControllerRef.current = null;
+        setOriginalLoading(false);
+      }
+    }
+  };
   const download = async () => {
     if (!entry || !metadata) return;
     try {
-      const result = await readContent(instanceId, entry.relativePath, root.revision, undefined, true);
+      const result = await readContent(instanceId, entry.relativePath, root.revision, { download: true });
       const url = URL.createObjectURL(new Blob([result.data], { type: metadata.mimeType }));
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -220,6 +261,7 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
         <div className="filesystem-preview-actions">
           <button autoFocus className="icon-button file-preview-back-terminal" type="button" onClick={onBackToTerminal} title="Back to Terminal" aria-label="Back to Terminal" data-testid="file-preview-back-terminal"><SquareTerminal size={17} aria-hidden="true" /></button>
           {kind === 'markdown' && <button className="icon-button" type="button" onClick={() => setMarkdownSource((value) => !value)} title={markdownSource ? 'Rendered markdown' : 'Markdown source'} aria-label={markdownSource ? 'Rendered markdown' : 'Markdown source'}><Search size={16} aria-hidden="true" /></button>}
+          {kind === 'image' && source && <button className={`icon-button ${imageVariant === 'original' ? 'selected' : ''}`} type="button" onClick={() => void viewOriginal()} disabled={imageVariant === 'original' || originalLoading} title={imageVariant === 'original' ? 'Original loaded' : 'View original'} aria-label={imageVariant === 'original' ? 'Original loaded' : 'View original'} data-testid="file-preview-view-original">{originalLoading ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <ScanSearch size={16} aria-hidden="true" />}</button>}
           <button className="icon-button" type="button" onClick={() => void download()} title="Download" aria-label="Download"><Download size={16} aria-hidden="true" /></button>
         </div>
       </header>
@@ -237,12 +279,4 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
       </div>
     </section>
   );
-}
-
-function formatSize(size: number | null): string {
-  if (size === null) return 'size unavailable';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }

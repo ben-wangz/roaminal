@@ -24,3 +24,14 @@ data:
   authRefreshTTL: {{ .Values.app.authRefreshTTL | quote }}
   authMaxAttempts: {{ .Values.app.authMaxAttempts | quote }}
   clientDiagnosticsEnabled: {{ .Values.app.clientDiagnosticsEnabled | quote }}
+  filesystemImagePreviewCacheDir: "/var/cache/roaminal/filesystem-image-previews"
+  filesystemImagePreviewCacheTargetMiB: {{ .Values.filesystemImagePreview.cacheTargetMiB | quote }}
+  filesystemImagePreviewCacheMaxAge: {{ .Values.filesystemImagePreview.cacheMaxAge | quote }}
+  filesystemImagePreviewCacheCleanupInterval: {{ .Values.filesystemImagePreview.cacheCleanupInterval | quote }}
+  filesystemImagePreviewMaxConversions: {{ .Values.filesystemImagePreview.maxConversions | quote }}
+  filesystemImagePreviewMaxSourceMiB: {{ .Values.filesystemImagePreview.maxSourceMiB | quote }}
+  filesystemImagePreviewMaxOutputMiB: {{ .Values.filesystemImagePreview.maxOutputMiB | quote }}
+  filesystemImagePreviewMaxStaticPixels: {{ printf "%d" (int64 .Values.filesystemImagePreview.maxStaticPixels) | quote }}
+  filesystemImagePreviewMaxFrames: {{ .Values.filesystemImagePreview.maxFrames | quote }}
+  filesystemImagePreviewMaxAnimatedPixels: {{ printf "%d" (int64 .Values.filesystemImagePreview.maxAnimatedPixels) | quote }}
+  filesystemImagePreviewConversionTimeout: {{ .Values.filesystemImagePreview.conversionTimeout | quote }}

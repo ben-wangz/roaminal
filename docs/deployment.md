@@ -24,6 +24,7 @@ podman run --rm --name roaminal -p 9846:9846 \
   -e ROAMINAL_ACCEPT_TERMS=true -e ROAMINAL_PASSWORD='use-a-secret' \
   -v roaminal-state:/home/roaminal/.roaminal \
   -v roaminal-ssh:/home/roaminal/.ssh \
+  -v roaminal-image-previews:/var/cache/roaminal/filesystem-image-previews \
   -v roaminal-workspace:/workspace "$IMAGE"
 ```
 
@@ -64,6 +65,15 @@ its PVC on uninstall.
 Read-only SSH Secrets and projected volumes remain usable for connections, but
 SSH config edits and key operations require a writable source. State and
 workspace must always be writable by UID/GID 1000.
+
+The Chart mounts a separate `emptyDir` at
+`/var/cache/roaminal/filesystem-image-previews`. Its default `192Mi` quota is
+the sum of the `128Mi` cache target, one conversion's `32Mi` source and
+`16Mi` output staging allowance, and `16Mi` overhead. If concurrency or byte
+limits are increased, set `filesystemImagePreview.cache.emptyDir.sizeLimit`
+to at least `cache target + maxConversions * (maxSource + maxOutput) + 16Mi`.
+Exhausting this volume disables only derivative generation; original views and
+downloads continue to use the FileSystem transport.
 
 ## Migrating from an older multi-volume deployment
 

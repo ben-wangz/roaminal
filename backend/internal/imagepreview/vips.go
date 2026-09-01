@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/davidbyttow/govips/v2/vips"
@@ -40,16 +41,11 @@ type imageDetails struct {
 	Frames int
 }
 
-func convertFile(ctx context.Context, file string, options Options) ([]byte, imageDetails, error) {
+func convertFile(ctx context.Context, file, mimeType string, options Options) ([]byte, imageDetails, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, imageDetails{}, err
 	}
-	params := vips.NewImportParams()
-	params.FailOnError.Set(true)
-	if options.MaxFrames < math.MaxInt-1 {
-		params.NumPages.Set(options.MaxFrames + 1)
-	}
-	image, err := vips.LoadImageFromFile(filepath.Clean(file), params)
+	image, err := loadImage(filepath.Clean(file), mimeType, options.MaxFrames)
 	if err != nil {
 		return nil, imageDetails{}, fmt.Errorf("%w: decode image", ErrInvalid)
 	}
@@ -85,7 +81,11 @@ func convertFile(ctx context.Context, file string, options Options) ([]byte, ima
 	if err := image.AutoRotate(); err != nil {
 		return nil, imageDetails{}, fmt.Errorf("%w: orientation normalization", ErrInvalid)
 	}
-	if image.ColorSpace() != vips.InterpretationSRGB && image.ColorSpace() != vips.InterpretationBW {
+	if image.HasICCProfile() {
+		if err := image.TransformICCProfile(vips.SRGBIEC6196621ICCProfilePath); err != nil {
+			return nil, imageDetails{}, fmt.Errorf("%w: ICC color conversion", ErrInvalid)
+		}
+	} else if image.ColorSpace() != vips.InterpretationSRGB && image.ColorSpace() != vips.InterpretationBW {
 		if err := image.ToColorSpace(vips.InterpretationSRGB); err != nil {
 			return nil, imageDetails{}, fmt.Errorf("%w: color conversion", ErrInvalid)
 		}
@@ -106,7 +106,46 @@ func convertFile(ctx context.Context, file string, options Options) ([]byte, ima
 	if int64(len(data)) > options.MaxOutputBytes {
 		return nil, imageDetails{}, fmt.Errorf("%w: output byte limit", ErrInvalid)
 	}
-	return data, imageDetails{Width: image.Width(), Height: image.PageHeight(), Frames: image.Pages()}, nil
+	height := image.PageHeight()
+	if height < 1 {
+		height = image.Height()
+	}
+	return data, imageDetails{Width: image.Width(), Height: height, Frames: frames}, nil
+}
+
+func loadImage(file, mimeType string, maxFrames int) (*vips.ImageRef, error) {
+	params := vips.NewImportParams()
+	params.FailOnError.Set(true)
+	if multiPageMIME(mimeType) && maxFrames < math.MaxInt-1 {
+		// Read one page beyond the configured limit so oversized animations
+		// are rejected without loading an unbounded number of frames.
+		params.NumPages.Set(maxFrames + 1)
+	}
+	image, err := vips.LoadImageFromFile(file, params)
+	if err == nil || !isPageLimitError(err) {
+		return image, err
+	}
+
+	// Some loaders reject a request for more pages than the file contains.
+	// Only then is an unbounded load safe: the failed probe proves that the
+	// actual page count is below the configured limit.
+	params = vips.NewImportParams()
+	params.FailOnError.Set(true)
+	params.NumPages.Set(-1)
+	return vips.LoadImageFromFile(file, params)
+}
+
+func isPageLimitError(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "bad page number")
+}
+
+func multiPageMIME(value string) bool {
+	switch value {
+	case "image/avif", "image/gif", "image/heic", "image/heif", "image/jxl", "image/tiff", "image/webp":
+		return true
+	default:
+		return false
+	}
 }
 
 func pixelProduct(width, height int) (uint64, bool) {

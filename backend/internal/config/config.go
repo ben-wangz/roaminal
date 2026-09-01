@@ -19,13 +19,24 @@ func defaults() Config {
 		MaxClientsPerConnectionInstance: DefaultMaxClientsPerConnectionInstance,
 		AuthAccessTTL:                   DefaultAuthAccessTTL, AuthRefreshTTL: DefaultAuthRefreshTTL,
 		AuthMaxAttempts: DefaultAuthMaxAttempts, ClientDiagnosticsEnabled: true, AgentHooksDir: DefaultAgentHooksDir,
+		FilesystemImagePreviewCacheDir:             DefaultFilesystemImagePreviewCacheDir,
+		FilesystemImagePreviewCacheTargetMiB:       DefaultFilesystemImagePreviewCacheMiB,
+		FilesystemImagePreviewCacheMaxAge:          DefaultFilesystemImagePreviewMaxAge,
+		FilesystemImagePreviewCacheCleanupInterval: DefaultFilesystemImagePreviewCleanup,
+		FilesystemImagePreviewMaxConversions:       DefaultFilesystemImagePreviewConvert,
+		FilesystemImagePreviewMaxSourceMiB:         DefaultFilesystemImagePreviewSourceMiB,
+		FilesystemImagePreviewMaxOutputMiB:         DefaultFilesystemImagePreviewOutputMiB,
+		FilesystemImagePreviewMaxStaticPixels:      DefaultFilesystemImagePreviewPixels,
+		FilesystemImagePreviewMaxFrames:            DefaultFilesystemImagePreviewFrames,
+		FilesystemImagePreviewMaxAnimatedPixels:    DefaultFilesystemImagePreviewAnimPixels,
+		FilesystemImagePreviewConversionTimeout:    DefaultFilesystemImagePreviewTimeout,
 	}
 }
 
 func Load(args []string) (Config, error) {
 	for _, arg := range args {
 		if arg == "--help" || arg == "-help" {
-			fmt.Fprintln(os.Stdout, "Roaminal - connection platform\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-connection-instances --max-clients-per-connection-instance --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --client-diagnostics --agent-hooks-dir --web-push-vapid-public-key --web-push-vapid-private-key --web-push-subject --debug/-d --accept-terms/-y")
+			fmt.Fprintln(os.Stdout, "Roaminal - connection platform\n\nUsage: roaminal [options]\n\nOptions: --host/-h --port/-p --password/-a --websocket-ping --scrollback-lines --max-connection-instances --max-clients-per-connection-instance --cwd --auth-access-ttl --auth-refresh-ttl --auth-max-attempts --client-diagnostics --agent-hooks-dir --web-push-vapid-public-key --web-push-vapid-private-key --web-push-subject --filesystem-image-preview-cache-dir --filesystem-image-preview-cache-target-mib --filesystem-image-preview-cache-max-age --filesystem-image-preview-cache-cleanup-interval --filesystem-image-preview-max-conversions --filesystem-image-preview-max-source-mib --filesystem-image-preview-max-output-mib --filesystem-image-preview-max-static-pixels --filesystem-image-preview-max-frames --filesystem-image-preview-max-animated-pixels --filesystem-image-preview-conversion-timeout --debug/-d --accept-terms/-y")
 			return Config{}, ErrHelp
 		}
 	}

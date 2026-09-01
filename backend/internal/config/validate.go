@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"net/mail"
 	"net/url"
 	"os"
@@ -70,6 +71,96 @@ func (c Config) Validate() error {
 	}
 	if err := validateWebPush(c); err != nil {
 		return err
+	}
+	if err := validateFilesystemImagePreview(c); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateFilesystemImagePreview(c Config) error {
+	if !filepath.IsAbs(c.FilesystemImagePreviewCacheDir) {
+		return errors.New("filesystemImagePreviewCacheDir must be an absolute path")
+	}
+	cacheDir := filepath.Clean(c.FilesystemImagePreviewCacheDir)
+	if cacheDir == string(filepath.Separator) {
+		return errors.New("filesystemImagePreviewCacheDir must not be the filesystem root")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve home directory for image preview cache: %w", err)
+	}
+	reserved := []string{filepath.Clean(home), filepath.Clean(c.StateDir), filepath.Clean(c.InitialCwd), filepath.Join(filepath.Clean(home), ".ssh"), "/tmp"}
+	for _, value := range reserved {
+		if pathWithin(cacheDir, value) || pathWithin(value, cacheDir) {
+			return fmt.Errorf("filesystemImagePreviewCacheDir must be outside %s", value)
+		}
+	}
+	if info, statErr := os.Stat(cacheDir); statErr == nil && !info.IsDir() {
+		return errors.New("filesystemImagePreviewCacheDir must be a directory")
+	} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("filesystemImagePreviewCacheDir: %w", statErr)
+	}
+	if err := noSymlinkPath(cacheDir); err != nil {
+		return fmt.Errorf("filesystemImagePreviewCacheDir: %w", err)
+	}
+	if c.FilesystemImagePreviewCacheTargetMiB < 1 || int64(c.FilesystemImagePreviewCacheTargetMiB) > math.MaxInt64/(1<<20) || c.FilesystemImagePreviewCacheTargetMiB > 1<<20 {
+		return errors.New("filesystemImagePreviewCacheTargetMiB must be 1..1048576")
+	}
+	if c.FilesystemImagePreviewCacheMaxAge < time.Minute || c.FilesystemImagePreviewCacheMaxAge > 8760*time.Hour {
+		return errors.New("filesystemImagePreviewCacheMaxAge must be 1m..8760h")
+	}
+	if c.FilesystemImagePreviewCacheCleanupInterval < time.Minute || c.FilesystemImagePreviewCacheCleanupInterval > 8760*time.Hour {
+		return errors.New("filesystemImagePreviewCacheCleanupInterval must be 1m..8760h")
+	}
+	if c.FilesystemImagePreviewMaxConversions < 1 || c.FilesystemImagePreviewMaxConversions > 1024 {
+		return errors.New("filesystemImagePreviewMaxConversions must be 1..1024")
+	}
+	if c.FilesystemImagePreviewMaxSourceMiB < 1 || int64(c.FilesystemImagePreviewMaxSourceMiB) > math.MaxInt64/(1<<20) || c.FilesystemImagePreviewMaxSourceMiB > 1<<20 {
+		return errors.New("filesystemImagePreviewMaxSourceMiB must be 1..1048576")
+	}
+	if c.FilesystemImagePreviewMaxOutputMiB < 1 || int64(c.FilesystemImagePreviewMaxOutputMiB) > math.MaxInt64/(1<<20) || c.FilesystemImagePreviewMaxOutputMiB > 1<<20 {
+		return errors.New("filesystemImagePreviewMaxOutputMiB must be 1..1048576")
+	}
+	if c.FilesystemImagePreviewMaxStaticPixels == 0 || c.FilesystemImagePreviewMaxStaticPixels > 1<<48 {
+		return errors.New("filesystemImagePreviewMaxStaticPixels must be 1..281474976710656")
+	}
+	if c.FilesystemImagePreviewMaxFrames < 1 || c.FilesystemImagePreviewMaxFrames > 100000 {
+		return errors.New("filesystemImagePreviewMaxFrames must be 1..100000")
+	}
+	if c.FilesystemImagePreviewMaxAnimatedPixels == 0 || c.FilesystemImagePreviewMaxAnimatedPixels > 1<<48 {
+		return errors.New("filesystemImagePreviewMaxAnimatedPixels must be 1..281474976710656")
+	}
+	if c.FilesystemImagePreviewConversionTimeout < time.Second || c.FilesystemImagePreviewConversionTimeout >= 70*time.Second {
+		return errors.New("filesystemImagePreviewConversionTimeout must be 1s..69s")
+	}
+	return nil
+}
+
+func pathWithin(value, parent string) bool {
+	if parent == "" {
+		return false
+	}
+	return value == parent || strings.HasPrefix(value, parent+string(filepath.Separator))
+}
+
+func noSymlinkPath(value string) error {
+	current := string(filepath.Separator)
+	for _, part := range strings.Split(strings.TrimPrefix(filepath.Clean(value), current), string(filepath.Separator)) {
+		if part == "" {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("path must not traverse a symbolic link")
+		}
 	}
 	return nil
 }

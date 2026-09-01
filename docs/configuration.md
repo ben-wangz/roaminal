@@ -25,6 +25,17 @@ Roaminal fields are accepted. Durations use Go syntax.
 | `webPushVapidPublicKey` | `--web-push-vapid-public-key` | `ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY` | empty; disables Web Push when all three fields are empty |
 | `webPushVapidPrivateKey` | `--web-push-vapid-private-key` | `ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY` | empty |
 | `webPushSubject` | `--web-push-subject` | `ROAMINAL_WEB_PUSH_SUBJECT` | empty |
+| `filesystemImagePreviewCacheDir` | `--filesystem-image-preview-cache-dir` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_DIR` | `/var/cache/roaminal/filesystem-image-previews` |
+| `filesystemImagePreviewCacheTargetMiB` | `--filesystem-image-preview-cache-target-mib` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_TARGET_MIB` | `128` |
+| `filesystemImagePreviewCacheMaxAge` | `--filesystem-image-preview-cache-max-age` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_MAX_AGE` | `24h` |
+| `filesystemImagePreviewCacheCleanupInterval` | `--filesystem-image-preview-cache-cleanup-interval` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_CLEANUP_INTERVAL` | `10m` |
+| `filesystemImagePreviewMaxConversions` | `--filesystem-image-preview-max-conversions` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_CONVERSIONS` | `1` |
+| `filesystemImagePreviewMaxSourceMiB` | `--filesystem-image-preview-max-source-mib` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_SOURCE_MIB` | `32` |
+| `filesystemImagePreviewMaxOutputMiB` | `--filesystem-image-preview-max-output-mib` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_OUTPUT_MIB` | `16` |
+| `filesystemImagePreviewMaxStaticPixels` | `--filesystem-image-preview-max-static-pixels` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_STATIC_PIXELS` | `100000000` |
+| `filesystemImagePreviewMaxFrames` | `--filesystem-image-preview-max-frames` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_FRAMES` | `200` |
+| `filesystemImagePreviewMaxAnimatedPixels` | `--filesystem-image-preview-max-animated-pixels` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_ANIMATED_PIXELS` | `200000000` |
+| `filesystemImagePreviewConversionTimeout` | `--filesystem-image-preview-conversion-timeout` | `ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CONVERSION_TIMEOUT` | `30s` |
 
 Terms acknowledgement is required. Explicitly supplied empty passwords are an
 error; when no password is supplied a new random password is printed once at
@@ -52,3 +63,10 @@ Web Push is disabled unless `webPushVapidPublicKey`,
 Helm, put these values in an existing Secret and reference it with
 `webPush.existingSecret`; the chart maps its configured keys to the three
 environment variables and never renders the secret contents.
+
+Image previews use a private disk cache. The cache directory is not a browser
+setting and must be outside the state, workspace, SSH, home, and `/tmp`
+directories. Cache target, source/output byte limits, pixel/frame limits, and
+conversion concurrency are bounded by startup validation. The conversion
+deadline must remain below the HTTP write timeout. The WebP format, quality,
+effort, and pipeline version are fixed implementation details.

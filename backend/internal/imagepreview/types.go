@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
+	"strings"
 	"time"
 )
 
@@ -57,6 +59,27 @@ type Options struct {
 	MaxAnimatedPixels uint64
 	ConversionTimeout time.Duration
 	Logger            *log.Logger
+}
+
+func (o Options) validate() error {
+	if !validCachePath(o.CacheDir) {
+		return errors.New("cache directory must be an absolute private path outside reserved directories")
+	}
+	if o.CacheTargetBytes <= 0 || o.CacheTargetBytes >= math.MaxInt64 || o.CacheMaxAge < time.Minute || o.CacheMaxAge > 8760*time.Hour || o.CleanupInterval < time.Minute || o.CleanupInterval > 8760*time.Hour || o.MaxConversions <= 0 || o.MaxSourceBytes <= 0 || o.MaxOutputBytes <= 0 || o.MaxStaticPixels == 0 || o.MaxFrames <= 0 || o.MaxAnimatedPixels == 0 || o.ConversionTimeout < time.Second || o.ConversionTimeout >= 70*time.Second {
+		return errors.New("image preview limits are invalid")
+	}
+	if o.MaxConversions > 1024 || o.MaxFrames > 100000 || o.MaxSourceBytes >= int64(^uint64(0)>>1) || o.MaxOutputBytes >= int64(^uint64(0)>>1) {
+		return errors.New("image preview limits exceed supported bounds")
+	}
+	if o.MaxStaticPixels > 1<<48 || o.MaxAnimatedPixels > 1<<48 {
+		return errors.New("image preview pixel limits exceed supported bounds")
+	}
+	return nil
+}
+
+func (r Request) normalized() Request {
+	r.MIMEType = strings.ToLower(strings.TrimSpace(r.MIMEType))
+	return r
 }
 
 func (o Options) logger() *log.Logger {

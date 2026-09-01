@@ -102,5 +102,50 @@ func applyFile(c *Config, v fileConfig) error {
 	if v.WebPushSubject != nil {
 		c.WebPushSubject = *v.WebPushSubject
 	}
+	if v.FilesystemImagePreviewCacheDir != nil {
+		c.FilesystemImagePreviewCacheDir = *v.FilesystemImagePreviewCacheDir
+	}
+	if v.FilesystemImagePreviewCacheTargetMiB != nil {
+		c.FilesystemImagePreviewCacheTargetMiB = *v.FilesystemImagePreviewCacheTargetMiB
+	}
+	if v.FilesystemImagePreviewCacheMaxAge != nil {
+		d, err := time.ParseDuration(*v.FilesystemImagePreviewCacheMaxAge)
+		if err != nil {
+			return fmt.Errorf("filesystemImagePreviewCacheMaxAge: %w", err)
+		}
+		c.FilesystemImagePreviewCacheMaxAge = d
+	}
+	if v.FilesystemImagePreviewCacheCleanupInterval != nil {
+		d, err := time.ParseDuration(*v.FilesystemImagePreviewCacheCleanupInterval)
+		if err != nil {
+			return fmt.Errorf("filesystemImagePreviewCacheCleanupInterval: %w", err)
+		}
+		c.FilesystemImagePreviewCacheCleanupInterval = d
+	}
+	if v.FilesystemImagePreviewMaxConversions != nil {
+		c.FilesystemImagePreviewMaxConversions = *v.FilesystemImagePreviewMaxConversions
+	}
+	if v.FilesystemImagePreviewMaxSourceMiB != nil {
+		c.FilesystemImagePreviewMaxSourceMiB = *v.FilesystemImagePreviewMaxSourceMiB
+	}
+	if v.FilesystemImagePreviewMaxOutputMiB != nil {
+		c.FilesystemImagePreviewMaxOutputMiB = *v.FilesystemImagePreviewMaxOutputMiB
+	}
+	if v.FilesystemImagePreviewMaxStaticPixels != nil {
+		c.FilesystemImagePreviewMaxStaticPixels = *v.FilesystemImagePreviewMaxStaticPixels
+	}
+	if v.FilesystemImagePreviewMaxFrames != nil {
+		c.FilesystemImagePreviewMaxFrames = *v.FilesystemImagePreviewMaxFrames
+	}
+	if v.FilesystemImagePreviewMaxAnimatedPixels != nil {
+		c.FilesystemImagePreviewMaxAnimatedPixels = *v.FilesystemImagePreviewMaxAnimatedPixels
+	}
+	if v.FilesystemImagePreviewConversionTimeout != nil {
+		d, err := time.ParseDuration(*v.FilesystemImagePreviewConversionTimeout)
+		if err != nil {
+			return fmt.Errorf("filesystemImagePreviewConversionTimeout: %w", err)
+		}
+		c.FilesystemImagePreviewConversionTimeout = d
+	}
 	return nil
 }

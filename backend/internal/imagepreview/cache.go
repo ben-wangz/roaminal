@@ -44,23 +44,12 @@ func prepareManagedDirectory(root string) (string, string, error) {
 	if err := ensureNoSymlinkPath(root); err != nil {
 		return "", "", err
 	}
-	marker := filepath.Join(root, markerName)
-	data, err := os.ReadFile(marker)
-	if errors.Is(err, os.ErrNotExist) {
-		entries, readErr := os.ReadDir(root)
-		if readErr != nil {
-			return "", "", readErr
-		}
-		if len(entries) != 0 {
-			return "", "", errors.New("cache directory is not Roaminal-owned")
-		}
-		if err := os.WriteFile(marker, []byte(markerContent), 0o600); err != nil {
-			return "", "", err
-		}
-	} else if err != nil {
+	if err := os.Chmod(root, 0o700); err != nil {
 		return "", "", err
-	} else if string(data) != markerContent {
-		return "", "", errors.New("cache ownership marker is invalid")
+	}
+	marker := filepath.Join(root, markerName)
+	if err := ensureMarker(marker, root); err != nil {
+		return "", "", err
 	}
 	dataDir := filepath.Join(root, "fcache-data")
 	stagingDir := filepath.Join(root, "staging")
@@ -71,8 +60,71 @@ func prepareManagedDirectory(root string) (string, string, error) {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
 			return "", "", err
 		}
+		if err := ensureNoSymlinkPath(directory); err != nil {
+			return "", "", err
+		}
+		if err := os.Chmod(directory, 0o700); err != nil {
+			return "", "", err
+		}
 	}
 	return dataDir, stagingDir, nil
+}
+
+func ensureMarker(marker, root string) error {
+	for {
+		info, err := os.Lstat(marker)
+		if errors.Is(err, os.ErrNotExist) {
+			entries, readErr := os.ReadDir(root)
+			if readErr != nil {
+				return readErr
+			}
+			if len(entries) != 0 {
+				return errors.New("cache directory is not Roaminal-owned")
+			}
+			file, createErr := os.OpenFile(marker, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+			if errors.Is(createErr, os.ErrExist) {
+				continue
+			}
+			if createErr != nil {
+				return createErr
+			}
+			written, writeErr := file.WriteString(markerContent)
+			closeErr := file.Close()
+			if writeErr != nil {
+				return writeErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+			if written != len(markerContent) {
+				return errors.New("cache ownership marker was partially written")
+			}
+			info, err = os.Lstat(marker)
+			if err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return errors.New("cache ownership marker must be a regular file")
+		}
+		data, readErr := os.ReadFile(marker)
+		if readErr != nil {
+			return readErr
+		}
+		latest, statErr := os.Lstat(marker)
+		if statErr != nil {
+			return statErr
+		}
+		if latest.Mode()&os.ModeSymlink != 0 || !latest.Mode().IsRegular() {
+			return errors.New("cache ownership marker must be a regular file")
+		}
+		if string(data) != markerContent {
+			return errors.New("cache ownership marker is invalid")
+		}
+		return os.Chmod(marker, 0o600)
+	}
 }
 
 func ensureNoSymlinkPath(value string) error {
@@ -111,7 +163,13 @@ func replaceCacheData(directory string) error {
 	if err := os.RemoveAll(directory); err != nil {
 		return err
 	}
-	return os.MkdirAll(directory, 0o700)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return err
+	}
+	if err := ensureNoSymlinkPath(directory); err != nil {
+		return err
+	}
+	return os.Chmod(directory, 0o700)
 }
 
 func clearStaging(directory string) error {

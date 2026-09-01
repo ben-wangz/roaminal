@@ -14,6 +14,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
+	"github.com/ben-wangz/roaminal/backend/internal/imagepreview"
 	"github.com/ben-wangz/roaminal/backend/internal/messages"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/notifications"
@@ -38,6 +39,7 @@ type Server struct {
 	static            http.Handler
 	definitions       *definition.Service
 	filesystem        *filesystem.Service
+	imagePreview      *imagepreview.Service
 	diagnostics       *clientdiag.Sink
 	agentProvisioning agent.ProvisioningService
 	agentProjection   agent.ProjectionService
@@ -60,6 +62,7 @@ type Dependencies struct {
 	Definitions       *definition.Service
 	Diagnostics       *clientdiag.Sink
 	FileSystem        *filesystem.Service
+	ImagePreview      *imagepreview.Service
 	AgentProvisioning agent.ProvisioningService
 	AgentProjection   agent.ProjectionService
 	Messages          *messages.Service
@@ -85,6 +88,7 @@ func New(deps Dependencies) *Server {
 		diagnostics: deps.Diagnostics,
 	}
 	s.filesystem = deps.FileSystem
+	s.imagePreview = deps.ImagePreview
 	s.agentProvisioning = deps.AgentProvisioning
 	s.agentProjection = deps.AgentProjection
 	s.messages = deps.Messages

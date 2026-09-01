@@ -34,7 +34,7 @@ func applyArgs(c *Config, args []string) error {
 		key, value, hasValue := strings.Cut(arg, "=")
 		if !hasValue {
 			switch key {
-			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-hooks-dir", "--web-push-vapid-public-key", "--web-push-vapid-private-key", "--web-push-subject":
+			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-hooks-dir", "--web-push-vapid-public-key", "--web-push-vapid-private-key", "--web-push-subject", "--filesystem-image-preview-cache-dir", "--filesystem-image-preview-cache-target-mib", "--filesystem-image-preview-cache-max-age", "--filesystem-image-preview-cache-cleanup-interval", "--filesystem-image-preview-max-conversions", "--filesystem-image-preview-max-source-mib", "--filesystem-image-preview-max-output-mib", "--filesystem-image-preview-max-static-pixels", "--filesystem-image-preview-max-frames", "--filesystem-image-preview-max-animated-pixels", "--filesystem-image-preview-conversion-timeout":
 				if i+1 >= len(args) {
 					return fmt.Errorf("missing value for %s", key)
 				}
@@ -115,6 +115,8 @@ func applyArgs(c *Config, args []string) error {
 			c.WebPushVAPIDPrivateKey = value
 		case "--web-push-subject":
 			c.WebPushSubject = value
+		case "--filesystem-image-preview-cache-dir", "--filesystem-image-preview-cache-target-mib", "--filesystem-image-preview-cache-max-age", "--filesystem-image-preview-cache-cleanup-interval", "--filesystem-image-preview-max-conversions", "--filesystem-image-preview-max-source-mib", "--filesystem-image-preview-max-output-mib", "--filesystem-image-preview-max-static-pixels", "--filesystem-image-preview-max-frames", "--filesystem-image-preview-max-animated-pixels", "--filesystem-image-preview-conversion-timeout":
+			return applyFilesystemImagePreviewArg(c, key, value)
 		default:
 			return fmt.Errorf("unknown argument %s", arg)
 		}
@@ -192,6 +194,9 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := set("ROAMINAL_WEB_PUSH_SUBJECT", func(v string) error { c.WebPushSubject = v; return nil }); err != nil {
+		return err
+	}
+	if err := applyFilesystemImagePreviewEnv(c); err != nil {
 		return err
 	}
 	return nil

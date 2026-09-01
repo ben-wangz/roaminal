@@ -125,6 +125,24 @@ tmp:
   medium: ""
   sizeLimit: 64Mi
 
+# Image previews use a separate bounded ephemeral volume. The mount path is
+# fixed by the Deployment template and is intentionally not configurable.
+filesystemImagePreview:
+  cache:
+    emptyDir:
+      medium: ""
+      sizeLimit: 192Mi
+  cacheTargetMiB: 128
+  cacheMaxAge: 24h
+  cacheCleanupInterval: 10m
+  maxConversions: 1
+  maxSourceMiB: 32
+  maxOutputMiB: 16
+  maxStaticPixels: 100000000
+  maxFrames: 200
+  maxAnimatedPixels: 200000000
+  conversionTimeout: 30s
+
 # SSH data normally comes from the ssh/ subdirectory of the unified PVC.
 # secret and volume modes replace only that subdirectory mount and keep state
 # and workspace on the unified PVC.

@@ -19,7 +19,9 @@ license notices in their module distributions:
 
 - `github.com/creack/pty v1.1.24` - MIT
 - `github.com/coder/websocket v1.8.15` - MIT
+- `github.com/davidbyttow/govips/v2 v2.18.0` - MIT; see `LICENSES/MIT.txt`
 - `github.com/marknefedov/go-webpush/v2 v2.0.0` - MIT
+- `github.com/ydylla/fcache v1.6.1` - Apache-2.0; see `LICENSES/Apache-2.0.txt`
 - `github.com/golang-jwt/jwt/v5 v5.3.1` (transitive Web Push dependency) - MIT
 - `gopkg.in/yaml.v3 v3.0.1` - MIT
 
@@ -45,6 +47,10 @@ notices.
 
 ## Base image system tools
 
-The production image also installs the distribution `openssh-client` package.
-OpenSSH is invoked as the system SSH runtime; Roaminal does not embed or
-redistribute an SSH implementation.
+The production image also installs the distribution `libvips42`,
+`openssh-client`, and `tini` packages. libvips is dynamically linked by the
+backend and is distributed under LGPL-2.1-or-later; see
+`LICENSES/LGPL-2.1.txt`. OpenSSH is invoked as the system SSH runtime, and
+Roaminal does not embed or redistribute an SSH implementation. The base image
+package notices remain available from Debian's corresponding package
+metadata.

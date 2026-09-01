@@ -1,10 +1,10 @@
 # PW-WORK-013: FileSystem tree, preview, and upload
 
 Priority: P1. Capabilities: one live SSH connection instance whose tmux session
-contains a disposable fixture directory with Markdown, text, image, video, PDF,
-hidden, symlink, and nested-directory entries. Viewports: desktop and phone
-portrait. Use the existing diagnostics listeners and never print file contents
-or credentials.
+contains a disposable fixture directory with Markdown, text, a large transparent
+PNG, an animated image, video, PDF, hidden, symlink, and nested-directory
+entries. Viewports: desktop and phone portrait. Use the existing diagnostics
+listeners and never print file contents or credentials.
 
 ## Procedure and assertions
 
@@ -24,6 +24,12 @@ or credentials.
    source/rendered Markdown switching is safe, the icon-only `Back to
    Terminal` control is present, and file content is never interpreted as
    executable HTML or a command. The left tree remains visible and unchanged.
+   For the PNG and animated image, record the content responses and assert that
+   the initial request uses `variant=preview`, returns `Content-Type: image/webp`,
+   and does not request `variant=original`, `download=1`, or the complete source.
+   The displayed image keeps the source dimensions/aspect ratio and fits the
+   preview body without a default horizontal or vertical scrollbar. Clicking
+   the image itself does not load the original.
 4. Double-click a directory to enter it. Verify lazy loading, expand/collapse,
    breadcrumb navigation, keyboard Enter activation, and the directory context
    menu's Refresh action. The Root row has no duplicate refresh button. A
@@ -55,7 +61,13 @@ or credentials.
 8. Cancel once and confirm that no upload job exists. Repeat and confirm the
    upload; verify a 202 upload ID, non-blocking progress, observable `rsync` or
    `scp` transport, cancel behavior, partial-failure paths, and refresh of only
-   the target directory after completion.
+   the target directory after completion. For an image whose preview is shown,
+   activate the icon-only `View original` control and assert its tooltip and
+   accessible name, that the WebP remains visible while the original request is
+   pending, and that the source image replaces it only after a successful
+   `variant=original` response. Download the same image and assert that the
+   request uses `download=1` and the received bytes/MIME are the remote original,
+   not the WebP derivative.
 9. Click the single Refresh control in the `FILES` heading. Verify it
    re-probes the tmux PWD, refreshes the root and every currently expanded
    directory with at most three concurrent listing requests, preserves
@@ -67,7 +79,14 @@ or credentials.
    one automatic refresh and with a deliberately changed active-pane root: a
    transient root recovery must not discard the open preview or reset its
    reading position. The refresh request uses `cache: no-store` and successful
-   root/entries responses carry `Cache-Control: no-store`.
+   root/entries responses carry `Cache-Control: no-store`. Reopen the unchanged
+   image and assert that the preview response has the same ETag and is served
+   without another source transfer. Modify the remote image, refresh the tree,
+   reopen it, and assert that the preview ETag and visible derivative change.
+   Force one preview-generation failure and assert that the frontend falls back
+   to the original exactly once without an uncaught page error, console
+   warning/error, or unexpected failed request. Repeat the image checks on
+   desktop and phone portrait, keeping the preview actions reachable.
 10. Open the auto-refresh menu beside the global Refresh control. Verify the
     browser-wide preference offers Off, 30 seconds, 60 seconds, 2 minutes, and
     5 minutes, defaults to 60 seconds, persists after reload, pauses while the

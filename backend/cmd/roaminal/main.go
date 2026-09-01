@@ -25,6 +25,7 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
 	"github.com/ben-wangz/roaminal/backend/internal/frontend"
 	"github.com/ben-wangz/roaminal/backend/internal/identity"
+	"github.com/ben-wangz/roaminal/backend/internal/imagepreview"
 	"github.com/ben-wangz/roaminal/backend/internal/messages"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/notifications"
@@ -141,11 +142,29 @@ func run(cfg config.Config) error {
 	agentService := agent.NewWithRepository(cfg, agent.OpenStore(store.Root), terminals, agent.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource, Messages: messageService})
 	agentService.Start(context.Background())
 	defer agentService.Close()
+	fileSystem := filesystem.NewWithRepositories(terminals, connectionOptions, fileRepositories.Upload, cfg.StateDir, filesystem.Dependencies{Clock: clockSource, Random: randomSource})
+	imagePreview := imagepreview.New(imagepreview.Options{
+		CacheDir:          cfg.FilesystemImagePreviewCacheDir,
+		CacheTargetBytes:  mibBytes(cfg.FilesystemImagePreviewCacheTargetMiB),
+		CacheMaxAge:       cfg.FilesystemImagePreviewCacheMaxAge,
+		CleanupInterval:   cfg.FilesystemImagePreviewCacheCleanupInterval,
+		MaxConversions:    cfg.FilesystemImagePreviewMaxConversions,
+		MaxSourceBytes:    mibBytes(cfg.FilesystemImagePreviewMaxSourceMiB),
+		MaxOutputBytes:    mibBytes(cfg.FilesystemImagePreviewMaxOutputMiB),
+		MaxStaticPixels:   cfg.FilesystemImagePreviewMaxStaticPixels,
+		MaxFrames:         cfg.FilesystemImagePreviewMaxFrames,
+		MaxAnimatedPixels: cfg.FilesystemImagePreviewMaxAnimatedPixels,
+		ConversionTimeout: cfg.FilesystemImagePreviewConversionTimeout,
+		Logger:            log.Default(),
+	})
+	defer imagepreview.ShutdownVips()
+	defer imagePreview.Close()
 	serverDependencies := server.Dependencies{
 		Config: cfg, Version: buildinfo.Version, BootID: bootID, Auth: authManager, Workspace: workspace.New(fileRepositories.Workspace),
 		Connections: terminals, Monitor: monitor.NewWithClock(clockSource), Worker: terminalWorker,
 		Static: static, Definitions: definitions, Diagnostics: diagnostics,
-		FileSystem:        filesystem.NewWithRepositories(terminals, connectionOptions, fileRepositories.Upload, cfg.StateDir, filesystem.Dependencies{Clock: clockSource, Random: randomSource}),
+		FileSystem:        fileSystem,
+		ImagePreview:      imagePreview,
 		AgentProvisioning: agentService.Provisioning(),
 		AgentProjection:   agentService.Projection(),
 		Messages:          messageService,
@@ -186,6 +205,13 @@ func run(cfg config.Config) error {
 		return fatalErr
 	}
 	return nil
+}
+
+func mibBytes(value int) int64 {
+	if value <= 0 {
+		return 0
+	}
+	return int64(value) * 1024 * 1024
 }
 
 func resolveWorkerPath(configured string) string {
