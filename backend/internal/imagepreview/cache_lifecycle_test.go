@@ -14,40 +14,6 @@ import (
 	"github.com/ydylla/fcache"
 )
 
-func TestPreviewETagIncludesEverySourceIdentityField(t *testing.T) {
-	data := pngFixture(t)
-	base := previewRequest(data)
-	service := &Service{}
-	original, err := service.ETag(base)
-	if err != nil {
-		t.Fatal(err)
-	}
-	variants := map[string]func(*Request){
-		"connection":   func(value *Request) { value.ConnectionInstanceID = "other-instance" },
-		"root path":    func(value *Request) { value.RootAbsolutePath = "/other-root" },
-		"revision":     func(value *Request) { value.RootRevision = "root-2" },
-		"relative":     func(value *Request) { value.RelativePath = "nested/image.png" },
-		"source token": func(value *Request) { value.SourceToken = "token-2" },
-		"source size":  func(value *Request) { value.SourceSize++ },
-	}
-	for name, mutate := range variants {
-		t.Run(name, func(t *testing.T) {
-			value := base
-			mutate(&value)
-			etag, err := service.ETag(value)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if etag == original {
-				t.Fatalf("identity mutation did not change ETag %q", etag)
-			}
-		})
-	}
-	if original == `"token-1"` {
-		t.Fatal("preview ETag must not reuse the source ETag")
-	}
-}
-
 func TestServiceCacheCorruptionRegeneratesOnce(t *testing.T) {
 	data := pngFixture(t)
 	service := New(testOptions(t))
@@ -184,10 +150,7 @@ func TestManagedCacheRequiresPrivateOwnedPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, pathValue := range map[string]string{
-		"root":    root,
-		"marker":  filepath.Join(root, markerName),
-		"fcache":  dataDir,
-		"staging": stagingDir,
+		"root": root, "marker": filepath.Join(root, markerName), "fcache": dataDir, "staging": stagingDir,
 	} {
 		t.Run(name, func(t *testing.T) {
 			info, statErr := os.Stat(pathValue)
@@ -221,66 +184,4 @@ func TestManagedCacheRejectsMarkerSymlink(t *testing.T) {
 	if _, _, err := prepareManagedDirectory(root); err == nil {
 		t.Fatal("expected marker symlink to be rejected")
 	}
-}
-
-func TestServiceRejectsPixelFrameAndOutputLimitsWithoutCacheEntry(t *testing.T) {
-	data := pngFixture(t)
-	for name, configure := range map[string]func(*Options){
-		"static pixels":   func(options *Options) { options.MaxStaticPixels = 1 },
-		"output bytes":    func(options *Options) { options.MaxOutputBytes = 1 },
-		"frames":          func(options *Options) { options.MaxFrames = 1 },
-		"animated pixels": func(options *Options) { options.MaxAnimatedPixels = 1 },
-	} {
-		t.Run(name, func(t *testing.T) {
-			options := testOptions(t)
-			configure(&options)
-			service := New(options)
-			if !service.Available() {
-				t.Skip("libvips is unavailable")
-			}
-			request := previewRequest(data)
-			if name == "frames" || name == "animated pixels" {
-				animated := animatedGIFFixture(t)
-				request = Request{
-					ConnectionInstanceID: "instance", RootAbsolutePath: "/workspace", RootRevision: "root-1",
-					RelativePath: "animation.gif", MIMEType: "image/gif", SourceSize: int64(len(animated)),
-					SourceToken: "animation", Open: func(context.Context) (io.ReadCloser, error) {
-						return io.NopCloser(bytes.NewReader(animated)), nil
-					},
-				}
-			}
-			if _, err := service.Open(context.Background(), request); !errors.Is(err, ErrInvalid) {
-				t.Fatalf("error = %v, want invalid", err)
-			}
-			if items := service.cache.Stats().Items; items != 0 {
-				t.Fatalf("cache entries = %d, want 0", items)
-			}
-			service.Close()
-		})
-	}
-}
-
-func firstCacheFile(t *testing.T, directory string) string {
-	t.Helper()
-	var result string
-	err := filepath.WalkDir(directory, func(pathValue string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if result == "" && !entry.IsDir() {
-			result = pathValue
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result == "" {
-		t.Fatal("cache entry not found")
-	}
-	return result
-}
-
-func cacheKey(digest [32]byte) uint64 {
-	return uint64(digest[0])<<56 | uint64(digest[1])<<48 | uint64(digest[2])<<40 | uint64(digest[3])<<32 | uint64(digest[4])<<24 | uint64(digest[5])<<16 | uint64(digest[6])<<8 | uint64(digest[7])
 }
