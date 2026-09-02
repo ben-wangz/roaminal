@@ -37,6 +37,11 @@ jobs:
           echo "bin=${FORGEKIT_BIN}" >> "$GITHUB_OUTPUT"
           "${FORGEKIT_BIN}" --version
 
+      - name: setup-libvips
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvips-dev
+
       - name: run-forgekit-lint
         env:
           FORGEKIT_BIN: ${{ steps.forgekit.outputs.bin }}
