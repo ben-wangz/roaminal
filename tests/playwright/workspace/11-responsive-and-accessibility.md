@@ -5,7 +5,7 @@ Viewports: all five standard projects and 320 x 568.
 
 ## Procedure and assertions
 
-1. Capture login, connection manager, definition editor, Keys, local workspace,
+1. Capture login, Settings, definition editor, SSH keys, local workspace,
    SSH REMOTE workspace, search, Sessions dialog, action menu, and confirmation
    dialog at applicable viewports. No text/control overlap, clipped buttons,
    incoherent nested scroll, or horizontal page overflow is allowed.
@@ -48,9 +48,9 @@ Viewports: all five standard projects and 320 x 568.
 8. For every Modal, focus starts inside, wraps, Escape/backdrop close where
    allowed, and focus returns to a sensible trigger. For action menus verify
    menu keyboard behavior from PW-WORK-003.
-9. Verify Ctrl/Meta+Shift+T opens Connection manager, Ctrl/Meta+F opens terminal
-   search only with an active connection, and Ctrl/Meta+Shift+S toggles the
-   Connections tool surface.
+9. Verify Ctrl/Meta+Shift+T opens Settings at Connection definitions,
+   Ctrl/Meta+F opens terminal search only with an active connection, and
+   Ctrl/Meta+Shift+S toggles the Connections tool surface.
    Extra Alt or wrong Shift combinations must not trigger them.
 10. Emulate `prefers-reduced-motion: reduce`; workspace surface, monitor, and
    preview transitions do not depend on animation for correctness.

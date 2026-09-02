@@ -14,6 +14,10 @@ export type NotificationPreference = {
   runningToError: boolean;
 };
 
+export function notificationPreferenceKey(connectionDefinitionId: string, tmuxSessionName: string): string {
+  return `${connectionDefinitionId}\x00${tmuxSessionName}`;
+}
+
 type PushSubscriptionRequest = {
   endpoint: string;
   keys: {

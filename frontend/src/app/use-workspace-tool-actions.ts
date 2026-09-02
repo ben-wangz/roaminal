@@ -21,6 +21,7 @@ export function useWorkspaceToolActions({
   const connectionToolButton = useRef<HTMLButtonElement>(null);
   const keyboardToolButton = useRef<HTMLButtonElement>(null);
   const filesToolButton = useRef<HTMLButtonElement>(null);
+  const settingsToolButton = useRef<HTMLButtonElement>(null);
 
   const handleSelectWorkspaceTool = useCallback((tool: WorkspaceTool) => {
     if (tool === 'keyboard') {
@@ -54,6 +55,7 @@ export function useWorkspaceToolActions({
     connectionToolButton,
     keyboardToolButton,
     filesToolButton,
+    settingsToolButton,
     handleSelectWorkspaceTool,
     handleCollapseWorkspaceTool,
   };

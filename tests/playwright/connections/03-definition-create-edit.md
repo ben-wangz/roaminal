@@ -4,10 +4,10 @@ Priority: P0. Capabilities: mutable SSH config. Viewport: desktop. Run serially.
 
 ## Procedure and assertions
 
-1. Open New connection. Defaults are `User=root`, `Port=22`, and
+1. In Settings > Connection definitions, open New connection. Defaults are `User=root`, `Port=22`, and
    `ServerAliveInterval=15`. If an available Ed25519 key exists it is selected
    and `IdentitiesOnly=yes`; otherwise no identity is silently invented.
-2. Verify required/limit validation: Host alias follows the supported pattern,
+2. Verify required/limit validation: Connection name follows the supported pattern,
    port is `1..65535`, and numeric inputs reject out-of-range values. A failed
    native or server validation leaves the form open and preserves user input.
 3. Create a unique alias with HostName, User, Port, one or more managed identity

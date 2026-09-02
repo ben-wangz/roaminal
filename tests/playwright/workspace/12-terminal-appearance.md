@@ -18,11 +18,11 @@ cross-tab assertions.
 
 ## Cases
 
-1. Open `Appearance` from Connections and verify the page is a first-class page,
-   not a modal or connection-manager tab. Open it again from Workspace. The
-   page exposes a font selector, synchronized font-size range/number controls,
-   live read-only xterm sample, Save, Reset to defaults, Connections, and
-   Workspace navigation where applicable.
+1. Open Settings from the application tool rail and select `Interface`. Verify
+   it is a first-class section, not a modal or workspace tool tab. The section
+   exposes a font selector, synchronized font-size range/number controls, live
+   read-only xterm sample, Save, and Reset to defaults. Switch to another
+   Settings section and back without losing an unsaved draft.
 2. In a fresh profile, assert defaults are `Monaspace Neon` and `12px`. Select
    each bundled font and assert the sample changes family, the browser reports
    `document.fonts.check(...)`, and no font request leaves the Roaminal origin.
@@ -33,7 +33,8 @@ cross-tab assertions.
    value. Save stays disabled and an accessible validation message appears
    until the value is an integer from 10 through 32. Reset changes the draft
    and sample only; it does not change local storage until Save.
-4. Navigate away with an unsaved draft and return. The draft is discarded.
+4. Navigate away from Settings with an unsaved draft, cancel the discard
+   confirmation once, then confirm it and return. The draft is discarded.
    Save a non-default font and size, reload, sign out, sign back in, and assert
    the saved preference remains. Create a separate fresh browser context and
    assert it still starts with the defaults.
@@ -69,7 +70,7 @@ cross-tab assertions.
    landscape, tablet portrait, phone portrait, and phone landscape. Assert no
    clipped text, overlapping controls, horizontal page overflow, blank xterm,
    or inaccessible control. Verify screenshots at the saved final state.
-11. While the Appearance page is mounted, record the sample xterm element,
+11. While Settings > Interface is mounted, record the sample xterm element,
     runtime identity, rendered grid, and WebSocket count. Trigger at least 30
     heartbeat cycles, switch connection selection, open/close Message Center,
     toggle notification state, and open/close unrelated dialogs. Assert the

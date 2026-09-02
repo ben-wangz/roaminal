@@ -15,6 +15,9 @@ import type { ContextualMode } from '../input/contextual-keyboard-model';
 import type { TerminalAppearance } from '../appearance/appearance-model';
 import type { ToastState } from '../ui/toast';
 import type { FileSystemWorkspaceState } from '../filesystem/use-filesystem-workspace';
+import type { AuthState } from '../auth/auth-storage';
+import type { SettingsSection } from '../settings/settings-model';
+import { notificationTargetFocusKey } from '../settings/notification-settings';
 
 type AppActions = ReturnType<typeof useAppShellActions>;
 type ViewActions = ReturnType<typeof useAppShellViewActions>;
@@ -28,8 +31,11 @@ type WorkspaceActions = {
 
 type Params = {
   appState: AppControllerState;
+  auth: AuthState | null;
+  setSettingsSection: (section: SettingsSection) => void;
+  setSettingsFocusTarget: (target: string | null) => void;
   appearance: TerminalAppearance;
-  workspaceTools: Pick<AppShellViewProps, 'connectionToolButton' | 'keyboardToolButton' | 'filesToolButton'>;
+  workspaceTools: Pick<AppShellViewProps, 'connectionToolButton' | 'keyboardToolButton' | 'filesToolButton' | 'settingsToolButton'>;
   nativeKeyboardOpen: boolean;
   messageButtonRef: RefObject<HTMLButtonElement | null>;
   messageCenter: MessageCenter;
@@ -59,6 +65,9 @@ type Params = {
 
 export function buildAppShellViewProps({
   appState,
+  auth,
+  setSettingsSection,
+  setSettingsFocusTarget,
   appearance,
   workspaceTools,
   nativeKeyboardOpen,
@@ -87,13 +96,16 @@ export function buildAppShellViewProps({
   fullscreen,
   notifications,
 }: Params): AppShellViewProps {
-  const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, search, dialog } = appState;
+  const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, search, dialog, settingsSection, settingsFocusTarget } = appState;
   const dialogConnection = dialog && 'connectionInstanceId' in dialog
     ? connections.find((connection) => connection.connectionInstanceId === dialog.connectionInstanceId)
     : undefined;
   return {
     page,
+    auth,
     appearance,
+    settingsSection,
+    settingsFocusTarget,
     workspaceTool,
     workspaceToolOpen,
     ...workspaceTools,
@@ -145,21 +157,31 @@ export function buildAppShellViewProps({
     onContextualModeChange,
     onToggleSearch: viewActions.handleToggleSearch,
     onCloseSearch: viewActions.handleCloseSearch,
-    onOpenConnections: viewActions.handleOpenConnections,
-    onOpenAppearance: viewActions.handleOpenAppearance,
+    onOpenSettings: viewActions.handleOpenSettings,
+    onSelectSettingsSection: (next: SettingsSection) => {
+      setSettingsFocusTarget(null);
+      setSettingsSection(next);
+    },
+    onFocusTargetConsumed: () => setSettingsFocusTarget(null),
     onSignOut: actions.signOut,
     onOpenAuthSessions: () => void actions.openAuthSessions(),
     onOpenManager: viewActions.handleOpenConnections,
     onCreateConnection: actions.createConnection,
     onGenerated: actions.acceptGenerated,
-    onOpenWorkspace: viewActions.handleOpenWorkspace,
     onSaveAppearance: viewActions.handleSaveAppearance,
+    onSettingsDirtyChange: viewActions.setSettingsDirty,
     onShowToast,
     onRenameTitle: actions.updateTitle,
     onTerminateConnection: actions.terminateConnection,
     onRevokeAuthSession: (id) => void actions.revokeAuthSession(id),
     onLogoutOtherAuthSessions: () => void actions.logoutOtherAuthSessions(),
     onCloseDialog: viewActions.handleCloseDialog,
+    onManageNotifications: (connection) => {
+      if (connection.connectionDefinitionId && connection.tmuxSessionName) {
+        viewActions.handleOpenSettings('notifications', notificationTargetFocusKey(connection.connectionDefinitionId, connection.tmuxSessionName));
+        viewActions.handleCloseDialog();
+      }
+    },
     workspaceContent,
     onBackToTerminal,
     appShellRef: fullscreen.targetRef,

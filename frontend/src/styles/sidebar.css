@@ -2,6 +2,7 @@
 .workspace-tool-rail-buttons { display: grid; gap: 10px; justify-items: center; }
 .workspace-tool-rail .workspace-tool-button { width: 42px; height: 42px; flex-basis: 42px; border: 1px solid transparent; color: var(--muted); }
 .workspace-tool-rail .workspace-tool-button[data-testid='workspace-tool-connections'] { position: relative; }
+.workspace-tool-count-badge { position: absolute; top: -4px; right: -5px; min-width: 15px; height: 15px; box-sizing: border-box; padding: 0 3px; border: 1px solid var(--base1); border-radius: 8px; background: var(--yellow); color: var(--base); font-size: .58rem; font-weight: 700; line-height: 13px; text-align: center; font-variant-numeric: tabular-nums; }
 .workspace-tool-agent-relax-badge { position: absolute; top: -4px; left: -5px; min-width: 15px; height: 15px; box-sizing: border-box; padding: 0 3px; border: 1px solid var(--base1); border-radius: 8px; background: var(--green); color: var(--base); font-size: .58rem; font-weight: 700; line-height: 13px; text-align: center; font-variant-numeric: tabular-nums; }
 .workspace-tool-rail .workspace-tool-button:hover:not(:disabled), .workspace-tool-rail .workspace-tool-button:focus-visible { border-color: var(--border); color: var(--text-bright); background: var(--hover-wash); outline-offset: 2px; }
 .workspace-tool-rail .workspace-tool-button.active { border-color: var(--cyan); color: var(--text-bright); background: rgba(42,161,152,.22); }

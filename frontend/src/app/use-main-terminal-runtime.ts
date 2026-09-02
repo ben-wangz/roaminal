@@ -5,7 +5,7 @@ import { TerminalRuntime } from '../terminal/terminal-runtime';
 
 type Params = {
   auth: { accessToken: string } | null;
-  page: 'workspace' | 'connections' | 'appearance';
+  page: 'workspace' | 'settings';
   runtimeId: string | null;
   scrollbackLines: number;
   endpoint: 'connection-instances' | 'connection-launches';
@@ -33,7 +33,7 @@ export function useMainTerminalRuntime({
   appearanceRef.current = appearance;
   desiredRuntimeKeyRef.current = desiredRuntimeKey;
   useEffect(() => {
-    if (!auth || !runtimeId || (page !== 'workspace' && page !== 'appearance')) {
+    if (!auth || !runtimeId || (page !== 'workspace' && page !== 'settings')) {
       mainRuntime.current?.dispose();
       mainRuntime.current = null;
       activeRuntimeKeyRef.current = null;
@@ -41,10 +41,15 @@ export function useMainTerminalRuntime({
       return;
     }
     if (mainRuntime.current?.connectionInstanceId === runtimeId && activeRuntimeKeyRef.current === desiredRuntimeKey) {
+      // Settings replaces the terminal surface but must not tear down the
+      // active runtime. Keeping it alive preserves the PTY/WebSocket and the
+      // terminal scrollback when the user returns to the workspace. Keep the
+      // React reference too, so runtime messages continue updating lifecycle
+      // state while the terminal surface is temporarily hidden.
       setCurrentRuntime(mainRuntime.current);
       return;
     }
-    if (page === 'appearance') {
+    if (page === 'settings') {
       setCurrentRuntime(null);
       return;
     }

@@ -20,7 +20,7 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
 4. Start a long command that emits Roaminal execution markers. The status area
    reports Running and then clears/shows completion once. Normal commands that
    do not use the shell integration remain usable.
-5. In Appearance, verify the System notifications setting is independent from
+5. In Settings > Notifications, verify the System notifications setting is independent from
    terminal command completion. Completing an integrated command still shows
    the in-app `Command completed` toast, but it does not create a browser
    notification. Browser notifications are reserved for the configured Agent

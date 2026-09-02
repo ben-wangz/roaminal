@@ -5,6 +5,7 @@ import type { Dialog } from './app-shell-view';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import type { WorkspaceTool } from './workspace-tool';
 import type { WorkspaceContent } from './workspace-content';
+import { DEFAULT_SETTINGS_SECTION, type SettingsSection } from '../settings/settings-model';
 
 export type AppControllerState = {
   view: ConnectionView;
@@ -15,6 +16,8 @@ export type AppControllerState = {
   previewConnectionInstanceId: string | null;
   search: boolean;
   dialog: Dialog;
+  settingsSection: SettingsSection;
+  settingsFocusTarget: string | null;
 };
 
 type Listener = () => void;
@@ -51,6 +54,8 @@ class AppController {
   }
   setSearch(search: boolean): void { this.setState((current) => ({ ...current, search })); }
   setDialog(dialog: Dialog): void { this.setState((current) => ({ ...current, dialog })); }
+  setSettingsSection(settingsSection: SettingsSection): void { this.setState((current) => ({ ...current, settingsSection })); }
+  setSettingsFocusTarget(settingsFocusTarget: string | null): void { this.setState((current) => ({ ...current, settingsFocusTarget })); }
 }
 
 export function createAppController(): AppController {
@@ -58,13 +63,15 @@ export function createAppController(): AppController {
   const workspaceToolOpen = typeof window === 'undefined' || !window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches;
   return new AppController({
     view: initialView,
-    page: 'connections',
+    page: initialView.activeConnectionInstanceId ? 'workspace' : 'settings',
     workspaceTool: 'connections',
     workspaceToolOpen,
     workspaceContent: 'terminal',
     previewConnectionInstanceId: null,
     search: false,
     dialog: null,
+    settingsSection: DEFAULT_SETTINGS_SECTION,
+    settingsFocusTarget: null,
   });
 }
 
@@ -91,6 +98,8 @@ export function useAppController() {
   const setPreviewConnectionInstanceId = useCallback((next: SetStateAction<string | null>) => setField('previewConnectionInstanceId', next), [setField]);
   const setSearch = useCallback((next: SetStateAction<boolean>) => setField('search', next), [setField]);
   const setDialog = useCallback((next: SetStateAction<Dialog>) => setField('dialog', next), [setField]);
+  const setSettingsSection = useCallback((next: SetStateAction<SettingsSection>) => setField('settingsSection', next), [setField]);
+  const setSettingsFocusTarget = useCallback((next: SetStateAction<string | null>) => setField('settingsFocusTarget', next), [setField]);
   return {
     state,
     controller,
@@ -104,5 +113,7 @@ export function useAppController() {
     setPreviewConnectionInstanceId,
     setSearch,
     setDialog,
+    setSettingsSection,
+    setSettingsFocusTarget,
   };
 }

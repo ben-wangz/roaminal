@@ -15,7 +15,7 @@ Viewport: desktop. Run serially.
 4. Open the same source in contexts A and B. Save a change in A, then submit B's
    stale form. B receives an ETag conflict and must refresh before writing; A's
    newer change remains intact.
-5. Rename the source alias in A and refresh the Connections page. Verify its
+5. Rename the source alias in A and refresh Settings > Connection definitions. Verify its
    tmux and FileSystem options follow the new alias, the old option entry is not
    recreated, and no option becomes a synthetic disabled/default value.
 6. Delete the duplicate, cancel once, then confirm once. The exact Host block and

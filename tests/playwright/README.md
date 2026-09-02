@@ -205,7 +205,7 @@ without explaining the originating request and expiry condition.
 9. Treat fixture-backed labels and counts as dynamic data. Select an SSH start
    action using `ROAMINAL_E2E_SSH_ALIAS` and its accessible name; never hard-code
    a host alias such as `codespace` or `codespace-e2e`. Select the key inventory
-   through the `Keys` role and derive its row count from the rendered rows; never
+   through the `SSH keys` section and derive its row count from the rendered rows; never
    assume a fixed numeric badge. A smoke case that only probes key inventory may
    report `SKIPPED` when no controlled key fixture is provisioned. The dedicated
    key cases remain `BLOCKED` until their fixture matrix is available.
@@ -221,7 +221,7 @@ without explaining the originating request and expiry condition.
 | --- | --- |
 | Fixtures | [SSH and tmux codespace](fixtures/ssh-codespace.md) |
 | Authentication | [login](auth/01-login.md), [token refresh](auth/02-token-refresh.md), [login sessions](auth/03-login-sessions.md), [sign out](auth/04-sign-out.md) |
-| Connection definitions | [manager/filter](connections/01-manager-and-filter.md), [source capabilities](connections/02-ssh-config-source.md), [create/edit](connections/03-definition-create-edit.md), [copy/delete/ETag](connections/04-definition-copy-delete-etag.md) |
+| Connection definitions | [unified settings](settings/01-unified-settings.md), [manager/filter](connections/01-manager-and-filter.md), [source capabilities](connections/02-ssh-config-source.md), [create/edit](connections/03-definition-create-edit.md), [copy/delete/ETag](connections/04-definition-copy-delete-etag.md) |
 | Connection lifecycle | [local](connections/05-local-connection.md), [SSH](connections/06-ssh-initial-connect.md), [reuse](connections/07-transport-reuse.md), [tmux](connections/08-tmux.md), [pending launch](connections/09-pending-launch.md), [exit/failover](connections/10-exit-and-failover.md), [source change](connections/11-source-change-draining.md) |
 | SSH keys | [inventory/copy](keys/01-inventory-and-copy.md), [generation](keys/02-generation.md), [delete/read-only](keys/03-delete-and-readonly.md) |
 | Workspace | [terminal I/O](workspace/01-terminal-io.md), [sidebar/preview](workspace/02-sidebar-selection-and-preview.md), [actions/titles](workspace/03-actions-and-titles.md), [display names](workspace/04-display-name.md), [search](workspace/05-search.md), [virtual keyboard](workspace/06-contextual-keyboard.md), [mobile input](workspace/07-touch-keyboard.md), [resize](workspace/08-resize.md), [local status](workspace/09-system-status.md), [remote monitor](workspace/10-remote-monitor.md), [responsive/a11y](workspace/11-responsive-and-accessibility.md), [terminal appearance](workspace/12-terminal-appearance.md), [FileSystem](workspace/13-filesystem.md), [Codex Agent status](workspace/14-codex-agent-status.md), [Agent messages](workspace/15-agent-messages.md), [browser capabilities](workspace/16-browser-capabilities.md), [connection-instance groups](workspace/17-connection-instance-groups.md), [Agent notification preferences](workspace/18-agent-notification-preferences.md), [main UI shell](workspace/19-main-ui-upgrade.md) |

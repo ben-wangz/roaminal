@@ -15,13 +15,14 @@ portrait, phone portrait, and phone landscape.
    surface start below the topbar and extend to the bottom of the viewport.
    Verify there is no document-level horizontal or vertical overflow.
 3. Verify the topbar still exposes the brand, Roaminal-scoped resource metrics,
-   search, Messages, Appearance, Fullscreen, Sessions, and Sign out. Verify it
+   search, Messages, Fullscreen, Sessions, and Sign out. Verify it
    does not expose a Connections or Virtual keyboard workspace switcher, active
    connection identity, heartbeat state, or a connection count. The
    `fullscreen-toggle` remains present and retains its runtime-driven supported,
    pending, active, or unsupported state.
 4. Verify the rail has exactly one Connections control, one Virtual keyboard
-   control, one Files control, one Help control, and one collapse control. Use
+   control, one Files control, one Settings control, one Help control, and one
+   collapse control. Use
    accessible names and `data-testid` values rather than icon or CSS selectors.
    The active tool has an active background and `aria-pressed`; Virtual
    keyboard remains selectable while File preview is visible and returns the

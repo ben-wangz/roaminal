@@ -10,8 +10,8 @@ disposable remote home. Viewports: desktop, tablet, phone, and 320 px.
    Playwright README. Create a live SSH connection with tmux enabled, install
    the Codex Agent component, trust the hook, and verify the first local state
    snapshot can be read by the backend synchronizer.
-2. On the workspace, Connections page, and Appearance page verify a Lucide
-   Bell control appears immediately before Appearance. Its label is `Messages`
+2. On the workspace and Settings page verify a Lucide Bell control appears in
+   the topbar. Its label is `Messages`
    when empty and includes the unread count otherwise. The badge has no zero
    state and displays `99+` for counts above 99.
 3. Trigger the initial `relax` snapshot and verify no ordinary hook event or

@@ -56,7 +56,7 @@ export function reduceTerminalMessage(
         effects: [
           { type: 'detach-runtime' },
           { type: 'clear-launch' },
-          { type: 'navigate', page: 'connections' },
+          { type: 'navigate', page: 'settings' },
           { type: 'toast', message: 'tmux connection could not be started.', kind: 'error' },
         ],
       };
@@ -67,7 +67,7 @@ export function reduceTerminalMessage(
     const connections = state.connections.filter((connection) => connection.connectionInstanceId !== context.runtimeId);
     const view = reconcileConnections(connections, state.view, previousIds);
     const effects: TerminalEventEffect[] = [];
-    if (!view.activeConnectionInstanceId) effects.push({ type: 'navigate', page: 'connections' }, { type: 'close-search' });
+    if (!view.activeConnectionInstanceId) effects.push({ type: 'navigate', page: 'settings' }, { type: 'close-search' });
     return { state: { ...state, connections, view, connectionOrder: connections.map((connection) => connection.connectionInstanceId) }, effects };
   }
 

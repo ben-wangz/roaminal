@@ -22,6 +22,7 @@ type Props = {
   onCloseDialog: () => void;
   connections: ConnectionInstanceSummary[];
   onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<boolean>;
+  onManageNotifications: (connection: ConnectionInstanceSummary) => void;
 };
 
 export function AppShellOverlays({
@@ -39,6 +40,7 @@ export function AppShellOverlays({
   onCloseDialog,
   connections,
   onCreateConnection,
+  onManageNotifications,
 }: Props) {
   return (
     <>
@@ -79,6 +81,7 @@ export function AppShellOverlays({
           connection={dialogConnection}
           onClose={onCloseDialog}
           onShowToast={onShowToast}
+          onManageNotifications={() => onManageNotifications(dialogConnection)}
         />
       )}
     </>

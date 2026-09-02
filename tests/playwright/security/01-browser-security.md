@@ -5,7 +5,7 @@ Priority: P0. Capabilities: core. Viewports: desktop and phone portrait.
 ## Procedure and assertions
 
 1. Start diagnostics before `/` and record every resource URL. Login, manager,
-   workspace, Keys, and all icon/font/terminal assets load only from the current
+   workspace, Settings > SSH keys, and all icon/font/terminal assets load only from the current
    origin, `data:`, or `blob:`. There are no CDN, analytics, telemetry, or
    third-party requests.
 2. Before the user enables System notifications, assert no Service Worker

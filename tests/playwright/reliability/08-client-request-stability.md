@@ -9,8 +9,8 @@ FileSystem steps. Viewport: desktop, with a phone smoke pass.
    creating a context. Record every request's method, normalized path, start
    and end time, owning view/action, and maximum concurrent count. Use a fresh
    login and reset the browser notification opt-in to off.
-2. Observe at least 30 one-second heartbeat cycles while switching Connections,
-   Appearance, Sessions, Terminal, FileSystem, Message Center, and the Agent
+2. Observe at least 30 one-second heartbeat cycles while switching Settings
+   sections, Sessions, Terminal, FileSystem, Message Center, and the Agent
    dialog. With notifications disabled, `/api/v2/notifications/preferences`
    is requested once for the stable authenticated lifecycle, and neither
    `/api/v2/notifications/config` nor subscription registration is requested.
@@ -21,10 +21,10 @@ FileSystem steps. Viewport: desktop, with a phone smoke pass.
    and subscription synchronization each occur once per authentication
    identity. Replacing the access/refresh token through the normal auth flow
    causes exactly one new lifecycle synchronization, not a render loop.
-4. Open an Agent dialog and verify its explicit target-preference refresh may
-   issue one GET for that dialog. Keep it open through 30 heartbeat cycles and
-   repeated parent renders; no repeated GET, unbounded polling, or overlapping
-   preference request is allowed. Closing the dialog cancels its lifecycle.
+4. Open an Agent dialog and verify it does not fetch or edit notification
+   preferences. Use `Manage in Settings` to open the shared Notifications
+   section and verify the lifecycle still performs no repeated GET, unbounded
+   polling, or overlapping preference request.
 5. With Message Center mounted, record the baseline `/api/v2/messages` request.
    Unchanged heartbeat revisions produce no additional history request. Change
    the heartbeat message revision twice while one request is delayed and verify

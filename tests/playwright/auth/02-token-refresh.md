@@ -20,7 +20,7 @@ Viewport: desktop. Run serially.
    token must not be reused by later HTTP requests or a newly created preview or
    main terminal WebSocket.
 4. After refresh, switch between two connections, open and close a sidebar
-   preview, issue another terminal command, open Connections, and return to the
+   preview, issue another terminal command, open Settings, and return to the
    workspace. All operations must work without re-login.
 5. Leave the page active for at least one further heartbeat/monitor interval and
    verify there is no repeating unauthorized-refresh loop.

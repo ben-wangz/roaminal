@@ -16,11 +16,12 @@ phone portrait.
 
 ## Procedure and assertions
 
-1. Open Agent details for a supported SSH/tmux instance. Verify the Browser
-   notifications section is present and all three controls default to off. A
-   local, unsupported, or non-tmux instance has no editable target preference.
-   The controls are keyed by stable connection definition plus tmux session,
-   never by connection-instance ID.
+1. Open Agent details for a supported SSH/tmux instance. Verify it offers only
+   a `Manage in Settings` action for browser notifications. Open the action and
+   verify Settings > Notifications contains all three controls, defaulting to
+   off. A local, unsupported, or non-tmux instance has no editable target
+   preference. The controls are keyed by stable connection definition plus
+   tmux session, never by connection-instance ID.
 2. Enable `Notify for this connection`. Verify the parent PUT contains only
    the documented preference identity and booleans, the two child controls
    remain off, and no browser permission prompt or notification is triggered by
@@ -28,7 +29,7 @@ phone portrait.
 3. Enable `Agent running to idle` and create a real `running -> relax`
    transition. With the page visible, verify the transition is stored in
    Message Center but no browser notification is shown. Explicitly enable
-   System notifications through Appearance and grant browser permission, then
+   System notifications through Settings > Notifications and grant browser permission, then
    hide/unfocus the page and create another transition; verify exactly one
    browser notification is eligible.
 4. Enable `Agent running to error` independently using a provider fixture that

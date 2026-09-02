@@ -13,7 +13,7 @@ Viewport: desktop. Run serially.
    prior order. Its output and input remain usable. No removed runtime may
    reattach or receive input.
 4. Make C active and exit it; selection falls back to A. Exit A; with no active
-   instances, the UI opens Connection manager directly.
+   instances, the UI opens Settings at Connection definitions directly.
 5. Repeat by using the action-menu Close command instead of shell `exit` and
    confirm identical retirement/failover semantics.
 6. For SSH transport reuse, exit the original instance while a derived instance

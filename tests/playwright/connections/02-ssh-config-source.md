@@ -14,12 +14,12 @@ another user's SSH directory to create these variants.
 Execute each available source variant against a dedicated release:
 
 1. Writable regular `~/.ssh/config`: source band reports readable/writable and
-   Host/Edit/Duplicate/Delete actions are enabled.
+   Connection/Edit/Duplicate/Delete actions are enabled.
 2. Directly mounted read-only config: definitions remain readable and Start is
    enabled, while mutations are disabled and the source band explains
    read-only status.
 3. Missing config: Local remains usable, the SSH list is empty, and creating a
-   Host is available only if the parent SSH directory can safely create it.
+   connection is available only if the parent SSH directory can safely create it.
 4. Unreadable, non-regular, or unsafe source: the manager fails closed, explains
    the capability, and does not overwrite or chmod the source.
 5. Config containing `Include`, `Match`, wildcard/multi-alias Host blocks,

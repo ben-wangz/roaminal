@@ -30,11 +30,12 @@ import { useFilesystemWorkspace } from '../filesystem/use-filesystem-workspace';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
-  const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setWorkspaceContent, setPreviewConnectionInstanceId, setSearch, setDialog } = appController;
+  const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setWorkspaceContent, setPreviewConnectionInstanceId, setSearch, setDialog, setSettingsSection, setSettingsFocusTarget } = appController;
   const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, previewConnectionInstanceId } = appState;
   const [auth, setAuth] = useState(loadAuth());
   const { connections, layout: connectionInstanceLayout, heartbeat: heartbeatState, heartbeatLatency } = connectionState;
   const [appearance, setAppearance] = useState<TerminalAppearance>(() => loadAppearance(browserAppearanceStorage()));
+  const [settingsDirty, setSettingsDirty] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
@@ -207,6 +208,7 @@ export function AppShell() {
     connectionToolButton,
     keyboardToolButton,
     filesToolButton,
+    settingsToolButton,
     handleSelectWorkspaceTool,
     handleCollapseWorkspaceTool,
   } = useWorkspaceToolActions({
@@ -226,21 +228,30 @@ export function AppShell() {
     onOpenFileTree: openFileTree,
     setPreviewConnectionInstanceId,
     setDialog,
-    setWorkspaceTool,
     setWorkspaceToolOpen,
     setWorkspaceContent,
     setSearch,
     setPage,
+    page,
+    workspaceToolOpen,
+    setSettingsSection,
+    setSettingsFocusTarget,
+    settingsToolButton,
+    settingsDirty,
+    setSettingsDirty,
     cancelLaunch,
     viewRef,
     showToast,
     setAppearance,
   });
   if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
-  const workspaceTools = { connectionToolButton, keyboardToolButton, filesToolButton };
+  const workspaceTools = { connectionToolButton, keyboardToolButton, filesToolButton, settingsToolButton };
   const workspaceActions = { handleSelectWorkspaceTool, handleCollapseWorkspaceTool };
   return <AppShellView {...buildAppShellViewProps({
     appState,
+    auth,
+    setSettingsSection,
+    setSettingsFocusTarget,
     appearance,
     workspaceTools,
     nativeKeyboardOpen: mobileKeyboard.keyboardOpen,

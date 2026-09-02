@@ -19,7 +19,8 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
    the password or proof.
 3. Replace it with `ROAMINAL_E2E_PASSWORD` and submit. The challenge and login
    requests succeed, the authenticated app shell appears, and the initial view
-   is either the connection manager or the currently selected live workspace.
+   is Settings > Connection definitions when no instance is live, or the
+   currently selected live workspace.
 4. Reload once. Authentication remains valid without showing the password form,
    and no second login challenge is issued.
 5. During this fresh-login phase, inspect local storage: only the expected

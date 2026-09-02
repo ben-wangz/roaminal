@@ -14,8 +14,8 @@ fullscreen assertions.
    present with an accessible label and maximize icon when inactive. If runtime
    capability detection reports unsupported, the control remains visible,
    carries `data-fullscreen-state="unsupported"`, is disabled, has an
-   unavailable visual marker and clear label, and login, connection manager,
-   Terminal, Files, messages, and input remain usable. Verify that a
+   unavailable visual marker and clear label, and login, Settings, Terminal,
+   Files, messages, and input remain usable. Verify that a
    disabled control does not issue a fullscreen request.
 3. In a Chromium context where element fullscreen is permitted, enter and exit
    fullscreen through a real click. Verify the target is the complete
@@ -33,7 +33,7 @@ fullscreen assertions.
    native keyboard. In an iPhone-sized emulated context, verify visibility and
    runtime-driven state only; desktop Chromium emulation must not be reported
    as proof of iPhone WebKit support.
-5. Open Appearance and inspect System notifications. Before an explicit Enable
+5. Open Settings > Notifications and inspect System notifications. Before an explicit Enable
    click, no permission prompt or Service Worker registration is created. Click
    Enable in a secure context, grant permission, and verify the state reflects
    the granted browser permission. When the authenticated backend config

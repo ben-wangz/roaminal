@@ -136,6 +136,9 @@ export function useAppShellActions({
   });
   const chromeActions = useAppShellChromeActions({
     workspaceTool,
+    page,
+    hasActiveInstance: Boolean(viewActiveConnectionInstanceId),
+    setPage,
     setWorkspaceTool,
     setWorkspaceToolOpen,
     setPreviewConnectionInstanceId,

@@ -6,8 +6,8 @@ desktop, tablet portrait, and phone portrait.
 
 ## Procedure and assertions
 
-1. Local connection and Connection manager show no Remote monitor band and
-   issue no remote-monitor requests. Selecting a live SSH instance adds one
+1. Local connection and Settings show no Remote monitor band and issue no
+   remote-monitor requests. Selecting a live SSH instance adds one
    `REMOTE-HEALTH` band directly below the topbar and polls only that instance.
    There is no selected-connection context row. The remote band owns exactly
    one disclosure control (`remote-monitor-toggle`) in its header. It is

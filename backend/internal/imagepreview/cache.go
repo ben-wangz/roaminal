@@ -44,7 +44,11 @@ func prepareManagedDirectory(root string) (string, string, error) {
 	if err := ensureNoSymlinkPath(root); err != nil {
 		return "", "", err
 	}
-	if err := os.Chmod(root, 0o700); err != nil {
+	// Kubernetes emptyDir mounts are commonly root-owned even when the
+	// application runs with a non-root UID. The marker and managed children
+	// remain private, so an ownership-only chmod failure on the mount point is
+	// safe to tolerate; all other filesystem errors still disable the cache.
+	if err := os.Chmod(root, 0o700); err != nil && !errors.Is(err, os.ErrPermission) {
 		return "", "", err
 	}
 	marker := filepath.Join(root, markerName)

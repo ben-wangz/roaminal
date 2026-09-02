@@ -58,13 +58,15 @@ export function useHeartbeat({
         return;
       }
       controller.setBootId(next.runtime.bootId);
+      const hadActiveInstance = Boolean(viewRef.current.activeConnectionInstanceId);
       const reconciled = controller.applyHeartbeat(next, viewRef.current);
       setActiveView(reconciled.activeView);
       if (!controller.getSnapshot().hydrated && !activeLaunchId) {
         controller.markHydrated();
-        if (page !== 'appearance') setPage(reconciled.activeView.activeConnectionInstanceId ? 'workspace' : 'connections');
-      } else if (!activeLaunchId && !reconciled.activeView.activeConnectionInstanceId && page !== 'appearance') {
-        setPage('connections');
+        if (!hadActiveInstance && reconciled.activeView.activeConnectionInstanceId) setPage('workspace');
+        else if (!reconciled.activeView.activeConnectionInstanceId && page !== 'settings') setPage('settings');
+      } else if (!activeLaunchId && !reconciled.activeView.activeConnectionInstanceId && page !== 'settings') {
+        setPage('settings');
       }
     } catch (err) {
       if (paused.current || signal.aborted || (err as Error).name === 'AbortError') return;

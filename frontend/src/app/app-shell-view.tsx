@@ -1,6 +1,5 @@
 import { Minimize } from 'lucide-react';
 import { ConnectionManager } from '../connections/connection-manager';
-import { AppearanceSettings } from '../appearance/appearance-settings';
 import { ShellTopbar } from './shell-topbar';
 import { WorkspacePage } from './workspace-page';
 import { WorkspaceToolSurface } from '../ui/workspace-tool-surface';
@@ -13,12 +12,16 @@ export type { Dialog } from './app-shell-overlays';
 
 export function AppShellView({
   page,
+  auth,
   appearance,
+  settingsSection,
+  settingsFocusTarget,
   workspaceTool,
   workspaceToolOpen,
   connectionToolButton,
   keyboardToolButton,
   filesToolButton,
+  settingsToolButton,
   nativeKeyboardOpen,
   messageButtonRef,
   messageCenter,
@@ -45,6 +48,7 @@ export function AppShellView({
   authSessionBusy,
   onSelectWorkspaceTool,
   onCollapseWorkspaceTool,
+  onOpenSettings,
   onHelp,
   onAddConnection,
   onSelectConnection,
@@ -67,21 +71,22 @@ export function AppShellView({
   onContextualModeChange,
   onToggleSearch,
   onCloseSearch,
-  onOpenConnections,
-  onOpenAppearance,
+  onSelectSettingsSection,
+  onFocusTargetConsumed,
   onSignOut,
   onOpenAuthSessions,
   onOpenManager,
   onCreateConnection,
   onGenerated,
-  onOpenWorkspace,
   onSaveAppearance,
+  onSettingsDirtyChange,
   onShowToast,
   onRenameTitle,
   onTerminateConnection,
   onRevokeAuthSession,
   onLogoutOtherAuthSessions,
   onCloseDialog,
+  onManageNotifications,
   workspaceContent,
   onBackToTerminal,
   appShellRef,
@@ -94,9 +99,19 @@ export function AppShellView({
   onDisableNotifications,
 }: AppShellViewProps) {
   const workspaceOpen = page === 'workspace';
+  const toolRailOpen = workspaceOpen || page === 'settings';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
+  const handleWorkspaceToolSelection = (tool: Parameters<typeof onSelectWorkspaceTool>[0]) => {
+    if (!workspaceOpen) {
+      // There is no workspace surface to reveal until a connection instance
+      // exists. Keep the global rail usable on the initial Settings page.
+      if (!activeInstance) return;
+      onOpenSettings();
+    }
+    onSelectWorkspaceTool(tool);
+  };
   return (
-    <div ref={appShellRef} className={`app-shell ${workspaceOpen ? 'workspace-open' : ''}`}>
+    <div ref={appShellRef} className={`app-shell ${workspaceOpen ? 'workspace-open' : ''} ${page === 'settings' ? 'settings-open' : ''}`}>
       <ShellTopbar
         workspaceOpen={workspaceOpen}
         activeConnectionInstanceId={activeInstance?.connectionInstanceId || null}
@@ -108,7 +123,6 @@ export function AppShellView({
         persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
         onToggleMessages={messageCenter.togglePopover}
         onToggleSearch={onToggleSearch}
-        onOpenAppearance={onOpenAppearance}
         onOpenAuthSessions={onOpenAuthSessions}
         onSignOut={onSignOut}
         fullscreenActive={fullscreenActive}
@@ -117,17 +131,21 @@ export function AppShellView({
         onToggleFullscreen={onToggleFullscreen}
       />
       <div className="app-shell-workspace">
-        {workspaceOpen && (
+        {toolRailOpen && (
           <WorkspaceToolRail
             workspaceTool={workspaceTool}
             workspaceToolOpen={workspaceToolOpen}
+            connectionCount={connections.length}
             agentRelaxCount={countRelaxedAgentConnections(connections)}
             connectionToolButton={connectionToolButton}
             keyboardToolButton={keyboardToolButton}
             filesToolButton={filesToolButton}
-            onSelectWorkspaceTool={onSelectWorkspaceTool}
+            settingsToolButton={settingsToolButton}
+            settingsActive={page === 'settings'}
+            onSelectWorkspaceTool={handleWorkspaceToolSelection}
             onCollapseWorkspaceTool={onCollapseWorkspaceTool}
             onHelp={onHelp}
+            onOpenSettings={onOpenSettings}
           />
         )}
         {workspaceOpen && (
@@ -211,25 +229,23 @@ export function AppShellView({
               onBackToTerminal={onBackToTerminal}
               onToast={onShowToast}
             />
-          ) : page === 'connections' ? (
+          ) : (
             <ConnectionManager
+              auth={auth}
               connections={connections}
               onConnect={onCreateConnection}
               onGenerated={onGenerated}
-              onOpenWorkspace={onOpenWorkspace}
               onToast={onShowToast}
-              onOpenAppearance={onOpenAppearance}
-            />
-          ) : (
-            <AppearanceSettings
               appearance={appearance}
-              onSave={onSaveAppearance}
-              onBack={onOpenConnections}
-              onWorkspace={onOpenWorkspace}
-              hasWorkspace={Boolean(activeInstance)}
+              onSaveAppearance={onSaveAppearance}
+              onSettingsDirtyChange={onSettingsDirtyChange}
               notificationState={notificationState}
               onEnableNotifications={onEnableNotifications}
               onDisableNotifications={onDisableNotifications}
+              section={settingsSection}
+              onSectionChange={onSelectSettingsSection}
+              focusTarget={settingsFocusTarget}
+              onFocusTargetConsumed={onFocusTargetConsumed}
             />
           )}
         </main>
@@ -254,6 +270,7 @@ export function AppShellView({
         onCloseDialog={onCloseDialog}
         connections={connections}
         onCreateConnection={onCreateConnection}
+        onManageNotifications={onManageNotifications}
       />
     </div>
   );

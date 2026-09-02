@@ -9,12 +9,14 @@ type Props = {
   keys: SSHKey[];
   busy: boolean;
   optionsAvailable?: boolean;
+  error?: string;
   onDraft: (draft: ConnectionDraft) => void;
   onSave: (event: React.FormEvent) => void;
+  onRefresh?: () => void;
   onClose: () => void;
 };
 
-export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsAvailable = true, onDraft, onSave, onClose }: Props) {
+export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsAvailable = true, error, onDraft, onSave, onRefresh, onClose }: Props) {
   const set = (key: keyof ConnectionDraft, value: string) => onDraft({ ...draft, [key]: value });
   return (
     <Modal onClose={onClose}>
@@ -29,9 +31,9 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
           </button>
         </header>
         <label>
-          Host alias
+          Connection name
           <input
-            id="connection-host-alias"
+            id="connection-name"
             name="hostAlias"
             required
             pattern={'[A-Za-z0-9][\\-A-Za-z0-9._]{0,254}'}
@@ -67,8 +69,8 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
             />
           </label>
         </div>
-        <label>
-          Identity files
+        <fieldset className="identity-fieldset">
+          <legend>Identity files</legend>
           <div className="identity-options">
             {keys.map((key) => (
               <label key={key.keyId}>
@@ -90,7 +92,7 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
               </label>
             ))}
           </div>
-        </label>
+        </fieldset>
         <div className="form-grid">
           <label>
             IdentitiesOnly
@@ -185,6 +187,12 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
         {(draft.strictHostKeyChecking === 'no' || draft.userKnownHostsFile === '/dev/null') && (
           <div className="risk-warning" role="alert">
             <ShieldAlert size={16} aria-hidden="true" /> Host verification is weakened for this connection.
+          </div>
+        )}
+        {error && (
+          <div className="error-text connection-editor-error" role="alert">
+            {error}
+            {onRefresh && <button className="text-button" type="button" onClick={onRefresh} disabled={busy}>Refresh and retry</button>}
           </div>
         )}
         <footer>

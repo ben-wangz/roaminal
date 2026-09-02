@@ -1,5 +1,5 @@
 import { memo, type RefObject } from 'react';
-import { Ban, Bell, Maximize, Minimize, Search, Settings, ShieldCheck } from 'lucide-react';
+import { Ban, Bell, Maximize, Minimize, Search, ShieldCheck } from 'lucide-react';
 import { SystemStatus } from '../status/system-status';
 import type { Heartbeat } from '../status/heartbeat';
 import { messageBadgeLabel, messageButtonLabel } from '../messages/message-center';
@@ -12,7 +12,6 @@ type Props = {
   latencyMs: number | null;
   persistenceDegraded: boolean;
   onToggleSearch: () => void;
-  onOpenAppearance: () => void;
   messageUnreadCount: number;
   messagesOpen: boolean;
   onToggleMessages: () => void;
@@ -32,7 +31,6 @@ export const ShellTopbar = memo(function ShellTopbar({
   latencyMs,
   persistenceDegraded,
   onToggleSearch,
-  onOpenAppearance,
   messageUnreadCount,
   messagesOpen,
   onToggleMessages,
@@ -89,9 +87,6 @@ export const ShellTopbar = memo(function ShellTopbar({
         >
           <Bell aria-hidden="true" size={17} />
           {messageBadgeLabel(messageUnreadCount) && <span className="message-badge">{messageBadgeLabel(messageUnreadCount)}</span>}
-        </button>
-        <button className="icon-button" type="button" onClick={onOpenAppearance} aria-label="Appearance" title="Appearance">
-          <Settings aria-hidden="true" size={17} />
         </button>
         <button
           className={`icon-button fullscreen-toggle fullscreen-toggle-${fullscreenState}`}

@@ -1,6 +1,6 @@
 import type { AgentMessage } from '../messages/message-api';
 import type { AuthState } from '../auth/auth-storage';
-import { deleteBrowserNotificationSubscriptions, fetchBrowserNotificationConfig, fetchNotificationPreferences, registerBrowserNotificationSubscription, type NotificationPreference } from './notification-api';
+import { deleteBrowserNotificationSubscriptions, fetchBrowserNotificationConfig, fetchNotificationPreferences, notificationPreferenceKey, registerBrowserNotificationSubscription, type NotificationPreference } from './notification-api';
 
 const ENABLED_KEY = 'roaminal_system_notifications_enabled';
 const STATE_EVENT = 'roaminal-notification-state-change';
@@ -27,6 +27,8 @@ const deliveredClickIds = new Set<string>();
 let workerListenerInstalled = false;
 let pushRegistrationStatus: 'unknown' | 'enabled' | 'unavailable' = 'unknown';
 let notificationPreferences = new Map<string, NotificationPreference>();
+let notificationPreferencesLoaded = false;
+let notificationPreferencesSync: Promise<void> | null = null;
 
 function dispatchStateChange(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(STATE_EVENT));
@@ -142,16 +144,26 @@ export async function disableBrowserNotifications(auth: AuthState | null = null)
 }
 
 export function setNotificationPreferences(preferences: NotificationPreference[]): void {
-  notificationPreferences = new Map(preferences.map((preference) => [preference.connectionDefinitionId + '\x00' + preference.tmuxSessionName, preference]));
+  notificationPreferences = new Map(preferences.map((preference) => [notificationPreferenceKey(preference.connectionDefinitionId, preference.tmuxSessionName), preference]));
+  notificationPreferencesLoaded = true;
+}
+
+export function notificationPreferencesSnapshot(): NotificationPreference[] {
+  return Array.from(notificationPreferences.values(), (preference) => ({ ...preference }));
 }
 
 export function updateNotificationPreference(preference: NotificationPreference): void {
-  const key = preference.connectionDefinitionId + '\x00' + preference.tmuxSessionName;
+  const key = notificationPreferenceKey(preference.connectionDefinitionId, preference.tmuxSessionName);
   notificationPreferences = new Map(notificationPreferences).set(key, preference);
 }
 
 export function clearNotificationPreferences(): void {
   notificationPreferences = new Map();
+  notificationPreferencesLoaded = false;
+}
+
+export function hasLoadedNotificationPreferences(): boolean {
+  return notificationPreferencesLoaded;
 }
 
 export async function synchronizeNotificationPreferences(auth: AuthState | null): Promise<void> {
@@ -159,12 +171,18 @@ export async function synchronizeNotificationPreferences(auth: AuthState | null)
     clearNotificationPreferences();
     return;
   }
-  try {
-    const result = await fetchNotificationPreferences(auth);
-    setNotificationPreferences(result.preferences || []);
-  } catch {
-    // Keep the last successful projection during a transient API failure.
-  }
+  if (notificationPreferencesLoaded) return;
+  if (notificationPreferencesSync) return notificationPreferencesSync;
+  const sync = fetchNotificationPreferences(auth)
+    .then((result) => setNotificationPreferences(result.preferences || []))
+    .catch(() => {
+      // Keep the last successful projection during a transient API failure.
+    });
+  const pending = sync.finally(() => {
+    if (notificationPreferencesSync === pending) notificationPreferencesSync = null;
+  });
+  notificationPreferencesSync = pending;
+  return pending;
 }
 
 function decodeApplicationServerKey(value: string): Uint8Array {
@@ -221,9 +239,10 @@ function eligible(message: AgentMessage): boolean {
 }
 
 function preferenceAllows(message: AgentMessage): boolean {
-  if (!message.tmuxSessionName || !message.connectionDefinitionIds?.length) return false;
+  const tmuxSessionName = message.tmuxSessionName;
+  if (!tmuxSessionName || !message.connectionDefinitionIds?.length) return false;
   return message.connectionDefinitionIds.some((definitionID) => {
-    const preference = notificationPreferences.get(definitionID + '\x00' + message.tmuxSessionName);
+    const preference = notificationPreferences.get(notificationPreferenceKey(definitionID, tmuxSessionName));
     if (!preference?.enabled) return false;
     return message.agentStateTo === 'relax' ? preference.runningToRelax : preference.runningToError;
   });

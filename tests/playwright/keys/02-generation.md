@@ -5,7 +5,7 @@ algorithm. Viewport: desktop. Run serially and restore the fixture afterward.
 
 ## Procedure and assertions
 
-1. Open Keys and choose an algorithm that does not exist. The dialog keeps
+1. Open Settings > SSH keys and choose an algorithm that does not exist. The dialog keeps
    Algorithm focused while switching between available algorithms; RSA shows
    2048/3072/4096 bits and defaults to 3072. Filename follows `id_ed25519` or
    `id_rsa`, and comment is optional and bounded.
@@ -16,7 +16,7 @@ algorithm. Viewport: desktop. Run serially and restore the fixture afterward.
    passphrase must never leave terminal transport or appear in browser storage,
    screenshots, trace attachments, HTTP bodies, or console output.
 4. On success, the generated private/public pair is atomically promoted, the
-   generation connection exits and retires, the manager/next connection is
+   generation connection exits and retires, Settings/the next connection is
    selected according to normal failover, and refresh shows one new inventory
    row with a valid fingerprint.
 5. Cancel/fail generation once. No partial destination pair is visible, staging

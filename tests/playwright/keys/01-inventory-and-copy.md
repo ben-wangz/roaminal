@@ -12,7 +12,8 @@ symlink.
 
 ## Procedure and assertions
 
-1. Open Keys and refresh. Only allowlisted Ed25519/RSA private-key names appear.
+1. Open Settings > SSH keys and refresh. Only allowlisted Ed25519/RSA
+   private-key names appear.
    Each row accurately reports filename, algorithm/bits, fingerprint,
    availability, writable/read-only status, and public-key availability.
 2. Unsupported names, public-only files, broken material, and escaping symlinks

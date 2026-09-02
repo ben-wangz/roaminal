@@ -1,5 +1,5 @@
 import { memo, type RefObject } from 'react';
-import { ChevronsLeft, CircleHelp, FolderTree, Keyboard, PanelLeft } from 'lucide-react';
+import { ChevronsLeft, CircleHelp, FolderTree, Keyboard, PanelLeft, Settings } from 'lucide-react';
 import type { WorkspaceTool } from '../app/workspace-tool';
 
 type Props = {
@@ -8,10 +8,14 @@ type Props = {
   connectionToolButton: RefObject<HTMLButtonElement | null>;
   keyboardToolButton: RefObject<HTMLButtonElement | null>;
   filesToolButton: RefObject<HTMLButtonElement | null>;
+  settingsToolButton: RefObject<HTMLButtonElement | null>;
+  settingsActive: boolean;
+  connectionCount: number;
   agentRelaxCount: number;
   onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
   onCollapseWorkspaceTool: () => void;
   onHelp: () => void;
+  onOpenSettings: () => void;
 };
 
 export const WorkspaceToolRail = memo(function WorkspaceToolRail({
@@ -20,30 +24,35 @@ export const WorkspaceToolRail = memo(function WorkspaceToolRail({
   connectionToolButton,
   keyboardToolButton,
   filesToolButton,
+  settingsToolButton,
+  settingsActive,
+  connectionCount,
   agentRelaxCount,
   onSelectWorkspaceTool,
   onCollapseWorkspaceTool,
   onHelp,
+  onOpenSettings,
 }: Props) {
   const connectionActive = workspaceTool === 'connections';
   const keyboardActive = workspaceTool === 'keyboard';
   const filesActive = workspaceTool === 'files';
   return (
-    <nav className="workspace-tool-rail" aria-label="Workspace tools">
+    <nav className="workspace-tool-rail" aria-label="Application tools">
       <div className="workspace-tool-rail-buttons">
         <button
           ref={connectionToolButton}
           className={`workspace-tool-button ${connectionActive ? 'active' : ''}`}
           type="button"
           onClick={() => onSelectWorkspaceTool('connections')}
-          aria-label={`Connections, ${agentRelaxCount} idle agents`}
-          title={`Connections (${agentRelaxCount} idle agents)`}
+          aria-label={`Connections, ${connectionCount} connections, ${agentRelaxCount} relaxed agents`}
+          title={`Connections (${connectionCount}; ${agentRelaxCount} relaxed agents)`}
           aria-pressed={connectionActive}
           aria-expanded={connectionActive && workspaceToolOpen}
           aria-controls="workspace-tool-surface"
           data-testid="workspace-tool-connections"
         >
           <PanelLeft aria-hidden="true" size={18} />
+          <span className="workspace-tool-count-badge" aria-hidden="true" data-testid="workspace-tool-connections-count">{connectionCount}</span>
           <span className="workspace-tool-agent-relax-badge" aria-hidden="true" data-testid="workspace-tool-connections-agent-relax-count">{agentRelaxCount}</span>
         </button>
         <button
@@ -73,6 +82,18 @@ export const WorkspaceToolRail = memo(function WorkspaceToolRail({
           data-testid="workspace-tool-files"
         >
           <FolderTree aria-hidden="true" size={18} />
+        </button>
+        <button
+          ref={settingsToolButton}
+          className={`workspace-tool-button workspace-tool-settings ${settingsActive ? 'active' : ''}`}
+          type="button"
+          onClick={() => onOpenSettings()}
+          aria-label="Settings"
+          title="Settings"
+          aria-pressed={settingsActive}
+          data-testid="workspace-tool-settings"
+        >
+          <Settings aria-hidden="true" size={18} />
         </button>
         <button
           className="workspace-tool-button workspace-tool-help"

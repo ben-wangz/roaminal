@@ -19,7 +19,6 @@ const baseProps = {
   latencyMs: null,
   persistenceDegraded: false,
   onToggleSearch: vi.fn(),
-  onOpenAppearance: vi.fn(),
   messageUnreadCount: 0,
   messagesOpen: false,
   onToggleMessages: vi.fn(),

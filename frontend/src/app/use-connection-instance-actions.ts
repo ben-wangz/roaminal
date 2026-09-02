@@ -129,11 +129,6 @@ export function useConnectionInstanceActions({
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (matchesShortcut(event, SHORTCUTS[0])) {
-        event.preventDefault();
-        setSearch(false);
-        setPage('connections');
-      }
       if (matchesShortcut(event, SHORTCUTS[1]) && viewRef.current.activeConnectionInstanceId) {
         event.preventDefault();
         setSearch(true);
@@ -141,7 +136,7 @@ export function useConnectionInstanceActions({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setPage, setSearch, viewRef]);
+  }, [setSearch, viewRef]);
 
   return { createConnection, acceptGenerated, selectConnectionInstance, reorderConnectionInstances };
 }

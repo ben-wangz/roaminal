@@ -142,7 +142,8 @@ The SSH cases require an Ed25519 key in Roaminal. The algorithm uniqueness rule
 means a dedicated test release must start without an existing test-owned
 Ed25519 key.
 
-1. In the authenticated Roaminal UI, open `Connections` and `Keys`. Delete an
+1. In the authenticated Roaminal UI, open Settings > Connection definitions and
+   Settings > SSH keys. Delete an
    earlier fixture-owned Ed25519 key if one is present, then use `Generate key`
    with algorithm `Ed25519` and a unique filename such as
    `roaminal_e2e_ed25519`. The filename must end in `_ed25519` so it is

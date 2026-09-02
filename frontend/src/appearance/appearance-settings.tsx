@@ -1,19 +1,7 @@
-import { memo, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Bell, Monitor, RotateCcw, Save } from 'lucide-react';
+import { memo, useEffect, useRef } from 'react';
+import { RotateCcw, Save } from 'lucide-react';
 import type { Terminal } from '@xterm/xterm';
 import { APPEARANCE_SCHEMA_VERSION, DEFAULT_APPEARANCE, FONT_CATALOG, MAX_FONT_SIZE, MIN_FONT_SIZE, type TerminalAppearance, fontFamily, normalizeFontSize } from './appearance-model';
-import type { NotificationState } from '../status/notification-service';
-
-type Props = {
-  appearance: TerminalAppearance;
-  onSave: (appearance: TerminalAppearance) => void;
-  onBack: () => void;
-  onWorkspace: () => void;
-  hasWorkspace: boolean;
-  notificationState: NotificationState;
-  onEnableNotifications: () => Promise<void>;
-  onDisableNotifications: () => Promise<void>;
-};
 
 const AppearanceSample = memo(function AppearanceSample({ fontId, fontSize }: Pick<TerminalAppearance, 'fontId' | 'fontSize'>) {
   const elementRef = useRef<HTMLDivElement>(null);
@@ -48,13 +36,18 @@ const AppearanceSample = memo(function AppearanceSample({ fontId, fontSize }: Pi
   return <div className="appearance-sample" ref={elementRef} aria-label="Terminal appearance preview" />;
 });
 
-export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, hasWorkspace, notificationState, onEnableNotifications, onDisableNotifications }: Props) {
-  const [draft, setDraft] = useState(appearance);
-  useEffect(() => setDraft(appearance), [appearance]);
+type AppearanceControlsProps = {
+  appearance: TerminalAppearance;
+  draft: TerminalAppearance;
+  onDraftChange: (draft: TerminalAppearance) => void;
+  onSave: (appearance: TerminalAppearance) => void;
+};
+
+export function AppearanceControls({ appearance, draft, onDraftChange, onSave }: AppearanceControlsProps) {
   const validSize = normalizeFontSize(draft.fontSize) !== null;
   const changed = draft.fontId !== appearance.fontId || draft.fontSize !== appearance.fontSize;
   function updateSize(value: string) {
-    setDraft((current) => ({ ...current, fontSize: value === '' ? Number.NaN : Number(value) }));
+    onDraftChange({ ...draft, fontSize: value === '' ? Number.NaN : Number(value) });
   }
   function save(event: React.FormEvent) {
     event.preventDefault();
@@ -63,23 +56,11 @@ export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, ha
     onSave({ schemaVersion: APPEARANCE_SCHEMA_VERSION, fontId: draft.fontId, fontSize });
   }
   return (
-    <section className="appearance-page" aria-labelledby="appearance-title">
-      <header className="appearance-header">
-        <div>
-          <p className="eyebrow">ROAMINAL</p>
-          <h1 id="appearance-title">Appearance</h1>
-          <p className="appearance-subtitle">Choose how terminal text is rendered in this browser.</p>
-        </div>
-        <div className="appearance-header-actions">
-          {hasWorkspace && <button className="text-button" type="button" onClick={onWorkspace}><Monitor size={15} aria-hidden="true" /> Workspace</button>}
-          <button className="text-button" type="button" onClick={onBack}><ArrowLeft size={15} aria-hidden="true" /> Connections</button>
-        </div>
-      </header>
       <form className="appearance-content" onSubmit={save}>
         <div className="appearance-controls">
           <label>
             <span>Terminal font</span>
-            <select id="appearance-font" name="fontId" value={draft.fontId} onChange={(event) => setDraft((current) => ({ ...current, fontId: event.target.value as TerminalAppearance['fontId'] }))}>
+            <select id="appearance-font" name="fontId" value={draft.fontId} onChange={(event) => onDraftChange({ ...draft, fontId: event.target.value as TerminalAppearance['fontId'] })}>
               {(Object.keys(FONT_CATALOG) as TerminalAppearance['fontId'][]).map((id) => <option key={id} value={id}>{FONT_CATALOG[id].label}</option>)}
             </select>
           </label>
@@ -94,40 +75,13 @@ export function AppearanceSettings({ appearance, onSave, onBack, onWorkspace, ha
           </label>
           <div className="appearance-actions">
             <button className="primary" type="submit" disabled={!changed || !validSize}><Save size={15} aria-hidden="true" /> Save</button>
-            <button className="text-button" type="button" disabled={!changed} onClick={() => setDraft(DEFAULT_APPEARANCE)}><RotateCcw size={15} aria-hidden="true" /> Reset to defaults</button>
+            <button className="text-button" type="button" disabled={!changed} onClick={() => onDraftChange(DEFAULT_APPEARANCE)}><RotateCcw size={15} aria-hidden="true" /> Reset to defaults</button>
           </div>
-          <section className="appearance-notification-settings" aria-labelledby="notification-settings-title">
-            <header>
-              <div><Bell size={15} aria-hidden="true" /><strong id="notification-settings-title">System notifications</strong></div>
-              <span className={`notification-state notification-state-${notificationState.status}`}>{notificationState.status === 'foreground-only' ? 'Foreground only' : notificationState.status[0].toUpperCase() + notificationState.status.slice(1)}</span>
-            </header>
-            {notificationState.status === 'enable' && <>
-              <p>Allow enabled connections to show state changes outside this page.</p>
-              <button className="notification-toggle" type="button" role="switch" aria-checked="false" onClick={() => void onEnableNotifications()}>
-                <span className="notification-toggle-track" aria-hidden="true"><span /></span><span>Off</span>
-              </button>
-            </>}
-            {notificationState.status === 'enabled' && <>
-              <p>Enabled connection state changes can appear as browser notifications.</p>
-              <button className="notification-toggle" type="button" role="switch" aria-checked="true" onClick={() => void onDisableNotifications()}>
-                <span className="notification-toggle-track" aria-hidden="true"><span /></span><span>On</span>
-              </button>
-            </>}
-            {notificationState.status === 'foreground-only' && <>
-              <p>Enabled connection state changes appear while this page is running. Background delivery is unavailable.</p>
-              <button className="notification-toggle" type="button" role="switch" aria-checked="true" onClick={() => void onDisableNotifications()}>
-                <span className="notification-toggle-track" aria-hidden="true"><span /></span><span>On</span>
-              </button>
-            </>}
-            {notificationState.status === 'blocked' && <p>Notifications are blocked. Change this site's permission in browser settings.</p>}
-            {notificationState.status === 'unavailable' && <p>This browser or connection does not provide secure system notifications.</p>}
-          </section>
         </div>
         <div className="appearance-preview-region">
           <div className="appearance-preview-heading"><strong>Preview</strong><span>{FONT_CATALOG[draft.fontId].label} · {validSize ? draft.fontSize : MIN_FONT_SIZE}px</span></div>
           <AppearanceSample fontId={draft.fontId} fontSize={validSize ? draft.fontSize : MIN_FONT_SIZE} />
         </div>
       </form>
-    </section>
   );
 }
