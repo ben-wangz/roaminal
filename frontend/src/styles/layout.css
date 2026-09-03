@@ -26,11 +26,6 @@ body { background: var(--base); }
 .xterm { height: 100%; }
 .terminal-stage > .terminal-viewport, .terminal-stage > .empty-state { min-height: 0; flex: 1 1 auto; }
 .empty-state { height: auto; display: grid; place-items: center; align-content: center; gap: 24px; }
-.search-bar { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--border); background: var(--base1); }
-.search-bar input[type='text'], .search-bar > input:not([type]) { min-width: 0; flex: 1; }
-.search-bar > input { background: var(--base); border: 1px solid var(--border); color: var(--text-bright); padding: 6px 8px; }
-.search-bar label { color: var(--muted); white-space: nowrap; font-size: .72rem; }
-.search-bar button { border: 0; background: transparent; color: var(--text); font-size: 1.1rem; }
 .terminal-viewport .xterm-viewport { scrollbar-color: var(--base2) var(--base); }
 .terminal-viewport .xterm-screen { padding-bottom: 8px; }
 .workspace-body { min-width: 0; min-height: 0; overflow: hidden; position: relative; flex: 1 1 auto; display: flex; flex-direction: column; }

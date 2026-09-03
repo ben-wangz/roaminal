@@ -154,7 +154,7 @@ func convertEntries(raw []rawEntry) []ports.RemoteFileEntry {
 }
 
 func convertEntry(value rawEntry) ports.RemoteFileEntry {
-	return ports.RemoteFileEntry{Name: value.Name, Type: value.Type, Size: value.Size, ModifiedAt: value.ModifiedAt, Mode: value.Mode, Symlink: value.Symlink}
+	return ports.RemoteFileEntry{Name: value.Name, Type: value.Type, MIMEType: value.MIMEType, Size: value.Size, ModifiedAt: value.ModifiedAt, Mode: value.Mode, Symlink: value.Symlink}
 }
 
 var _ ports.RemoteFileSystem = (*remoteFileSystemAdapter)(nil)

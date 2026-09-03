@@ -32,7 +32,7 @@ func (s *Server) filesystemContent(w http.ResponseWriter, r *http.Request, _ str
 		writeFilesystemError(w, filesystem.ErrContentUnavailable)
 		return
 	}
-	contentType := mimeTypeForEntry(entry.Name, entry.Type)
+	contentType := mimeTypeForEntry(entry.Name, entry.Type, entry.MIMEType)
 	download := r.URL.Query().Get("download") == "1"
 	if variant == "preview" && !download {
 		s.filesystemImagePreview(w, r, id, pathValue, entry, root, contentType)

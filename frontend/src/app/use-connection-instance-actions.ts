@@ -1,6 +1,5 @@
 import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { api } from '../auth/auth-client';
-import { matchesShortcut, SHORTCUTS } from '../input/shortcuts';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
 import { saveConnectionInstanceOrder, startConnectionLaunch } from '../connections/connection-api';
 import { moveConnectionInstance as moveFlatConnectionInstance, orderConnectionInstances, selectConnection, type ConnectionOrderPlacement, type ConnectionView } from './connection-view';
@@ -26,7 +25,6 @@ type Params = {
   workspaceTool: WorkspaceTool;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
-  setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   showToast: (message: string, kind?: ToastKind) => void;
 };
@@ -45,7 +43,6 @@ export function useConnectionInstanceActions({
   workspaceTool,
   setWorkspaceToolOpen,
   setWorkspaceContent,
-  setSearch,
   setPreviewConnectionInstanceId,
   showToast,
 }: Params) {
@@ -94,11 +91,10 @@ export function useConnectionInstanceActions({
     if (viewRef.current.activeConnectionInstanceId !== id || activeLaunchId) setCurrentRuntime(null);
     setActiveView(selectConnection(viewRef.current, id));
     setPage('workspace');
-    setSearch(false);
     setWorkspaceContent('terminal');
     setPreviewConnectionInstanceId(null);
     if (window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches && workspaceTool === 'connections') setWorkspaceToolOpen(false);
-  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setSearch, setWorkspaceContent, setWorkspaceToolOpen, viewRef, workspaceTool]);
+  }, [activeLaunchId, setActiveView, setCurrentRuntime, setPage, setPreviewConnectionInstanceId, setWorkspaceContent, setWorkspaceToolOpen, viewRef, workspaceTool]);
 
   const reorderConnectionInstances = useCallback(async (
     draggedID: string,
@@ -126,17 +122,6 @@ export function useConnectionInstanceActions({
       ? `Roaminal - ${activeConnection.title || activeConnection.cwd || 'Connection'}`
       : 'Roaminal';
   }, [activeConnectionInstanceId, connections]);
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (matchesShortcut(event, SHORTCUTS[1]) && viewRef.current.activeConnectionInstanceId) {
-        event.preventDefault();
-        setSearch(true);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [setSearch, viewRef]);
 
   return { createConnection, acceptGenerated, selectConnectionInstance, reorderConnectionInstances };
 }

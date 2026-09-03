@@ -18,12 +18,10 @@ const baseProps = {
   system: null,
   latencyMs: null,
   persistenceDegraded: false,
-  onToggleSearch: vi.fn(),
   messageUnreadCount: 0,
   messagesOpen: false,
   onToggleMessages: vi.fn(),
   messageButtonRef: { current: null },
-  onOpenAuthSessions: vi.fn(),
   onSignOut: vi.fn(),
   fullscreenActive: false,
   fullscreenSupported: false,
@@ -57,6 +55,12 @@ describe('fullscreen top-bar control', () => {
     expect(html).not.toContain('workspace-tool-switcher');
     expect(html).not.toContain('workspace-tool-keyboard');
     expect(html).not.toContain('>Connections<');
+  });
+
+  it('leaves sessions and browser search out of the topbar', () => {
+    const html = renderToStaticMarkup(<ShellTopbar {...baseProps} workspaceOpen />);
+    expect(html).not.toContain('Sessions');
+    expect(html).not.toContain('Search terminal');
   });
 
   it('keeps an unsupported control visible and clearly marked', () => {

@@ -1,5 +1,5 @@
 import { memo, type RefObject } from 'react';
-import { Ban, Bell, Maximize, Minimize, Search, ShieldCheck } from 'lucide-react';
+import { Ban, Bell, Maximize, Minimize } from 'lucide-react';
 import { SystemStatus } from '../status/system-status';
 import type { Heartbeat } from '../status/heartbeat';
 import { messageBadgeLabel, messageButtonLabel } from '../messages/message-center';
@@ -11,12 +11,10 @@ type Props = {
   system: Heartbeat['system'] | null;
   latencyMs: number | null;
   persistenceDegraded: boolean;
-  onToggleSearch: () => void;
   messageUnreadCount: number;
   messagesOpen: boolean;
   onToggleMessages: () => void;
   messageButtonRef: RefObject<HTMLButtonElement | null>;
-  onOpenAuthSessions: () => void;
   onSignOut: () => void;
   fullscreenActive: boolean;
   fullscreenSupported: boolean;
@@ -30,12 +28,10 @@ export const ShellTopbar = memo(function ShellTopbar({
   system,
   latencyMs,
   persistenceDegraded,
-  onToggleSearch,
   messageUnreadCount,
   messagesOpen,
   onToggleMessages,
   messageButtonRef,
-  onOpenAuthSessions,
   onSignOut,
   fullscreenActive,
   fullscreenSupported,
@@ -62,18 +58,6 @@ export const ShellTopbar = memo(function ShellTopbar({
         resetKey={workspaceOpen ? activeConnectionInstanceId : 'manager'}
       />
       <div className="top-actions">
-        {workspaceOpen && (
-          <>
-            <button
-              className="icon-button"
-              onClick={onToggleSearch}
-              aria-label="Search terminal"
-              title="Search terminal"
-            >
-              <Search aria-hidden="true" size={17} />
-            </button>
-          </>
-        )}
         <button
           ref={messageButtonRef}
           className="icon-button message-bell-button"
@@ -104,9 +88,6 @@ export const ShellTopbar = memo(function ShellTopbar({
             {fullscreenActive ? <Minimize size={17} /> : <Maximize size={17} />}
             {fullscreenUnavailable && <Ban className="fullscreen-unavailable-mark" size={11} strokeWidth={2.5} />}
           </span>
-        </button>
-        <button className="text-button" onClick={onOpenAuthSessions}>
-          <ShieldCheck aria-hidden="true" size={15} /> Sessions
         </button>
         <button className="text-button" onClick={onSignOut}>
           Sign out

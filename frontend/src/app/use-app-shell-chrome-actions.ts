@@ -37,7 +37,7 @@ export function useAppShellChromeActions({
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (!matchesShortcut(event, SHORTCUTS[2])) return;
+      if (!matchesShortcut(event, SHORTCUTS[1])) return;
       event.preventDefault();
       toggleConnectionsTool();
     };

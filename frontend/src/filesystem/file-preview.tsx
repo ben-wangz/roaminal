@@ -1,5 +1,5 @@
-import { Download, FileQuestion, LoaderCircle, ScanSearch, Search, SquareTerminal } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Download, FileQuestion, LoaderCircle, ScanSearch, Search, SquareTerminal, ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { loadMetadata, readContent } from './filesystem-api';
 import type { FileEntry, FileMetadata, FileSystemError, RootContext } from './filesystem-types';
 import { formatSize, getPreviewScrollPosition, savePreviewScrollPosition } from './file-preview-helpers';
@@ -11,6 +11,13 @@ export type ImageDisplaySize = {
   height: number;
   scale: number;
 };
+
+type ImagePan = { x: number; y: number };
+type ImageDrag = ImagePan & { pointerId: number; startX: number; startY: number };
+
+const MIN_IMAGE_ZOOM = 25;
+const MAX_IMAGE_ZOOM = 400;
+const IMAGE_ZOOM_STEP = 25;
 
 export function fitImageSize(
   naturalWidth: number,
@@ -44,6 +51,9 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
   const [source, setSource] = useState<string | null>(null);
   const [imageVariant, setImageVariant] = useState<'preview' | 'original' | null>(null);
   const [originalLoading, setOriginalLoading] = useState(false);
+  const [imageZoom, setImageZoom] = useState(100);
+  const [imagePan, setImagePan] = useState<ImagePan>({ x: 0, y: 0 });
+  const [imageDragging, setImageDragging] = useState(false);
   const [markdownSource, setMarkdownSource] = useState(false);
   const previewBodyRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -51,6 +61,7 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
   const loadedIdentityRef = useRef<string | null>(null);
   const lastRestoredScrollKeyRef = useRef<string | null>(null);
   const imageRequestControllerRef = useRef<AbortController | null>(null);
+  const imageDragRef = useRef<ImageDrag | null>(null);
   const onRootChangedRef = useRef(onRootChanged);
   onRootChangedRef.current = onRootChanged;
   const entryPath = entry?.type === 'file' ? entry.relativePath : null;
@@ -79,6 +90,34 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
     if (size) setImageDisplaySize(size);
   };
 
+  const handleImageZoomChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = Number(event.currentTarget.value);
+    if (Number.isFinite(next)) setImageZoom(Math.min(MAX_IMAGE_ZOOM, Math.max(MIN_IMAGE_ZOOM, next)));
+  };
+
+  const handleImagePointerDown = (event: ReactPointerEvent<HTMLImageElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    imageDragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x: imagePan.x, y: imagePan.y };
+    setImageDragging(true);
+  };
+
+  const handleImagePointerMove = (event: ReactPointerEvent<HTMLImageElement>) => {
+    const drag = imageDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    setImagePan({ x: drag.x + event.clientX - drag.startX, y: drag.y + event.clientY - drag.startY });
+  };
+
+  const finishImageDrag = (event?: ReactPointerEvent<HTMLImageElement>) => {
+    const drag = imageDragRef.current;
+    if (!drag || (event && drag.pointerId !== event.pointerId)) return;
+    if (event?.currentTarget.hasPointerCapture?.(drag.pointerId)) event.currentTarget.releasePointerCapture?.(drag.pointerId);
+    imageDragRef.current = null;
+    setImageDragging(false);
+  };
+
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -89,6 +128,10 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
       setSource(null);
       setImageVariant(null);
       setOriginalLoading(false);
+      setImageZoom(100);
+      setImagePan({ x: 0, y: 0 });
+      setImageDragging(false);
+      imageDragRef.current = null;
       setImageDisplaySize(null);
       setMarkdownSource(false);
     }
@@ -118,6 +161,10 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
             try {
               const result = await readContent(instanceId, entryPath, rootRevision, { variant: 'original', signal: controller.signal });
               if (!active) return;
+              setImageZoom(100);
+              setImagePan({ x: 0, y: 0 });
+              setImageDragging(false);
+              imageDragRef.current = null;
               setImageVariant('original');
               setSource(URL.createObjectURL(new Blob([result.data], { type: next.mimeType })));
             } catch (originalReason) {
@@ -202,6 +249,11 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
   useEffect(() => () => { if (source) URL.revokeObjectURL(source); }, [source]);
 
   const hasPreviewContent = Boolean(metadata && (data !== null || source !== null || kind === 'raw'));
+  const imageStyle = {
+    ...(imageDisplaySize ? { width: `${imageDisplaySize.width}px`, height: `${imageDisplaySize.height}px` } : {}),
+    transform: `translate3d(${imagePan.x}px, ${imagePan.y}px, 0) scale(${imageZoom / 100})`,
+    transformOrigin: 'center center',
+  };
   const viewOriginal = async () => {
     if (!entry || !metadata || kind !== 'image' || !source || imageVariant === 'original' || originalLoading) return;
     const controller = new AbortController();
@@ -216,6 +268,10 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
         URL.revokeObjectURL(nextSource);
         return;
       }
+      setImageZoom(100);
+      setImagePan({ x: 0, y: 0 });
+      setImageDragging(false);
+      imageDragRef.current = null;
       setImageVariant('original');
       setSource(nextSource);
     } catch (reason) {
@@ -261,6 +317,7 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
         <div className="filesystem-preview-actions">
           <button autoFocus className="icon-button file-preview-back-terminal" type="button" onClick={onBackToTerminal} title="Back to Terminal" aria-label="Back to Terminal" data-testid="file-preview-back-terminal"><SquareTerminal size={17} aria-hidden="true" /></button>
           {kind === 'markdown' && <button className="icon-button" type="button" onClick={() => setMarkdownSource((value) => !value)} title={markdownSource ? 'Rendered markdown' : 'Markdown source'} aria-label={markdownSource ? 'Rendered markdown' : 'Markdown source'}><Search size={16} aria-hidden="true" /></button>}
+          {kind === 'image' && source && <label className="filesystem-image-zoom" title="Image zoom"><ZoomOut size={14} aria-hidden="true" /><input id="file-preview-image-zoom" data-testid="file-preview-image-zoom" aria-label="Image zoom" type="range" min={MIN_IMAGE_ZOOM} max={MAX_IMAGE_ZOOM} step={IMAGE_ZOOM_STEP} value={imageZoom} onChange={handleImageZoomChange} /><output htmlFor="file-preview-image-zoom">{imageZoom}%</output><ZoomIn size={14} aria-hidden="true" /></label>}
           {kind === 'image' && source && <button className={`icon-button ${imageVariant === 'original' ? 'selected' : ''}`} type="button" onClick={() => void viewOriginal()} disabled={imageVariant === 'original' || originalLoading} title={imageVariant === 'original' ? 'Original loaded' : 'View original'} aria-label={imageVariant === 'original' ? 'Original loaded' : 'View original'} data-testid="file-preview-view-original">{originalLoading ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <ScanSearch size={16} aria-hidden="true" />}</button>}
           <button className="icon-button" type="button" onClick={() => void download()} title="Download" aria-label="Download"><Download size={16} aria-hidden="true" /></button>
         </div>
@@ -268,7 +325,7 @@ export function FilePreview({ instanceId, root, entry, onBackToTerminal, onToast
       <div ref={previewBodyRef} className={`filesystem-preview-body ${kind === 'image' ? 'filesystem-preview-body-image' : ''}`}>
         {!hasPreviewContent && loading && <div className="filesystem-loading"><LoaderCircle size={18} className="spin" aria-hidden="true" /> Loading preview</div>}
         {!hasPreviewContent && !loading && error && <div className="filesystem-error">{error}</div>}
-        {hasPreviewContent && kind === 'image' && source && <img ref={imageRef} className="filesystem-image-viewer" src={source} alt={entry.name} style={imageDisplaySize ? { width: `${imageDisplaySize.width}px`, height: `${imageDisplaySize.height}px` } : undefined} onLoad={updateImageDisplaySize} />}
+        {hasPreviewContent && kind === 'image' && source && <img ref={imageRef} className={`filesystem-image-viewer${imageDragging ? ' dragging' : ''}`} src={source} alt={entry.name} draggable={false} style={imageStyle} onLoad={updateImageDisplaySize} onPointerDown={handleImagePointerDown} onPointerMove={handleImagePointerMove} onPointerUp={finishImageDrag} onPointerCancel={finishImageDrag} onLostPointerCapture={finishImageDrag} />}
         {hasPreviewContent && kind === 'video' && source && <video className="filesystem-video-viewer" src={source} controls preload="metadata" />}
         {hasPreviewContent && kind === 'pdf' && source && <iframe className="filesystem-pdf-viewer" src={source} title={entry.name} />}
         {hasPreviewContent && (kind === 'text' || (kind === 'markdown' && markdownSource)) && <pre className="filesystem-text-viewer">{text}</pre>}

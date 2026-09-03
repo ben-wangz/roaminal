@@ -15,7 +15,9 @@ portrait, phone portrait, and phone landscape.
    surface start below the topbar and extend to the bottom of the viewport.
    Verify there is no document-level horizontal or vertical overflow.
 3. Verify the topbar still exposes the brand, Roaminal-scoped resource metrics,
-   search, Messages, Fullscreen, Sessions, and Sign out. Verify it
+   Messages, Fullscreen, and Sign out. Verify Sessions is available from the
+   Settings page rather than the topbar, and Ctrl/Meta+F is left to browser Find.
+   Verify it
    does not expose a Connections or Virtual keyboard workspace switcher, active
    connection identity, heartbeat state, or a connection count. The
    `fullscreen-toggle` remains present and retains its runtime-driven supported,
@@ -79,7 +81,7 @@ portrait, phone portrait, and phone landscape.
     focus rules, and no old topbar tool buttons reappear. The Help and Add
     connection controls remain reachable with touch and keyboard.
 11. Switch the left rail between Connections and Files, activate a text/Markdown
-    file, use `Back to Terminal`, use terminal search, trigger a message-center
+    file, use `Back to Terminal`, use browser Find, trigger a message-center
     navigation, and exercise the
     fullscreen control. Verify the shell transition does not reset terminal
     scrollback, Markdown preview position, message state, connection selection,

@@ -14,7 +14,6 @@ type Params = {
   setDialog: Dispatch<SetStateAction<Dialog>>;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
-  setSearch: Dispatch<SetStateAction<boolean>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
   page: AppPage;
   workspaceToolOpen: boolean;
@@ -35,7 +34,6 @@ export function useAppShellViewActions({
   setDialog,
   setWorkspaceToolOpen,
   setWorkspaceContent,
-  setSearch,
   setPage,
   page,
   workspaceToolOpen,
@@ -66,19 +64,16 @@ export function useAppShellViewActions({
   const handleTerminate = useCallback((id: string) => setDialog({ type: 'terminate', connectionInstanceId: id }), [setDialog]);
   const handleAddConnection = useCallback(() => setDialog({ type: 'add-connection' }), [setDialog]);
   const handleHelp = useCallback(() => showToast('User manual is being prepared.'), [showToast]);
-  const handleToggleSearch = useCallback(() => setSearch((value) => !value), [setSearch]);
-  const handleCloseSearch = useCallback(() => setSearch(false), [setSearch]);
   const openSettings = useCallback((section: SettingsSection, focusTarget: string | null) => {
     cancelLaunch();
     previousWorkspaceToolOpen.current = workspaceToolOpen;
     setPreviewConnectionInstanceId(null);
     setWorkspaceContent('terminal');
     setWorkspaceToolOpen(false);
-    setSearch(false);
     setSettingsSection(section);
     setSettingsFocusTarget(focusTarget);
     setPage('settings');
-  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSearch, setSettingsFocusTarget, setSettingsSection, setWorkspaceContent, setWorkspaceToolOpen, workspaceToolOpen]);
+  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSettingsFocusTarget, setSettingsSection, setWorkspaceContent, setWorkspaceToolOpen, workspaceToolOpen]);
   const handleOpenSettings = useCallback((section?: SettingsSection, focusTarget: string | null = null) => {
     if (page === 'settings' && section === undefined) {
       if (!viewRef.current.activeConnectionInstanceId) return;
@@ -86,7 +81,6 @@ export function useAppShellViewActions({
       setPage('workspace');
       setWorkspaceContent('terminal');
       setPreviewConnectionInstanceId(null);
-      setSearch(false);
       setWorkspaceToolOpen(previousWorkspaceToolOpen.current ?? false);
       setSettingsFocusTarget(null);
       setSettingsDirty(false);
@@ -94,7 +88,7 @@ export function useAppShellViewActions({
       return;
     }
     openSettings(section || 'definitions', focusTarget);
-  }, [openSettings, page, setPage, setPreviewConnectionInstanceId, setSearch, setSettingsDirty, setSettingsFocusTarget, setWorkspaceContent, setWorkspaceToolOpen, settingsDirty, settingsToolButton, viewRef]);
+  }, [openSettings, page, setPage, setPreviewConnectionInstanceId, setSettingsDirty, setSettingsFocusTarget, setWorkspaceContent, setWorkspaceToolOpen, settingsDirty, settingsToolButton, viewRef]);
   const handleOpenConnections = useCallback(() => handleOpenSettings('definitions'), [handleOpenSettings]);
   const handleSaveAppearance = useCallback((next: TerminalAppearance) => {
     if (!saveAppearance(browserAppearanceStorage(), next)) {
@@ -130,8 +124,6 @@ export function useAppShellViewActions({
     handleTerminate,
     handleAddConnection,
     handleHelp,
-    handleToggleSearch,
-    handleCloseSearch,
     handleOpenConnections,
     handleOpenSettings,
     handleSaveAppearance,

@@ -31,13 +31,14 @@ tablet portrait, phone portrait, and phone landscape.
    horizontal overflow.
 4. At tablet and phone sizes verify the same DOM content becomes one column,
    the rail becomes a 44px horizontal strip in the order Connections, Virtual
-   keyboard, Files, Settings, Help, and the four section buttons wrap without
+   keyboard, Files, Settings, Help, and the five section buttons wrap without
    horizontal overflow. Each section button remains a readable touch target.
 5. Exercise each settings section in order: Connection definitions, SSH keys,
-   Interface, and Notifications. Verify only the selected section is visible,
-   the selected item has `aria-current="page"`, the section heading is
+   Interface, Notifications, and Sessions. Verify only the selected section is
+   visible, the selected item has `aria-current="page"`, the section heading is
    focusable after navigation, and returning to a section restores its scroll
-   position.
+   position. Sessions lists login sessions inline, supports refresh, revoking an
+   individual session, and logging out other sessions without opening a modal.
 6. In Connection definitions filter by alias, hostname, and user using mixed
    case and surrounding whitespace. Verify filtering is local. Verify Local,
    source status, managed-key count, trust, Tmux, warning/read-only facts, and

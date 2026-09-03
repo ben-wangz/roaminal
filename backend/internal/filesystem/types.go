@@ -16,14 +16,17 @@ type RootContext struct {
 }
 
 type Entry struct {
-	Name         string     `json:"name"`
-	RelativePath string     `json:"relativePath"`
-	AbsolutePath string     `json:"absolutePath"`
-	Type         string     `json:"type"`
-	Size         *int64     `json:"size"`
-	ModifiedAt   *time.Time `json:"modifiedAt"`
-	Mode         uint32     `json:"mode"`
-	Symlink      bool       `json:"symlink"`
+	Name         string `json:"name"`
+	RelativePath string `json:"relativePath"`
+	AbsolutePath string `json:"absolutePath"`
+	Type         string `json:"type"`
+	// MIMEType is adapter metadata used by the server to select a viewer. Keep
+	// it out of directory JSON; stat already exposes the value as mimeType.
+	MIMEType   string     `json:"-"`
+	Size       *int64     `json:"size"`
+	ModifiedAt *time.Time `json:"modifiedAt"`
+	Mode       uint32     `json:"mode"`
+	Symlink    bool       `json:"symlink"`
 }
 
 type DirectoryResult struct {

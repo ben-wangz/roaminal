@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"bytes"
+	"mime"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -17,6 +18,7 @@ const (
 type rawEntry struct {
 	Name       string
 	Type       string
+	MIMEType   string
 	Size       *int64
 	ModifiedAt *time.Time
 	Mode       uint32
@@ -29,27 +31,42 @@ func parseDirectory(data []byte) ([]rawEntry, error) {
 		return nil, ErrProtocol
 	}
 	records := fields[1 : len(fields)-2]
-	if len(records)%7 != 0 {
-		return nil, ErrProtocol
-	}
-	if len(records)/7 > maxDirectoryEntries {
-		return nil, ErrDirectoryTooLarge
-	}
-	result := make([]rawEntry, 0, len(records)/7)
-	for index := 0; index < len(records); index += 7 {
-		name := string(records[index])
-		if name == "" || !utf8.Valid(records[index]) || bytes.Contains(records[index], []byte{'/'}) {
+	result := make([]rawEntry, 0)
+	for index := 0; index < len(records); {
+		// Directory frames contain seven fields, while stat frames append the
+		// detected MIME field before the empty record terminator.
+		width := 0
+		mimeType := ""
+		switch {
+		case index+7 <= len(records) && len(records[index+6]) == 0:
+			width = 7
+		case index+8 <= len(records) && len(records[index+7]) == 0:
+			width = 8
+			parsed, mimeErr := parseOptionalMIME(records[index+6])
+			if mimeErr != nil {
+				return nil, ErrProtocol
+			}
+			mimeType = parsed
+		default:
+			return nil, ErrProtocol
+		}
+		if len(result) >= maxDirectoryEntries {
+			return nil, ErrDirectoryTooLarge
+		}
+		record := records[index : index+width]
+		name := string(record[0])
+		if name == "" || !utf8.Valid(record[0]) || bytes.Contains(record[0], []byte{'/'}) {
 			return nil, ErrFilenameEncoding
 		}
-		entryType := string(records[index+1])
+		entryType := string(record[1])
 		if entryType != "directory" && entryType != "file" && entryType != "symlink" && entryType != "other" {
 			return nil, ErrProtocol
 		}
-		size, err := parseOptionalInt64(records[index+2])
+		size, err := parseOptionalInt64(record[2])
 		if err != nil || (size != nil && *size < 0) {
 			return nil, ErrProtocol
 		}
-		modifiedUnix, err := parseOptionalInt64(records[index+3])
+		modifiedUnix, err := parseOptionalInt64(record[3])
 		if err != nil {
 			return nil, ErrProtocol
 		}
@@ -58,20 +75,38 @@ func parseDirectory(data []byte) ([]rawEntry, error) {
 			value := time.Unix(*modifiedUnix, 0).UTC()
 			modifiedAt = &value
 		}
-		mode, err := strconv.ParseUint(string(records[index+4]), 10, 32)
+		mode, err := strconv.ParseUint(string(record[4]), 10, 32)
 		if err != nil {
 			return nil, ErrProtocol
 		}
-		symlink, err := strconv.ParseBool(string(records[index+5]))
+		symlink, err := strconv.ParseBool(string(record[5]))
 		if err != nil || (entryType == "symlink") != symlink {
 			return nil, ErrProtocol
 		}
-		if string(records[index+6]) != "" {
+		if len(record) == 7 && string(record[6]) != "" {
 			return nil, ErrProtocol
 		}
-		result = append(result, rawEntry{Name: name, Type: entryType, Size: size, ModifiedAt: modifiedAt, Mode: uint32(mode), Symlink: symlink})
+		if len(record) == 8 && string(record[7]) != "" {
+			return nil, ErrProtocol
+		}
+		result = append(result, rawEntry{Name: name, Type: entryType, MIMEType: mimeType, Size: size, ModifiedAt: modifiedAt, Mode: uint32(mode), Symlink: symlink})
+		index += width
 	}
 	return result, nil
+}
+
+func parseOptionalMIME(value []byte) (string, error) {
+	if bytes.Equal(value, []byte("-")) {
+		return "", nil
+	}
+	if len(value) == 0 || !utf8.Valid(value) || bytes.IndexAny(value, "\x00\r\n") >= 0 {
+		return "", ErrProtocol
+	}
+	parsed, _, err := mime.ParseMediaType(string(value))
+	if err != nil {
+		return "", ErrProtocol
+	}
+	return parsed, nil
 }
 
 func parseOptionalInt64(value []byte) (*int64, error) {
@@ -139,6 +174,13 @@ if [ -L "$target" ]; then type=symlink; symlink=true
 elif [ -d "$target" ]; then type=directory
 elif [ -f "$target" ]; then type=file
 fi
+mime_type=-
+if [ "$type" = file ] && command -v file >/dev/null 2>&1; then
+  mime_type=$(file -b --mime-type -- "$target" 2>/dev/null || true)
+  case "$mime_type" in
+    ''|*[!A-Za-z0-9./+_-]*) mime_type=-;;
+  esac
+fi
 metadata=$(stat -c '%s %Y %a' -- "$target" 2>/dev/null || stat -f '%z %m %Lp' "$target" 2>/dev/null || printf '%s' '- - -')
 set -- $metadata
 size=${1:--}; modified=${2:--}; mode=${3:--}
@@ -146,7 +188,7 @@ case "$size" in ''|*[!0-9]*) size=-;; esac
 case "$modified" in ''|*[!0-9-]*) modified=-;; esac
 case "$mode" in ''|*[!0-9]*) mode=0;; esac
 printf '%s\0' 'ROAMINAL_FILESYSTEM_V1_BEGIN'
-printf '%s\0%s\0%s\0%s\0%s\0%s\0%s\0' "$name" "$type" "$size" "$modified" "$mode" "$symlink" ''
+printf '%s\0%s\0%s\0%s\0%s\0%s\0%s\0%s\0' "$name" "$type" "$size" "$modified" "$mode" "$symlink" "$mime_type" ''
 printf '%s\0' 'ROAMINAL_FILESYSTEM_V1_END'
 `
 

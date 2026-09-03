@@ -22,15 +22,15 @@ describe('app controller', () => {
     });
     expect(snapshots).toEqual(['workspace', 'workspace', 'workspace', 'workspace', 'workspace']);
     unsubscribe();
-    controller.setSearch(true);
+    controller.setPage('settings');
     expect(snapshots).toHaveLength(5);
   });
 
   it('supports functional field updates without exposing mutable state', () => {
     const controller = createAppController();
     const before = controller.getSnapshot();
-    controller.setState((current) => ({ ...current, search: !current.search }));
-    expect(before.search).toBe(false);
-    expect(controller.getSnapshot().search).toBe(true);
+    controller.setState((current) => ({ ...current, workspaceContent: current.workspaceContent === 'terminal' ? 'file-preview' : 'terminal' }));
+    expect(before.workspaceContent).toBe('terminal');
+    expect(controller.getSnapshot().workspaceContent).toBe('file-preview');
   });
 });

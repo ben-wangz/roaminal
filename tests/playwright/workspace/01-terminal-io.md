@@ -10,7 +10,7 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
 2. Print UTF-8 text split across writes, ANSI colors, a long line, and enough
    lines to enter scrollback. Text remains valid, control sequences render
    instead of leaking, horizontal page overflow does not appear, and scrollback
-   remains searchable.
+   remains visible and scrollable.
 3. Run `cd` to a unique directory and set a shell title. Wait for heartbeat/meta
    updates; the footer PWD, document title, and automatic card title reflect
    the new state without private marker bytes appearing in xterm output. The

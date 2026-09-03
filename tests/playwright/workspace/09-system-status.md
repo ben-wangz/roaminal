@@ -6,8 +6,9 @@ standard projects.
 ## Procedure and assertions
 
 1. After heartbeat, the topbar shows Roaminal-scoped CPU/MEM with progress
-   semantics, process uptime, optional local RTT, Sessions, Sign out, and
-   workspace actions where applicable. It does not show the active connection
+   semantics, process uptime, optional local RTT, Sign out, and workspace
+   actions where applicable. Sessions is available inside Settings, not in the
+   topbar. It does not show the active connection
    name, a heartbeat Connected/Reconnecting label, or a connection count.
 2. CPU and memory values match the heartbeat payload within formatting rules.
    Capacity/working-set/limit details are truthful for cgroup scope; unavailable

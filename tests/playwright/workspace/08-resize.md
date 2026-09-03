@@ -10,7 +10,7 @@ five standard projects plus dynamic resizing.
    Verify `TERM` remains present and values stay in supported bounds.
 2. Resize the desktop viewport through narrow/wide and short/tall dimensions,
    collapse/open the shared workspace tool surface, switch between Connections
-   and Virtual keyboard, open/close search, and show/hide the remote monitor.
+   and Virtual keyboard, use browser Find, and show/hide the remote monitor.
    After each stable layout, xterm fits once to available space and sends the
    converged geometry without an endless resize loop.
 3. Run `stty size` after each state. Reported PTY rows/columns match xterm and

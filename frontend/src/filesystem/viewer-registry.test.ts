@@ -32,6 +32,13 @@ describe('filesystem viewer registry', () => {
     expect(viewerFor(metadata('archive.bin', 'application/octet-stream'))).toBe('raw');
   });
 
+	it('keeps supported document extensions ahead of detected MIME', () => {
+		expect(viewerFor(metadata('notes.pdf', 'text/plain'))).toBe('pdf');
+		expect(viewerFor(metadata('notes.txt', 'image/png'))).toBe('text');
+		expect(viewerFor(metadata('component.jsx', 'video/mp4'))).toBe('text');
+		expect(viewerFor(metadata('README.md', 'image/png'))).toBe('markdown');
+	});
+
   it('allows an extension descriptor to override the built-in priority', () => {
     const unregister = registerViewer({
       id: 'fixture',

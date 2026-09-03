@@ -33,3 +33,29 @@ func TestContentRange(t *testing.T) {
 		})
 	}
 }
+
+func TestMimeTypeForEntryPrefersExtensionThenDetectedType(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		detected string
+		want     string
+	}{
+		{name: "detected text for unknown extension", filename: "README", detected: "text/plain", want: "text/plain"},
+		{name: "detected type is normalized", filename: "README", detected: "TEXT/X-SHELLSCRIPT", want: "text/x-shellscript"},
+		{name: "supported extension wins over detected type", filename: "notes.json", detected: "text/plain", want: "application/json"},
+		{name: "empty detection falls back to extension", filename: "notes.json", detected: "-", want: "application/json"},
+		{name: "unknown detection falls back to extension", filename: "notes.json", detected: "", want: "application/json"},
+		{name: "generic binary extension allows detected text", filename: "notes.bin", detected: "text/plain", want: "text/plain"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := mimeTypeForEntry(test.filename, "file", test.detected); got != test.want {
+				t.Fatalf("mimeTypeForEntry(%q, file, %q) = %q, want %q", test.filename, test.detected, got, test.want)
+			}
+		})
+	}
+	if got := mimeTypeForEntry("notes.txt", "file", "text/plain\r\nX-Injected: true"); got != "text/plain; charset=utf-8" {
+		t.Fatalf("invalid detected MIME must fall back to extension, got %q", got)
+	}
+}

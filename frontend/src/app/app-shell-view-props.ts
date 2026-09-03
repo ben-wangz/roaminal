@@ -48,7 +48,6 @@ export type AppShellViewProps = {
   previewConnectionInstanceId: string | null;
   previewRuntime: TerminalPreviewRuntime | null;
   contextualMode: ContextualMode;
-  search: boolean;
   executionStatus: string | null;
   toast: ToastState | null;
   dialog: Dialog;
@@ -56,6 +55,7 @@ export type AppShellViewProps = {
   authSessions: AuthSessionSummary[];
   currentAuthSessionId: string;
   authSessionBusy: string | null;
+  authSessionsLoading: boolean;
   onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
   onCollapseWorkspaceTool: () => void;
   onHelp: () => void;
@@ -78,13 +78,11 @@ export type AppShellViewProps = {
   onAutomaticTitle: (id: string) => void;
   onTerminate: (id: string) => void;
   onContextualModeChange: (mode: ContextualMode) => void;
-  onToggleSearch: () => void;
-  onCloseSearch: () => void;
   onOpenSettings: (section?: SettingsSection, focusTarget?: string | null) => void;
   onSelectSettingsSection: (section: SettingsSection) => void;
   onFocusTargetConsumed: () => void;
   onSignOut: () => void;
-  onOpenAuthSessions: () => void;
+  onLoadAuthSessions: () => Promise<void>;
   onOpenManager: () => void;
   onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<boolean>;
   onGenerated: (instance: ConnectionInstanceSummary) => Promise<void>;

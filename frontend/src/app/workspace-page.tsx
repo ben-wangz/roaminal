@@ -2,7 +2,6 @@ import { useMonitorDisclosure } from '../status/use-monitor-disclosure';
 import { RemoteMonitorBand } from '../status/remote-monitor-band';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { TerminalViewport } from '../terminal/terminal-viewport';
-import { TerminalSearch } from '../terminal/terminal-search';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { FilePreviewWorkspace } from '../filesystem/file-preview-workspace';
 import type { FileSystemWorkspaceState } from '../filesystem/use-filesystem-workspace';
@@ -14,9 +13,7 @@ type Props = {
   activeInstance: ConnectionInstanceSummary | null;
   activeRuntime: TerminalRuntime | null;
   currentConnection: ConnectionInstanceSummary | undefined;
-  search: boolean;
   executionStatus: string | null;
-  onCloseSearch: () => void;
   onOpenManager: () => void;
   content: WorkspaceContent;
   filesystem: FileSystemWorkspaceState;
@@ -29,9 +26,7 @@ export function WorkspacePage({
   activeInstance,
   activeRuntime,
   currentConnection,
-  search,
   executionStatus,
-  onCloseSearch,
   onOpenManager,
   content,
   filesystem,
@@ -61,7 +56,6 @@ export function WorkspacePage({
           aria-hidden={content !== 'terminal'}
           inert={content !== 'terminal' || undefined}
         >
-          {search && activeRuntime && <TerminalSearch runtime={activeRuntime} onClose={onCloseSearch} />}
           <section className="terminal-stage">
             {activeRuntime ? (
               <TerminalViewport

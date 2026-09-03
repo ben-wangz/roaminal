@@ -40,7 +40,7 @@
 .filesystem-preview-body { min-height: 0; flex: 1; overflow: auto; display: grid; place-items: center; padding: 18px; position: relative; }
 .filesystem-preview-body-image { overflow: hidden; }
 .filesystem-text-viewer { align-self: stretch; width: 100%; margin: 0; padding: 4px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; line-height: 1.55; }
-.filesystem-markdown-viewer { align-self: start; width: min(900px, 100%); color: var(--text); line-height: 1.6; font-family: 'Source Code Pro', monospace; font-size: .82rem; }
+.filesystem-markdown-viewer { align-self: start; justify-self: stretch; width: 100%; min-width: 0; max-width: 100%; color: var(--text); line-height: 1.6; font-family: 'Source Code Pro', monospace; font-size: .82rem; overflow-wrap: anywhere; }
 .filesystem-markdown-viewer > :first-child { margin-top: 0; }
 .filesystem-markdown-viewer > :last-child { margin-bottom: 0; }
 .filesystem-markdown-viewer h1, .filesystem-markdown-viewer h2, .filesystem-markdown-viewer h3, .filesystem-markdown-viewer h4, .filesystem-markdown-viewer h5, .filesystem-markdown-viewer h6 { color: var(--text-bright); line-height: 1.25; margin: 1.2em 0 .55em; }
@@ -53,14 +53,19 @@
 .filesystem-markdown-viewer a { color: var(--cyan); }
 .filesystem-markdown-viewer blockquote { margin-left: 0; padding-left: 1em; border-left: 3px solid var(--border); color: var(--muted); }
 .filesystem-markdown-viewer code { padding: .12em .3em; background: var(--surface-0); color: var(--text-bright); font-size: .9em; }
-.filesystem-markdown-viewer pre { overflow: auto; padding: 11px 13px; border: 1px solid var(--border-soft); background: var(--surface-0); }
+.filesystem-markdown-viewer pre { max-width: 100%; overflow: auto; padding: 11px 13px; border: 1px solid var(--border-soft); background: var(--surface-0); }
 .filesystem-markdown-viewer pre code { padding: 0; background: transparent; }
-.filesystem-markdown-viewer table { width: 100%; border-collapse: collapse; text-align: left; }
+.filesystem-markdown-viewer table { width: 100%; max-width: 100%; border-collapse: collapse; table-layout: fixed; text-align: left; }
 .filesystem-markdown-viewer th, .filesystem-markdown-viewer td { padding: 7px 9px; border: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+.filesystem-markdown-viewer img { display: block; max-width: 100%; height: auto; }
 .filesystem-markdown-viewer th { color: var(--text-bright); background: var(--surface-0); font-weight: 700; }
 .filesystem-markdown-viewer tr:nth-child(even) td { background: color-mix(in oklab, var(--surface-0) 45%, transparent); }
 .filesystem-markdown-viewer input[type='checkbox'] { accent-color: var(--cyan); margin-right: .45em; }
-.filesystem-image-viewer { display: block; max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: auto; }
+.filesystem-image-zoom { display: inline-flex; align-items: center; gap: 5px; flex: 0 1 180px; min-width: 105px; color: var(--muted); }
+.filesystem-image-zoom input[type='range'] { width: 100px; min-width: 40px; flex: 1 1 auto; accent-color: var(--cyan); }
+.filesystem-image-zoom output { min-width: 3.5em; color: var(--text); font-size: .68rem; text-align: right; }
+.filesystem-image-viewer { display: block; max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: auto; cursor: grab; user-select: none; touch-action: none; will-change: transform; }
+.filesystem-image-viewer.dragging { cursor: grabbing; }
 .filesystem-video-viewer { max-width: 100%; max-height: 100%; }
 .filesystem-pdf-viewer { width: 100%; height: 100%; border: 0; background: white; }
 .filesystem-raw-viewer, .filesystem-preview-empty, .filesystem-loading, .filesystem-error, .filesystem-unavailable { display: inline-flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: .78rem; text-align: center; }

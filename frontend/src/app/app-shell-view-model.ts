@@ -96,7 +96,7 @@ export function buildAppShellViewProps({
   fullscreen,
   notifications,
 }: Params): AppShellViewProps {
-  const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, search, dialog, settingsSection, settingsFocusTarget } = appState;
+  const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, dialog, settingsSection, settingsFocusTarget } = appState;
   const dialogConnection = dialog && 'connectionInstanceId' in dialog
     ? connections.find((connection) => connection.connectionInstanceId === dialog.connectionInstanceId)
     : undefined;
@@ -125,7 +125,6 @@ export function buildAppShellViewProps({
     previewConnectionInstanceId,
     previewRuntime: previewRuntime?.connectionInstanceId === previewConnectionInstanceId ? previewRuntime : null,
     contextualMode,
-    search,
     executionStatus,
     toast,
     dialog,
@@ -133,6 +132,7 @@ export function buildAppShellViewProps({
     authSessions: actions.authSessions,
     currentAuthSessionId: actions.currentAuthSessionId,
     authSessionBusy: actions.authSessionBusy,
+    authSessionsLoading: actions.authSessionsLoading,
     onSelectWorkspaceTool: workspaceActions.handleSelectWorkspaceTool,
     onCollapseWorkspaceTool: workspaceActions.handleCollapseWorkspaceTool,
     onHelp: viewActions.handleHelp,
@@ -155,8 +155,6 @@ export function buildAppShellViewProps({
     onAutomaticTitle: actions.resetTitle,
     onTerminate: viewActions.handleTerminate,
     onContextualModeChange,
-    onToggleSearch: viewActions.handleToggleSearch,
-    onCloseSearch: viewActions.handleCloseSearch,
     onOpenSettings: viewActions.handleOpenSettings,
     onSelectSettingsSection: (next: SettingsSection) => {
       setSettingsFocusTarget(null);
@@ -164,7 +162,7 @@ export function buildAppShellViewProps({
     },
     onFocusTargetConsumed: () => setSettingsFocusTarget(null),
     onSignOut: actions.signOut,
-    onOpenAuthSessions: () => void actions.openAuthSessions(),
+    onLoadAuthSessions: actions.loadAuthSessions,
     onOpenManager: viewActions.handleOpenConnections,
     onCreateConnection: actions.createConnection,
     onGenerated: actions.acceptGenerated,

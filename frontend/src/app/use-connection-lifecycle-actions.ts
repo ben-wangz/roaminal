@@ -20,7 +20,6 @@ type Params = {
   setActiveView: (next: ConnectionView) => void;
   setDialog: Dispatch<SetStateAction<Dialog>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
-  setSearch: Dispatch<SetStateAction<boolean>>;
   setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
   mainRuntime: MutableRefObject<TerminalRuntime | null>;
   previewRuntimeRef: DisposableRuntimeRef;
@@ -36,7 +35,6 @@ export function useConnectionLifecycleActions({
   setActiveView,
   setDialog,
   setPreviewConnectionInstanceId,
-  setSearch,
   setWorkspaceContent,
   mainRuntime,
   previewRuntimeRef,
@@ -79,12 +77,11 @@ export function useConnectionLifecycleActions({
         return next;
       });
       setDialog(null);
-      setSearch(false);
       setPreviewConnectionInstanceId(null);
     } catch (err) {
       showToast((err as Error).message, 'error');
     }
-  }, [controller, mainRuntime, previewRuntimeRef, setActiveView, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setSearch, setWorkspaceContent, showToast, viewRef]);
+  }, [controller, mainRuntime, previewRuntimeRef, setActiveView, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setWorkspaceContent, showToast, viewRef]);
 
   const onLogin = useCallback(async (password: string) => {
     try {

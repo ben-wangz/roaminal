@@ -30,7 +30,7 @@ import { useFilesystemWorkspace } from '../filesystem/use-filesystem-workspace';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
-  const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setWorkspaceContent, setPreviewConnectionInstanceId, setSearch, setDialog, setSettingsSection, setSettingsFocusTarget } = appController;
+  const { state: appState, viewRef, setActiveView, setView, setPage, setWorkspaceTool, setWorkspaceToolOpen, setWorkspaceContent, setPreviewConnectionInstanceId, setDialog, setSettingsSection, setSettingsFocusTarget } = appController;
   const { view, page, workspaceTool, workspaceToolOpen, workspaceContent, previewConnectionInstanceId } = appState;
   const [auth, setAuth] = useState(loadAuth());
   const { connections, layout: connectionInstanceLayout, heartbeat: heartbeatState, heartbeatLatency } = connectionState;
@@ -85,7 +85,6 @@ export function AppShell() {
     setWorkspaceTool,
     setWorkspaceToolOpen,
     setWorkspaceContent,
-    setSearch,
     setPreviewConnectionInstanceId,
     setDialog,
     showToast,
@@ -129,7 +128,6 @@ export function AppShell() {
     setCurrentRuntime,
     setView,
     setPage,
-    setSearch,
     setExecutionStatus,
     setExecutionStatusRuntime,
     showToast,
@@ -230,7 +228,6 @@ export function AppShell() {
     setDialog,
     setWorkspaceToolOpen,
     setWorkspaceContent,
-    setSearch,
     setPage,
     page,
     workspaceToolOpen,

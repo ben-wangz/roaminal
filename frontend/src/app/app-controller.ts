@@ -14,7 +14,6 @@ export type AppControllerState = {
   workspaceToolOpen: boolean;
   workspaceContent: WorkspaceContent;
   previewConnectionInstanceId: string | null;
-  search: boolean;
   dialog: Dialog;
   settingsSection: SettingsSection;
   settingsFocusTarget: string | null;
@@ -52,7 +51,6 @@ class AppController {
   setPreviewConnectionInstanceId(previewConnectionInstanceId: string | null): void {
     this.setState((current) => ({ ...current, previewConnectionInstanceId }));
   }
-  setSearch(search: boolean): void { this.setState((current) => ({ ...current, search })); }
   setDialog(dialog: Dialog): void { this.setState((current) => ({ ...current, dialog })); }
   setSettingsSection(settingsSection: SettingsSection): void { this.setState((current) => ({ ...current, settingsSection })); }
   setSettingsFocusTarget(settingsFocusTarget: string | null): void { this.setState((current) => ({ ...current, settingsFocusTarget })); }
@@ -68,7 +66,6 @@ export function createAppController(): AppController {
     workspaceToolOpen,
     workspaceContent: 'terminal',
     previewConnectionInstanceId: null,
-    search: false,
     dialog: null,
     settingsSection: DEFAULT_SETTINGS_SECTION,
     settingsFocusTarget: null,
@@ -96,7 +93,6 @@ export function useAppController() {
   const setWorkspaceToolOpen = useCallback((next: SetStateAction<boolean>) => setField('workspaceToolOpen', next), [setField]);
   const setWorkspaceContent = useCallback((next: SetStateAction<WorkspaceContent>) => setField('workspaceContent', next), [setField]);
   const setPreviewConnectionInstanceId = useCallback((next: SetStateAction<string | null>) => setField('previewConnectionInstanceId', next), [setField]);
-  const setSearch = useCallback((next: SetStateAction<boolean>) => setField('search', next), [setField]);
   const setDialog = useCallback((next: SetStateAction<Dialog>) => setField('dialog', next), [setField]);
   const setSettingsSection = useCallback((next: SetStateAction<SettingsSection>) => setField('settingsSection', next), [setField]);
   const setSettingsFocusTarget = useCallback((next: SetStateAction<string | null>) => setField('settingsFocusTarget', next), [setField]);
@@ -111,7 +107,6 @@ export function useAppController() {
     setWorkspaceToolOpen,
     setWorkspaceContent,
     setPreviewConnectionInstanceId,
-    setSearch,
     setDialog,
     setSettingsSection,
     setSettingsFocusTarget,

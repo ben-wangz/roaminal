@@ -78,6 +78,7 @@ func makeEntry(root RootContext, parent string, raw ports.RemoteFileEntry) Entry
 		RelativePath: relative,
 		AbsolutePath: path.Join(root.AbsolutePath, relative),
 		Type:         raw.Type,
+		MIMEType:     raw.MIMEType,
 		Size:         raw.Size,
 		ModifiedAt:   raw.ModifiedAt,
 		Mode:         raw.Mode,

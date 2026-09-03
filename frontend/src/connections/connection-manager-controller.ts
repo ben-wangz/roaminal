@@ -4,6 +4,7 @@ import type { TerminalAppearance } from '../appearance/appearance-model';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { ToastKind } from '../ui/toast';
 import type { NotificationState } from '../status/notification-service';
+import type { AuthSessionSummary } from '../auth/auth-session-ui';
 import {
   loadDefinitions,
   loadKeys,
@@ -33,6 +34,13 @@ export type ConnectionManagerProps = {
   onEnableNotifications: () => Promise<void>;
   onDisableNotifications: () => Promise<void>;
   onToast: (message: string, kind?: ToastKind) => void;
+  authSessions?: AuthSessionSummary[];
+  currentAuthSessionId?: string;
+  authSessionBusy?: string | null;
+  authSessionsLoading?: boolean;
+  onLoadAuthSessions?: () => Promise<void>;
+  onRevokeAuthSession?: (id: string) => void;
+  onLogoutOtherAuthSessions?: () => void;
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
   focusTarget: string | null;

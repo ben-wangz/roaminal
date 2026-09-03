@@ -1,18 +1,15 @@
 import type { FitAddon } from '@xterm/addon-fit';
-import type { SearchAddon } from '@xterm/addon-search';
 import type { Terminal } from '@xterm/xterm';
 import { type ClientCommand, type ServerMessage } from './terminal-protocol';
 import { TerminalStream } from './terminal-stream';
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 import { attachTerminalShortcutHandler } from './terminal-shortcuts';
-import { findTerminalMatch, type TerminalSearchOptions } from './terminal-search-guard';
 import { ImeInputFallbackAddon } from './terminal-ime-fallback';
 
 export type TerminalRuntimeConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'terminated';
 export type TerminalGrid = { cols: number; rows: number };
 export class TerminalRuntime {
   terminal?: Terminal;
-  search?: SearchAddon;
   private fit?: FitAddon;
   private stream: TerminalStream | null = null;
   private element: HTMLElement | null = null;
@@ -52,10 +49,9 @@ export class TerminalRuntime {
     const modules = await Promise.all([
       import('@xterm/xterm'),
       import('@xterm/addon-fit'),
-      import('@xterm/addon-search'),
     ]);
     if (this.disposed) return;
-    const [{ Terminal }, { FitAddon }, { SearchAddon }] = modules;
+    const [{ Terminal }, { FitAddon }] = modules;
     this.terminal = new Terminal({
       convertEol: false,
       cursorBlink: true,
@@ -64,7 +60,6 @@ export class TerminalRuntime {
       theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' },
     });
     this.fit = new FitAddon();
-    this.search = new SearchAddon();
     attachTerminalShortcutHandler(this.terminal);
     this.terminal.onData((data) => this.input(data));
     this.terminal.onResize(({ cols, rows }) => {
@@ -103,8 +98,8 @@ export class TerminalRuntime {
   }
 
   private mount(): void {
-    const { element, terminal, fit, search } = this;
-    if (this.disposed || !element || !terminal || !fit || !search) return;
+    const { element, terminal, fit } = this;
+    if (this.disposed || !element || !terminal || !fit) return;
     if (terminal.element) element.replaceChildren(terminal.element);
     else {
       terminal.open(element);
@@ -115,9 +110,8 @@ export class TerminalRuntime {
       void Promise.all([import('@xterm/addon-ligatures'), import('@xterm/addon-progress')]).then(
         ([{ LigaturesAddon }, { ProgressAddon }]) => {
           this.addonsLoading = false;
-          if (this.disposed || !this.terminal || !this.fit || !this.search) return;
+          if (this.disposed || !this.terminal || !this.fit) return;
           this.terminal.loadAddon(this.fit);
-          this.terminal.loadAddon(this.search);
           this.terminal.loadAddon(new LigaturesAddon());
           this.terminal.loadAddon(new ProgressAddon());
           this.addonsLoaded = true;
@@ -201,7 +195,6 @@ export class TerminalRuntime {
     const terminal = this.terminal;
     this.terminal = undefined;
     this.fit = undefined;
-    this.search = undefined;
     if (terminal) {
       this.deferTerminalDispose(terminal);
     } else {
@@ -210,7 +203,6 @@ export class TerminalRuntime {
         const loaded = this.terminal;
         this.terminal = undefined;
         this.fit = undefined;
-        this.search = undefined;
         if (loaded) this.deferTerminalDispose(loaded);
       });
     }
@@ -255,14 +247,6 @@ export class TerminalRuntime {
     if (this.disposed || this.closed || !data) return;
     this.claim();
     this.send({ type: 'input', data });
-  }
-
-  find(query: string, options: TerminalSearchOptions = {}): boolean {
-    return findTerminalMatch(this.search, query, options, false);
-  }
-
-  findPrevious(query: string, options: TerminalSearchOptions = {}): boolean {
-    return findTerminalMatch(this.search, query, options, true);
   }
 
   send(message: ClientCommand): void {

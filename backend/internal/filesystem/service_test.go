@@ -137,6 +137,24 @@ func TestDirectoryProtocolAndStableOrdering(t *testing.T) {
 	}
 }
 
+func TestStatPreservesDetectedMIMEType(t *testing.T) {
+	alias := "fixture"
+	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
+	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
+		if command.Script == configuredRootScript {
+			return rootOutput("/workspace"), nil
+		}
+		return detectedDirectoryOutput(rawEntry{Name: "README", Type: "file", MIMEType: "text/plain", Size: int64Pointer(4)}), nil
+	}
+	entry, _, err := New(fake, nil).Stat(context.Background(), "instance", "README", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.MIMEType != "text/plain" {
+		t.Fatalf("detected MIME type = %q, want text/plain", entry.MIMEType)
+	}
+}
+
 func TestEntriesRejectsRootRevisionChange(t *testing.T) {
 	alias := "fixture"
 	rootPath := "/workspace"

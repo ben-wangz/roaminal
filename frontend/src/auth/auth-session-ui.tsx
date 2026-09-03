@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, X } from 'lucide-react';
-import { Modal } from '../ui/modal';
+import { RefreshCw, ShieldCheck } from 'lucide-react';
 
 export function AuthSessionUI({ error, onLogin }: { error: string; onLogin: (password: string) => Promise<void> }) {
   const [password, setPassword] = useState('');
@@ -16,13 +15,40 @@ export function AuthSessionUI({ error, onLogin }: { error: string; onLogin: (pas
 
 export type AuthSessionSummary = { id: string; createdAt: string; lastSeenAt: string; refreshExpiresAt: string; userAgent: string; current: boolean };
 
-export function AuthSessionsDialog({ sessions, currentId, busy, onRevoke, onLogoutOthers, onClose }: { sessions: AuthSessionSummary[]; currentId: string; busy: string | null; onRevoke: (id: string) => void; onLogoutOthers: () => void; onClose: () => void }) {
-  return <Modal onClose={onClose}><section className="auth-sessions-dialog" aria-labelledby="auth-sessions-title">
-    <header><div><h2 id="auth-sessions-title">Login sessions</h2><p>Review and revoke active refresh sessions.</p></div><button type="button" className="icon-button" aria-label="Close sessions" title="Close sessions" onClick={onClose}><X aria-hidden="true" size={17} /></button></header>
-    <div className="auth-session-list">{sessions.map((session) => <div className="auth-session-row" key={session.id}>
-      <div className="auth-session-copy"><strong>{session.current || session.id === currentId ? 'This browser' : 'Other browser'}</strong><small>{session.userAgent || 'Unknown client'} · last seen {new Date(session.lastSeenAt).toLocaleString()}</small><code>{session.id.slice(-12)}</code></div>
-      <button type="button" className="text-button destructive-text" disabled={busy !== null} onClick={() => onRevoke(session.id)}>{busy === session.id ? 'Revoking...' : 'Revoke'}</button>
-    </div>)}</div>
-    <footer><ShieldCheck aria-hidden="true" size={15} /><button type="button" className="text-button" disabled={busy !== null} onClick={onLogoutOthers}>{busy === 'others' ? 'Revoking...' : 'Log out other sessions'}</button></footer>
-  </section></Modal>;
+type AuthSessionsActions = {
+  sessions: AuthSessionSummary[];
+  currentId: string;
+  busy: string | null;
+  onRevoke: (id: string) => void;
+  onLogoutOthers: () => void;
+};
+
+function AuthSessionRows({ sessions, currentId, busy, onRevoke }: Pick<AuthSessionsActions, 'sessions' | 'currentId' | 'busy' | 'onRevoke'>) {
+  return <>{sessions.map((session) => <div className="auth-session-row" key={session.id}>
+    <div className="auth-session-copy"><strong>{session.current || session.id === currentId ? 'This browser' : 'Other browser'}</strong><small>{session.userAgent || 'Unknown client'} · last seen {new Date(session.lastSeenAt).toLocaleString()}</small><code>{session.id.slice(-12)}</code></div>
+    <button type="button" className="text-button destructive-text" disabled={busy !== null} onClick={() => onRevoke(session.id)}>{busy === session.id ? 'Revoking...' : 'Revoke'}</button>
+  </div>)}</>;
+}
+
+export type AuthSessionsPanelProps = AuthSessionsActions & {
+  loading: boolean;
+  onRefresh: () => void;
+};
+
+export function AuthSessionsPanel({ sessions, currentId, busy, onRevoke, onLogoutOthers, loading, onRefresh }: AuthSessionsPanelProps) {
+  const controlsDisabled = loading || busy !== null;
+  return <section className="settings-panel settings-auth-sessions-panel" aria-labelledby="settings-auth-sessions-title">
+    <header className="settings-auth-sessions-header">
+      <div><h2 id="settings-auth-sessions-title">Login sessions</h2><p>Review and revoke active refresh sessions.</p></div>
+      <button type="button" className="settings-secondary-action" disabled={controlsDisabled} onClick={onRefresh}>
+        <RefreshCw size={16} aria-hidden="true" className={loading ? 'spin' : ''} /> Refresh
+      </button>
+    </header>
+    <div className="auth-session-list" aria-live="polite">
+      {loading ? <div className="settings-auth-sessions-status" role="status">Loading sessions...</div>
+        : sessions.length ? <AuthSessionRows sessions={sessions} currentId={currentId} busy={busy} onRevoke={onRevoke} />
+          : <div className="settings-auth-sessions-status">No active login sessions.</div>}
+    </div>
+    <footer className="settings-auth-sessions-footer"><ShieldCheck aria-hidden="true" size={15} /><button type="button" className="text-button" disabled={controlsDisabled} onClick={onLogoutOthers}>{busy === 'others' ? 'Revoking...' : 'Log out other sessions'}</button></footer>
+  </section>;
 }

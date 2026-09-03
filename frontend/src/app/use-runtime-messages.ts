@@ -19,7 +19,6 @@ type Params = {
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setView: Dispatch<SetStateAction<ConnectionView>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
-  setSearch: Dispatch<SetStateAction<boolean>>;
   setExecutionStatus: Dispatch<SetStateAction<string | null>>;
   setExecutionStatusRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   showToast: (message: string, kind?: ToastKind) => void;
@@ -38,7 +37,6 @@ export function useRuntimeMessages({
   setCurrentRuntime,
   setView,
   setPage,
-  setSearch,
   setExecutionStatus,
   setExecutionStatusRuntime,
   showToast,
@@ -89,9 +87,6 @@ export function useRuntimeMessages({
           case 'navigate':
             setPage(effect.page);
             break;
-          case 'close-search':
-            setSearch(false);
-            break;
           case 'toast':
             showToast(effect.message, effect.kind);
             break;
@@ -106,7 +101,6 @@ export function useRuntimeMessages({
     setCurrentRuntime,
     setExecutionStatus,
     setPage,
-    setSearch,
     setView,
     showToast,
     setExecutionStatusRuntime,

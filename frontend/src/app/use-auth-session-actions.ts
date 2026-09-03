@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { api, clearAuth } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
 import type { AuthSessionSummary } from '../auth/auth-session-ui';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ToastKind } from '../ui/toast';
-import type { Dialog } from './app-shell-overlays';
 
 type Params = {
   auth: AuthState | null;
@@ -14,7 +13,6 @@ type Params = {
   previewRuntimeRef: MutableRefObject<{ dispose(): void } | null>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   pauseHeartbeat: () => Promise<void>;
-  setDialog: Dispatch<SetStateAction<Dialog>>;
   showToast: (message: string, kind?: ToastKind) => void;
 };
 
@@ -26,12 +24,13 @@ export function useAuthSessionActions({
   previewRuntimeRef,
   setPreviewConnectionInstanceId,
   pauseHeartbeat,
-  setDialog,
   showToast,
 }: Params) {
   const [authSessions, setAuthSessions] = useState<AuthSessionSummary[]>([]);
   const [currentAuthSessionId, setCurrentAuthSessionId] = useState('');
   const [authSessionBusy, setAuthSessionBusy] = useState<string | null>(null);
+  const [authSessionsLoading, setAuthSessionsLoading] = useState(false);
+  const authSessionsRequest = useRef<Promise<void> | null>(null);
   const signingOut = useRef(false);
 
   useEffect(() => {
@@ -65,19 +64,25 @@ export function useAuthSessionActions({
       });
   }
 
-  async function openAuthSessions() {
-    try {
-      const [listed, current] = await Promise.all([
-        api<{ sessions: AuthSessionSummary[] }>('/auth/sessions'),
-        api<{ sessionId: string }>('/auth/session'),
-      ]);
+  const loadAuthSessions = useCallback(async () => {
+    if (!auth) return;
+    if (authSessionsRequest.current) return authSessionsRequest.current;
+    setAuthSessionsLoading(true);
+    const request = Promise.all([
+      api<{ sessions: AuthSessionSummary[] }>('/auth/sessions', {}, auth),
+      api<{ sessionId: string }>('/auth/session', {}, auth),
+    ]).then(([listed, current]) => {
       setAuthSessions(listed.sessions);
       setCurrentAuthSessionId(current.sessionId);
-      setDialog({ type: 'auth' });
-    } catch (err) {
+    }).catch((err) => {
       showToast((err as Error).message, 'error');
-    }
-  }
+    }).finally(() => {
+      authSessionsRequest.current = null;
+      setAuthSessionsLoading(false);
+    });
+    authSessionsRequest.current = request;
+    return request;
+  }, [auth, showToast]);
 
   async function revokeAuthSession(id: string) {
     setAuthSessionBusy(id);
@@ -108,8 +113,9 @@ export function useAuthSessionActions({
     authSessions,
     currentAuthSessionId,
     authSessionBusy,
+    authSessionsLoading,
     signOut,
-    openAuthSessions,
+    loadAuthSessions,
     revokeAuthSession,
     logoutOtherAuthSessions,
   };

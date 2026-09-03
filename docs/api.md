@@ -109,7 +109,8 @@ The server does not persist a directory tree. `root` returns a revision,
 `entries` lists one relative directory, and `stat`/`content` use that revision
 to detect a root change. Directory pagination snapshots are in-memory and
 short-lived. Paths are constrained below the resolved root; symlink content is
-not read through the API.
+not read through the API. `stat` uses the filename extension first and uses the
+SSH target's `file(1)` MIME result only when the extension is not recognized.
 
 Uploads are asynchronous multipart requests with a file manifest and file parts.
 Conflict policies are `refuse` (default), `overwrite`, and `update-if-newer`.

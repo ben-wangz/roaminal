@@ -28,7 +28,7 @@ const baseProps = {
 
 describe('unified settings page', () => {
   it('mounts only the selected section body', () => {
-    for (const section of ['definitions', 'keys', 'interface', 'notifications'] as const) {
+    for (const section of ['definitions', 'keys', 'interface', 'notifications', 'sessions'] as const) {
       const html = renderToStaticMarkup(<ConnectionManager {...baseProps} section={section} />);
       expect((html.match(/class="settings-section-body"/g) || [])).toHaveLength(1);
       expect(html).not.toContain(' hidden=');
@@ -40,7 +40,15 @@ describe('unified settings page', () => {
     expect(html).toContain('class="settings-page"');
     expect(html).toContain('data-testid="settings-section-definitions"');
     expect(html).toContain('data-testid="settings-section-notifications"');
+    expect(html).toContain('data-testid="settings-section-sessions"');
     expect(html).toContain('Terminal appearance');
     expect(html).not.toContain('Connection definitions</h1>');
+  });
+
+  it('renders login sessions inside the settings page', () => {
+    const html = renderToStaticMarkup(<ConnectionManager {...baseProps} section="sessions" />);
+    expect(html).toContain('settings-auth-sessions-panel');
+    expect(html).toContain('Login sessions');
+    expect(html).not.toContain('modal-backdrop');
   });
 });

@@ -5,8 +5,8 @@ Viewports: all five standard projects and 320 x 568.
 
 ## Procedure and assertions
 
-1. Capture login, Settings, definition editor, SSH keys, local workspace,
-   SSH REMOTE workspace, search, Sessions dialog, action menu, and confirmation
+1. Capture login, Settings, definition editor, SSH keys, Sessions section, local workspace,
+   SSH REMOTE workspace, browser Find, action menu, and confirmation
    dialog at applicable viewports. No text/control overlap, clipped buttons,
    incoherent nested scroll, or horizontal page overflow is allowed.
 2. At width `<=800`, the Connections and Files surfaces begin closed and inert.
@@ -49,8 +49,8 @@ Viewports: all five standard projects and 320 x 568.
    allowed, and focus returns to a sensible trigger. For action menus verify
    menu keyboard behavior from PW-WORK-003.
 9. Verify Ctrl/Meta+Shift+T opens Settings at Connection definitions,
-   Ctrl/Meta+F opens terminal search only with an active connection, and
-   Ctrl/Meta+Shift+S toggles the Connections tool surface.
+   Ctrl/Meta+F remains available to the browser's native Find UI in every app
+   view, and Ctrl/Meta+Shift+S toggles the Connections tool surface.
    Extra Alt or wrong Shift combinations must not trigger them.
 10. Emulate `prefers-reduced-motion: reduce`; workspace surface, monitor, and
    preview transitions do not depend on animation for correctness.

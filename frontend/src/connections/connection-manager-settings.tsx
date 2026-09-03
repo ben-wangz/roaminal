@@ -1,4 +1,6 @@
-import { Bell, Filter, KeyRound, Monitor, Plus, RefreshCw, Settings } from 'lucide-react';
+import { useEffect } from 'react';
+import { Bell, Filter, KeyRound, Monitor, Plus, RefreshCw, Settings, ShieldCheck } from 'lucide-react';
+import { AuthSessionsPanel } from '../auth/auth-session-ui';
 import { InterfaceSettings } from '../settings/interface-settings';
 import { NotificationSettings } from '../settings/notification-settings';
 import { SETTINGS_SECTIONS, type SettingsSection } from '../settings/settings-model';
@@ -29,7 +31,15 @@ const SECTION_COPY: Record<SettingsSection, { eyebrow: string; title: string; de
     title: 'Notifications',
     description: 'Choose when Roaminal may notify you about Agent state changes.',
   },
+  sessions: {
+    eyebrow: 'LOGIN SESSIONS',
+    title: 'Sessions',
+    description: 'Review and revoke active login sessions for your Roaminal account.',
+  },
 };
+
+const noop = () => undefined;
+const noopAsync = async () => undefined;
 
 type Props = ConnectionManagerProps & { controller: ConnectionManagerController };
 
@@ -48,6 +58,13 @@ export function SettingsPage({
   focusTarget,
   onFocusTargetConsumed,
   controller,
+  authSessions = [],
+  currentAuthSessionId = '',
+  authSessionBusy = null,
+  authSessionsLoading = false,
+  onLoadAuthSessions = noopAsync,
+  onRevokeAuthSession = noop,
+  onLogoutOtherAuthSessions = noop,
 }: Props) {
   const {
     appearanceDraft,
@@ -88,6 +105,10 @@ export function SettingsPage({
   } = controller;
   const sectionCopy = SECTION_COPY[section];
 
+  useEffect(() => {
+    if (section === 'sessions') void onLoadAuthSessions();
+  }, [onLoadAuthSessions, section]);
+
   return (
     <section ref={settingsPage} className="settings-page" aria-label="Settings" onScroll={saveSectionScroll}>
       <header className="settings-section-header">
@@ -99,7 +120,7 @@ export function SettingsPage({
         <p className="settings-navigation-eyebrow">SETTINGS</p>
         <nav aria-label="Settings sections">
           {SETTINGS_SECTIONS.map((item) => {
-            const Icon = item.id === 'definitions' ? Settings : item.id === 'keys' ? KeyRound : item.id === 'interface' ? Monitor : Bell;
+            const Icon = item.id === 'definitions' ? Settings : item.id === 'keys' ? KeyRound : item.id === 'interface' ? Monitor : item.id === 'notifications' ? Bell : ShieldCheck;
             const active = section === item.id;
             return (
               <button
@@ -210,6 +231,17 @@ export function SettingsPage({
             onDisableNotifications={onDisableNotifications}
             focusTarget={focusTarget}
             onFocusTargetConsumed={onFocusTargetConsumed}
+          />
+        </section>}
+        {section === 'sessions' && <section className="settings-section-body" aria-labelledby="settings-section-title">
+          <AuthSessionsPanel
+            sessions={authSessions}
+            currentId={currentAuthSessionId}
+            busy={authSessionBusy}
+            loading={authSessionsLoading}
+            onRefresh={() => void onLoadAuthSessions()}
+            onRevoke={onRevokeAuthSession}
+            onLogoutOthers={onLogoutOtherAuthSessions}
           />
         </section>}
       </div>

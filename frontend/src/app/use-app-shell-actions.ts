@@ -40,7 +40,6 @@ type Params = {
   setWorkspaceTool: Dispatch<SetStateAction<WorkspaceTool>>;
   setWorkspaceToolOpen: Dispatch<SetStateAction<boolean>>;
   setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
-  setSearch: Dispatch<SetStateAction<boolean>>;
   setPreviewConnectionInstanceId: Dispatch<SetStateAction<string | null>>;
   setDialog: Dispatch<SetStateAction<Dialog>>;
   showToast: (message: string, kind?: ToastKind) => void;
@@ -68,7 +67,6 @@ export function useAppShellActions({
   setWorkspaceTool,
   setWorkspaceToolOpen,
   setWorkspaceContent,
-  setSearch,
   setPreviewConnectionInstanceId,
   setDialog,
   showToast,
@@ -92,7 +90,6 @@ export function useAppShellActions({
     previewRuntimeRef,
     setPreviewConnectionInstanceId,
     pauseHeartbeat,
-    setDialog,
     showToast,
   });
 
@@ -107,7 +104,6 @@ export function useAppShellActions({
     setActiveView,
     setDialog,
     setPreviewConnectionInstanceId,
-    setSearch,
     setWorkspaceContent,
     mainRuntime,
     previewRuntimeRef,
@@ -130,7 +126,6 @@ export function useAppShellActions({
     workspaceTool,
     setWorkspaceToolOpen,
     setWorkspaceContent,
-    setSearch,
     setPreviewConnectionInstanceId,
     showToast,
   });

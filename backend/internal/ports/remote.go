@@ -98,8 +98,11 @@ type RemoteTransferProvider interface {
 // not contain filesystem service policy such as relative-path normalization,
 // root revisions, pagination cursors, or upload state.
 type RemoteFileEntry struct {
-	Name       string
-	Type       string
+	Name string
+	Type string
+	// MIMEType is detected by the remote filesystem adapter when available.
+	// It is empty when the remote file(1) probe is unavailable or inconclusive.
+	MIMEType   string
 	Size       *int64
 	ModifiedAt *time.Time
 	Mode       uint32

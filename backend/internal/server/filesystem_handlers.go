@@ -62,7 +62,7 @@ func (s *Server) filesystemStat(w http.ResponseWriter, r *http.Request, _ string
 		ConnectionInstanceID: root.ConnectionInstanceID,
 		RootRevision:         root.Revision,
 		Entry:                entry,
-		MimeType:             mimeTypeForEntry(entry.Name, entry.Type),
+		MimeType:             mimeTypeForEntry(entry.Name, entry.Type, entry.MIMEType),
 		Encoding:             "utf-8",
 		Capabilities:         filesystemCapabilities{Read: entry.Type == "file", Range: entry.Type == "file", Stream: entry.Type == "file", Download: entry.Type == "file"},
 		ConsistencyToken:     consistencyToken(entry),
@@ -144,13 +144,20 @@ func consistencyToken(entry filesystem.Entry) string {
 	return size + "-" + modified + "-" + strconv.FormatUint(uint64(entry.Mode), 10)
 }
 
-func mimeTypeForEntry(name, entryType string) string {
+func mimeTypeForEntry(name, entryType string, detected ...string) string {
 	if entryType != "file" {
 		return "application/octet-stream"
 	}
-	value := mime.TypeByExtension(strings.ToLower(path.Ext(name)))
-	if value == "" {
-		return "application/octet-stream"
+	if value := mime.TypeByExtension(strings.ToLower(path.Ext(name))); value != "" && value != "application/octet-stream" {
+		return value
 	}
-	return value
+	if len(detected) > 0 {
+		value := strings.TrimSpace(detected[0])
+		if value != "" && value != "-" && !strings.ContainsAny(value, "\r\n") {
+			if parsed, _, err := mime.ParseMediaType(value); err == nil {
+				return strings.ToLower(parsed)
+			}
+		}
+	}
+	return "application/octet-stream"
 }

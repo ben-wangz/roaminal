@@ -38,7 +38,6 @@ export function AppShellView({
   previewConnectionInstanceId,
   previewRuntime,
   contextualMode,
-  search,
   executionStatus,
   toast,
   dialog,
@@ -46,6 +45,7 @@ export function AppShellView({
   authSessions,
   currentAuthSessionId,
   authSessionBusy,
+  authSessionsLoading,
   onSelectWorkspaceTool,
   onCollapseWorkspaceTool,
   onOpenSettings,
@@ -69,12 +69,10 @@ export function AppShellView({
   onAutomaticTitle,
   onTerminate,
   onContextualModeChange,
-  onToggleSearch,
-  onCloseSearch,
   onSelectSettingsSection,
   onFocusTargetConsumed,
   onSignOut,
-  onOpenAuthSessions,
+  onLoadAuthSessions,
   onOpenManager,
   onCreateConnection,
   onGenerated,
@@ -122,8 +120,6 @@ export function AppShellView({
         latencyMs={heartbeatLatency}
         persistenceDegraded={Boolean(heartbeatState?.runtime.persistenceDegraded)}
         onToggleMessages={messageCenter.togglePopover}
-        onToggleSearch={onToggleSearch}
-        onOpenAuthSessions={onOpenAuthSessions}
         onSignOut={onSignOut}
         fullscreenActive={fullscreenActive}
         fullscreenSupported={fullscreenSupported}
@@ -220,9 +216,7 @@ export function AppShellView({
               activeInstance={activeInstance}
               activeRuntime={activeRuntime}
               currentConnection={currentConnection}
-              search={search}
               executionStatus={executionStatus}
-              onCloseSearch={onCloseSearch}
               onOpenManager={onOpenManager}
               content={workspaceContent}
               filesystem={filesystem}
@@ -246,6 +240,13 @@ export function AppShellView({
               onSectionChange={onSelectSettingsSection}
               focusTarget={settingsFocusTarget}
               onFocusTargetConsumed={onFocusTargetConsumed}
+              authSessions={authSessions}
+              currentAuthSessionId={currentAuthSessionId}
+              authSessionBusy={authSessionBusy}
+              authSessionsLoading={authSessionsLoading}
+              onLoadAuthSessions={onLoadAuthSessions}
+              onRevokeAuthSession={onRevokeAuthSession}
+              onLogoutOtherAuthSessions={onLogoutOtherAuthSessions}
             />
           )}
         </main>
@@ -259,14 +260,9 @@ export function AppShellView({
         toast={toast}
         dialog={dialog}
         dialogConnection={dialogConnection}
-        authSessions={authSessions}
-        currentAuthSessionId={currentAuthSessionId}
-        authSessionBusy={authSessionBusy}
         onShowToast={onShowToast}
         onRenameTitle={onRenameTitle}
         onTerminateConnection={onTerminateConnection}
-        onRevokeAuthSession={onRevokeAuthSession}
-        onLogoutOtherAuthSessions={onLogoutOtherAuthSessions}
         onCloseDialog={onCloseDialog}
         connections={connections}
         onCreateConnection={onCreateConnection}

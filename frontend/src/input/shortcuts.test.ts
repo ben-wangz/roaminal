@@ -6,8 +6,8 @@ function keyEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
 }
 
 describe('shortcut registry', () => {
-  it('keeps the approved create/search/sidebar bindings discoverable', () => {
-    expect(SHORTCUTS.map(({ key, shift }) => `${shift ? 'shift+' : ''}${key}`)).toEqual(['shift+t', 'f', 'shift+s']);
+  it('keeps the approved create/sidebar bindings discoverable', () => {
+    expect(SHORTCUTS.map(({ key, shift }) => `${shift ? 'shift+' : ''}${key}`)).toEqual(['shift+t', 'shift+s']);
   });
 
   it('accepts Ctrl and Meta while rejecting unexpected modifiers', () => {

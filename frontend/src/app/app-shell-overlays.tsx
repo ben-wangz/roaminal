@@ -1,24 +1,18 @@
-import { AuthSessionsDialog, type AuthSessionSummary } from '../auth/auth-session-ui';
 import { Toast, type ToastKind, type ToastState } from '../ui/toast';
 import { RenameTitleDialog, CloseConnectionDialog } from '../ui/connection-dialogs';
 import { AgentDialog } from '../ui/agent-dialog';
 import { AddConnectionDialog } from '../ui/add-connection-dialog';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 
-export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'auth' | 'add-connection' } | null;
+export type Dialog = { type: 'rename' | 'terminate' | 'agent'; connectionInstanceId: string } | { type: 'add-connection' } | null;
 
 type Props = {
   toast: ToastState | null;
   dialog: Dialog;
   dialogConnection: ConnectionInstanceSummary | undefined;
-  authSessions: AuthSessionSummary[];
-  currentAuthSessionId: string;
-  authSessionBusy: string | null;
   onShowToast: (message: string, kind?: ToastKind) => void;
   onRenameTitle: (id: string, title: string | null) => Promise<void>;
   onTerminateConnection: (id: string) => Promise<void>;
-  onRevokeAuthSession: (id: string) => void;
-  onLogoutOtherAuthSessions: () => void;
   onCloseDialog: () => void;
   connections: ConnectionInstanceSummary[];
   onCreateConnection: (definitionId: string, reuseFrom?: string, tmuxEnabled?: boolean) => Promise<boolean>;
@@ -29,14 +23,9 @@ export function AppShellOverlays({
   toast,
   dialog,
   dialogConnection,
-  authSessions,
-  currentAuthSessionId,
-  authSessionBusy,
   onShowToast,
   onRenameTitle,
   onTerminateConnection,
-  onRevokeAuthSession,
-  onLogoutOtherAuthSessions,
   onCloseDialog,
   connections,
   onCreateConnection,
@@ -56,16 +45,6 @@ export function AppShellOverlays({
         <CloseConnectionDialog
           connection={dialogConnection}
           onConfirm={() => onTerminateConnection(dialogConnection.connectionInstanceId)}
-          onClose={onCloseDialog}
-        />
-      )}
-      {dialog?.type === 'auth' && (
-        <AuthSessionsDialog
-          sessions={authSessions}
-          currentId={currentAuthSessionId}
-          busy={authSessionBusy}
-          onRevoke={onRevokeAuthSession}
-          onLogoutOthers={onLogoutOtherAuthSessions}
           onClose={onCloseDialog}
         />
       )}
