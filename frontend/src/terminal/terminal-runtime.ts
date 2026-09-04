@@ -5,6 +5,8 @@ import { TerminalStream } from './terminal-stream';
 import { DEFAULT_APPEARANCE, type TerminalAppearance, xtermFontOptions } from '../appearance/appearance-model';
 import { attachTerminalShortcutHandler } from './terminal-shortcuts';
 import { ImeInputFallbackAddon } from './terminal-ime-fallback';
+import { TerminalSelectionAddon } from './terminal-selection-addon';
+import { TERMINAL_WORD_SEPARATORS } from './terminal-selection-model';
 
 export type TerminalRuntimeConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'terminated';
 export type TerminalGrid = { cols: number; rows: number };
@@ -56,6 +58,7 @@ export class TerminalRuntime {
       convertEol: false,
       cursorBlink: true,
       scrollback: Math.max(0, Math.min(50000, scrollbackLines)),
+      wordSeparator: TERMINAL_WORD_SEPARATORS,
       ...xtermFontOptions(this.appearance),
       theme: { background: '#002b36', foreground: '#93a1a1', cursor: '#b58900', selectionBackground: '#586e75' },
     });
@@ -104,6 +107,7 @@ export class TerminalRuntime {
     else {
       terminal.open(element);
       terminal.loadAddon(new ImeInputFallbackAddon());
+      terminal.loadAddon(new TerminalSelectionAddon());
     }
     if (!this.addonsLoaded && !this.addonsLoading) {
       this.addonsLoading = true;

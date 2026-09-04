@@ -36,6 +36,18 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
    remains usable. While composing a Chinese word, intermediate candidate text
    must remain in the IME composition view and must not be sent before the final
    committed character.
+9. Exercise terminal selection and copy from the same interactive xterm. A
+   keyboard copy and a native context-menu copy of a non-empty single line
+   remove only incidental leading/trailing whitespace. A whitespace-only
+   selection, including tabs, is copied byte-for-byte. A multiline selection
+   removes horizontal whitespace before each hard line ending and at the final
+   line while preserving line-leading indentation, original line endings, and
+   soft-wrapped lines without inserting a newline. Double-click shell tokens
+   such as `key=value`, `/home/user/file.ts`, `--flag-name`, and `foo+bar`
+   selects the intended token; clicking `=` or `@` selects that punctuation.
+   Double-clicking the middle of `翻真的翻` selects `真的`, while either outer
+   character remains a single-character selection. Verify the same behavior
+   after scrolling the terminal into scrollback.
 
 ## Pass gate
 
