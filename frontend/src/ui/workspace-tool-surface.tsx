@@ -11,6 +11,8 @@ import type { WorkspaceContent } from '../app/workspace-content';
 import type { WorkspaceTool } from '../app/workspace-tool';
 import { FileTreeToolSurface } from '../filesystem/file-tree-tool-surface';
 import type { FileSystemWorkspaceState } from '../filesystem/use-filesystem-workspace';
+import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
+import { useWorkspaceToolResize } from './use-workspace-tool-resize';
 
 type Props = {
   tool: WorkspaceTool;
@@ -32,8 +34,8 @@ type Props = {
   onCollapse: () => void;
   onAddConnection: () => void;
   onSelectConnection: (id: string) => void;
-  onMoveConnectionInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
-  onReorderConnectionGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
+  onMoveConnectionInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<boolean>;
+  onReorderConnectionGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<boolean>;
   onCreateConnectionGroup: (name: string) => Promise<boolean>;
   onRenameConnectionGroup: (id: string, name: string) => Promise<boolean>;
   onDeleteConnectionGroup: (id: string) => Promise<boolean>;
@@ -96,7 +98,8 @@ export function WorkspaceToolSurface({
   const surface = useRef<HTMLElement>(null);
   const collapseButton = useRef<HTMLButtonElement>(null);
   const previousOpen = useRef(false);
-  const compact = window.matchMedia('(max-width: 800px)').matches;
+  const compact = window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches;
+  const { resizable, resizing, resizeBounds, resizeHandle, style, valueNow, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown } = useWorkspaceToolResize(surface, open);
 
   useEffect(() => {
     if (open && !previousOpen.current && compact && (tool === 'connections' || tool === 'files')) collapseButton.current?.focus();
@@ -149,10 +152,29 @@ export function WorkspaceToolSurface({
       <aside
         ref={surface}
         id="workspace-tool-surface"
-        className={`workspace-tool-surface workspace-tool-${tool} ${open ? 'open' : 'closed'}`}
+        className={`workspace-tool-surface workspace-tool-${tool} ${open ? 'open' : 'closed'} ${resizing ? 'resizing' : ''}`}
+        style={style}
         aria-hidden={!open}
         inert={!open || undefined}
       >
+        {resizable && open && <div
+          ref={resizeHandle}
+          className="workspace-tool-resize-handle"
+          role="separator"
+          aria-label="Resize workspace panel"
+          aria-orientation="vertical"
+          aria-valuemin={resizeBounds.min}
+          aria-valuemax={resizeBounds.max}
+          aria-valuenow={valueNow}
+          aria-controls="workspace-tool-surface"
+          tabIndex={0}
+          data-testid="workspace-tool-resize-handle"
+          onKeyDown={onKeyDown}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
+        />}
         <header className="workspace-tool-header">
           <div className="workspace-tool-title">
             {tool === 'connections' ? <Users size={16} aria-hidden="true" /> : tool === 'keyboard' ? <Keyboard size={16} aria-hidden="true" /> : <FolderTree size={16} aria-hidden="true" />}

@@ -15,6 +15,7 @@ import {
   type ConnectionInstanceLayout,
 } from '../connections/connection-instance-groups';
 import { ConnectionInstanceController } from '../connections/connection-instance-controller';
+import { RoaminalApiError } from '../api/http-client';
 import type { ToastKind } from '../ui/toast';
 
 type Params = {
@@ -22,23 +23,36 @@ type Params = {
   showToast: (message: string, kind?: ToastKind) => void;
 };
 
+function authoritativeLayoutFromError(error: unknown): ConnectionInstanceLayout | null {
+  if (!(error instanceof RoaminalApiError) || error.code !== 'connection_instance_layout_conflict') return null;
+  const details = error.details;
+  if (!details || typeof details !== 'object' || !('layout' in details)) return null;
+  const layout = (details as { layout?: unknown }).layout;
+  if (!layout || typeof layout !== 'object') return null;
+  return layout as ConnectionInstanceLayout;
+}
+
 export function useConnectionInstanceLayoutActions({ controller, showToast }: Params) {
   const acceptConnectionInstanceLayout = useCallback((next: ConnectionInstanceLayout) => {
     controller.setLayout(next);
     controller.setConnections((current) => flattenConnectionInstanceLayout(next, current));
   }, [controller]);
 
-  const persistConnectionInstanceLayout = useCallback(async (next: ConnectionInstanceLayout, previous: ConnectionInstanceLayout) => {
+  const persistConnectionInstanceLayout = useCallback(async (next: ConnectionInstanceLayout, previous: ConnectionInstanceLayout): Promise<boolean> => {
     controller.beginLayout(next);
     acceptConnectionInstanceLayout(next);
     try {
       const persisted = await saveConnectionInstanceLayout(next);
       controller.resolveLayout(persisted);
       acceptConnectionInstanceLayout(persisted);
+      return true;
     } catch (err) {
-      controller.rollbackLayout(previous);
-      acceptConnectionInstanceLayout(previous);
+      const authoritative = authoritativeLayoutFromError(err);
+      const rollback = authoritative || previous;
+      controller.rollbackLayout(rollback);
+      acceptConnectionInstanceLayout(rollback);
       showToast((err as Error).message, 'error');
+      return false;
     }
   }, [acceptConnectionInstanceLayout, controller, showToast]);
 
@@ -49,24 +63,24 @@ export function useConnectionInstanceLayoutActions({ controller, showToast }: Pa
     groupId: string,
     targetId: string | null,
     placement: InstanceMovePlacement,
-  ) => {
+  ): Promise<boolean> => {
     const previous = currentConnectionInstanceLayout();
     const next = moveGroupedConnectionInstance(previous, id, groupId, targetId, placement);
     if (!next) {
       showToast('Group limit reached (10 connections).', 'error');
-      return;
+      return false;
     }
-    await persistConnectionInstanceLayout(next, previous);
+    return persistConnectionInstanceLayout(next, previous);
   }, [currentConnectionInstanceLayout, persistConnectionInstanceLayout, showToast]);
 
   const reorderConnectionInstanceGroup = useCallback(async (
     id: string,
     targetId: string,
     placement: InstanceMovePlacement,
-  ) => {
+  ): Promise<boolean> => {
     const previous = currentConnectionInstanceLayout();
     const next = reorderConnectionGroup(previous, id, targetId, placement);
-    if (next) await persistConnectionInstanceLayout(next, previous);
+    return next ? persistConnectionInstanceLayout(next, previous) : false;
   }, [currentConnectionInstanceLayout, persistConnectionInstanceLayout]);
 
   const createConnectionInstanceGroup = useCallback(async (name: string): Promise<boolean> => {

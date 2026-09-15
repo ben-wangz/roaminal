@@ -35,9 +35,15 @@ collapse, focus, and overflow assertions repeated at phone width.
    IDs, not titles or connection definition IDs. Use the per-instance menu and
    group drop target for the same operation and compare the resulting order.
 6. Reorder members with pointer drag and with the keyboard reorder control.
-   Reorder group headers, including `Ungrouped`, with pointer and keyboard
-   input. Search for a title or group name and verify search disables all
-   reorder/move mutations; clearing search restores the previous order.
+   Reorder group headers, including `Ungrouped`, with desktop pointer and
+   keyboard input. Start a group drag only from its handle; verify the source
+   group is visibly marked and the target header shows a stable before/after
+   insertion line. Drag a group across a connection card and release: no
+   connection-instance move request is sent, membership is unchanged, and the
+   group drag can continue to another header. A collapsed or empty group uses
+   its header as the only group target. Search for a title or group name and
+   verify search disables all reorder/move mutations; clearing search restores
+   the previous order.
 7. Fill a named group to 10 members and attempt an 11th move. Verify the
    request is rejected with the documented capacity error, the optimistic
    layout rolls back exactly once, and no member disappears. Move all members
@@ -65,6 +71,16 @@ collapse, focus, and overflow assertions repeated at phone width.
     context A and verify context B adopts it on its next authoritative refresh,
     while each context retains its own collapse state. No credentials,
     endpoint keys, tmux data, or terminal output may appear in layout requests.
+13. On a narrow or coarse-pointer viewport, verify native drag handles are not
+    draggable and no touch drag mutation is sent. The group and instance
+    action menus remain usable. With a keyboard, verify ArrowUp/ArrowLeft move
+    toward the start, ArrowDown/ArrowRight move toward the end, Home/End move
+    to the boundary, boundary presses announce a no-op, focus returns to the
+    same group handle after save, and Escape cancels an active pointer drag.
+    Delay one layout response and attempt a second reorder; verify only one
+    request is sent. Force a layout revision conflict and verify the UI adopts
+    the conflict response's authoritative layout, clears the marker, and shows
+    one error without replaying the stale drag.
 
 ## Pass gate and cleanup
 

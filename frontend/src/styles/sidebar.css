@@ -8,7 +8,12 @@
 .workspace-tool-rail .workspace-tool-button.active { border-color: var(--cyan); color: var(--text-bright); background: rgba(42,161,152,.22); }
 .workspace-tool-rail .workspace-tool-help { margin-top: 20px; }
 .workspace-tool-rail-collapse { color: var(--muted); }
-.workspace-tool-surface { width: clamp(300px, 29vw, 418px); flex: 0 1 clamp(300px, 29vw, 418px); min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--surface-1); transition: width .18s ease, flex-basis .18s ease, transform .18s ease; z-index: 3; }
+.workspace-tool-surface { position: relative; width: var(--workspace-tool-width, clamp(300px, 29vw, 418px)); flex: 0 0 var(--workspace-tool-width, clamp(300px, 29vw, 418px)); min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--surface-1); transition: width .18s ease, flex-basis .18s ease, transform .18s ease; z-index: 3; }
+.workspace-tool-surface.resizing { transition: transform .18s ease; }
+.workspace-tool-resize-handle { position: absolute; z-index: 5; top: 0; right: -5px; bottom: 0; width: 10px; touch-action: none; cursor: col-resize; }
+.workspace-tool-resize-handle::after { position: absolute; top: 12px; bottom: 12px; left: 4px; width: 2px; border-radius: 2px; background: transparent; content: ''; transition: background var(--dur-fast) var(--ease-out); }
+.workspace-tool-resize-handle:hover::after, .workspace-tool-resize-handle:focus-visible::after, .workspace-tool-surface.resizing .workspace-tool-resize-handle::after { background: var(--cyan); }
+.workspace-tool-resize-handle:focus-visible { outline: 1px solid var(--cyan); outline-offset: -1px; }
 .workspace-tool-surface.closed { flex-basis: 0; width: 0; overflow: hidden; border-right: 0; pointer-events: none; }
 .workspace-tool-header { height: 62px; flex: 0 0 62px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--border); color: var(--text-bright); }
 .workspace-tool-title { min-width: 0; display: flex; align-items: center; gap: 8px; }
@@ -30,10 +35,14 @@
 .connection-group-create input, .connection-group-edit input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-bright); font: inherit; font-size: .7rem; }
 .connection-group-create .icon-button, .connection-group-edit .icon-button { width: 26px; height: 26px; flex: 0 0 auto; }
 .connection-group-list { padding-top: 3px; }
-.connection-group { min-width: 0; margin-bottom: 7px; }
-.connection-group.drop-before { border-top: 1px solid var(--cyan); }
-.connection-group.drop-after { border-bottom: 1px solid var(--cyan); }
-.connection-group.drop-blocked { cursor: not-allowed; border-color: var(--danger-soft); }
+.connection-sidebar-a11y { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.connection-group { min-width: 0; position: relative; margin-bottom: 7px; }
+.connection-group.drop-before::before, .connection-group.drop-after::after { position: absolute; z-index: 4; right: 0; left: 0; height: 2px; border-radius: 1px; background: var(--cyan); content: ''; pointer-events: none; }
+.connection-group.drop-before::before { top: -4px; }
+.connection-group.drop-after::after { bottom: -4px; }
+.connection-group.dragging { opacity: .52; }
+.connection-group.drop-members .connection-group-header { outline: 1px solid var(--cyan); outline-offset: -1px; background: rgba(42,161,152,.12); }
+.connection-group.drop-blocked .connection-group-header { cursor: not-allowed; outline: 1px solid var(--danger-soft); }
 .connection-group-header { min-width: 0; min-height: 31px; display: flex; align-items: center; gap: 3px; padding: 0 2px 0 0; color: var(--muted); }
 .connection-group-toggle, .connection-group-name { min-height: 28px; border: 0; background: transparent; color: inherit; }
 .connection-group-toggle { width: 23px; display: inline-grid; flex: 0 0 23px; place-items: center; padding: 0; }

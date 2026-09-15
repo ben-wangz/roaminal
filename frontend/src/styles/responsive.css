@@ -17,6 +17,7 @@
   .workspace-tool-surface.workspace-tool-files.closed { width: min(300px, 88vw); flex-basis: min(300px, 88vw); overflow: visible; border-right: 1px solid var(--border); pointer-events: none; }
   .workspace-tool-surface.workspace-tool-keyboard { order: 2; flex: 0 0 auto; width: 100%; max-height: min(44vh, 360px); transform: none; transition: none; border-top: 1px solid var(--border); border-right: 0; background: var(--shade-2); }
   .workspace-tool-surface.workspace-tool-keyboard.closed { display: none; }
+  .workspace-tool-resize-handle { display: none; }
   .workspace-tool-backdrop { position: absolute; inset: 44px 0 0; z-index: 2; display: block; border: 0; background: rgba(0,43,54,.58); }
   .main-panel { order: 1; width: 100%; }
   .terminal-stage { padding: 8px 8px 0; }

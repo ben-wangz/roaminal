@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, FolderOpen, FolderPlus, GripVertical, Plus, Search, Terminal, X } from 'lucide-react';
 import type { ConnectionInstanceLayout, InstanceMovePlacement } from '../connections/connection-instance-groups';
 import { groupedConnectionInstances, UNGROUPED_GROUP_ID } from '../connections/connection-instance-groups';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import { SIDEBAR_BREAKPOINT_QUERY } from '../input/viewport';
+import { useMobileMode } from '../input/mobile-mode';
 import { ConnectionActions, type ConnectionGroupMoveTarget } from './connection-actions';
 import { TerminalPreview, type TerminalPreviewRuntime } from '../terminal/terminal-preview';
 import { useConnectionGroupReorder } from './use-connection-group-reorder';
@@ -20,8 +21,8 @@ type Props = {
   previewConnectionInstanceId: string | null;
   previewRuntime: TerminalPreviewRuntime | null;
   onSelect: (id: string) => void;
-  onMoveInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<void>;
-  onReorderGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<void>;
+  onMoveInstance: (id: string, groupId: string, targetId: string | null, placement: InstanceMovePlacement) => Promise<boolean>;
+  onReorderGroup: (id: string, targetId: string, placement: InstanceMovePlacement) => Promise<boolean>;
   onCreateGroup: (name: string) => Promise<boolean>;
   onRenameGroup: (id: string, name: string) => Promise<boolean>;
   onDeleteGroup: (id: string) => Promise<boolean>;
@@ -111,13 +112,19 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
   const [editingGroupName, setEditingGroupName] = useState('');
   const [dragExpandedGroupId, setDragExpandedGroupId] = useState<string | null>(null);
   const groupHeaderRefs = useRef(new Map<string, HTMLButtonElement>());
+  const groupDragHandleRefs = useRef(new Map<string, HTMLButtonElement>());
   const previousGroupIds = useRef<string[]>([]);
   const focusNewGroup = useRef(false);
   const groups = useMemo(() => groupedConnectionInstances(layout, connections), [connections, layout]);
   const query = search.trim().toLowerCase();
+  const mobileMode = useMobileMode();
+  const dragEnabled = !mobileMode && !query;
+  const focusGroup = useCallback((groupId: string) => {
+    window.requestAnimationFrame(() => groupDragHandleRefs.current.get(groupId)?.focus());
+  }, []);
   const {
-    capacityBlockedGroupId, clearDrag, draggedConnectionInstanceId, draggedGroupId, dragLeave, dragOverGroup, dragOverInstance, dropGroup, dropInstance, dropTarget, moveGroupWithKeyboard, moveInstanceWithKeyboard, reorderPending, startGroupDrag, startInstanceDrag,
-  } = useConnectionGroupReorder({ layout, disabled: Boolean(query), onMoveInstance, onReorderGroup, onPreviewEnd, onExpandGroup: setDragExpandedGroupId });
+    capacityBlockedGroupId, clearDrag, dragState, draggedConnectionInstanceId, draggedGroupId, dragLeave, dragOverGroup, dragOverInstance, dropGroup, dropInstance, dropTarget, moveGroupWithKeyboard, moveInstanceWithKeyboard, reorderPending, startGroupDrag, startInstanceDrag, statusMessage,
+  } = useConnectionGroupReorder({ layout, disabled: Boolean(query), dragEnabled, onMoveInstance, onReorderGroup, onPreviewEnd, onExpandGroup: setDragExpandedGroupId, onFocusGroup: focusGroup });
 
   useEffect(() => {
     setCollapsed(loadCollapsed(loginSessionId));
@@ -178,6 +185,7 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
         </div>
         <label className="connection-sidebar-search"><Search size={14} aria-hidden="true" /><input id="connection-sidebar-search" name="connectionSearch" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search connections" aria-label="Search connections" /></label>
         {creatingGroup && <div className="connection-group-create"><input id="connection-group-create-name" name="connectionGroupName" autoFocus value={newGroupName} onChange={(event) => setNewGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void submitNewGroup(); if (event.key === 'Escape') setCreatingGroup(false); }} placeholder="Group name" aria-label="New group name" /><button className="icon-button" type="button" title="Create group" aria-label="Create group" onClick={() => void submitNewGroup()}><Check size={14} aria-hidden="true" /></button><button className="icon-button" type="button" title="Cancel" aria-label="Cancel" onClick={() => setCreatingGroup(false)}><X size={14} aria-hidden="true" /></button></div>}
+        <div id="connection-sidebar-reorder-status" className="connection-sidebar-a11y" role="status" aria-live="polite" aria-atomic="true">{query ? 'Clear search to reorder groups or connection instances.' : statusMessage}</div>
         <div className="connection-list connection-group-list">
           {groups.map(({ group, connections: groupConnections }) => {
             const matchingConnections = groupConnections.filter((connection) => matchesSearch(connection, group.name, query));
@@ -185,15 +193,18 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
             if (query && !groupMatches && matchingConnections.length === 0) return null;
             const isCollapsed = !query && collapsed.has(group.groupId) && dragExpandedGroupId !== group.groupId;
             const editing = editingGroupId === group.groupId;
-            const groupDrop = dropTarget?.kind === 'group' && dropTarget.id === group.groupId;
+            const groupDrop = dragState.kind === 'group' && dropTarget?.kind === 'group' && dropTarget.id === group.groupId;
+            const groupMembersDrop = dragState.kind === 'instance' && dropTarget?.kind === 'group-members' && dropTarget.id === group.groupId;
+            const groupDragging = draggedGroupId === group.groupId;
+            const position = groups.findIndex(({ group: item }) => item.groupId === group.groupId) + 1;
             const groupMembersId = `connection-group-members-${group.groupId}`;
             return (
-              <section key={group.groupId} className={`connection-group ${isCollapsed ? 'collapsed' : ''} ${groupDrop ? `drop-${dropTarget?.placement}` : ''} ${capacityBlockedGroupId === group.groupId ? 'drop-blocked' : ''}`} title={capacityBlockedGroupId === group.groupId ? 'Group limit reached (10)' : undefined} onDragOver={(event) => dragOverGroup(event, group.groupId)} onDragLeave={(event) => dragLeave(event, group.groupId)} onDrop={(event) => dropGroup(event, group.groupId)}>
-                <header className="connection-group-header">
+              <section key={group.groupId} className={`connection-group ${isCollapsed ? 'collapsed' : ''} ${groupDragging ? 'dragging' : ''} ${groupDrop ? `drop-${dropTarget?.placement}` : ''} ${groupMembersDrop ? 'drop-members' : ''} ${capacityBlockedGroupId === group.groupId ? 'drop-blocked' : ''}`} title={capacityBlockedGroupId === group.groupId ? 'Group limit reached (10)' : undefined}>
+                <header className="connection-group-header" data-group-id={group.groupId} data-drop-surface="group" onDragOver={(event) => dragOverGroup(event, group.groupId)} onDragLeave={(event) => dragLeave(event, group.groupId)} onDrop={(event) => dropGroup(event, group.groupId)}>
                   <button className="connection-group-toggle" type="button" aria-label={isCollapsed ? `Expand ${group.name}` : `Collapse ${group.name}`} aria-expanded={!isCollapsed} aria-controls={groupMembersId} onClick={() => toggleGroup(group.groupId)}>{isCollapsed ? <ChevronRight size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}</button>
                   {editing ? <div className="connection-group-edit"><input id={`connection-group-rename-${group.groupId}`} name="connectionGroupName" autoFocus value={editingGroupName} onChange={(event) => setEditingGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void submitRename(); if (event.key === 'Escape') setEditingGroupId(null); }} aria-label={`Rename ${group.name}`} /><button className="icon-button" type="button" title="Save group name" aria-label="Save group name" onClick={() => void submitRename()}><Check size={13} aria-hidden="true" /></button><button className="icon-button" type="button" title="Cancel" aria-label="Cancel" onClick={() => setEditingGroupId(null)}><X size={13} aria-hidden="true" /></button></div> : <button ref={(element) => { if (element) groupHeaderRefs.current.set(group.groupId, element); else groupHeaderRefs.current.delete(group.groupId); }} className="connection-group-name" type="button" onClick={() => toggleGroup(group.groupId)}>{group.name}</button>}
                   <span className="connection-group-count" aria-label={`${groupConnections.length} connection instances`}>{groupConnections.length}</span>
-                  <button className="connection-group-drag-handle" type="button" draggable={!reorderPending && !query} aria-label={`Reorder ${group.name} group`} title={query ? 'Clear search to reorder groups' : 'Reorder group'} onClick={(event) => event.stopPropagation()} onDragStart={(event) => startGroupDrag(event, group.groupId)} onDragEnd={clearDrag} onKeyDown={(event) => moveGroupWithKeyboard(event, group.groupId)}><GripVertical size={14} aria-hidden="true" /></button>
+                  <button ref={(element) => { if (element) groupDragHandleRefs.current.set(group.groupId, element); else groupDragHandleRefs.current.delete(group.groupId); }} className="connection-group-drag-handle" type="button" draggable={dragEnabled && !reorderPending} aria-disabled={query || reorderPending ? true : undefined} aria-grabbed={draggedGroupId === group.groupId ? true : undefined} aria-describedby="connection-sidebar-reorder-status" aria-label={`Reorder ${group.name} group, position ${position} of ${groups.length}`} title={query ? 'Clear search to reorder groups' : mobileMode ? 'Use the keyboard to reorder groups' : 'Reorder group'} onClick={(event) => event.stopPropagation()} onDragStart={(event) => startGroupDrag(event, group.groupId)} onDragEnd={clearDrag} onKeyDown={(event) => moveGroupWithKeyboard(event, group.groupId)}><GripVertical size={14} aria-hidden="true" /></button>
                   {group.groupId !== UNGROUPED_GROUP_ID && <ConnectionGroupActions nonEmpty={groupConnections.length > 0} onRename={() => { setEditingGroupId(group.groupId); setEditingGroupName(group.name); }} onMoveAll={() => void onMoveGroupMembers(group.groupId)} onDelete={() => void onDeleteGroup(group.groupId)} />}
                 </header>
                 {!isCollapsed && <div id={groupMembersId} className="connection-group-members" role="group" aria-label={`${group.name} connections`}>
@@ -221,21 +232,21 @@ export const ConnectionSidebar = memo(function ConnectionSidebar({
       if (workspaceContent === 'terminal' && !draggedConnectionInstanceId && !draggedGroupId && !reorderPending && canPreview()) onPreviewStart(connection.connectionInstanceId);
     };
     const stopPreview = () => onPreviewEnd(connection.connectionInstanceId);
-    const dropPlacement = dropTarget?.kind === 'instance' && dropTarget.id === connection.connectionInstanceId ? dropTarget.placement : null;
+    const dropPlacement = dragState.kind === 'instance' && dropTarget?.kind === 'instance' && dropTarget.id === connection.connectionInstanceId ? dropTarget.placement : null;
     const agent = agentSummary(connection);
     const agentState = agentVisualState(agent);
     const agentLabel = agentTitle(agent);
     const fileSystemAvailable = connection.type === 'ssh' && connection.lifecycle === 'live' && connection.purpose === 'interactive';
     const accessibleDetailsId = `connection-details-${connection.connectionInstanceId}`;
     return (
-      <article className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''} ${draggedConnectionInstanceId === connection.connectionInstanceId ? 'dragging' : ''} ${dropPlacement ? `drop-${dropPlacement}` : ''}`} data-connection-id={connection.connectionInstanceId} key={connection.connectionInstanceId} onMouseEnter={startPreview} onMouseLeave={stopPreview} onClick={() => onSelect(connection.connectionInstanceId)} onDragOver={(event) => dragOverInstance(event, connection.connectionInstanceId, groupId)} onDragLeave={(event) => dragLeave(event, connection.connectionInstanceId)} onDrop={(event) => dropInstance(event, connection.connectionInstanceId, groupId)} onFocus={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview(); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) stopPreview(); }}>
+      <article className={`connection-card ${connection.connectionInstanceId === active ? 'active' : ''} ${connection.attention ? 'attention' : ''} ${previewing ? 'previewing' : ''} ${draggedConnectionInstanceId === connection.connectionInstanceId ? 'dragging' : ''} ${dropPlacement ? `drop-${dropPlacement}` : ''}`} data-connection-id={connection.connectionInstanceId} data-drop-surface="instance" key={connection.connectionInstanceId} onMouseEnter={startPreview} onMouseLeave={stopPreview} onClick={() => onSelect(connection.connectionInstanceId)} onDragOver={(event) => dragOverInstance(event, connection.connectionInstanceId, groupId)} onDragLeave={(event) => dragLeave(event, connection.connectionInstanceId)} onDrop={(event) => dropInstance(event, connection.connectionInstanceId, groupId)} onFocus={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) startPreview(); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) stopPreview(); }}>
         <div className="connection-card-preview">{previewing && previewRuntime && <TerminalPreview runtime={previewRuntime} />}</div>
         <div className="connection-card-overlay">
           <button className="connection-select" type="button" onClick={() => onSelect(connection.connectionInstanceId)} aria-current={connection.connectionInstanceId === active ? 'page' : undefined} aria-describedby={accessibleDetailsId} title={connection.connectionInstanceId}><span className="connection-indicator" /><span className="connection-title-wrap"><b>{connection.title || 'Connection'}</b><small>{connectionTypeLabel(connection)}</small></span></button>
           <div className="connection-metadata"><span>ID: {shortConnectionId(connection.connectionInstanceId)}</span>{detailLabel && <span className="connection-path" title={connection.cwd}>{detailLabel}</span>}<time dateTime={connection.createdAt} title={connection.createdAt}>SINCE: {sinceLabel(connection.createdAt)}</time></div>
         </div>
         <div className="connection-actions" aria-label="Connection extensions and actions">
-          <button className="connection-drag-handle" type="button" draggable={!reorderPending && !query} aria-label={`Reorder ${connection.title || 'connection'}`} title={query ? 'Clear search to reorder connections' : 'Reorder connection'} onClick={(event) => event.stopPropagation()} onDragStart={(event) => startInstanceDrag(event, connection.connectionInstanceId)} onDragEnd={clearDrag} onKeyDown={(event) => moveInstanceWithKeyboard(event, connection.connectionInstanceId, groupId)}><GripVertical aria-hidden="true" size={15} /></button>
+          <button className="connection-drag-handle" type="button" draggable={dragEnabled && !reorderPending} aria-disabled={query || reorderPending ? true : undefined} aria-grabbed={draggedConnectionInstanceId === connection.connectionInstanceId ? true : undefined} aria-describedby="connection-sidebar-reorder-status" aria-label={`Reorder ${connection.title || 'connection'}`} title={query ? 'Clear search to reorder connections' : mobileMode ? 'Use the keyboard to reorder connections' : 'Reorder connection'} onClick={(event) => event.stopPropagation()} onDragStart={(event) => startInstanceDrag(event, connection.connectionInstanceId)} onDragEnd={clearDrag} onKeyDown={(event) => moveInstanceWithKeyboard(event, connection.connectionInstanceId, groupId)}><GripVertical aria-hidden="true" size={15} /></button>
           <button className="extension-button terminal-extension" type="button" aria-label="Open Terminal" title="Open Terminal" onClick={(event) => { event.stopPropagation(); onOpenTerminal(connection.connectionInstanceId); }}><Terminal aria-hidden="true" size={15} /></button>
           {fileSystemAvailable && <button className="extension-button" type="button" aria-label="Open Files" title="Open Files" onClick={(event) => { event.stopPropagation(); onPreviewEnd(connection.connectionInstanceId); onOpenFileTree(connection.connectionInstanceId); }}><FolderOpen aria-hidden="true" size={15} /></button>}
           <ConnectionActions connection={connection} moveTargets={groups.map(({ group, connections: members }): ConnectionGroupMoveTarget => ({ groupId: group.groupId, name: group.name, count: members.length, current: group.groupId === groupId, full: group.groupId !== UNGROUPED_GROUP_ID && members.length >= 10 && group.groupId !== groupId }))} onMoveToGroup={(targetGroupId) => { void onMoveInstance(connection.connectionInstanceId, targetGroupId, null, 'after'); }} onRename={() => onRename(connection.connectionInstanceId)} onAutomaticTitle={() => onAutomaticTitle(connection.connectionInstanceId)} onTerminate={() => onTerminate(connection.connectionInstanceId)} />
