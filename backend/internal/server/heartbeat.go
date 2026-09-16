@@ -24,6 +24,8 @@ type heartbeatUpdate struct {
 type heartbeatResponse struct {
 	ConnectionInstances      []ports.ConnectionInstanceSummary `json:"connectionInstances"`
 	ConnectionInstanceLayout domain.ConnectionInstanceLayout   `json:"connectionInstanceLayout"`
+	BrowserEnabled           bool                              `json:"browserEnabled"`
+	BrowserAvailable         bool                              `json:"browserAvailable"`
 	System                   monitor.SystemStats               `json:"system"`
 	Runtime                  struct {
 		BootID              string `json:"bootId"`
@@ -68,7 +70,7 @@ func (s *Server) heartbeatPost(w http.ResponseWriter, r *http.Request, sessionID
 	writeJSON(w, 200, s.heartbeat(sessionID))
 }
 func (s *Server) heartbeat(sessionID string) heartbeatResponse {
-	result := heartbeatResponse{ConnectionInstances: s.orderedConnectionInstances(sessionID), System: s.monitor.Stats(), ConnectionInstanceLayout: s.connectionInstanceLayout(sessionID)}
+	result := heartbeatResponse{ConnectionInstances: s.orderedConnectionInstances(sessionID), System: s.monitor.Stats(), ConnectionInstanceLayout: s.connectionInstanceLayout(sessionID), BrowserEnabled: s.cfg.BrowserEnabled, BrowserAvailable: s.browser != nil && s.browser.Available()}
 	result.Runtime.BootID = s.bootID
 	result.Runtime.PersistenceDegraded = s.terms.PersistenceDegraded()
 	result.Runtime.ScrollbackLines = s.cfg.ScrollbackLines

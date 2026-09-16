@@ -6,6 +6,8 @@ import type { MessageStateProjection } from '../messages/message-api';
 export type Heartbeat = {
   connectionInstances: ConnectionInstanceSummary[];
   connectionInstanceLayout: ConnectionInstanceLayout;
+  browserEnabled?: boolean;
+  browserAvailable?: boolean;
   system: {
     hostname: string;
     kernel: string;

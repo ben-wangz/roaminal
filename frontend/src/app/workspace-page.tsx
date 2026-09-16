@@ -7,6 +7,8 @@ import { FilePreviewWorkspace } from '../filesystem/file-preview-workspace';
 import type { FileSystemWorkspaceState } from '../filesystem/use-filesystem-workspace';
 import { TerminalFooter } from '../terminal/terminal-footer';
 import type { WorkspaceContent } from './workspace-content';
+import type { BrowserRuntime } from '../browser/browser-runtime';
+import { BrowserWorkspace } from '../browser/browser-workspace';
 
 type Props = {
   connections: ConnectionInstanceSummary[];
@@ -16,6 +18,7 @@ type Props = {
   executionStatus: string | null;
   onOpenManager: () => void;
   content: WorkspaceContent;
+  browserRuntime: BrowserRuntime;
   filesystem: FileSystemWorkspaceState;
   onBackToTerminal: () => void;
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
@@ -29,6 +32,7 @@ export function WorkspacePage({
   executionStatus,
   onOpenManager,
   content,
+  browserRuntime,
   filesystem,
   onBackToTerminal,
   onToast,
@@ -45,11 +49,11 @@ export function WorkspacePage({
   };
   return (
     <>
-      <RemoteMonitorBand
+      {content !== 'browser' && <RemoteMonitorBand
         instance={activeInstance}
         expanded={monitorDisclosure.expanded}
         onToggle={() => monitorDisclosure.setExpanded((value) => !value)}
-      />
+      />}
       <div className="workspace-body">
         <div
           className={`workspace-content-view terminal-content-view ${content === 'terminal' ? 'active' : 'inactive'}`}
@@ -82,6 +86,17 @@ export function WorkspacePage({
               />
             )}
           </section>
+        </div>
+        <div
+          className={`workspace-content-view browser-content-view ${content === 'browser' ? 'active' : 'inactive'}`}
+          aria-hidden={content !== 'browser'}
+          inert={content !== 'browser' || undefined}
+        >
+          <BrowserWorkspace
+            runtime={browserRuntime}
+            active={content === 'browser'}
+            onBackToTerminal={onBackToTerminal}
+          />
         </div>
         <div
           className={`workspace-content-view file-preview-content-view ${previewActive ? 'active' : 'inactive'}`}

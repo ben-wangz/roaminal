@@ -17,6 +17,7 @@ import './styles/settings.css';
 import './styles/filesystem.css';
 import './styles/virtual-keyboard.css';
 import './styles/messages.css';
+import './styles/browser.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AppShell } from './app/app-shell';

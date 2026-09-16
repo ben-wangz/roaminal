@@ -1,18 +1,22 @@
 import { memo, type RefObject } from 'react';
-import { ChevronsLeft, CircleHelp, FolderTree, Keyboard, PanelLeft, Settings } from 'lucide-react';
+import { ChevronsLeft, CircleHelp, FolderTree, Globe, Keyboard, PanelLeft, Settings } from 'lucide-react';
 import type { WorkspaceTool } from '../app/workspace-tool';
 
 type Props = {
   workspaceTool: WorkspaceTool;
   workspaceToolOpen: boolean;
   connectionToolButton: RefObject<HTMLButtonElement | null>;
+  browserToolButton?: RefObject<HTMLButtonElement | null>;
   keyboardToolButton: RefObject<HTMLButtonElement | null>;
   filesToolButton: RefObject<HTMLButtonElement | null>;
   settingsToolButton: RefObject<HTMLButtonElement | null>;
   settingsActive: boolean;
+  browserEnabled?: boolean;
+  browserActive?: boolean;
   connectionCount: number;
   agentRelaxCount: number;
   onSelectWorkspaceTool: (tool: WorkspaceTool) => void;
+  onToggleBrowser?: () => void;
   onCollapseWorkspaceTool: () => void;
   onHelp: () => void;
   onOpenSettings: () => void;
@@ -22,23 +26,39 @@ export const WorkspaceToolRail = memo(function WorkspaceToolRail({
   workspaceTool,
   workspaceToolOpen,
   connectionToolButton,
+  browserToolButton,
   keyboardToolButton,
   filesToolButton,
   settingsToolButton,
   settingsActive,
+  browserEnabled = true,
+  browserActive = false,
   connectionCount,
   agentRelaxCount,
   onSelectWorkspaceTool,
+  onToggleBrowser,
   onCollapseWorkspaceTool,
   onHelp,
   onOpenSettings,
 }: Props) {
-  const connectionActive = workspaceTool === 'connections';
-  const keyboardActive = workspaceTool === 'keyboard';
-  const filesActive = workspaceTool === 'files';
+  const connectionActive = !browserActive && workspaceTool === 'connections';
+  const keyboardActive = !browserActive && workspaceTool === 'keyboard';
+  const filesActive = !browserActive && workspaceTool === 'files';
   return (
     <nav className="workspace-tool-rail" aria-label="Application tools">
       <div className="workspace-tool-rail-buttons">
+        {(browserEnabled || browserActive) && <button
+          ref={browserToolButton}
+          className={`workspace-tool-button workspace-tool-browser ${browserActive ? 'active' : ''}`}
+          type="button"
+          onClick={() => onToggleBrowser?.()}
+          aria-label={browserActive ? 'Return to terminal' : 'Remote browser'}
+          title={browserActive ? 'Return to terminal' : 'Remote browser'}
+          aria-pressed={browserActive}
+          data-testid="workspace-tool-browser"
+        >
+          <Globe aria-hidden="true" size={18} />
+        </button>}
         <button
           ref={connectionToolButton}
           className={`workspace-tool-button ${connectionActive ? 'active' : ''}`}
@@ -60,6 +80,7 @@ export const WorkspaceToolRail = memo(function WorkspaceToolRail({
           className={`workspace-tool-button ${keyboardActive ? 'active' : ''}`}
           type="button"
           onClick={() => onSelectWorkspaceTool('keyboard')}
+          disabled={browserActive}
           aria-label="Virtual keyboard"
           title="Virtual keyboard"
           aria-pressed={keyboardActive}

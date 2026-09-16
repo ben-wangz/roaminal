@@ -10,9 +10,8 @@ Priority: P1. Capabilities: core. Viewports: desktop and phone portrait.
 2. Use the browser Find UI to search visible page text, then dismiss it with the
    browser's normal controls. The application does not add a query, mutate
    terminal state, or issue a search endpoint request.
-3. Repeat in Settings, FileSystem preview, and the Connections surface. The
-   browser shortcut remains available in each view and no app-level handler
-   captures the key combination.
+3. Repeat in Settings, FileSystem preview, and the Connections surface. No
+   app-level handler captures the key combination.
 
 ## Pass gate
 

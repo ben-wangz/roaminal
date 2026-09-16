@@ -52,19 +52,20 @@ LABEL org.opencontainers.image.source="https://github.com/ben-wangz/roaminal" \
       org.opencontainers.image.licenses="MPL-2.0" \
       org.opencontainers.image.version="${ROAMINAL_VERSION}"
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash ca-certificates libvips42 openssh-client tini \
+    && apt-get install -y --no-install-recommends bash ca-certificates chromium fonts-noto-cjk libvips42 openssh-client tini \
     && rm -rf /var/lib/apt/lists/* \
     && groupmod --new-name roaminal node \
     && usermod --login roaminal --home /home/roaminal --move-home node \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/yarn \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
-    && mkdir -p /opt/roaminal/terminal-worker /opt/roaminal/agents/hooks /home/roaminal/.roaminal /home/roaminal/.ssh /var/cache/roaminal/filesystem-image-previews /workspace \
+    && mkdir -p /opt/roaminal/terminal-worker /opt/roaminal/browser-worker /opt/roaminal/agents/hooks /home/roaminal/.roaminal /home/roaminal/.ssh /var/cache/roaminal/filesystem-image-previews /workspace \
     && chmod 0700 /home/roaminal/.ssh \
     && chmod 0700 /var/cache/roaminal /var/cache/roaminal/filesystem-image-previews \
     && chown -R roaminal:roaminal /opt/roaminal /home/roaminal /var/cache/roaminal /workspace
 COPY --from=backend-builder /out/roaminal /usr/local/bin/roaminal
 COPY --from=frontend-runtime /src/frontend/dist /opt/roaminal/frontend
 COPY --from=worker-deps --chown=roaminal:roaminal /opt/roaminal/terminal-worker /opt/roaminal/terminal-worker
+COPY --chown=roaminal:roaminal backend/browser-worker /opt/roaminal/browser-worker
 COPY --from=codex-hook-builder --chown=roaminal:roaminal /out/agents/hooks/codex /opt/roaminal/agents/hooks/codex
 COPY --chown=roaminal:roaminal backend/shell /opt/roaminal/shell
 COPY LICENSE THIRD_PARTY_NOTICES.md docs/licensing.md /usr/share/licenses/roaminal/
@@ -75,6 +76,7 @@ RUN chmod 0755 /usr/local/bin/roaminal \
     && find /opt/roaminal/agents/hooks -type f -name '*.json' -exec chmod 0444 {} + \
     && find /opt/roaminal/agents/hooks -type f -name 'roaminal-agent-hook' -exec chmod 0555 {} +
 ENV HOME=/home/roaminal \
+    LANG=C.UTF-8 \
     ROAMINAL_HOST=0.0.0.0 \
     ROAMINAL_PORT=9846 \
     ROAMINAL_CWD=/workspace \
@@ -82,6 +84,8 @@ ENV HOME=/home/roaminal \
     ROAMINAL_FRONTEND_DIR=/opt/roaminal/frontend \
     ROAMINAL_AGENT_HOOKS_DIR=/opt/roaminal/agents/hooks \
     ROAMINAL_WORKER_PATH=/opt/roaminal/terminal-worker/src/index.mjs \
+    ROAMINAL_BROWSER_WORKER_PATH=/opt/roaminal/browser-worker/index.mjs \
+    ROAMINAL_BROWSER_CHROMIUM_PATH=/usr/bin/chromium \
     ROAMINAL_SHELL_RC=/opt/roaminal/shell/roaminal-bashrc
 EXPOSE 9846
 USER 1000:1000

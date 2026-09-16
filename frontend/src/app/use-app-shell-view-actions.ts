@@ -16,6 +16,7 @@ type Params = {
   setWorkspaceContent: Dispatch<SetStateAction<WorkspaceContent>>;
   setPage: Dispatch<SetStateAction<AppPage>>;
   page: AppPage;
+  workspaceContent: WorkspaceContent;
   workspaceToolOpen: boolean;
   setSettingsSection: Dispatch<SetStateAction<SettingsSection>>;
   setSettingsFocusTarget: Dispatch<SetStateAction<string | null>>;
@@ -36,6 +37,7 @@ export function useAppShellViewActions({
   setWorkspaceContent,
   setPage,
   page,
+  workspaceContent,
   workspaceToolOpen,
   setSettingsSection,
   setSettingsFocusTarget,
@@ -48,6 +50,7 @@ export function useAppShellViewActions({
   setAppearance,
 }: Params) {
   const previousWorkspaceToolOpen = useRef<boolean | null>(null);
+  const previousWorkspaceContent = useRef<WorkspaceContent>('terminal');
   const handlePreviewStart = useCallback((id: string) => setPreviewConnectionInstanceId(id), [setPreviewConnectionInstanceId]);
   const handlePreviewEnd = useCallback(
     (id: string) => setPreviewConnectionInstanceId((current) => (current === id ? null : current)),
@@ -67,19 +70,20 @@ export function useAppShellViewActions({
   const openSettings = useCallback((section: SettingsSection, focusTarget: string | null) => {
     cancelLaunch();
     previousWorkspaceToolOpen.current = workspaceToolOpen;
+    previousWorkspaceContent.current = workspaceContent;
     setPreviewConnectionInstanceId(null);
     setWorkspaceContent('terminal');
     setWorkspaceToolOpen(false);
     setSettingsSection(section);
     setSettingsFocusTarget(focusTarget);
     setPage('settings');
-  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSettingsFocusTarget, setSettingsSection, setWorkspaceContent, setWorkspaceToolOpen, workspaceToolOpen]);
+  }, [cancelLaunch, setPage, setPreviewConnectionInstanceId, setSettingsFocusTarget, setSettingsSection, setWorkspaceContent, setWorkspaceToolOpen, workspaceContent, workspaceToolOpen]);
   const handleOpenSettings = useCallback((section?: SettingsSection, focusTarget: string | null = null) => {
     if (page === 'settings' && section === undefined) {
-      if (!viewRef.current.activeConnectionInstanceId) return;
+      if (!viewRef.current.activeConnectionInstanceId && previousWorkspaceContent.current !== 'browser') return;
       if (settingsDirty && !window.confirm('Discard unsaved interface changes?')) return;
       setPage('workspace');
-      setWorkspaceContent('terminal');
+      setWorkspaceContent(previousWorkspaceContent.current);
       setPreviewConnectionInstanceId(null);
       setWorkspaceToolOpen(previousWorkspaceToolOpen.current ?? false);
       setSettingsFocusTarget(null);

@@ -102,5 +102,6 @@ func (s *Server) newAPIRouter() http.Handler {
 	mux.Handle(api.HTTPPrefix+"/ssh-key-generations", protected(http.MethodPost, s.generateSSHKey))
 	mux.Handle(api.WebSocketPrefix+"/connection-instances/{connectionInstanceId}", plain(http.MethodGet, s.websocket))
 	mux.Handle(api.WebSocketPrefix+"/connection-launches/{launchId}", plain(http.MethodGet, s.websocket))
+	mux.Handle(api.WebSocketPrefix+"/browser", plain(http.MethodGet, s.browserWebsocket))
 	return mux
 }

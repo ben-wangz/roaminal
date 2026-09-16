@@ -1,6 +1,6 @@
 export type DiagnosticOperation = {
   protocol: 'websocket' | 'resource';
-  endpoint?: 'connection-instances' | 'connection-launches';
+  endpoint?: 'connection-instances' | 'connection-launches' | 'browser';
   connectionInstanceId?: string;
   phase?: 'construct' | 'handshake' | 'open' | 'close';
   durationMs?: number;

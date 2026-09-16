@@ -86,6 +86,9 @@ app:
   authRefreshTTL: 2160h
   authMaxAttempts: 30
   clientDiagnosticsEnabled: true
+  browserEnabled: false
+  browserWorkerPath: /opt/roaminal/browser-worker/index.mjs
+  browserChromiumPath: /usr/bin/chromium
 
 auth:
   existingSecret: roaminal

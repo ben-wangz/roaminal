@@ -90,6 +90,15 @@ func applyFile(c *Config, v fileConfig) error {
 	if v.FrontendDir != nil {
 		c.FrontendDir = *v.FrontendDir
 	}
+	if v.BrowserEnabled != nil {
+		c.BrowserEnabled = *v.BrowserEnabled
+	}
+	if v.BrowserWorkerPath != nil {
+		c.BrowserWorkerPath = *v.BrowserWorkerPath
+	}
+	if v.BrowserChromiumPath != nil {
+		c.BrowserChromiumPath = *v.BrowserChromiumPath
+	}
 	if v.AgentHooksDir != nil {
 		c.AgentHooksDir = *v.AgentHooksDir
 	}

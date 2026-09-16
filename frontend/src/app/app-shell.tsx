@@ -27,6 +27,7 @@ import { useNotificationNavigation } from './use-notification-navigation';
 import { useWorkspaceToolActions } from './use-workspace-tool-actions';
 import { useWorkspaceNavigation } from './use-workspace-navigation';
 import { useFilesystemWorkspace } from '../filesystem/use-filesystem-workspace';
+import { useBrowserRuntime } from '../browser/browser-runtime';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
@@ -40,6 +41,7 @@ export function AppShell() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const [executionStatusRuntime, setExecutionStatusRuntime] = useState<TerminalRuntime | null>(null);
+  const browserRuntime = useBrowserRuntime();
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
   const connectionsOpen = workspaceTool === 'connections' && workspaceToolOpen;
@@ -168,6 +170,23 @@ export function AppShell() {
     setWorkspaceContent('terminal');
     setPreviewEntry(null);
   };
+  const previousBrowserToolOpen = useRef(workspaceToolOpen);
+  const handleToggleBrowser = useCallback(() => {
+    if (page === 'settings') {
+      if (settingsDirty && !window.confirm('Discard unsaved interface changes?')) return;
+      setSettingsDirty(false);
+      setPage('workspace');
+    }
+    if (workspaceContent === 'browser') {
+      setWorkspaceContent('terminal');
+      setWorkspaceToolOpen(previousBrowserToolOpen.current);
+      return;
+    }
+    previousBrowserToolOpen.current = workspaceToolOpen;
+    setWorkspaceToolOpen(false);
+    setWorkspaceContent('browser');
+    if (page !== 'workspace') setPage('workspace');
+  }, [page, setPage, setSettingsDirty, setWorkspaceContent, setWorkspaceToolOpen, settingsDirty, workspaceContent, workspaceToolOpen]);
   const mobileKeyboard = useMobileKeyboard(
     activeRuntime,
     page === 'workspace' && workspaceContent === 'terminal' && Boolean(activeRuntime),
@@ -205,6 +224,7 @@ export function AppShell() {
   const {
     connectionToolButton,
     keyboardToolButton,
+    browserToolButton,
     filesToolButton,
     settingsToolButton,
     handleSelectWorkspaceTool,
@@ -230,6 +250,7 @@ export function AppShell() {
     setWorkspaceContent,
     setPage,
     page,
+    workspaceContent,
     workspaceToolOpen,
     setSettingsSection,
     setSettingsFocusTarget,
@@ -242,7 +263,7 @@ export function AppShell() {
     setAppearance,
   });
   if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
-  const workspaceTools = { connectionToolButton, keyboardToolButton, filesToolButton, settingsToolButton };
+  const workspaceTools = { connectionToolButton, browserToolButton, keyboardToolButton, filesToolButton, settingsToolButton };
   const workspaceActions = { handleSelectWorkspaceTool, handleCollapseWorkspaceTool };
   return <AppShellView {...buildAppShellViewProps({
     appState,
@@ -273,6 +294,8 @@ export function AppShell() {
     onNavigateToConnection: openTerminal,
     onContextualModeChange: setContextualMode,
     onBackToTerminal: handleBackToTerminal,
+    onToggleBrowser: handleToggleBrowser,
+    browserRuntime,
     onShowToast: showToast,
     fullscreen,
     notifications,

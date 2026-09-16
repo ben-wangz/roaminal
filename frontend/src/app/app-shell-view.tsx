@@ -18,7 +18,9 @@ export function AppShellView({
   settingsFocusTarget,
   workspaceTool,
   workspaceToolOpen,
+  browserEnabled,
   connectionToolButton,
+  browserToolButton,
   keyboardToolButton,
   filesToolButton,
   settingsToolButton,
@@ -86,7 +88,9 @@ export function AppShellView({
   onCloseDialog,
   onManageNotifications,
   workspaceContent,
+  browserRuntime,
   onBackToTerminal,
+  onToggleBrowser,
   appShellRef,
   fullscreenActive,
   fullscreenSupported,
@@ -100,6 +104,7 @@ export function AppShellView({
   const toolRailOpen = workspaceOpen || page === 'settings';
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
   const handleWorkspaceToolSelection = (tool: Parameters<typeof onSelectWorkspaceTool>[0]) => {
+    if (workspaceOpen && workspaceContent === 'browser') onBackToTerminal();
     if (!workspaceOpen) {
       // There is no workspace surface to reveal until a connection instance
       // exists. Keep the global rail usable on the initial Settings page.
@@ -134,11 +139,15 @@ export function AppShellView({
             connectionCount={connections.length}
             agentRelaxCount={countRelaxedAgentConnections(connections)}
             connectionToolButton={connectionToolButton}
+            browserToolButton={browserToolButton}
             keyboardToolButton={keyboardToolButton}
             filesToolButton={filesToolButton}
             settingsToolButton={settingsToolButton}
             settingsActive={page === 'settings'}
+            browserEnabled={browserEnabled}
+            browserActive={workspaceContent === 'browser'}
             onSelectWorkspaceTool={handleWorkspaceToolSelection}
+            onToggleBrowser={onToggleBrowser}
             onCollapseWorkspaceTool={onCollapseWorkspaceTool}
             onHelp={onHelp}
             onOpenSettings={onOpenSettings}
@@ -219,6 +228,7 @@ export function AppShellView({
               executionStatus={executionStatus}
               onOpenManager={onOpenManager}
               content={workspaceContent}
+              browserRuntime={browserRuntime}
               filesystem={filesystem}
               onBackToTerminal={onBackToTerminal}
               onToast={onShowToast}

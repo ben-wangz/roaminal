@@ -15,6 +15,7 @@ import (
 
 	"github.com/ben-wangz/roaminal/backend/internal/agent"
 	"github.com/ben-wangz/roaminal/backend/internal/auth"
+	"github.com/ben-wangz/roaminal/backend/internal/browser"
 	"github.com/ben-wangz/roaminal/backend/internal/buildinfo"
 	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
 	"github.com/ben-wangz/roaminal/backend/internal/clock"
@@ -89,6 +90,8 @@ func run(cfg config.Config) error {
 	if err := terminalWorker.Start(ctx); err != nil {
 		return err
 	}
+	browserRuntime := browser.New(cfg)
+	defer browserRuntime.Shutdown(context.Background())
 	sshRoot, sshErr := sshfs.Open()
 	if sshErr != nil {
 		fmt.Fprintf(os.Stderr, "Roaminal SSH source unavailable: %v\n", sshErr)
@@ -162,7 +165,8 @@ func run(cfg config.Config) error {
 	serverDependencies := server.Dependencies{
 		Config: cfg, Version: buildinfo.Version, BootID: bootID, Auth: authManager, Workspace: workspace.New(fileRepositories.Workspace),
 		Connections: terminals, Monitor: monitor.NewWithClock(clockSource), Worker: terminalWorker,
-		Static: static, Definitions: definitions, Diagnostics: diagnostics,
+		Browser: browserRuntime,
+		Static:  static, Definitions: definitions, Diagnostics: diagnostics,
 		FileSystem:        fileSystem,
 		ImagePreview:      imagePreview,
 		AgentProvisioning: agentService.Provisioning(),

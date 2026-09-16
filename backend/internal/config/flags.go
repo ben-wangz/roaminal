@@ -34,7 +34,7 @@ func applyArgs(c *Config, args []string) error {
 		key, value, hasValue := strings.Cut(arg, "=")
 		if !hasValue {
 			switch key {
-			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-hooks-dir", "--web-push-vapid-public-key", "--web-push-vapid-private-key", "--web-push-subject", "--filesystem-image-preview-cache-dir", "--filesystem-image-preview-cache-target-mib", "--filesystem-image-preview-cache-max-age", "--filesystem-image-preview-cache-cleanup-interval", "--filesystem-image-preview-max-conversions", "--filesystem-image-preview-max-source-mib", "--filesystem-image-preview-max-output-mib", "--filesystem-image-preview-max-static-pixels", "--filesystem-image-preview-max-frames", "--filesystem-image-preview-max-animated-pixels", "--filesystem-image-preview-conversion-timeout":
+			case "--host", "-h", "--port", "-p", "--password", "-a", "--websocket-ping", "--scrollback-lines", "--max-connection-instances", "--max-clients-per-connection-instance", "--cwd", "--frontend-dir", "--browser-enabled", "--browser-worker-path", "--browser-chromium-path", "--auth-access-ttl", "--auth-refresh-ttl", "--auth-max-attempts", "--agent-hooks-dir", "--web-push-vapid-public-key", "--web-push-vapid-private-key", "--web-push-subject", "--filesystem-image-preview-cache-dir", "--filesystem-image-preview-cache-target-mib", "--filesystem-image-preview-cache-max-age", "--filesystem-image-preview-cache-cleanup-interval", "--filesystem-image-preview-max-conversions", "--filesystem-image-preview-max-source-mib", "--filesystem-image-preview-max-output-mib", "--filesystem-image-preview-max-static-pixels", "--filesystem-image-preview-max-frames", "--filesystem-image-preview-max-animated-pixels", "--filesystem-image-preview-conversion-timeout":
 				if i+1 >= len(args) {
 					return fmt.Errorf("missing value for %s", key)
 				}
@@ -83,6 +83,16 @@ func applyArgs(c *Config, args []string) error {
 			c.InitialCwd = value
 		case "--frontend-dir":
 			c.FrontendDir = value
+		case "--browser-enabled":
+			b, err := parseBool(value)
+			if err != nil {
+				return fmt.Errorf("browser enabled: %w", err)
+			}
+			c.BrowserEnabled = b
+		case "--browser-worker-path":
+			c.BrowserWorkerPath = value
+		case "--browser-chromium-path":
+			c.BrowserChromiumPath = value
 		case "--auth-access-ttl":
 			d, err := time.ParseDuration(value)
 			if err != nil {
@@ -170,6 +180,15 @@ func applyEnv(c *Config) error {
 		return err
 	}
 	if err := set("ROAMINAL_FRONTEND_DIR", func(v string) error { c.FrontendDir = v; return nil }); err != nil {
+		return err
+	}
+	if err := set("ROAMINAL_BROWSER_ENABLED", func(v string) error { b, err := parseBool(v); c.BrowserEnabled = b; return err }); err != nil {
+		return err
+	}
+	if err := set("ROAMINAL_BROWSER_WORKER_PATH", func(v string) error { c.BrowserWorkerPath = v; return nil }); err != nil {
+		return err
+	}
+	if err := set("ROAMINAL_BROWSER_CHROMIUM_PATH", func(v string) error { c.BrowserChromiumPath = v; return nil }); err != nil {
 		return err
 	}
 	if err := set("ROAMINAL_AUTH_ACCESS_TTL", func(v string) error { d, err := time.ParseDuration(v); c.AuthAccessTTL = d; return err }); err != nil {

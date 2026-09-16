@@ -1,6 +1,6 @@
 import { clientDiagnostics } from '../diagnostics/client-diagnostics';
 import type { DiagnosticOperation } from '../diagnostics/diagnostic-queue';
-import { websocketPath, WS_PROTOCOL } from '../api/routes';
+import { browserWebsocketPath, websocketPath, WS_PROTOCOL } from '../api/routes';
 
 type Endpoint = 'connection-instances' | 'connection-launches';
 export type WebSocketRole = 'interactive' | 'observer';
@@ -55,3 +55,34 @@ export function closeRoaminalWebSocket(socket: WebSocket, code?: number, reason?
 }
 
 export function expectRoaminalWebSocketClose(socket: WebSocket): void { expectedClosed.add(socket); }
+
+export function createBrowserWebSocket(token: string, reporter = clientDiagnostics() as DiagnosticReporter | null): WebSocket {
+  const startedAt = performance.now();
+  let opened = false;
+  let reported = false;
+  let errorObserved = false;
+  const operation = (): DiagnosticOperation => ({
+    protocol: 'websocket', endpoint: 'browser', phase: opened ? 'close' : 'handshake',
+    durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+    online: typeof navigator === 'undefined' ? undefined : navigator.onLine,
+  });
+  const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(`${scheme}//${location.host}${browserWebsocketPath()}`, [WS_PROTOCOL, `roaminal.auth.${token}`]);
+  socket.binaryType = 'arraybuffer';
+  socket.addEventListener('open', () => { opened = true; });
+  socket.addEventListener('error', () => {
+    errorObserved = true;
+    if (!reported && !intentionallyClosed.has(socket) && !expectedClosed.has(socket)) {
+      reported = true;
+      reporter?.reportWebSocket(operation(), opened ? 'Browser WebSocket failed after open' : 'Browser WebSocket connection failed before open');
+    }
+  });
+  socket.addEventListener('close', (event) => {
+    if (reported || intentionallyClosed.has(socket) || expectedClosed.has(socket)) return;
+    if (!opened || !event.wasClean || errorObserved) {
+      reported = true;
+      reporter?.reportWebSocket({ ...operation(), phase: opened ? 'close' : 'handshake', closeCode: event.code, wasClean: event.wasClean }, opened ? 'Browser WebSocket closed unexpectedly' : 'Browser WebSocket connection closed before open');
+    }
+  });
+  return socket;
+}

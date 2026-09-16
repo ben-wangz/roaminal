@@ -19,6 +19,7 @@ import type { useMessages } from '../messages/use-messages';
 import type { Dialog } from './app-shell-overlays';
 import type { AuthState } from '../auth/auth-storage';
 import type { SettingsSection } from '../settings/settings-model';
+import type { BrowserRuntime } from '../browser/browser-runtime';
 
 export type AppShellViewProps = {
   page: AppPage;
@@ -28,9 +29,11 @@ export type AppShellViewProps = {
   settingsFocusTarget: string | null;
   workspaceTool: WorkspaceTool;
   workspaceToolOpen: boolean;
+  browserEnabled: boolean;
   connectionToolButton: RefObject<HTMLButtonElement | null>;
   keyboardToolButton: RefObject<HTMLButtonElement | null>;
   filesToolButton: RefObject<HTMLButtonElement | null>;
+  browserToolButton: RefObject<HTMLButtonElement | null>;
   settingsToolButton: RefObject<HTMLButtonElement | null>;
   nativeKeyboardOpen: boolean;
   messageButtonRef: RefObject<HTMLButtonElement | null>;
@@ -96,7 +99,9 @@ export type AppShellViewProps = {
   onCloseDialog: () => void;
   onManageNotifications: (connection: ConnectionInstanceSummary) => void;
   workspaceContent: WorkspaceContent;
+  browserRuntime: BrowserRuntime;
   onBackToTerminal: () => void;
+  onToggleBrowser: () => void;
   appShellRef: RefObject<FullscreenTarget | null>;
   fullscreenActive: boolean;
   fullscreenSupported: boolean;

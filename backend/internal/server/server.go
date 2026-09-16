@@ -31,6 +31,7 @@ type Server struct {
 	ids               ports.IDGenerator
 	clock             ports.Clock
 	worker            ports.TerminalWorker
+	browser           ports.BrowserRuntime
 	bootID            string
 	version           string
 	handler           http.Handler
@@ -58,6 +59,7 @@ type Dependencies struct {
 	IDs               ports.IDGenerator
 	Clock             ports.Clock
 	Worker            ports.TerminalWorker
+	Browser           ports.BrowserRuntime
 	Static            http.Handler
 	Definitions       *definition.Service
 	Diagnostics       *clientdiag.Sink
@@ -83,7 +85,7 @@ func New(deps Dependencies) *Server {
 	}
 	s := &Server{
 		cfg: deps.Config, version: deps.Version, bootID: deps.BootID, auth: deps.Auth, workspace: deps.Workspace,
-		terms: deps.Connections, monitor: deps.Monitor, ids: deps.IDs, clock: runtimeClock, worker: deps.Worker,
+		terms: deps.Connections, monitor: deps.Monitor, ids: deps.IDs, clock: runtimeClock, worker: deps.Worker, browser: deps.Browser,
 		started: runtimeClock.Now(), static: static, definitions: deps.Definitions,
 		diagnostics: deps.Diagnostics,
 	}

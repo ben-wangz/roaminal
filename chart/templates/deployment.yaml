@@ -161,6 +161,21 @@ spec:
                 configMapKeyRef:
                   name: {{ include "roaminal.configMapName" . }}
                   key: clientDiagnosticsEnabled
+            - name: ROAMINAL_BROWSER_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: browserEnabled
+            - name: ROAMINAL_BROWSER_WORKER_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: browserWorkerPath
+            - name: ROAMINAL_BROWSER_CHROMIUM_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: browserChromiumPath
             - name: ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_DIR
               valueFrom:
                 configMapKeyRef:

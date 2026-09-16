@@ -29,6 +29,8 @@ const (
 	DefaultWorkerHandshake                  = 5 * time.Second
 	DefaultWorkerControl                    = 30 * time.Second
 	DefaultWorkerStall                      = 10 * time.Second
+	DefaultBrowserWorkerPath                = "/opt/roaminal/browser-worker/index.mjs"
+	DefaultBrowserChromiumPath              = "/usr/bin/chromium"
 )
 
 type Config struct {
@@ -48,6 +50,9 @@ type Config struct {
 	ClientDiagnosticsEnabled                   bool
 	StateDir                                   string
 	WorkerPath                                 string
+	BrowserEnabled                             bool
+	BrowserWorkerPath                          string
+	BrowserChromiumPath                        string
 	FrontendDir                                string
 	Version                                    string
 	PasswordGenerated                          bool
@@ -84,6 +89,9 @@ type fileConfig struct {
 	AuthMaxAttempts                            *int    `json:"authMaxAttempts"`
 	ClientDiagnosticsEnabled                   *bool   `json:"clientDiagnosticsEnabled"`
 	FrontendDir                                *string `json:"frontendDir"`
+	BrowserEnabled                             *bool   `json:"browserEnabled"`
+	BrowserWorkerPath                          *string `json:"browserWorkerPath"`
+	BrowserChromiumPath                        *string `json:"browserChromiumPath"`
 	AgentHooksDir                              *string `json:"agentHooksDir"`
 	WebPushVAPIDPublicKey                      *string `json:"webPushVapidPublicKey"`
 	WebPushVAPIDPrivateKey                     *string `json:"webPushVapidPrivateKey"`
@@ -106,6 +114,7 @@ var allowedFileKeys = map[string]bool{
 	"scrollbackLines": true, "maxConnectionInstances": true, "maxClientsPerConnectionInstance": true,
 	"debug": true, "acceptTerms": true, "initialCwd": true, "authAccessTTL": true,
 	"authRefreshTTL": true, "authMaxAttempts": true, "clientDiagnosticsEnabled": true, "frontendDir": true,
+	"browserEnabled": true, "browserWorkerPath": true, "browserChromiumPath": true,
 	"agentHooksDir":         true,
 	"webPushVapidPublicKey": true, "webPushVapidPrivateKey": true, "webPushSubject": true,
 	"filesystemImagePreviewCacheDir": true, "filesystemImagePreviewCacheTargetMiB": true,

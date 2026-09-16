@@ -17,6 +17,7 @@ import type { ToastState } from '../ui/toast';
 import type { FileSystemWorkspaceState } from '../filesystem/use-filesystem-workspace';
 import type { AuthState } from '../auth/auth-storage';
 import type { SettingsSection } from '../settings/settings-model';
+import type { BrowserRuntime } from '../browser/browser-runtime';
 import { notificationTargetFocusKey } from '../settings/notification-settings';
 
 type AppActions = ReturnType<typeof useAppShellActions>;
@@ -35,7 +36,7 @@ type Params = {
   setSettingsSection: (section: SettingsSection) => void;
   setSettingsFocusTarget: (target: string | null) => void;
   appearance: TerminalAppearance;
-  workspaceTools: Pick<AppShellViewProps, 'connectionToolButton' | 'keyboardToolButton' | 'filesToolButton' | 'settingsToolButton'>;
+  workspaceTools: Pick<AppShellViewProps, 'connectionToolButton' | 'keyboardToolButton' | 'filesToolButton' | 'browserToolButton' | 'settingsToolButton'>;
   nativeKeyboardOpen: boolean;
   messageButtonRef: RefObject<HTMLButtonElement | null>;
   messageCenter: MessageCenter;
@@ -58,6 +59,8 @@ type Params = {
   onNavigateToConnection: AppShellViewProps['onNavigateToConnection'];
   onContextualModeChange: AppShellViewProps['onContextualModeChange'];
   onBackToTerminal: AppShellViewProps['onBackToTerminal'];
+  onToggleBrowser: AppShellViewProps['onToggleBrowser'];
+  browserRuntime: BrowserRuntime;
   onShowToast: AppShellViewProps['onShowToast'];
   fullscreen: Fullscreen;
   notifications: Notifications;
@@ -92,6 +95,8 @@ export function buildAppShellViewProps({
   onNavigateToConnection,
   onContextualModeChange,
   onBackToTerminal,
+  onToggleBrowser,
+  browserRuntime,
   onShowToast,
   fullscreen,
   notifications,
@@ -108,6 +113,7 @@ export function buildAppShellViewProps({
     settingsFocusTarget,
     workspaceTool,
     workspaceToolOpen,
+    browserEnabled: heartbeatState?.browserEnabled !== false,
     ...workspaceTools,
     nativeKeyboardOpen,
     messageButtonRef,
@@ -181,7 +187,9 @@ export function buildAppShellViewProps({
       }
     },
     workspaceContent,
+    browserRuntime,
     onBackToTerminal,
+    onToggleBrowser,
     appShellRef: fullscreen.targetRef,
     fullscreenActive: fullscreen.active,
     fullscreenSupported: fullscreen.supported,

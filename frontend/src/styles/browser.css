@@ -1,0 +1,40 @@
+.browser-content-view { background: var(--base); }
+.browser-workspace { min-width: 0; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; background: var(--base); }
+.browser-workspace.inactive { display: none; }
+.browser-toolbar { min-width: 0; min-height: 48px; flex: 0 0 48px; display: flex; align-items: center; gap: 9px; padding: 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface-1); }
+.browser-navigation, .browser-toolbar-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.browser-page-identity { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 9px; border: 1px solid transparent; background: transparent; color: var(--text); text-align: left; }
+.browser-page-identity:hover, .browser-page-identity:focus-visible { border-color: var(--border); background: var(--hover-wash); }
+.browser-page-identity strong, .browser-page-identity small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-page-identity strong { color: var(--text-bright); font-size: .73rem; }
+.browser-page-identity small { color: var(--muted); font-size: .62rem; }
+.browser-frame-wrap { position: relative; min-width: 0; min-height: 0; flex: 1 1 auto; display: grid; place-items: center; overflow: hidden; background: #111; }
+.browser-frame-wrap canvas { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: auto; outline: 0; touch-action: none; user-select: none; }
+.browser-frame-wrap canvas:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.browser-frame-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.58); color: var(--text-bright); font-size: .8rem; text-align: center; }
+.browser-frame-error { color: var(--danger-soft); }
+.browser-status-line { min-height: 27px; flex: 0 0 27px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 12px; border-top: 1px solid var(--border-soft); color: var(--muted); font-size: .62rem; }
+.browser-status-line [data-status='connected'] { color: var(--green); }
+.browser-status-line [data-status='reconnecting'], .browser-status-line [data-status='connecting'] { color: var(--yellow); }
+.browser-status-line [data-status='error'] { color: var(--danger-soft); }
+.browser-address-panel { width: min(620px, calc(100% - 32px)); max-height: min(720px, calc(100% - 32px)); overflow: auto; display: grid; gap: 16px; align-content: start; margin: auto; padding: 28px; border: 1px solid var(--border); background: var(--surface-1); box-shadow: 0 18px 48px rgba(0,0,0,.34); }
+.browser-address-dialog { width: min(640px, calc(100% - 28px)); margin: 0; }
+.browser-address-heading { display: flex; align-items: center; gap: 10px; color: var(--text-bright); font-size: .9rem; }
+.browser-address-heading .icon-button { margin-left: auto; }
+.browser-address-form { display: grid; gap: 7px; }
+.browser-address-form label { color: var(--muted); font-size: .68rem; }
+.browser-address-input-row { display: flex; min-width: 0; gap: 8px; }
+.browser-address-input-row input { min-width: 0; flex: 1 1 auto; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 9px 10px; outline: 0; font-size: .72rem; }
+.browser-address-input-row input:focus { border-color: var(--cyan); }
+.browser-form-error { margin: 0; color: var(--danger-soft); font-size: .67rem; }
+.browser-dialog-backdrop { position: absolute; z-index: 8; inset: 0; display: grid; place-items: start center; padding-top: 18px; background: rgba(0,0,0,.58); }
+.browser-page-dialog { width: min(440px, calc(100% - 32px)); display: grid; gap: 12px; margin-top: 12vh; padding: 20px; border: 1px solid var(--border); background: var(--surface-1); box-shadow: 0 18px 48px rgba(0,0,0,.34); color: var(--text-bright); }
+.browser-page-dialog p { margin: 0; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
+.browser-page-dialog input { min-width: 0; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 9px 10px; font-size: .72rem; outline: 0; }
+.browser-page-dialog input:focus { border-color: var(--cyan); }
+.browser-page-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 600px) {
+  .browser-toolbar { gap: 3px; padding-inline: 6px; }
+  .browser-page-identity { padding-inline: 5px; }
+  .browser-address-panel { padding: 20px 16px; }
+}

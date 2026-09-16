@@ -65,9 +65,12 @@
         "authAccessTTL": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
         "authRefreshTTL": {"type": "string", "minLength": 1, "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"},
         "authMaxAttempts": {"type": "integer", "minimum": 1, "maximum": 1000},
-        "clientDiagnosticsEnabled": {"type": "boolean"}
+        "clientDiagnosticsEnabled": {"type": "boolean"},
+        "browserEnabled": {"type": "boolean"},
+        "browserWorkerPath": {"type": "string", "minLength": 1},
+        "browserChromiumPath": {"type": "string", "minLength": 1}
       },
-      "required": ["host", "port", "websocketPingInterval", "scrollbackLines", "maxConnectionInstances", "maxClientsPerConnectionInstance", "debug", "acceptTerms", "initialCwd", "authAccessTTL", "authRefreshTTL", "authMaxAttempts", "clientDiagnosticsEnabled"]
+      "required": ["host", "port", "websocketPingInterval", "scrollbackLines", "maxConnectionInstances", "maxClientsPerConnectionInstance", "debug", "acceptTerms", "initialCwd", "authAccessTTL", "authRefreshTTL", "authMaxAttempts", "clientDiagnosticsEnabled", "browserEnabled", "browserWorkerPath", "browserChromiumPath"]
     },
     "auth": {
       "type": "object",

@@ -69,6 +69,12 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.AgentHooksDir) == "" {
 		return errors.New("agent hooks directory must not be empty")
 	}
+	if strings.TrimSpace(c.BrowserWorkerPath) == "" {
+		return errors.New("browser worker path must not be empty")
+	}
+	if strings.TrimSpace(c.BrowserChromiumPath) == "" {
+		return errors.New("browser Chromium path must not be empty")
+	}
 	if err := validateWebPush(c); err != nil {
 		return err
 	}

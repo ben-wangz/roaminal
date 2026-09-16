@@ -1,1 +1,1 @@
-export type WorkspaceContent = 'terminal' | 'file-preview';
+export type WorkspaceContent = 'terminal' | 'file-preview' | 'browser';

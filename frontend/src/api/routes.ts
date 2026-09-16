@@ -11,3 +11,7 @@ export function apiPath(path: string): string {
 export function websocketPath(endpoint: string, id: string): string {
   return `${WS_PREFIX}/${endpoint}/${encodeURIComponent(id)}`;
 }
+
+export function browserWebsocketPath(): string {
+  return `${WS_PREFIX}/browser`;
+}

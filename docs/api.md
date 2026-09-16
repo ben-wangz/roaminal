@@ -97,6 +97,17 @@ removes all subscriptions for the current login session when turned
 off. If VAPID configuration is absent, the config endpoint reports Web Push
 disabled.
 
+## Remote Browser
+
+Heartbeat reports `browserEnabled` and `browserAvailable` separately. When the
+feature is enabled, the client opens `/ws/v2/browser` with the same-origin
+authenticated WebSocket subprotocol used by terminal connections. The current
+MVP permits one viewer and relays bounded JSON state, input, and base64 JPEG
+frame events from the Chromium worker. Page requests originate in the Roaminal
+Pod; the frontend never fetches the target service. Addresses are entered
+through the browser address dialog and handled only by the active remote
+browser instance.
+
 ## FileSystem
 
 FileSystem operations are available only for live SSH connection instances.

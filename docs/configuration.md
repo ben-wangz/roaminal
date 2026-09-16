@@ -21,6 +21,9 @@ Roaminal fields are accepted. Durations use Go syntax.
 | `authRefreshTTL` | `--auth-refresh-ttl` | `ROAMINAL_AUTH_REFRESH_TTL` | `2160h` |
 | `authMaxAttempts` | `--auth-max-attempts` | `ROAMINAL_AUTH_MAX_ATTEMPTS` | `30` |
 | `clientDiagnosticsEnabled` | `--client-diagnostics=<bool>` | `ROAMINAL_CLIENT_DIAGNOSTICS_ENABLED` | `true` |
+| `browserEnabled` | `--browser-enabled=<bool>` | `ROAMINAL_BROWSER_ENABLED` | `false` |
+| `browserWorkerPath` | `--browser-worker-path` | `ROAMINAL_BROWSER_WORKER_PATH` | `/opt/roaminal/browser-worker/index.mjs` |
+| `browserChromiumPath` | `--browser-chromium-path` | `ROAMINAL_BROWSER_CHROMIUM_PATH` | `/usr/bin/chromium` |
 | `agentHooksDir` | `--agent-hooks-dir` | `ROAMINAL_AGENT_HOOKS_DIR` | `/opt/roaminal/agents/hooks` |
 | `webPushVapidPublicKey` | `--web-push-vapid-public-key` | `ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY` | empty; disables Web Push when all three fields are empty |
 | `webPushVapidPrivateKey` | `--web-push-vapid-private-key` | `ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY` | empty |
@@ -49,6 +52,8 @@ notification preferences, upload records, active
 `connection-instances/<id>/metadata.json` and `terminal.snapshot` files, audit
 copies under `audit/connection-instances/`, and
 `ssh-connection-options.yaml` for Roaminal-only tmux/FileSystem settings.
+When remote Browser is enabled, the Chromium profile remains temporary below
+`/tmp`.
 Temporary upload staging is also below `uploads/`. SSH config and key material
 remain under `~/.ssh/`. When enabled, recent redacted browser diagnostics are
 stored below `diagnostics/` with bounded retention.

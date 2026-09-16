@@ -19,6 +19,7 @@ export function useWorkspaceToolActions({
   setWorkspaceToolOpen,
 }: Params) {
   const connectionToolButton = useRef<HTMLButtonElement>(null);
+  const browserToolButton = useRef<HTMLButtonElement>(null);
   const keyboardToolButton = useRef<HTMLButtonElement>(null);
   const filesToolButton = useRef<HTMLButtonElement>(null);
   const settingsToolButton = useRef<HTMLButtonElement>(null);
@@ -53,6 +54,7 @@ export function useWorkspaceToolActions({
 
   return {
     connectionToolButton,
+    browserToolButton,
     keyboardToolButton,
     filesToolButton,
     settingsToolButton,

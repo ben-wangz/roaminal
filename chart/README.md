@@ -102,6 +102,23 @@ Client diagnostics are enabled by default. Set
 redacted events use the existing `state/` subdirectory and are capped at five
 files and 10 MiB; no extra PVC is created.
 
+## Remote browser
+
+Remote Browser is disabled by default. Enable it only when the Pod is allowed
+to run the bundled non-root Chromium worker:
+
+```yaml
+app:
+  browserEnabled: true
+  browserWorkerPath: /opt/roaminal/browser-worker/index.mjs
+  browserChromiumPath: /usr/bin/chromium
+```
+
+Chromium requests services from inside the Roaminal Pod, so `localhost` and
+cluster DNS names resolve from that Pod. The feature does not inherit routes
+from an SSH connection instance. The worker's CDP endpoint is loopback-only;
+the Chart exposes only the existing Roaminal Service.
+
 ## Browser notifications
 
 Web Push is disabled by default. To enable the authenticated sender, create an

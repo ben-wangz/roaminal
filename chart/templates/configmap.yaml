@@ -24,6 +24,9 @@ data:
   authRefreshTTL: {{ .Values.app.authRefreshTTL | quote }}
   authMaxAttempts: {{ .Values.app.authMaxAttempts | quote }}
   clientDiagnosticsEnabled: {{ .Values.app.clientDiagnosticsEnabled | quote }}
+  browserEnabled: {{ .Values.app.browserEnabled | quote }}
+  browserWorkerPath: {{ .Values.app.browserWorkerPath | quote }}
+  browserChromiumPath: {{ .Values.app.browserChromiumPath | quote }}
   filesystemImagePreviewCacheDir: "/var/cache/roaminal/filesystem-image-previews"
   filesystemImagePreviewCacheTargetMiB: {{ .Values.filesystemImagePreview.cacheTargetMiB | quote }}
   filesystemImagePreviewCacheMaxAge: {{ .Values.filesystemImagePreview.cacheMaxAge | quote }}
