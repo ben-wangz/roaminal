@@ -19,6 +19,9 @@ func (s *Server) newAPIRouter() http.Handler {
 	}
 	mux.Handle(api.HTTPPrefix+"/auth/challenge", plain(http.MethodPost, s.challenge))
 	mux.Handle(api.HTTPPrefix+"/auth/login", plain(http.MethodPost, s.login))
+	mux.Handle(api.HTTPPrefix+"/auth/2fa/setup", plain(http.MethodPost, s.totpSetup))
+	mux.Handle(api.HTTPPrefix+"/auth/2fa/confirm", plain(http.MethodPost, s.totpConfirm))
+	mux.Handle(api.HTTPPrefix+"/auth/2fa/verify", plain(http.MethodPost, s.totpVerify))
 	mux.Handle(api.HTTPPrefix+"/auth/refresh", plain(http.MethodPost, s.refresh))
 	mux.Handle(api.HTTPPrefix+"/auth/logout", plain(http.MethodPost, s.logout))
 	mux.Handle(api.HTTPPrefix+"/auth/session", protected(http.MethodGet, s.currentSession))

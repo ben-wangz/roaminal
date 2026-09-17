@@ -22,6 +22,12 @@ const (
 )
 
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	// Subscribe before authenticating so a deletion that races the auth check
+	// cannot leave a newly accepted stream unwatched.
+	stopEnrollmentWatch := s.watchEnrollment(ctx, cancel)
+	defer stopEnrollmentWatch()
 	id := r.PathValue("connectionInstanceId")
 	pendingID := r.PathValue("launchId")
 	pending := pendingID != ""
@@ -39,6 +45,10 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	}
 	authSessionID, err := s.auth.Authenticate(websocketToken(r))
 	if err != nil {
+		writeError(w, 401, "unauthorized")
+		return
+	}
+	if err := ctx.Err(); err != nil {
 		writeError(w, 401, "unauthorized")
 		return
 	}
@@ -76,8 +86,6 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
 	attach := s.terms.AttachReserved
 	detach := s.terms.Detach
 	input := s.terms.Input
@@ -192,6 +200,28 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	<-writerDone
+}
+
+// watchEnrollment cancels the connection context when the TOTP enrollment
+// identity changes (deletion, re-enrollment, or storage failure). The
+// returned stop function cancels first and then waits for the watcher, so
+// teardown can never deadlock on a request context that is only canceled
+// after the handler returns.
+func (s *Server) watchEnrollment(ctx context.Context, cancel context.CancelFunc) func() {
+	if s.auth == nil {
+		return func() {}
+	}
+	changed := s.auth.EnrollmentChanged()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		select {
+		case <-changed:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return func() { cancel(); <-done }
 }
 
 func parseWebSocketRole(value string) (websocketRole, error) {

@@ -21,7 +21,9 @@ license notices in their module distributions:
 - `github.com/coder/websocket v1.8.15` - MIT
 - `github.com/davidbyttow/govips/v2 v2.18.0` - MIT; see `LICENSES/MIT.txt`
 - `github.com/marknefedov/go-webpush/v2 v2.0.0` - MIT
+- `github.com/pquerna/otp v1.5.0` - Apache-2.0; see `LICENSES/Apache-2.0.txt`
 - `github.com/ydylla/fcache v1.6.1` - Apache-2.0; see `LICENSES/Apache-2.0.txt`
+- `github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc` (transitive OTP dependency) - MIT
 - `github.com/golang-jwt/jwt/v5 v5.3.1` (transitive Web Push dependency) - MIT
 - `gopkg.in/yaml.v3 v3.0.1` - MIT
 

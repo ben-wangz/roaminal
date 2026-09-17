@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/api"
-	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/clientdiag"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
@@ -90,6 +89,29 @@ func TestSameOriginRequiresMatchingHostAndScheme(t *testing.T) {
 	}
 }
 
+func TestRejectedAuthRoutesAreNotCacheable(t *testing.T) {
+	server := New(Dependencies{Config: config.Config{}, Version: "0.3.0", BootID: "boot", Static: http.NotFoundHandler()})
+
+	for _, request := range []*http.Request{
+		httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/auth/challenge", nil),
+		httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/auth", nil),
+	} {
+		response := httptest.NewRecorder()
+		server.Handler().ServeHTTP(response, request)
+		if response.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("unsupported auth route %s cache policy = %q, want no-store", request.URL.Path, response.Header().Get("Cache-Control"))
+		}
+	}
+
+	originRequest := httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/auth/challenge", strings.NewReader("{}"))
+	originRequest.Header.Set("Origin", "http://other.test")
+	originResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(originResponse, originRequest)
+	if originResponse.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("origin-denied auth cache policy = %q, want no-store", originResponse.Header().Get("Cache-Control"))
+	}
+}
+
 func TestAPIRouteAcceptsHTTPSOriginWhenProxyReportsWSS(t *testing.T) {
 	server := New(Dependencies{Config: config.Config{}, Version: "0.1.0", BootID: "boot"})
 	request := httptest.NewRequest(http.MethodGet, "https://roaminal.test/api/v2/version", nil)
@@ -144,7 +166,7 @@ func TestClientDiagnosticsEndpointRequiresAuthAndAcceptsBatch(t *testing.T) {
 	}
 	var logs bytes.Buffer
 	sink := clientdiag.New("", "0.2.11", "boot", log.New(&logs, "", 0))
-	server := New(Dependencies{Config: cfg, Version: "0.2.11", BootID: "boot", Auth: authManager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace), Diagnostics: sink})
+	server := New(Dependencies{Config: cfg, Version: "0.2.11", BootID: "boot", Auth: authManager.Manager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace), Diagnostics: sink})
 	body := clientdiag.Batch{SchemaVersion: 1, PageID: "11111111-1111-4000-8000-000000000004", Events: []clientdiag.Event{{EventID: "11111111-1111-4000-8000-000000000005", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano), Kind: "console_error", Message: "test"}}}
 	encoded, err := json.Marshal(body)
 	if err != nil {
@@ -158,14 +180,7 @@ func TestClientDiagnosticsEndpointRequiresAuthAndAcceptsBatch(t *testing.T) {
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated status = %d, want 401", response.Code)
 	}
-	challenge, err := authManager.Challenge()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tokens, err := authManager.Login(challenge.ChallengeID, auth.Proof(cfg.Password, challenge), "browser")
-	if err != nil {
-		t.Fatal(err)
-	}
+	tokens := authManager.login(t, cfg.Password)
 	request = httptest.NewRequest(http.MethodPost, "http://roaminal.test/api/v2/client-diagnostics", bytes.NewReader(encoded))
 	request.Header.Set("Origin", "http://roaminal.test")
 	request.Header.Set("Content-Type", "application/json")

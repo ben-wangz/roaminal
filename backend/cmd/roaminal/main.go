@@ -105,11 +105,15 @@ func run(cfg config.Config) error {
 		return err
 	}
 	fileRepositories := persistence.NewRepositories(store)
-	authManager, err := auth.NewWithRepositories(cfg, fileRepositories.Auth, auth.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource})
+	authManager, err := auth.NewWithRepositories(cfg, fileRepositories.Auth, auth.Dependencies{Clock: clockSource, IDs: idGenerator, Random: randomSource, Enrollment: fileRepositories.TOTPEnrollment})
 	if err != nil {
 		_ = terminalWorker.Shutdown(context.Background())
 		return err
 	}
+	// Live-deletion detection for already-open streams: the reconciler also
+	// runs inline on every authentication boundary. The watcher lives for
+	// the whole process lifetime.
+	authManager.StartEnrollmentWatch(context.Background(), time.Second)
 	notificationService, err := notifications.New(fileRepositories.PushSubscriptions, idGenerator, notifications.Options{
 		PublicKey: cfg.WebPushVAPIDPublicKey, PrivateKey: cfg.WebPushVAPIDPrivateKey, Subject: cfg.WebPushSubject,
 		Clock: clockSource, PreferenceRepository: fileRepositories.NotificationPreferences, UserKey: authManager.Fingerprint(),

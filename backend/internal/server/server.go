@@ -108,6 +108,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Roaminal-Request-ID", value)
 		}
 	}
+	// Apply the authentication cache policy before origin and method routing so
+	// rejected or unsupported auth requests cannot be cached either.
+	if isAuthPath(r.URL.Path) {
+		noStoreAuthResponse(w)
+	}
 	if strings.HasPrefix(r.URL.Path, api.HTTPPrefix+"/") || r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, api.WebSocketPrefix+"/") {
 		if r.Method != http.MethodOptions && !s.sameOrigin(r) {
 			writeError(w, http.StatusForbidden, "origin denied")
@@ -192,10 +197,17 @@ func (s *Server) versionInfo(w http.ResponseWriter, _ *http.Request) {
 type authenticatedHandler func(http.ResponseWriter, *http.Request, string)
 
 func (s *Server) withAuth(w http.ResponseWriter, r *http.Request, fn authenticatedHandler) {
+	if isAuthPath(r.URL.Path) {
+		noStoreAuthResponse(w)
+	}
 	sessionID, err := s.auth.Authenticate(bearer(r))
 	if err != nil {
 		writeError(w, 401, "unauthorized")
 		return
 	}
 	fn(w, r, sessionID)
+}
+
+func isAuthPath(path string) bool {
+	return path == api.HTTPPrefix+"/auth" || strings.HasPrefix(path, api.HTTPPrefix+"/auth/")
 }

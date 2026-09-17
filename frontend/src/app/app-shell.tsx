@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadAuth } from '../auth/auth-client';
+import { onAuthStateChange } from '../auth/auth-storage';
 import { AuthSessionUI } from '../auth/auth-session-ui';
 import { TerminalRuntime } from '../terminal/terminal-runtime';
 import { observeViewportHeight } from '../input/viewport';
@@ -44,6 +45,17 @@ export function AppShell() {
   const browserRuntime = useBrowserRuntime();
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange(setAuth);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'roaminal_auth_state') setAuth(loadAuth());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
   const connectionsOpen = workspaceTool === 'connections' && workspaceToolOpen;
   const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, connectionsOpen, appearance);
   const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(auth, mainRuntime, previewRuntimeRef);
@@ -64,7 +76,6 @@ export function AppShell() {
   const actions = useAppShellActions({
     auth,
     setAuth,
-    setError,
     activeLaunchId,
     startLaunch,
     clearLaunch,
@@ -258,7 +269,7 @@ export function AppShell() {
     showToast,
     setAppearance,
   });
-  if (!auth) return <AuthSessionUI error={error} onLogin={actions.onLogin} />;
+  if (!auth) return <AuthSessionUI error={error} onAuthenticated={(tokens) => { setAuth(tokens); setError(''); }} />;
   const workspaceTools = { connectionToolButton, browserToolButton, keyboardToolButton, filesToolButton, settingsToolButton };
   const workspaceActions = { handleSelectWorkspaceTool, handleCollapseWorkspaceTool };
   return <AppShellView {...buildAppShellViewProps({

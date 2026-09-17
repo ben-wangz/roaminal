@@ -11,10 +11,15 @@ contexts and never print tokens.
    connection instances, launches, definitions, SSH keys, Agent initializations,
    messages, notification config/preferences/subscriptions, remote monitor,
    connection groups/order, and FileSystem root/entries/stat/content/uploads.
+   Pending TOTP tokens from `/auth/login` are purpose-bound: used as Bearer
+   or refresh credentials they return `401`, and a setup pending token is
+   rejected by `/auth/2fa/verify` (a verification pending token by
+   `/auth/2fa/setup`).
 2. From a page with a mismatched/null Origin and through requests with a wrong
    Origin scheme/host, call API and WebSocket paths. They return `403 origin
    denied`. Matching host and effective scheme succeed.
-3. Login and verify protected HTTP requests use Bearer auth. Tokens are never
+3. Login (password plus TOTP per PW-AUTH-001) and verify protected HTTP
+   requests use Bearer auth. Tokens are never
    query parameters. After token rotation, the prior access and refresh tokens
    are rejected while current tokens work.
 4. Open an instance WebSocket at `/ws/v2/connection-instances/<id>` with both

@@ -11,6 +11,12 @@
 .auth-username-label, .auth-username { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .auth-modal label { color: var(--muted); font-size: .75rem; }
 .auth-modal input[type='password'] { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; }
+.auth-modal input[type='text'] { min-height: 40px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 10px; }
+.auth-totp-qr { display: grid; place-items: center; padding: 8px; border: 1px solid var(--border); background: #fff; }
+.auth-totp-qr img { display: block; width: 192px; height: 192px; image-rendering: pixelated; }
+.auth-totp-secret { font-family: var(--mono-font, monospace); letter-spacing: .08em; text-transform: uppercase; }
+.auth-notice { color: var(--ok); font-size: .76rem; }
+.auth-hint { color: var(--muted); font-size: .7rem; margin: 0; }
 .error-text { color: var(--danger-soft); font-size: .76rem; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0,43,54,.72); backdrop-filter: blur(4px); opacity: 1; transition: opacity var(--dur-base) var(--ease-out); }
 @starting-style { .modal-backdrop { opacity: 0; } }

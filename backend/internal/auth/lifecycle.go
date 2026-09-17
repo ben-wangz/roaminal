@@ -12,16 +12,18 @@ import (
 func (m *Manager) IsSessionActive(sessionID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.reconcileLocked()
 	entry, ok := m.refresh[sessionID]
-	return ok && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint
+	return ok && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint && m.sessionBoundLocked(entry)
 }
 
 func (m *Manager) SessionIDForRefresh(refreshToken string) (string, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.reconcileLocked()
 	hash := hashToken(strings.TrimSpace(refreshToken))
 	for sessionID, entry := range m.refresh {
-		if refreshToken != "" && hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint {
+		if refreshToken != "" && hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint && m.sessionBoundLocked(entry) {
 			return sessionID, true
 		}
 	}
@@ -59,8 +61,9 @@ func (m *Manager) Logout(refreshToken, accessToken string) error {
 func (m *Manager) Current(sessionID string) (CurrentSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.reconcileLocked()
 	entry, ok := m.refresh[sessionID]
-	if !ok || !entry.RefreshExpiresAt.After(m.clock.Now().UTC()) {
+	if !ok || !entry.RefreshExpiresAt.After(m.clock.Now().UTC()) || !m.sessionBoundLocked(entry) {
 		if ok {
 			delete(m.refresh, sessionID)
 			_ = m.persistLocked()
@@ -79,11 +82,12 @@ func (m *Manager) Current(sessionID string) (CurrentSession, error) {
 func (m *Manager) List(sessionID string) []SessionSummary {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.reconcileLocked()
 	result := make([]SessionSummary, 0, len(m.refresh))
 	now := m.clock.Now().UTC()
 	changed := false
 	for id, entry := range m.refresh {
-		if !entry.RefreshExpiresAt.After(now) {
+		if !entry.RefreshExpiresAt.After(now) || !m.sessionBoundLocked(entry) {
 			delete(m.refresh, id)
 			changed = true
 			continue

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/connection"
 	"github.com/ben-wangz/roaminal/backend/internal/identity"
@@ -26,7 +25,7 @@ func TestConnectionInstanceOrderRouteIsNotTreatedAsAnInstanceID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := New(Dependencies{Config: config.Config{}, Version: "0.1.0", BootID: "boot", Auth: authManager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace)})
+	server := New(Dependencies{Config: config.Config{}, Version: "0.1.0", BootID: "boot", Auth: authManager.Manager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace)})
 	request := httptest.NewRequest(http.MethodPut, "http://roaminal.test/api/v2/connection-instances/order", nil)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, request)
@@ -99,15 +98,8 @@ func TestConnectionInstanceGroupRoutesPersistAndProtectRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	challenge, err := authManager.Challenge()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tokens, err := authManager.Login(challenge.ChallengeID, auth.Proof(cfg.Password, challenge), "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	server := New(Dependencies{Config: cfg, Version: "0.1.0", BootID: "boot", Auth: authManager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace), IDs: identity.UUIDGenerator{}})
+	tokens := authManager.login(t, cfg.Password)
+	server := New(Dependencies{Config: cfg, Version: "0.1.0", BootID: "boot", Auth: authManager.Manager, Workspace: workspace.New(persistence.NewRepositories(store).Workspace), IDs: identity.UUIDGenerator{}})
 	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/connection-instance-groups", nil)
 	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 	response := httptest.NewRecorder()

@@ -1,6 +1,5 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
-import { api, login } from '../auth/auth-client';
-import type { AuthState } from '../auth/auth-storage';
+import { api } from '../auth/auth-client';
 import type { ConnectionInstanceSummary } from '../terminal/terminal-protocol';
 import type { TerminalRuntime } from '../terminal/terminal-runtime';
 import type { ConnectionView } from './connection-view';
@@ -13,8 +12,6 @@ import type { WorkspaceContent } from './workspace-content';
 type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 
 type Params = {
-  setAuth: Dispatch<SetStateAction<AuthState | null>>;
-  setError: Dispatch<SetStateAction<string>>;
   controller: ConnectionInstanceController;
   setCurrentRuntime: Dispatch<SetStateAction<TerminalRuntime | null>>;
   setActiveView: (next: ConnectionView) => void;
@@ -28,8 +25,6 @@ type Params = {
 };
 
 export function useConnectionLifecycleActions({
-  setAuth,
-  setError,
   controller,
   setCurrentRuntime,
   setActiveView,
@@ -83,14 +78,5 @@ export function useConnectionLifecycleActions({
     }
   }, [controller, mainRuntime, previewRuntimeRef, setActiveView, setCurrentRuntime, setDialog, setPreviewConnectionInstanceId, setWorkspaceContent, showToast, viewRef]);
 
-  const onLogin = useCallback(async (password: string) => {
-    try {
-      setAuth(await login(password));
-      setError('');
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }, [setAuth, setError]);
-
-  return { updateTitle, resetTitle, terminateConnection, onLogin };
+  return { updateTitle, resetTitle, terminateConnection };
 }

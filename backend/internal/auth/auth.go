@@ -16,6 +16,9 @@ func NewWithRepositories(cfg config.Config, authRepository ports.AuthRepository,
 	if authRepository == nil {
 		return nil, errors.New("auth repository is required")
 	}
+	if deps.Enrollment == nil {
+		return nil, errors.New("auth enrollment repository is required")
+	}
 	if deps.Clock == nil {
 		return nil, errors.New("auth clock is required")
 	}
@@ -27,7 +30,18 @@ func NewWithRepositories(cfg config.Config, authRepository ports.AuthRepository,
 	}
 	passwordKey := sha256.Sum256([]byte(cfg.Password))
 	fingerprintHash := sha256.Sum256(append([]byte("roaminal-password-fingerprint-v1:"), passwordKey[:]...))
-	m := &Manager{cfg: cfg, authRepository: authRepository, clock: deps.Clock, ids: deps.IDs, random: deps.Random, fingerprint: hex.EncodeToString(fingerprintHash[:]), refresh: make(map[string]domain.AuthSessionRecord), access: make(map[string]accessEntry), challenges: make(map[string]challenge)}
+	m := &Manager{cfg: cfg, authRepository: authRepository, enrollmentRepo: deps.Enrollment, clock: deps.Clock, ids: deps.IDs, random: deps.Random, fingerprint: hex.EncodeToString(fingerprintHash[:]), refresh: make(map[string]domain.AuthSessionRecord), access: make(map[string]accessEntry), challenges: make(map[string]challenge), pending: make(map[string]pendingEntry), enrollmentChange: make(chan struct{})}
+	// Fail closed at startup: an existing-but-unusable enrollment file is an
+	// error, never an invitation to enroll.
+	startup, exists, err := m.loadEnrollmentLocked()
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		enrollment := startup
+		m.enrollment = &enrollment
+		m.enrollmentState = enrollmentConfigured
+	}
 	records, err := authRepository.LoadAuth(context.Background())
 	if err != nil {
 		return nil, err
@@ -35,7 +49,11 @@ func NewWithRepositories(cfg config.Config, authRepository ports.AuthRepository,
 	changed := false
 	now := m.clock.Now().UTC()
 	for _, entry := range records {
-		if entry.PasswordFingerprint != m.fingerprint || !entry.RefreshExpiresAt.After(now) {
+		// Only sessions bound to the currently enrolled identity survive
+		// startup. Legacy pre-TOTP records, stale fingerprints, expired
+		// refresh tokens, and every session from an absent enrollment are
+		// invalidated; business data is untouched.
+		if entry.PasswordFingerprint != m.fingerprint || !entry.RefreshExpiresAt.After(now) || !m.sessionBoundLocked(entry) {
 			changed = true
 			continue
 		}

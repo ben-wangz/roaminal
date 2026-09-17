@@ -10,6 +10,7 @@ import (
 // Repositories exposes storage adapters through application-owned ports.
 type Repositories struct {
 	Auth                    ports.AuthRepository
+	TOTPEnrollment          ports.TOTPEnrollmentRepository
 	Connection              ports.ConnectionInstanceRepository
 	Audit                   ports.AuditRepository
 	TerminalSnapshots       ports.TerminalSnapshotRepository
@@ -22,7 +23,7 @@ type Repositories struct {
 
 func NewRepositories(store *Store) Repositories {
 	adapter := &repositoryAdapter{store: store}
-	return Repositories{Auth: adapter, Connection: adapter, Audit: adapter, TerminalSnapshots: adapter, Workspace: adapter, Upload: adapter, Messages: adapter, PushSubscriptions: adapter, NotificationPreferences: adapter}
+	return Repositories{Auth: adapter, TOTPEnrollment: adapter, Connection: adapter, Audit: adapter, TerminalSnapshots: adapter, Workspace: adapter, Upload: adapter, Messages: adapter, PushSubscriptions: adapter, NotificationPreferences: adapter}
 }
 
 type repositoryAdapter struct{ store *Store }
@@ -49,7 +50,7 @@ func (a *repositoryAdapter) LoadAuth(ctx context.Context) ([]domain.AuthSessionR
 	}
 	result := make([]domain.AuthSessionRecord, 0, len(file.Sessions))
 	for _, value := range file.Sessions {
-		result = append(result, domain.AuthSessionRecord{ID: value.ID, PasswordFingerprint: value.PasswordFingerprint, RefreshTokenHash: value.RefreshTokenHash, CreatedAt: value.CreatedAt, LastSeenAt: value.LastSeenAt, RefreshExpiresAt: value.RefreshExpiresAt, RotatedAt: value.RotatedAt, UserAgent: value.UserAgent})
+		result = append(result, domain.AuthSessionRecord{ID: value.ID, PasswordFingerprint: value.PasswordFingerprint, EnrollmentID: value.EnrollmentID, RefreshTokenHash: value.RefreshTokenHash, CreatedAt: value.CreatedAt, LastSeenAt: value.LastSeenAt, RefreshExpiresAt: value.RefreshExpiresAt, RotatedAt: value.RotatedAt, UserAgent: value.UserAgent})
 	}
 	return result, nil
 }
@@ -60,9 +61,27 @@ func (a *repositoryAdapter) SaveAuth(ctx context.Context, records []domain.AuthS
 	}
 	converted := make([]AuthSession, 0, len(records))
 	for _, value := range records {
-		converted = append(converted, AuthSession{ID: value.ID, PasswordFingerprint: value.PasswordFingerprint, RefreshTokenHash: value.RefreshTokenHash, CreatedAt: value.CreatedAt, LastSeenAt: value.LastSeenAt, RefreshExpiresAt: value.RefreshExpiresAt, RotatedAt: value.RotatedAt, UserAgent: value.UserAgent})
+		converted = append(converted, AuthSession{ID: value.ID, PasswordFingerprint: value.PasswordFingerprint, EnrollmentID: value.EnrollmentID, RefreshTokenHash: value.RefreshTokenHash, CreatedAt: value.CreatedAt, LastSeenAt: value.LastSeenAt, RefreshExpiresAt: value.RefreshExpiresAt, RotatedAt: value.RotatedAt, UserAgent: value.UserAgent})
 	}
 	return a.store.SaveAuth(AuthFile{Sessions: converted})
+}
+
+func (a *repositoryAdapter) LoadEnrollment(ctx context.Context) (domain.TOTPEnrollmentRecord, bool, error) {
+	if err := checkContext(ctx); err != nil {
+		return domain.TOTPEnrollmentRecord{}, false, err
+	}
+	a.store.totpMu.Lock()
+	defer a.store.totpMu.Unlock()
+	return a.store.LoadTOTPEnrollment()
+}
+
+func (a *repositoryAdapter) SaveEnrollment(ctx context.Context, record domain.TOTPEnrollmentRecord) error {
+	if err := checkContext(ctx); err != nil {
+		return err
+	}
+	a.store.totpMu.Lock()
+	defer a.store.totpMu.Unlock()
+	return a.store.SaveTOTPEnrollment(record)
 }
 
 func (a *repositoryAdapter) ListConnectionInstances(ctx context.Context) ([]domain.ConnectionInstanceMeta, error) {
@@ -189,6 +208,7 @@ func cloneLayout(layout domain.ConnectionInstanceLayout) domain.ConnectionInstan
 }
 
 var _ ports.AuthRepository = (*repositoryAdapter)(nil)
+var _ ports.TOTPEnrollmentRepository = (*repositoryAdapter)(nil)
 var _ ports.ConnectionInstanceRepository = (*repositoryAdapter)(nil)
 var _ ports.AuditRepository = (*repositoryAdapter)(nil)
 var _ ports.TerminalSnapshotRepository = (*repositoryAdapter)(nil)

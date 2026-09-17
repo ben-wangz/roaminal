@@ -220,7 +220,7 @@ without explaining the originating request and expiry condition.
 | Area | Cases |
 | --- | --- |
 | Fixtures | [SSH and tmux codespace](fixtures/ssh-codespace.md) |
-| Authentication | [login](auth/01-login.md), [token refresh](auth/02-token-refresh.md), [login sessions](auth/03-login-sessions.md), [sign out](auth/04-sign-out.md) |
+| Authentication | [login](auth/01-login.md), [token refresh](auth/02-token-refresh.md), [login sessions](auth/03-login-sessions.md), [sign out](auth/04-sign-out.md), [mandatory TOTP enrollment/reset](auth/05-mandatory-totp.md) |
 | Connection definitions | [unified settings](settings/01-unified-settings.md), [manager/filter](connections/01-manager-and-filter.md), [source capabilities](connections/02-ssh-config-source.md), [create/edit](connections/03-definition-create-edit.md), [copy/delete/ETag](connections/04-definition-copy-delete-etag.md) |
 | Connection lifecycle | [local](connections/05-local-connection.md), [SSH](connections/06-ssh-initial-connect.md), [reuse](connections/07-transport-reuse.md), [tmux](connections/08-tmux.md), [pending launch](connections/09-pending-launch.md), [exit/failover](connections/10-exit-and-failover.md), [source change](connections/11-source-change-draining.md) |
 | SSH keys | [inventory/copy](keys/01-inventory-and-copy.md), [generation](keys/02-generation.md), [delete/read-only](keys/03-delete-and-readonly.md) |

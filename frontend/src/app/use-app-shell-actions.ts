@@ -21,7 +21,6 @@ type DisposableRuntimeRef = MutableRefObject<{ dispose(): void } | null>;
 type Params = {
   auth: AuthState | null;
   setAuth: Dispatch<SetStateAction<AuthState | null>>;
-  setError: Dispatch<SetStateAction<string>>;
   activeLaunchId: string | null;
   startLaunch: (id: string) => void;
   clearLaunch: () => void;
@@ -48,7 +47,6 @@ type Params = {
 export function useAppShellActions({
   auth,
   setAuth,
-  setError,
   activeLaunchId,
   startLaunch,
   clearLaunch,
@@ -98,8 +96,6 @@ export function useAppShellActions({
     showToast,
   });
   const lifecycleActions = useConnectionLifecycleActions({
-    setAuth,
-    setError,
     setCurrentRuntime,
     setActiveView,
     setDialog,

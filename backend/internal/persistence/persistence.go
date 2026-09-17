@@ -35,10 +35,13 @@ type ConnectionInstanceLayout = domain.ConnectionInstanceLayout
 type ConnectionInstanceMeta = domain.ConnectionInstanceMeta
 
 // AuthSession is the current storage representation of an authentication
-// record. Workspace layout is deliberately stored in another file.
+// record. Workspace layout is deliberately stored in another file. An empty
+// EnrollmentID marks a legacy record from before mandatory TOTP; the auth
+// manager rejects such credentials at load time.
 type AuthSession struct {
 	ID                  string    `json:"id"`
 	PasswordFingerprint string    `json:"passwordFingerprint"`
+	EnrollmentID        string    `json:"enrollmentId,omitempty"`
 	RefreshTokenHash    string    `json:"refreshTokenHash"`
 	CreatedAt           time.Time `json:"createdAt"`
 	LastSeenAt          time.Time `json:"lastSeenAt"`
@@ -64,6 +67,7 @@ type Store struct {
 	messagesMu                sync.Mutex
 	pushMu                    sync.Mutex
 	notificationPreferencesMu sync.Mutex
+	totpMu                    sync.Mutex
 	degradedIDs               map[string]struct{}
 	globalError               bool
 }

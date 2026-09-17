@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/identity"
@@ -39,15 +38,8 @@ func TestNotificationSubscriptionAPIIsAuthenticatedAndKeepsKeysPrivate(t *testin
 		t.Fatal(err)
 	}
 	defer service.Close()
-	server := New(Dependencies{Config: cfg, Auth: authManager, IDs: identity.UUIDGenerator{}, Notifications: service})
-	challenge, err := authManager.Challenge()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tokens, err := authManager.Login(challenge.ChallengeID, auth.Proof(cfg.Password, challenge), "browser")
-	if err != nil {
-		t.Fatal(err)
-	}
+	server := New(Dependencies{Config: cfg, Auth: authManager.Manager, IDs: identity.UUIDGenerator{}, Notifications: service})
+	tokens := authManager.login(t, cfg.Password)
 
 	configResponse := serveNotificationRequest(t, server, http.MethodGet, "/api/v2/notifications/config", nil, tokens.AccessToken)
 	if configResponse.Code != http.StatusOK {

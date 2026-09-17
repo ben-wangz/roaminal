@@ -116,6 +116,11 @@ func stateRootHasData(root string) (bool, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, err
 	}
+	if _, err := os.Lstat(filepath.Join(root, "2fa-secret")); err == nil {
+		return true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
 	entries, err := os.ReadDir(filepath.Join(root, "sessions"))
 	if err == nil && len(entries) > 0 {
 		return true, nil

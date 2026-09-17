@@ -4,9 +4,13 @@ JSON API requests use `Content-Type: application/json`, are limited to 1 MiB, an
 reject unknown fields. FileSystem uploads use multipart form data and are
 limited to 10 GiB of file content plus multipart overhead. Browser requests
 must use the current page Origin. The public endpoints are `/healthz`,
-`/api/v2/version`, and the authentication challenge/login/refresh/logout
-routes; other API endpoints require `Authorization: Bearer <access-token>`.
-Errors use
+`/api/v2/version`, and the authentication challenge/login plus mandatory
+TOTP setup/confirm/verify/refresh/logout routes; other API endpoints require
+`Authorization: Bearer <access-token>`.
+`POST /api/v2/auth/login` verifies the password proof and returns
+`nextStep` (`setup_totp` before enrollment, `verify_totp` after it) with a
+short-lived purpose-bound `pendingToken`; normal tokens are issued only by
+`POST /api/v2/auth/2fa/verify`. Errors use
 `{"error":"message","code":"stable_code","retryable":false}` and may include `field`, `requestId`, and bounded `details`.
 
 | Method | Path | Purpose |
@@ -14,6 +18,9 @@ Errors use
 | GET | `/healthz` | Backend and terminal-worker health (`503` while unavailable) |
 | GET | `/api/v2/version` | Product, API version, process `bootId`, and diagnostic capability |
 | POST | `/api/v2/auth/challenge`, `/api/v2/auth/login`, `/api/v2/auth/refresh`, `/api/v2/auth/logout` | Login and session lifecycle |
+| POST | `/api/v2/auth/2fa/setup` | Return the enrollment candidate (provisioning URI, secret, local QR) for a setup pending token |
+| POST | `/api/v2/auth/2fa/confirm` | Complete enrollment with a confirmation code; invalidates all credentials |
+| POST | `/api/v2/auth/2fa/verify` | Exchange a verification pending token and TOTP code for normal tokens |
 | GET | `/api/v2/auth/session`, `/api/v2/auth/sessions` | Current or all login sessions |
 | DELETE | `/api/v2/auth/sessions/:authSessionId` | Revoke one login session |
 | POST | `/api/v2/auth/logout-others` | Revoke other login sessions |

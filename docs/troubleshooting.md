@@ -21,6 +21,15 @@ seconds and are single-use, including failed attempts. Refresh tokens rotate;
 discard the old token after a successful refresh. Changing the configured
 password or restarting with a generated password revokes existing login sessions.
 
+Login always requires a TOTP code after the password. If the authenticator is
+lost, reset enrollment by deleting `<state root>/2fa-secret` inside the running
+Pod, then log out and log back in (see
+[`security.md`](security.md#resetting-totp-enrollment)). A `503 auth enrollment
+storage unavailable` login error means that file exists but is empty,
+malformed, or unreadable; repair or remove it; enrollment is never offered
+from a broken file. Reused codes are rejected: wait for the next 30-second
+code after confirming enrollment or a rejected attempt.
+
 ## WebSocket closes immediately
 
 Use the current page Origin, `ws:`/`wss:` matching the page, and both

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ben-wangz/roaminal/backend/internal/auth"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/identity"
@@ -41,7 +40,7 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	messageID := record.MessageID
-	service := New(Dependencies{Config: cfg, Version: "0.3.0", BootID: "boot", Auth: authManager, Messages: messageService})
+	service := New(Dependencies{Config: cfg, Version: "0.3.0", BootID: "boot", Auth: authManager.Manager, Messages: messageService})
 	unauthorized := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/messages", nil)
 	request.Header.Set("Origin", "http://roaminal.test")
@@ -56,14 +55,7 @@ func TestMessageAPIRequiresAuthAndRedactsInternalFields(t *testing.T) {
 	if unauthorizedDelete.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized delete status = %d, want 401", unauthorizedDelete.Code)
 	}
-	challenge, err := authManager.Challenge()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tokens, err := authManager.Login(challenge.ChallengeID, auth.Proof(cfg.Password, challenge), "browser")
-	if err != nil {
-		t.Fatal(err)
-	}
+	tokens := authManager.login(t, cfg.Password)
 	request = httptest.NewRequest(http.MethodGet, "http://roaminal.test/api/v2/messages?limit=1", nil)
 	request.Header.Set("Origin", "http://roaminal.test")
 	request.Header.Set("Authorization", "Bearer "+tokens.AccessToken)

@@ -22,6 +22,15 @@ type AuthRepository interface {
 	SaveAuth(context.Context, []domain.AuthSessionRecord) error
 }
 
+// TOTPEnrollmentRepository stores the single shared identity's mandatory TOTP
+// enrollment as private credential material. LoadEnrollment reports exists as
+// false only when the file is absent; every other unusable state must return
+// an error so callers can fail closed instead of inviting re-enrollment.
+type TOTPEnrollmentRepository interface {
+	LoadEnrollment(context.Context) (domain.TOTPEnrollmentRecord, bool, error)
+	SaveEnrollment(context.Context, domain.TOTPEnrollmentRecord) error
+}
+
 type ConnectionInstanceRepository interface {
 	ListConnectionInstances(context.Context) ([]domain.ConnectionInstanceMeta, error)
 	LoadConnectionInstance(context.Context, domain.ConnectionInstanceID) (domain.ConnectionInstanceMeta, error)

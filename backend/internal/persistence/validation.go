@@ -11,6 +11,9 @@ func validateAuthSession(session AuthSession) error {
 	if !uuidPattern.MatchString(session.ID) || !hex64Pattern.MatchString(session.PasswordFingerprint) || !hex64Pattern.MatchString(session.RefreshTokenHash) {
 		return errors.New("invalid auth session identity or hash")
 	}
+	if session.EnrollmentID != "" && !uuidPattern.MatchString(session.EnrollmentID) {
+		return errors.New("invalid auth session enrollment binding")
+	}
 	if session.CreatedAt.IsZero() || session.LastSeenAt.IsZero() || session.RefreshExpiresAt.IsZero() || session.RotatedAt.IsZero() {
 		return errors.New("invalid auth session timestamp")
 	}

@@ -8,7 +8,9 @@ workspace/  -> /workspace
 ssh/        -> /home/roaminal/.ssh
 ```
 
-`state/` stores login sessions, per-login-session workspace
+`state/` stores login sessions, the mandatory TOTP enrollment
+(`state/2fa-secret`, see [`security.md`](security.md#resetting-totp-enrollment)),
+per-login-session workspace
 layouts, Agent endpoint projections and latest per-tmux state snapshots,
 message history, notification preferences, upload records, active connection
 metadata and snapshots, and archived
@@ -40,4 +42,8 @@ password, invalidates existing refresh sessions.
 
 Corrupt state is quarantined and reported through the degraded-persistence
 status. A corrupt auth file requires login; a corrupt terminal snapshot is not
-used to recreate a connection instance.
+used to recreate a connection instance. A corrupt, empty, or unreadable
+`2fa-secret` is never treated as unconfigured: the backend refuses to start or
+denies login until the file is repaired or removed, after which the first
+login offers enrollment again. Restoring without `2fa-secret` keeps all
+business data but forces a fresh enrollment.
