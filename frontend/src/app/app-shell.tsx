@@ -46,11 +46,7 @@ export function AppShell() {
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
   const connectionsOpen = workspaceTool === 'connections' && workspaceToolOpen;
   const { previewRuntimeRef, previewRuntime } = useTerminalPreview(auth, previewConnectionInstanceId, connectionsOpen, appearance);
-  const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(
-    auth,
-    mainRuntime,
-    previewRuntimeRef,
-  );
+  const { activeLaunchId, startLaunch, clearLaunch, cancelLaunch } = usePendingLaunch(auth, mainRuntime, previewRuntimeRef);
   const toastTimer = useRef<number | null>(null);
   useEffect(() => observeViewportHeight(), []);
   const showToast = useCallback((message: string, kind: ToastKind = 'info') => {

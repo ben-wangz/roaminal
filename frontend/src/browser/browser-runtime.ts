@@ -1,132 +1,17 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { currentAccessToken } from '../auth/auth-client';
-import { closeRoaminalWebSocket, createBrowserWebSocket, expectRoaminalWebSocketClose } from '../terminal/connection-socket';
+import { closeRoaminalWebSocket, expectRoaminalWebSocketClose } from '../terminal/connection-socket';
+import { BrowserRuntimeCore } from './browser-runtime-core';
+import {
+  decodeBase64,
+  normalizeViewport,
+  requestId,
+  validAddress,
+  viewportKey,
+  type BrowserMessage,
+  type BrowserRuntimeState,
+} from './browser-runtime-model';
 
-export type BrowserRuntimeStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'closed';
-
-export type BrowserFrame = {
-  data: ArrayBuffer;
-  width: number;
-  height: number;
-  sequence: number;
-};
-
-export type BrowserDialog = {
-  kind: 'alert' | 'confirm' | 'prompt' | 'beforeunload';
-  message: string;
-  defaultPrompt: string;
-};
-
-export type BrowserRuntimeState = {
-  status: BrowserRuntimeStatus;
-  title: string;
-  url: string;
-  error: string | null;
-  viewport: { width: number; height: number } | null;
-  frame: BrowserFrame | null;
-  dialog: BrowserDialog | null;
-  generation: string | null;
-  isPrimaryClient: boolean;
-  primaryError: string | null;
-  takeoverPending: boolean;
-};
-
-type BrowserMessage = {
-  type?: string;
-  status?: string;
-  title?: string;
-  url?: string;
-  error?: string;
-  code?: string;
-  width?: number;
-  height?: number;
-  sequence?: number;
-  data?: string;
-  generation?: string;
-  primary?: boolean;
-  takeover?: boolean;
-  kind?: BrowserDialog['kind'];
-  message?: string;
-  defaultPrompt?: string;
-};
-
-type ViewportSize = { width: number; height: number };
-
-const MIN_VIEWPORT_WIDTH = 1;
-const MAX_VIEWPORT_WIDTH = 3840;
-const MIN_VIEWPORT_HEIGHT = 1;
-const MAX_VIEWPORT_HEIGHT = 2160;
-const RESIZE_COALESCE_MS = 16;
-
-function requestId(): string {
-  return globalThis.crypto?.randomUUID?.() || `browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function decodeBase64(value: string): ArrayBuffer {
-  const binary = atob(value);
-  const output = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) output[index] = binary.charCodeAt(index);
-  return output.buffer;
-}
-
-function validAddress(value: string): string | null {
-  try {
-    const parsed = new URL(value.trim());
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    if (parsed.username || parsed.password || !parsed.hostname) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
-
-function normalizeViewport(width: number, height: number): ViewportSize | null {
-  if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
-  const normalized = { width: Math.round(width), height: Math.round(height) };
-  if (normalized.width < MIN_VIEWPORT_WIDTH || normalized.height < MIN_VIEWPORT_HEIGHT) return null;
-  return {
-    width: Math.min(MAX_VIEWPORT_WIDTH, normalized.width),
-    height: Math.min(MAX_VIEWPORT_HEIGHT, normalized.height),
-  };
-}
-
-function viewportKey(size: ViewportSize): string {
-  return `${size.width}x${size.height}`;
-}
-
-export class BrowserRuntime {
-  private socket: WebSocket | null = null;
-  private reconnectTimer: number | null = null;
-  private resizeTimer: number | null = null;
-  private disposed = false;
-  private stopped = false;
-  private connectedOnce = false;
-  private pendingNavigation: string | null = null;
-  private pendingFrame: { width: number; height: number; sequence: number } | null = null;
-  private latestResize: ViewportSize | null = null;
-  private lastResizeKey: string | null = null;
-  private generation: string | null = null;
-  private desiredVisibility = false;
-  private frameSequence = 0;
-  private readonly clientId = requestId();
-  private stateValue: BrowserRuntimeState = {
-    status: 'idle', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
-    generation: null, isPrimaryClient: true, primaryError: null, takeoverPending: false,
-  };
-  private readonly listeners = new Set<() => void>();
-
-  getSnapshot = (): BrowserRuntimeState => this.stateValue;
-
-  subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  };
-
-  private setState(update: (current: BrowserRuntimeState) => BrowserRuntimeState): void {
-    this.stateValue = update(this.stateValue);
-    for (const listener of this.listeners) listener();
-  }
-
+export class BrowserRuntime extends BrowserRuntimeCore {
   open(address: string): boolean {
     const url = validAddress(address);
     if (!url) {
@@ -166,60 +51,7 @@ export class BrowserRuntime {
     return true;
   }
 
-  private connect(): void {
-    if (this.disposed || this.stopped || this.socket || this.reconnectTimer !== null) return;
-    const token = currentAccessToken();
-    if (!token) {
-      this.setState((current) => ({ ...current, status: 'error', error: 'Authentication expired. Sign in again to use Browser.' }));
-      return;
-    }
-    const socket = createBrowserWebSocket(token, undefined, this.clientId);
-    this.socket = socket;
-    socket.onopen = () => {
-      if (this.disposed || this.socket !== socket) return;
-      const reconnecting = this.connectedOnce;
-      this.connectedOnce = true;
-      this.setState((current) => ({ ...current, status: 'connected', error: null }));
-      const pendingNavigation = this.pendingNavigation;
-      this.pendingNavigation = null;
-      const url = this.stateValue.url;
-      if (pendingNavigation) this.send({ type: 'open', url: pendingNavigation, requestId: requestId() });
-      else if (url) this.send(reconnecting ? { type: 'sync', requestId: requestId() } : { type: 'open', url, requestId: requestId() });
-      this.send({ type: 'visibility', visible: this.desiredVisibility, requestId: requestId() });
-    };
-    socket.onmessage = (event) => {
-      if (this.disposed || this.socket !== socket) return;
-      if (typeof event.data === 'string') this.handleMessage(event.data);
-      else void this.handleFrame(event.data);
-    };
-    socket.onclose = (event) => {
-      if (this.socket !== socket) return;
-      this.socket = null;
-      this.clearResizeTimer();
-      this.generation = null;
-      this.setState((current) => ({ ...current, generation: null, takeoverPending: false }));
-      if (this.disposed || this.stopped) return;
-      if (event.code === 1011) {
-        this.stopped = true;
-        this.setState((current) => ({ ...current, status: 'error', error: 'The remote browser worker stopped. Reopen the address to restart it.' }));
-        return;
-      }
-      if (!this.connectedOnce) {
-        this.stopped = true;
-        this.setState((current) => ({ ...current, status: 'error', error: 'Remote browser is unavailable in this deployment.' }));
-        return;
-      }
-      this.setState((current) => ({ ...current, status: current.url ? 'reconnecting' : 'idle' }));
-      if (this.stateValue.url && this.reconnectTimer === null) {
-        this.reconnectTimer = window.setTimeout(() => {
-          this.reconnectTimer = null;
-          this.connect();
-        }, 3000);
-      }
-    };
-  }
-
-  private handleMessage(data: string): void {
+  protected handleMessage(data: string): void {
     let message: BrowserMessage;
     try { message = JSON.parse(data) as BrowserMessage; } catch { return; }
     if (message.type === 'frame') {
@@ -334,58 +166,6 @@ export class BrowserRuntime {
       return;
     }
     this.setState((current) => ({ ...current, viewport: authoritativeViewport || current.viewport, takeoverPending: false, primaryError: message.error || 'The remote browser rejected the viewport change.' }));
-  }
-
-  private setGeneration(value: string): void {
-    if (this.generation === value) return;
-    this.generation = value;
-    this.lastResizeKey = null;
-    this.setState((current) => ({ ...current, generation: value }));
-    this.scheduleResize();
-  }
-
-  private async handleFrame(value: ArrayBuffer | Blob): Promise<void> {
-    const data = value instanceof Blob ? await value.arrayBuffer() : value;
-    if (this.disposed) return;
-    const metadata = this.pendingFrame || { width: this.stateValue.viewport?.width || 0, height: this.stateValue.viewport?.height || 0, sequence: ++this.frameSequence };
-    this.pendingFrame = null;
-    this.setState((current) => ({ ...current, frame: { data, ...metadata } }));
-  }
-
-  private send(message: Record<string, unknown>): boolean {
-    if (this.socket?.readyState !== WebSocket.OPEN) return false;
-    try {
-      this.socket.send(JSON.stringify({ ...message, clientId: this.clientId }));
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private clearResizeTimer(): void {
-    if (this.resizeTimer !== null) window.clearTimeout(this.resizeTimer);
-    this.resizeTimer = null;
-  }
-
-  private scheduleResize(): void {
-    if (this.resizeTimer !== null || !this.stateValue.isPrimaryClient || !this.latestResize || !this.generation) return;
-    this.resizeTimer = window.setTimeout(() => {
-      this.resizeTimer = null;
-      this.flushResize(false);
-    }, RESIZE_COALESCE_MS);
-  }
-
-  private flushResize(takeover: boolean): boolean {
-    const size = this.latestResize || (this.stateValue.viewport ? { ...this.stateValue.viewport } : null);
-    if (!size || !this.generation || this.socket?.readyState !== WebSocket.OPEN) return false;
-    if (!takeover && !this.stateValue.isPrimaryClient) return false;
-    if (!takeover && viewportKey(size) === this.lastResizeKey) return true;
-    const sent = this.send({
-      type: 'resize', width: size.width, height: size.height, generation: this.generation,
-      primaryIntent: true, takeover, requestId: requestId(),
-    });
-    if (sent) this.lastResizeKey = viewportKey(size);
-    return sent;
   }
 
   navigate(address: string): boolean { return this.open(address); }
