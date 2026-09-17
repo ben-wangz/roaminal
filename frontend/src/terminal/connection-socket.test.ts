@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { closeRoaminalWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
+import { closeRoaminalWebSocket, createBrowserWebSocket, createRoaminalWebSocket, expectRoaminalWebSocketClose } from './connection-socket';
 
 type Listener = (event: Event & { code?: number; wasClean?: boolean }) => void;
 
@@ -83,5 +83,14 @@ describe('Roaminal WebSocket observation', () => {
     const fake = socket as unknown as FakeWebSocket;
     expect(fake.url).toContain('/ws/v2/connection-instances/11111111-1111-4000-8000-000000000004?role=observer');
     expect(fake.protocols[0]).toBe('roaminal.v2');
+  });
+
+  it('carries the stable browser client identity in the WebSocket URL', () => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' } });
+    const socket = createBrowserWebSocket('token', { reportWebSocket: () => undefined }, 'client with spaces');
+    const fake = socket as unknown as FakeWebSocket;
+    expect(fake.url).toBe('wss://roaminal.test/ws/v2/browser?clientId=client%20with%20spaces');
+    expect(fake.protocols).toEqual(['roaminal.v2', 'roaminal.auth.token']);
   });
 });

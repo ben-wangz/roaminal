@@ -8,6 +8,11 @@
 .browser-page-identity strong, .browser-page-identity small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-page-identity strong { color: var(--text-bright); font-size: .73rem; }
 .browser-page-identity small { color: var(--muted); font-size: .62rem; }
+.browser-primary-client { flex: 0 0 34px; color: var(--muted); }
+.browser-primary-client.active { color: var(--yellow); }
+.browser-primary-client.inactive { color: var(--muted); }
+.browser-primary-client.inactive:hover:not(:disabled), .browser-primary-client.inactive:focus-visible { color: var(--yellow); }
+.browser-primary-client:disabled { cursor: wait; opacity: .55; }
 .browser-frame-wrap { position: relative; min-width: 0; min-height: 0; flex: 1 1 auto; display: grid; place-items: center; overflow: hidden; background: #111; }
 .browser-frame-wrap canvas { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: auto; outline: 0; touch-action: none; user-select: none; }
 .browser-frame-wrap canvas:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
@@ -17,6 +22,8 @@
 .browser-status-line [data-status='connected'] { color: var(--green); }
 .browser-status-line [data-status='reconnecting'], .browser-status-line [data-status='connecting'] { color: var(--yellow); }
 .browser-status-line [data-status='error'] { color: var(--danger-soft); }
+.browser-primary-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.browser-primary-status[role='status'] { color: var(--danger-soft); }
 .browser-address-panel { width: min(620px, calc(100% - 32px)); max-height: min(720px, calc(100% - 32px)); overflow: auto; display: grid; gap: 16px; align-content: start; margin: auto; padding: 28px; border: 1px solid var(--border); background: var(--surface-1); box-shadow: 0 18px 48px rgba(0,0,0,.34); }
 .browser-address-dialog { width: min(640px, calc(100% - 28px)); margin: 0; }
 .browser-address-heading { display: flex; align-items: center; gap: 10px; color: var(--text-bright); font-size: .9rem; }
@@ -33,6 +40,8 @@
 .browser-page-dialog input { min-width: 0; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 9px 10px; font-size: .72rem; outline: 0; }
 .browser-page-dialog input:focus { border-color: var(--cyan); }
 .browser-page-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.browser-takeover-dialog { width: min(420px, calc(100vw - 40px)); display: grid; gap: 12px; color: var(--text-bright); }
+.browser-takeover-dialog p { margin: 0; color: var(--text); font-size: .75rem; line-height: 1.5; }
 @media (max-width: 600px) {
   .browser-toolbar { gap: 3px; padding-inline: 6px; }
   .browser-page-identity { padding-inline: 5px; }

@@ -19,24 +19,39 @@ Roaminal Pod.
    assets, redirects, cookies, and an application WebSocket originate from
    the Roaminal Pod. The test browser must see only the Roaminal origin and
    the streamed page surface; it must not issue requests to the fixture.
-4. Verify the toolbar exposes Back, Forward, Reload, page identity, Open
-   address, and an icon-only Back to terminal action. The page identity shows
-   `Network: Roaminal`. Open address must be a dialog, not a permanent browser
-   address bar. Cancel leaves the current page unchanged.
+4. Verify the toolbar exposes Back, Forward, Reload, page identity, an
+   icon-only Crown primary-client control, and an icon-only Back to terminal
+   action. The page identity shows `Network: Roaminal` and opens the address
+   dialog when clicked. There is no permanent browser address bar. Cancel
+   leaves the current page unchanged. The active Crown has the accessible name
+   `Primary client`.
 5. Try invalid, credential-bearing, `file:`, and browser-internal addresses.
    Verify each is rejected without a target request.
 6. Exercise pointer click, drag, wheel, keyboard input, password input,
    Chinese IME text, and viewport resize. Verify input reaches the fixture
    page, no terminal receives browser keystrokes, the canvas remains within
-   the workspace, and no local file picker or download is opened.
+   the workspace, and no local file picker or download is opened. Repeated
+   identical content-host measurements produce no extra resize request. When
+   the host and remote page have different aspect ratios, the complete frame
+   remains visible with letterboxing and pointer coordinates land on the same
+   remote page location.
 7. Switch repeatedly between Browser, Terminal, Connections, and Files while
    a terminal command is running. Browser page state and terminal process
    state remain intact. Settings preserves its unsaved-changes guard and
    returns to Browser even when there are no terminal connections.
-8. Close the browser WebSocket, refresh the Roaminal page, and expire the
-   access token. Verify reconnect state recovery, explicit re-open after a
-   worker restart, one-viewer conflict behavior, and a useful unavailable
-   error. Browser failure must not affect terminal APIs or `/healthz`.
+8. Open a second Roaminal browser client against the same deployment. Verify
+   both clients receive the same frames and page state. The first client whose
+   valid resize is accepted has an active Crown; the other receives a
+   `not_primary_client` response, changes to the inactive `Set as primary
+   client` Crown, and sends no further automatic resize requests. Clicking the
+   inactive Crown opens `Take over primary client?`; Cancel sends nothing.
+   Confirming `Take over` sends one takeover resize using the latest measured
+   dimensions. On success the new client becomes primary and later unique
+   sizes are applied. A failed takeover leaves it inactive without a retry
+   loop. Also close the browser WebSocket, refresh the Roaminal page, and
+   expire the access token. Verify reconnect state recovery, explicit re-open
+   after a worker restart, and a useful unavailable error. Browser failure
+   must not affect terminal APIs or `/healthz`.
 9. Inspect diagnostics and cleanup. No access token, page content, keystroke,
    password, or complete sensitive URL may appear in
    console output, traces, screenshots, worker logs, or server logs. Confirm

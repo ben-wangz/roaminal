@@ -56,7 +56,7 @@ export function closeRoaminalWebSocket(socket: WebSocket, code?: number, reason?
 
 export function expectRoaminalWebSocketClose(socket: WebSocket): void { expectedClosed.add(socket); }
 
-export function createBrowserWebSocket(token: string, reporter = clientDiagnostics() as DiagnosticReporter | null): WebSocket {
+export function createBrowserWebSocket(token: string, reporter = clientDiagnostics() as DiagnosticReporter | null, clientId = ''): WebSocket {
   const startedAt = performance.now();
   let opened = false;
   let reported = false;
@@ -67,7 +67,8 @@ export function createBrowserWebSocket(token: string, reporter = clientDiagnosti
     online: typeof navigator === 'undefined' ? undefined : navigator.onLine,
   });
   const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${scheme}//${location.host}${browserWebsocketPath()}`, [WS_PROTOCOL, `roaminal.auth.${token}`]);
+  const query = clientId ? `?clientId=${encodeURIComponent(clientId)}` : '';
+  const socket = new WebSocket(`${scheme}//${location.host}${browserWebsocketPath()}${query}`, [WS_PROTOCOL, `roaminal.auth.${token}`]);
   socket.binaryType = 'arraybuffer';
   socket.addEventListener('open', () => { opened = true; });
   socket.addEventListener('error', () => {

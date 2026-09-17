@@ -147,8 +147,8 @@ async function ensurePage() {
 }
 
 async function setViewport(width, height) {
-  viewport.width = Math.max(320, Math.min(1920, Math.round(width)));
-  viewport.height = Math.max(240, Math.min(1080, Math.round(height)));
+  viewport.width = Math.max(1, Math.min(3840, Math.round(width)));
+  viewport.height = Math.max(1, Math.min(2160, Math.round(height)));
   if (cdp && pageSession) await cdp.send('Emulation.setDeviceMetricsOverride', { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: false }, pageSession);
   emit({ type: 'viewport', width: viewport.width, height: viewport.height });
 }
@@ -167,7 +167,7 @@ async function captureFrame() {
 
 async function startScreencast() {
   if (screencasting || !cdp || !pageSession) return;
-  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 70, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 }, pageSession);
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 70, maxWidth: 3840, maxHeight: 2160, everyNthFrame: 1 }, pageSession);
   screencasting = true;
 }
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Globe, RefreshCw, Terminal, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Crown, Globe, RefreshCw, Terminal, X } from 'lucide-react';
 import type { BrowserRuntime } from './browser-runtime';
 import { useBrowserRuntimeState, validAddress } from './browser-runtime';
+import { Modal } from '../ui/modal';
 
 type Props = { runtime: BrowserRuntime; active: boolean; onBackToTerminal: () => void };
 
@@ -22,6 +23,24 @@ function BrowserPageDialog({ runtime, dialog }: { runtime: BrowserRuntime; dialo
         </div>
       </div>
     </div>
+  );
+}
+
+function PrimaryClientDialog({ runtime, onClose }: { runtime: BrowserRuntime; onClose: () => void }) {
+  const confirm = () => {
+    if (runtime.takeOver()) onClose();
+  };
+  return (
+    <Modal onClose={onClose}>
+      <div className="browser-takeover-dialog">
+        <strong>Take over primary client?</strong>
+        <p>Viewport sizing will follow this browser client. Other viewers will continue to see the remote page.</p>
+        <div className="browser-page-dialog-actions">
+          <button type="button" className="text-button" onClick={onClose} disabled={runtime.getSnapshot().takeoverPending}>Cancel</button>
+          <button type="button" className="primary" onClick={confirm} disabled={runtime.getSnapshot().takeoverPending}>Take over</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -60,6 +79,7 @@ function BrowserAddressForm({ initial, onSubmit, onCancel, dialog }: {
 export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
   const state = useBrowserRuntimeState(runtime);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [takeoverDialogOpen, setTakeoverDialogOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameBoxRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
@@ -101,9 +121,22 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const width = state.frame?.width || state.viewport?.width || rect.width;
-    const height = state.frame?.height || state.viewport?.height || rect.height;
-    return { x: Math.max(0, Math.round((event.clientX - rect.left) * width / rect.width)), y: Math.max(0, Math.round((event.clientY - rect.top) * height / rect.height)) };
+    const frameWidth = state.frame?.width || state.viewport?.width || rect.width;
+    const frameHeight = state.frame?.height || state.viewport?.height || rect.height;
+    const remoteWidth = state.viewport?.width || frameWidth;
+    const remoteHeight = state.viewport?.height || frameHeight;
+    if (rect.width <= 0 || rect.height <= 0 || frameWidth <= 0 || frameHeight <= 0 || remoteWidth <= 0 || remoteHeight <= 0) return { x: 0, y: 0 };
+    const scale = Math.min(rect.width / frameWidth, rect.height / frameHeight);
+    const renderedWidth = frameWidth * scale;
+    const renderedHeight = frameHeight * scale;
+    const offsetX = (rect.width - renderedWidth) / 2;
+    const offsetY = (rect.height - renderedHeight) / 2;
+    const frameX = Math.max(0, Math.min(frameWidth, (event.clientX - rect.left - offsetX) / scale));
+    const frameY = Math.max(0, Math.min(frameHeight, (event.clientY - rect.top - offsetY) / scale));
+    return {
+      x: Math.max(0, Math.min(remoteWidth, Math.round(frameX * remoteWidth / frameWidth))),
+      y: Math.max(0, Math.min(remoteHeight, Math.round(frameY * remoteHeight / frameHeight))),
+    };
   }, [state.frame, state.viewport]);
   const canvasEvents = useMemo(() => ({
     onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => { event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId); runtime.input({ kind: 'mouse', event: 'mousePressed', ...point(event), button: event.button, buttons: event.buttons }); },
@@ -122,12 +155,25 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
       <header className="browser-toolbar">
         <div className="browser-navigation"><button type="button" className="icon-button" onClick={() => runtime.back()} aria-label="Back" title="Back"><ArrowLeft size={17} /></button><button type="button" className="icon-button" onClick={() => runtime.forward()} aria-label="Forward" title="Forward"><ArrowRight size={17} /></button><button type="button" className="icon-button" onClick={() => runtime.reload()} aria-label="Reload" title="Reload"><RefreshCw size={16} /></button></div>
         <button type="button" className="browser-page-identity" onClick={() => setDialogOpen(true)} title="Open address"><strong>{state.title || addressLabel(state.url)}</strong><small>Network: Roaminal · {addressLabel(state.url)}</small></button>
+        <button
+          type="button"
+          className={`icon-button browser-primary-client ${state.isPrimaryClient ? 'active' : 'inactive'}`}
+          onClick={() => { if (!state.isPrimaryClient) setTakeoverDialogOpen(true); }}
+          aria-label={state.isPrimaryClient ? 'Primary client' : 'Set as primary client'}
+          title={state.isPrimaryClient ? 'Primary client' : 'Set as primary client'}
+          aria-pressed={state.isPrimaryClient}
+          disabled={state.takeoverPending}
+          data-testid="browser-primary-client"
+        >
+          <Crown size={17} strokeWidth={state.isPrimaryClient ? 2.25 : 1.5} aria-hidden="true" />
+        </button>
         <div className="browser-toolbar-actions"><button type="button" className="icon-button" onClick={onBackToTerminal} aria-label="Back to terminal" title="Back to terminal"><Terminal size={17} /></button></div>
       </header>
       <div ref={frameBoxRef} className="browser-frame-wrap"><canvas ref={canvasRef} tabIndex={0} aria-label={state.title || 'Remote page'} {...canvasEvents} />{!state.frame && state.status === 'connecting' && <div className="browser-frame-overlay">Opening remote page...</div>}{state.status === 'reconnecting' && <div className="browser-frame-overlay">Reconnecting...</div>}{state.status === 'error' && <div className="browser-frame-overlay browser-frame-error">{state.error}</div>}</div>
     </> : <BrowserAddressForm initial={firstAddress} onSubmit={openAddress} />}
-    {pageOpen && <div className="browser-status-line"><span data-status={state.status}>{state.status === 'connected' ? 'Connected' : state.status === 'reconnecting' ? 'Reconnecting' : state.status}</span><span>{state.viewport ? `${state.viewport.width} × ${state.viewport.height}` : ''}</span></div>}
+    {pageOpen && <div className="browser-status-line"><span data-status={state.status}>{state.status === 'connected' ? 'Connected' : state.status === 'reconnecting' ? 'Reconnecting' : state.status}</span><span className="browser-primary-status" role={state.primaryError ? 'status' : undefined}>{state.primaryError || (state.viewport ? `${state.viewport.width} × ${state.viewport.height}` : '')}</span></div>}
     {dialogOpen && <div className="browser-dialog-backdrop" role="presentation"><BrowserAddressForm initial={state.url} onSubmit={openAddress} onCancel={() => setDialogOpen(false)} dialog /></div>}
+    {takeoverDialogOpen && !state.isPrimaryClient && <PrimaryClientDialog runtime={runtime} onClose={() => setTakeoverDialogOpen(false)} />}
     {state.dialog && <BrowserPageDialog runtime={runtime} dialog={state.dialog} />}
   </section>;
 }
