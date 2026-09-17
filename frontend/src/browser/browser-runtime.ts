@@ -7,6 +7,7 @@ import {
   requestId,
   validAddress,
   viewportKey,
+  type BrowserDialog,
   type BrowserMessage,
   type BrowserRuntimeState,
 } from './browser-runtime-model';
