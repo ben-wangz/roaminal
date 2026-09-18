@@ -83,7 +83,7 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameBoxRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
-  const pageOpen = Boolean(state.url);
+  const pageOpen = state.pageStatus !== 'none' && state.pageStatus !== 'closed' && Boolean(state.url);
   const firstAddress = state.url || '';
   const openAddress = (url: string) => { runtime.open(url); setDialogOpen(false); };
 
@@ -110,6 +110,13 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
   }, [active, runtime]);
 
   useEffect(() => {
+    if (state.pageStatus === 'none' || state.pageStatus === 'closed') {
+      setDialogOpen(false);
+      setTakeoverDialogOpen(false);
+    }
+  }, [state.pageStatus]);
+
+  useEffect(() => {
     if (!active || !frameBoxRef.current) return undefined;
     const observer = new ResizeObserver(() => {
       const box = frameBoxRef.current?.getBoundingClientRect();
@@ -117,7 +124,7 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
     });
     observer.observe(frameBoxRef.current);
     return () => observer.disconnect();
-  }, [active, runtime]);
+  }, [active, pageOpen, runtime]);
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -153,7 +160,7 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
   return <section className={`browser-workspace ${active ? 'active' : 'inactive'}`} aria-label="Remote browser">
     {pageOpen ? <>
       <header className="browser-toolbar">
-        <div className="browser-navigation"><button type="button" className="icon-button" onClick={() => runtime.back()} aria-label="Back" title="Back"><ArrowLeft size={17} /></button><button type="button" className="icon-button" onClick={() => runtime.forward()} aria-label="Forward" title="Forward"><ArrowRight size={17} /></button><button type="button" className="icon-button" onClick={() => runtime.reload()} aria-label="Reload" title="Reload"><RefreshCw size={16} /></button></div>
+        <div className="browser-navigation"><button type="button" className="icon-button" onClick={() => runtime.back()} aria-label="Back" title="Back" disabled={!state.synchronized || state.pageStatus === 'closing'}><ArrowLeft size={17} /></button><button type="button" className="icon-button" onClick={() => runtime.forward()} aria-label="Forward" title="Forward" disabled={!state.synchronized || state.pageStatus === 'closing'}><ArrowRight size={17} /></button><button type="button" className="icon-button" onClick={() => runtime.reload()} aria-label="Reload" title="Reload" disabled={!state.synchronized || state.pageStatus === 'closing'}><RefreshCw size={16} /></button></div>
         <button type="button" className="browser-page-identity" onClick={() => setDialogOpen(true)} title="Open address"><strong>{state.title || addressLabel(state.url)}</strong><small>Network: Roaminal · {addressLabel(state.url)}</small></button>
         <button
           type="button"
@@ -167,9 +174,12 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
         >
           <Crown size={17} strokeWidth={state.isPrimaryClient ? 2.25 : 1.5} aria-hidden="true" />
         </button>
-        <div className="browser-toolbar-actions"><button type="button" className="icon-button" onClick={onBackToTerminal} aria-label="Back to terminal" title="Back to terminal"><Terminal size={17} /></button></div>
+        <div className="browser-toolbar-actions">
+          <button type="button" className="icon-button browser-close-page" onClick={() => runtime.closePage()} aria-label="Close page" title="Close page" disabled={state.closePending || state.pageStatus === 'closing' || !state.synchronized} data-testid="browser-close-page"><X size={17} /></button>
+          <button type="button" className="icon-button" onClick={onBackToTerminal} aria-label="Back to terminal" title="Back to terminal"><Terminal size={17} /></button>
+        </div>
       </header>
-      <div ref={frameBoxRef} className="browser-frame-wrap"><canvas ref={canvasRef} tabIndex={0} aria-label={state.title || 'Remote page'} {...canvasEvents} />{!state.frame && state.status === 'connecting' && <div className="browser-frame-overlay">Opening remote page...</div>}{state.status === 'reconnecting' && <div className="browser-frame-overlay">Reconnecting...</div>}{state.status === 'error' && <div className="browser-frame-overlay browser-frame-error">{state.error}</div>}</div>
+      <div ref={frameBoxRef} className="browser-frame-wrap"><canvas ref={canvasRef} tabIndex={0} aria-label={state.title || 'Remote page'} {...canvasEvents} />{!state.frame && (state.status === 'connecting' || state.pageStatus === 'loading') && <div className="browser-frame-overlay">Opening remote page...</div>}{state.status === 'reconnecting' && <div className="browser-frame-overlay">Reconnecting...</div>}{state.status === 'error' && <div className="browser-frame-overlay browser-frame-error">{state.error}</div>}{state.pageStatus === 'closing' && <div className="browser-frame-overlay">Closing remote page...</div>}</div>
     </> : <BrowserAddressForm initial={firstAddress} onSubmit={openAddress} />}
     {pageOpen && <div className="browser-status-line"><span data-status={state.status}>{state.status === 'connected' ? 'Connected' : state.status === 'reconnecting' ? 'Reconnecting' : state.status}</span><span className="browser-primary-status" role={state.primaryError ? 'status' : undefined}>{state.primaryError || (state.viewport ? `${state.viewport.width} × ${state.viewport.height}` : '')}</span></div>}
     {dialogOpen && <div className="browser-dialog-backdrop" role="presentation"><BrowserAddressForm initial={state.url} onSubmit={openAddress} onCancel={() => setDialogOpen(false)} dialog /></div>}

@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	commandLimit = 128 * 1024
-	eventLimit   = 12 * 1024 * 1024
+	commandLimit          = 128 * 1024
+	eventLimit            = 12 * 1024 * 1024
+	browserCommandTimeout = 20 * time.Second
 
 	minViewportWidth  = 1
 	maxViewportWidth  = 3840
@@ -46,20 +47,38 @@ type Manager struct {
 }
 
 type process struct {
-	cmd        *exec.Cmd
-	stdin      io.WriteCloser
-	writeMu    sync.Mutex
-	generation string
-	viewport   viewportSize
+	cmd            *exec.Cmd
+	stdin          io.WriteCloser
+	writeMu        sync.Mutex
+	commandMu      sync.Mutex
+	generation     string
+	viewport       viewportSize
+	pageStatus     string
+	pageGeneration string
+	pageOperation  int64
+	pageRevision   int64
+	pageURL        string
+	pageTitle      string
+	pageError      string
+	pageDialog     map[string]any
+	latestFrame    []byte
+	pending        map[string]*pendingBrowserRequest
 }
 
 type viewer struct {
 	clientID string
+	routeID  string
 	runtime  *process
 	events   chan []byte
 	done     chan struct{}
 	closeOne sync.Once
 	visible  bool
+}
+
+type pendingBrowserRequest struct {
+	viewer    *viewer
+	requestID string
+	timer     *time.Timer
 }
 
 func New(cfg config.Config) *Manager {
@@ -101,7 +120,7 @@ func (m *Manager) Handle(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 	clientID := browserClientID(r)
-	viewer := &viewer{clientID: clientID, runtime: runtime, events: make(chan []byte, 32), done: make(chan struct{})}
+	viewer := &viewer{clientID: clientID, routeID: newBrowserRequestID("viewer"), runtime: runtime, events: make(chan []byte, 32), done: make(chan struct{})}
 	m.addViewer(viewer)
 	defer m.removeViewer(viewer)
 
@@ -176,7 +195,7 @@ func browserClientID(r *http.Request) string {
 func (m *Manager) addViewer(current *viewer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.shutdown {
+	if m.shutdown || m.process != current.runtime {
 		current.closeOne.Do(func() { close(current.done) })
 		return
 	}
@@ -185,9 +204,15 @@ func (m *Manager) addViewer(current *viewer) {
 	}
 	m.viewers[current] = struct{}{}
 	m.enqueueLocked(current, m.stateEventLocked(current))
+	if len(current.runtime.latestFrame) > 0 && current.runtime.pageStatus != "none" && current.runtime.pageStatus != "closed" {
+		m.enqueueLocked(current, current.runtime.latestFrame)
+	}
 }
 
 func (m *Manager) removeViewer(current *viewer) {
+	runtime := current.runtime
+	runtime.commandMu.Lock()
+	defer runtime.commandMu.Unlock()
 	m.mu.Lock()
 	if _, ok := m.viewers[current]; !ok {
 		m.mu.Unlock()
@@ -195,11 +220,11 @@ func (m *Manager) removeViewer(current *viewer) {
 	}
 	delete(m.viewers, current)
 	current.closeOne.Do(func() { close(current.done) })
+	forgetViewerRequestsLocked(runtime, current)
 	if m.process == current.runtime && m.primary == current.clientID && !m.hasClientLocked(current.runtime, current.clientID) {
 		m.primary = ""
 		m.broadcastPrimaryLocked()
 	}
-	runtime := current.runtime
 	lastVisible := m.process == runtime && !m.anyVisibleLocked(runtime)
 	m.mu.Unlock()
 	if lastVisible {

@@ -12,6 +12,86 @@ func (m *Manager) broadcastEvent(runtime *process, data []byte) {
 		m.mu.Unlock()
 		return
 	}
+	typ, _ := event["type"].(string)
+	if typ == "command_result" || typ == "pong" {
+		internalRequestID := rawStringValue(event["requestId"])
+		pending, ok := runtime.pending[internalRequestID]
+		if !ok {
+			m.mu.Unlock()
+			return
+		}
+		delete(runtime.pending, internalRequestID)
+		if pending.timer != nil {
+			pending.timer.Stop()
+		}
+		if _, live := m.viewers[pending.viewer]; live && pending.viewer.runtime == runtime {
+			event["requestId"] = pending.requestID
+			event["clientId"] = pending.viewer.clientID
+			copyEvent := cloneMap(event)
+			if m.primaryKnown {
+				copyEvent["primary"] = m.primary == pending.viewer.clientID
+			}
+			m.enqueueLocked(pending.viewer, copyEvent)
+			if success, exists := event["success"].(bool); exists && !success {
+				m.enqueueLocked(pending.viewer, m.stateEventLocked(pending.viewer))
+			}
+		}
+		m.mu.Unlock()
+		return
+	}
+	if value, ok := event["pageOperation"].(float64); ok && int64(value) != runtime.pageOperation {
+		m.mu.Unlock()
+		return
+	}
+	if value, ok := event["revision"].(float64); ok && value < float64(runtime.pageRevision) {
+		m.mu.Unlock()
+		return
+	}
+	if value, ok := event["pageGeneration"].(string); ok && value != "" {
+		// Worker events are authoritative, but an event for an old page must not
+		// resurrect cached content after a newer open or close.
+		if runtime.pageGeneration != "" && value != runtime.pageGeneration {
+			m.mu.Unlock()
+			return
+		}
+		runtime.pageGeneration = value
+	}
+	if value, ok := event["revision"].(float64); ok && value >= float64(runtime.pageRevision) {
+		runtime.pageRevision = int64(value)
+	}
+	if value, ok := event["pageStatus"].(string); ok && value != "" {
+		runtime.pageStatus = value
+	}
+	if runtime.pageStatus == "loading" || runtime.pageStatus == "ready" || runtime.pageStatus == "none" || runtime.pageStatus == "closed" {
+		runtime.pageError = ""
+	}
+	if value, ok := event["error"].(string); ok && runtime.pageStatus == "error" {
+		runtime.pageError = value
+	}
+	if value, ok := event["url"].(string); ok {
+		runtime.pageURL = value
+	}
+	if value, ok := event["title"].(string); ok {
+		runtime.pageTitle = value
+	}
+	if dialog, ok := event["dialog"].(map[string]any); ok {
+		runtime.pageDialog = cloneMap(dialog)
+	}
+	if typ == "dialog" {
+		runtime.pageDialog = map[string]any{
+			"dialogId": event["dialogId"], "kind": event["kind"], "message": event["message"], "defaultPrompt": event["defaultPrompt"],
+		}
+	}
+	if typ == "dialogClosed" || typ == "closed" || runtime.pageStatus == "none" || runtime.pageStatus == "closed" {
+		runtime.pageDialog = nil
+	}
+	if typ == "closed" || runtime.pageStatus == "closed" || runtime.pageStatus == "none" {
+		runtime.latestFrame = nil
+		if typ == "closed" || runtime.pageStatus == "closed" {
+			runtime.pageURL = ""
+			runtime.pageTitle = ""
+		}
+	}
 	if typ, _ := event["type"].(string); typ == "viewport" {
 		if width, ok := integerField(event["width"]); ok {
 			if height, ok := integerField(event["height"]); ok {
@@ -20,8 +100,26 @@ func (m *Manager) broadcastEvent(runtime *process, data []byte) {
 		}
 	}
 	event["generation"] = runtime.generation
+	if runtime.pageGeneration != "" {
+		event["pageGeneration"] = runtime.pageGeneration
+	}
+	event["pageStatus"] = runtime.pageStatus
+	event["pageOperation"] = runtime.pageOperation
+	event["revision"] = runtime.pageRevision
+	if typ == "state" || typ == "ready" || typ == "loaded" || typ == "closed" || typ == "dialog" {
+		event["url"] = runtime.pageURL
+		event["title"] = runtime.pageTitle
+		event["error"] = runtime.pageError
+		event["dialog"] = runtime.pageDialog
+	}
+	if typ == "frame" {
+		runtime.latestFrame = append([]byte(nil), data...)
+	}
 	for current := range m.viewers {
 		if current.runtime != runtime {
+			continue
+		}
+		if typ == "frame" && !current.visible {
 			continue
 		}
 		copyEvent := cloneMap(event)
@@ -34,11 +132,23 @@ func (m *Manager) broadcastEvent(runtime *process, data []byte) {
 }
 
 func (m *Manager) stateEventLocked(current *viewer) map[string]any {
+	pageStatus := current.runtime.pageStatus
+	if pageStatus == "" {
+		pageStatus = "none"
+	}
 	event := map[string]any{
-		"type":       "state",
-		"generation": current.runtime.generation,
-		"width":      current.runtime.viewport.Width,
-		"height":     current.runtime.viewport.Height,
+		"type":           "state",
+		"generation":     current.runtime.generation,
+		"width":          current.runtime.viewport.Width,
+		"height":         current.runtime.viewport.Height,
+		"pageStatus":     pageStatus,
+		"pageGeneration": current.runtime.pageGeneration,
+		"pageOperation":  current.runtime.pageOperation,
+		"revision":       current.runtime.pageRevision,
+		"url":            current.runtime.pageURL,
+		"title":          current.runtime.pageTitle,
+		"error":          current.runtime.pageError,
+		"dialog":         current.runtime.pageDialog,
 	}
 	if m.primaryKnown {
 		event["primary"] = m.primary == current.clientID
@@ -90,17 +200,34 @@ func (m *Manager) enqueueLocked(current *viewer, message any) []byte {
 	case current.events <- data:
 	default:
 		// A slow viewer must not let the worker's stdout grow without bound.
-		// Preserve lifecycle and ownership messages by evicting an older frame
-		// when the bounded queue is full.
-		if eventType(data) != "frame" {
+		// Frames are replaceable; lifecycle and ownership messages are not.
+		if eventType(data) == "frame" {
+			return data
+		}
+		queued := make([][]byte, 0, cap(current.events))
+		removedFrame := false
+		for {
 			select {
-			case <-current.events:
+			case item := <-current.events:
+				if !removedFrame && eventType(item) == "frame" {
+					removedFrame = true
+					continue
+				}
+				queued = append(queued, item)
 			default:
+				goto drained
 			}
-			select {
-			case current.events <- data:
-			default:
-			}
+		}
+	drained:
+		for _, item := range queued {
+			current.events <- item
+		}
+		if removedFrame {
+			current.events <- data
+		} else {
+			// All queue slots contain control messages. Disconnect this slow
+			// viewer so it can reconnect and obtain a fresh authoritative state.
+			current.closeOne.Do(func() { close(current.done) })
 		}
 	}
 	return data

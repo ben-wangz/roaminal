@@ -118,4 +118,46 @@ describe('browser address validation', () => {
     expect(runtime.getSnapshot()).toMatchObject({ isPrimaryClient: true, takeoverPending: false });
     runtime.dispose();
   });
+
+  it('attaches without a local URL, closes explicitly, and never closes on stop', () => {
+    globalThis.WebSocket = FakeBrowserWebSocket as unknown as typeof WebSocket;
+    Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' }, window: globalThis });
+    const values = new Map<string, string>([['roaminal_auth_state', JSON.stringify({ accessToken: 'access', refreshToken: 'refresh' })]]);
+    Object.assign(globalThis, { localStorage: { getItem: (key: string) => values.get(key) || null, setItem: () => undefined, removeItem: () => undefined, clear: () => undefined, key: () => null, length: 1 } as unknown as Storage });
+
+    const runtime = new BrowserRuntime();
+    runtime.visibility(true);
+    const socket = FakeBrowserWebSocket.instances[0];
+    socket.open();
+    const initialCommands = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>);
+    expect(initialCommands.some((value) => value.type === 'sync')).toBe(true);
+    expect(initialCommands.some((value) => value.type === 'visibility' && value.visible === true)).toBe(true);
+
+    socket.message(JSON.stringify({ type: 'state', pageStatus: 'ready', pageGeneration: 'page-one', revision: 1, generation: 'worker-one', url: 'https://fixture.test/', title: 'Fixture', width: 800, height: 600 }));
+    expect(runtime.getSnapshot()).toMatchObject({ pageStatus: 'ready', url: 'https://fixture.test/', pageGeneration: 'page-one', synchronized: true });
+    expect(runtime.closePage()).toBe(true);
+    const close = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).find((value) => value.type === 'close');
+    expect(close).toMatchObject({ pageGeneration: 'page-one' });
+    socket.message(JSON.stringify({ type: 'closed', pageStatus: 'closed', pageGeneration: 'page-one', revision: 2 }));
+    expect(runtime.getSnapshot()).toMatchObject({ pageStatus: 'closed', url: '', frame: null, closePending: false });
+    runtime.stop();
+    expect(socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).filter((value) => value.type === 'close')).toHaveLength(1);
+  });
+
+  it('waits for the authoritative snapshot before sending a queued open', () => {
+    globalThis.WebSocket = FakeBrowserWebSocket as unknown as typeof WebSocket;
+    Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' }, window: globalThis });
+    const values = new Map<string, string>([['roaminal_auth_state', JSON.stringify({ accessToken: 'access', refreshToken: 'refresh' })]]);
+    Object.assign(globalThis, { localStorage: { getItem: (key: string) => values.get(key) || null, setItem: () => undefined, removeItem: () => undefined, clear: () => undefined, key: () => null, length: 1 } as unknown as Storage });
+
+    const runtime = new BrowserRuntime();
+    expect(runtime.open('http://service.namespace:8080/queued')).toBe(true);
+    const socket = FakeBrowserWebSocket.instances[0];
+    socket.open();
+    expect(socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).some((value) => value.type === 'open')).toBe(false);
+    socket.message(JSON.stringify({ type: 'state', pageStatus: 'ready', pageGeneration: 'page-existing', revision: 7, generation: 'worker-one', url: 'https://fixture.test/', title: 'Fixture', width: 800, height: 600 }));
+    const open = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).find((value) => value.type === 'open');
+    expect(open).toMatchObject({ url: 'http://service.namespace:8080/queued', pageGeneration: 'page-existing' });
+    runtime.dispose();
+  });
 });

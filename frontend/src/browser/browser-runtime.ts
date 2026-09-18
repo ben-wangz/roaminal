@@ -19,6 +19,8 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       this.setState((current) => ({ ...current, status: 'error', error: 'Enter a valid HTTP or HTTPS address.' }));
       return false;
     }
+    const canSendImmediately = this.socket?.readyState === WebSocket.OPEN && this.stateValue.synchronized;
+    const currentPageGeneration = this.stateValue.pageGeneration;
     const restarting = this.stopped;
     if (this.reconnectTimer !== null) {
       window.clearTimeout(this.reconnectTimer);
@@ -28,6 +30,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     if (restarting) {
       this.connectedOnce = false;
       this.generation = null;
+      this.lastWorkerGeneration = null;
       this.latestResize = null;
       this.lastResizeKey = null;
       this.clearResizeTimer();
@@ -37,40 +40,64 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     this.setState((current) => ({
       ...current,
       status: this.socket?.readyState === WebSocket.OPEN ? 'connected' : 'connecting',
+      pageStatus: 'loading',
       error: null,
       url,
+      title: '',
+      frame: null,
+      dialog: null,
+      closePending: false,
+      synchronized: false,
       generation: restarting ? null : current.generation,
       isPrimaryClient: restarting ? true : current.isPrimaryClient,
       primaryError: restarting ? null : current.primaryError,
       takeoverPending: restarting ? false : current.takeoverPending,
     }));
     this.connect();
-    if (this.socket?.readyState === WebSocket.OPEN) {
-      this.pendingNavigation = null;
-      this.send({ type: 'open', url, requestId: requestId() });
+    if (canSendImmediately) {
+      const sent = this.send({ type: 'open', url, pageGeneration: currentPageGeneration || undefined, requestId: requestId() });
+      if (sent) this.pendingNavigation = null;
+    } else {
+      this.flushPendingNavigation();
     }
     return true;
   }
 
-  protected handleMessage(data: string): void {
+  protected handleMessage(data: string, sourceSocket?: WebSocket): void {
     let message: BrowserMessage;
     try { message = JSON.parse(data) as BrowserMessage; } catch { return; }
     if (message.type === 'frame') {
       this.applyAuthority(message);
-      this.pendingFrame = { width: message.width || 0, height: message.height || 0, sequence: message.sequence || ++this.frameSequence };
-      if (message.data) void this.handleFrame(decodeBase64(message.data));
+      this.pendingFrame = { width: message.width || 0, height: message.height || 0, sequence: message.sequence || ++this.frameSequence, pageGeneration: message.pageGeneration || this.stateValue.pageGeneration, revision: message.revision ?? this.stateValue.revision };
+      this.highestFrameSequence = Math.max(this.highestFrameSequence, this.pendingFrame.sequence);
+      if (message.data) void this.handleFrame(decodeBase64(message.data), sourceSocket || this.socket);
       return;
     }
     if (message.type === 'ready' || message.type === 'state' || message.type === 'loaded') {
       this.applyAuthority(message);
+      const pageStatus = message.pageStatus || (message.url || message.width ? (message.status === 'error' ? 'error' : 'ready') : 'none');
+      const empty = pageStatus === 'none' || pageStatus === 'closed';
+      if (typeof message.revision === 'number' && message.revision < this.stateValue.revision) return;
       this.setState((current) => ({
         ...current,
-        status: message.status === 'error' ? 'error' : 'connected',
-        title: message.title ?? current.title,
-        url: message.url ?? current.url,
-        error: message.error || (message.status === 'error' ? 'Unable to open the remote page.' : null),
+        status: pageStatus === 'error' ? 'error' : 'connected',
+        pageStatus,
+        title: empty ? '' : (message.title ?? current.title),
+        url: empty ? '' : (message.url ?? current.url),
+        error: empty ? null : (message.error || (pageStatus === 'error' ? 'Unable to open the remote page.' : null)),
         viewport: message.width && message.height ? { width: message.width, height: message.height } : current.viewport,
+        pageGeneration: empty ? (message.pageGeneration ?? current.pageGeneration) : (message.pageGeneration ?? current.pageGeneration),
+        pageOperation: typeof message.pageOperation === 'number' ? message.pageOperation : current.pageOperation,
+        revision: typeof message.revision === 'number' ? message.revision : current.revision,
+        synchronized: true,
+        frame: empty || (message.pageGeneration && current.pageGeneration && message.pageGeneration !== current.pageGeneration) ? null : current.frame,
+        dialog: empty ? null : (message.dialog !== undefined ? message.dialog : current.dialog),
+        primaryError: empty ? null : current.primaryError,
+        takeoverPending: empty ? false : current.takeoverPending,
+        closePending: pageStatus === 'closing' ? current.closePending : false,
       }));
+      this.flushPendingNavigation();
+      this.scheduleResize();
       return;
     }
     if (message.type === 'primary') {
@@ -115,15 +142,35 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       return;
     }
     if (message.type === 'dialog' && message.kind) {
-      this.setState((current) => ({ ...current, dialog: { kind: message.kind as BrowserDialog['kind'], message: message.message || '', defaultPrompt: message.defaultPrompt || '' } }));
+      if (message.pageGeneration && this.stateValue.pageGeneration && message.pageGeneration !== this.stateValue.pageGeneration) return;
+      if (typeof message.revision === 'number' && message.revision < this.stateValue.revision) return;
+      this.setState((current) => ({ ...current, dialog: { dialogId: message.dialogId, kind: message.kind as BrowserDialog['kind'], message: message.message || '', defaultPrompt: message.defaultPrompt || '' } }));
       return;
     }
     if (message.type === 'dialogClosed') {
+      if (message.pageGeneration && this.stateValue.pageGeneration && message.pageGeneration !== this.stateValue.pageGeneration) return;
+      if (typeof message.revision === 'number' && message.revision < this.stateValue.revision) return;
       this.setState((current) => ({ ...current, dialog: null }));
       return;
     }
     if (message.type === 'closed') {
-      this.setState((current) => ({ ...current, status: 'closed', error: message.error || null }));
+      if (message.pageGeneration && this.stateValue.pageGeneration && message.pageGeneration !== this.stateValue.pageGeneration) return;
+      if (typeof message.revision === 'number' && message.revision < this.stateValue.revision) return;
+      this.pendingNavigation = null;
+      this.setState((current) => ({
+        ...current, status: 'connected', pageStatus: 'closed', title: '', url: '', frame: null, dialog: null,
+        error: message.error || null, closePending: false, synchronized: true, primaryError: null, takeoverPending: false,
+        revision: typeof message.revision === 'number' ? Math.max(current.revision, message.revision) : current.revision,
+        pageGeneration: message.pageGeneration ?? current.pageGeneration,
+        pageOperation: typeof message.pageOperation === 'number' ? message.pageOperation : current.pageOperation,
+      }));
+      return;
+    }
+    if (message.type === 'command_result' && message.success === false) {
+      if (message.pageGeneration && this.stateValue.pageGeneration && message.pageGeneration !== this.stateValue.pageGeneration) return;
+      this.setState((current) => ({ ...current, closePending: false, error: message.error || (message.code === 'stale_browser_page' ? 'The remote browser page has changed.' : 'The remote browser command was rejected.') }));
+      this.send({ type: 'sync', requestId: requestId() });
+      return;
     }
   }
 
@@ -170,12 +217,32 @@ export class BrowserRuntime extends BrowserRuntimeCore {
   }
 
   navigate(address: string): boolean { return this.open(address); }
-  back(): void { this.send({ type: 'back', requestId: requestId() }); }
-  forward(): void { this.send({ type: 'forward', requestId: requestId() }); }
-  reload(): void { this.send({ type: 'reload', requestId: requestId() }); }
+  back(): void {
+    if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'closing') return;
+    this.send({ type: 'back', pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
+  }
+  forward(): void {
+    if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'closing') return;
+    this.send({ type: 'forward', pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
+  }
+  reload(): void {
+    if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'closing') return;
+    this.send({ type: 'reload', pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
+  }
   visibility(visible: boolean): void {
     this.desiredVisibility = visible;
+    if (visible) {
+      this.stopped = false;
+      this.connect();
+    }
     this.send({ type: 'visibility', visible, requestId: requestId() });
+  }
+
+  closePage(): boolean {
+    if (this.stateValue.closePending || !this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing') return false;
+    const sent = this.send({ type: 'close', pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
+    if (sent) this.setState((current) => ({ ...current, closePending: true, pageStatus: 'closing' }));
+    return sent;
   }
 
   resize(width: number, height: number): void {
@@ -186,7 +253,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
   }
 
   takeOver(): boolean {
-    if (this.stateValue.isPrimaryClient || this.stateValue.takeoverPending) return false;
+    if (!this.stateValue.synchronized || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing' || this.stateValue.isPrimaryClient || this.stateValue.takeoverPending) return false;
     const size = this.latestResize || (this.stateValue.viewport ? { ...this.stateValue.viewport } : null);
     if (!size) return false;
     this.latestResize = size;
@@ -196,9 +263,13 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     return sent;
   }
 
-  input(event: Record<string, unknown>): void { this.send({ type: 'input', event, requestId: requestId() }); }
+  input(event: Record<string, unknown>): void {
+    if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'closing') return;
+    this.send({ type: 'input', event, pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
+  }
   handleDialog(accept: boolean, promptText = ''): void {
-    this.send({ type: 'dialog', accept, promptText, requestId: requestId() });
+    if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || !this.stateValue.dialog || this.stateValue.pageStatus === 'closing') return;
+    this.send({ type: 'dialog', accept, promptText, dialogId: this.stateValue.dialog.dialogId, pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
     this.setState((current) => ({ ...current, dialog: null }));
   }
 
@@ -207,13 +278,13 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     this.connectedOnce = false;
     this.pendingNavigation = null;
     this.generation = null;
+    this.lastWorkerGeneration = null;
     this.desiredVisibility = false;
     this.latestResize = null;
     this.lastResizeKey = null;
     this.clearResizeTimer();
     if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
-    this.send({ type: 'close', requestId: requestId() });
     const socket = this.socket;
     this.socket = null;
     if (socket) {
@@ -221,8 +292,9 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       closeRoaminalWebSocket(socket);
     }
     this.setState(() => ({
-      status: 'idle', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
-      generation: null, isPrimaryClient: true, primaryError: null, takeoverPending: false,
+      status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
+      generation: null, pageGeneration: null, pageOperation: 0, revision: 0, synchronized: false, closePending: false,
+      isPrimaryClient: true, primaryError: null, takeoverPending: false,
     }));
   }
 
@@ -232,6 +304,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     this.stopped = true;
     this.pendingNavigation = null;
     this.generation = null;
+    this.lastWorkerGeneration = null;
     this.desiredVisibility = false;
     this.clearResizeTimer();
     if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);

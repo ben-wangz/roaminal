@@ -20,12 +20,36 @@ func rawString(value json.RawMessage) string {
 	return strings.TrimSpace(result)
 }
 
+func rawStringValue(value any) string {
+	result, _ := value.(string)
+	return strings.TrimSpace(result)
+}
+
 func integerRaw(value json.RawMessage) (int, bool) {
 	var result int
 	if len(value) == 0 || json.Unmarshal(value, &result) != nil {
 		return 0, false
 	}
 	return result, true
+}
+
+func pageOperationRaw(value json.RawMessage) (int64, bool) {
+	if len(value) == 0 {
+		return 0, false
+	}
+	var result int64
+	if json.Unmarshal(value, &result) != nil || result < 0 {
+		return 0, false
+	}
+	return result, true
+}
+
+func pageOperationMatches(command map[string]json.RawMessage, expected int64) bool {
+	if len(command["pageOperation"]) == 0 {
+		return true
+	}
+	value, ok := pageOperationRaw(command["pageOperation"])
+	return ok && value == expected
 }
 
 func integerField(value any) (int, bool) {

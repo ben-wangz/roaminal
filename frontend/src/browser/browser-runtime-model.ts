@@ -1,4 +1,5 @@
 export type BrowserRuntimeStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'closed';
+export type BrowserPageStatus = 'none' | 'loading' | 'ready' | 'error' | 'closing' | 'closed';
 
 export type BrowserFrame = {
   data: ArrayBuffer;
@@ -8,6 +9,7 @@ export type BrowserFrame = {
 };
 
 export type BrowserDialog = {
+  dialogId?: string;
   kind: 'alert' | 'confirm' | 'prompt' | 'beforeunload';
   message: string;
   defaultPrompt: string;
@@ -15,6 +17,7 @@ export type BrowserDialog = {
 
 export type BrowserRuntimeState = {
   status: BrowserRuntimeStatus;
+  pageStatus: BrowserPageStatus;
   title: string;
   url: string;
   error: string | null;
@@ -22,6 +25,11 @@ export type BrowserRuntimeState = {
   frame: BrowserFrame | null;
   dialog: BrowserDialog | null;
   generation: string | null;
+  pageGeneration: string | null;
+  pageOperation: number;
+  revision: number;
+  synchronized: boolean;
+  closePending: boolean;
   isPrimaryClient: boolean;
   primaryError: string | null;
   takeoverPending: boolean;
@@ -30,15 +38,22 @@ export type BrowserRuntimeState = {
 export type BrowserMessage = {
   type?: string;
   status?: string;
+  pageStatus?: BrowserPageStatus;
   title?: string;
   url?: string;
   error?: string;
   code?: string;
+  success?: boolean;
   width?: number;
   height?: number;
   sequence?: number;
   data?: string;
   generation?: string;
+  pageGeneration?: string;
+  pageOperation?: number;
+  revision?: number;
+  dialogId?: string;
+  dialog?: BrowserDialog | null;
   primary?: boolean;
   takeover?: boolean;
   kind?: BrowserDialog['kind'];

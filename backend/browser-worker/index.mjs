@@ -16,13 +16,42 @@ let profilePath;
 let cdp;
 let target;
 let pageSession;
+let mainFrameId = '';
+let activeLoaderId = '';
+let lifecycleEventsEnabled = false;
 let sequence = 0;
 let lastFrameAt = 0;
 let screencasting = false;
 let blockedNavigation = false;
+let desiredVisibility = false;
+let pageGeneration = '';
+let pageOperation = 0;
+let pageRevision = 0;
+let pageStatus = 'none';
+let pageURL = '';
+let pageTitle = '';
+let pageError = null;
+let dialogState = null;
+let eventUnsubscribe = null;
 
 function emit(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
+}
+
+function operationValue(value) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function acceptOperation(message, advance = false) {
+  const requested = operationValue(message.pageOperation);
+  if (requested !== null) {
+    if (requested < pageOperation) return false;
+    pageOperation = requested;
+    return true;
+  }
+  if (advance) pageOperation += 1;
+  return true;
 }
 
 function modifiers(value = {}) {
@@ -77,9 +106,21 @@ class DevToolsConnection {
     const id = this.nextId++;
     const message = { id, method, params };
     if (sessionId) message.sessionId = sessionId;
-    const result = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+    let timer;
+    const result = new Promise((resolve, reject) => {
+      const settle = (handler) => (value) => {
+        clearTimeout(timer);
+        handler(value);
+      };
+      this.pending.set(id, { resolve: settle(resolve), reject: settle(reject) });
+      timer = setTimeout(() => {
+        if (!this.pending.has(id)) return;
+        this.pending.delete(id);
+        reject(new Error(`Chromium CDP command timed out: ${method}`));
+      }, 15000);
+    });
     try { this.socket.send(JSON.stringify(message)); }
-    catch (error) { this.pending.delete(id); throw error; }
+    catch (error) { this.pending.delete(id); clearTimeout(timer); throw error; }
     return result;
   }
 
@@ -96,7 +137,7 @@ async function launchChromium() {
   await writeFile(`${profile}/Default/Preferences`, JSON.stringify({ intl: { charset_default: 'UTF-8' } }));
   browserProcess = spawn(chromiumPath, [
     '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run',
-    '--no-default-browser-check', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
+    '--no-default-browser-check', '--block-new-web-contents', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
     `--user-data-dir=${profile}`, `--window-size=${viewport.width},${viewport.height}`, 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   let output = '';
@@ -115,30 +156,61 @@ async function launchChromium() {
   return cdp;
 }
 
-async function pageInfo() {
-  if (!cdp || !pageSession) return {};
+async function pageInfo(connection = cdp, session = pageSession) {
+  if (!connection || !session) return {};
+  if (dialogState) return { title: pageTitle, url: pageURL };
   try {
-    const result = await cdp.send('Runtime.evaluate', { expression: 'JSON.stringify({title: document.title, url: location.href})', returnByValue: true }, pageSession);
+    const result = await connection.send('Runtime.evaluate', { expression: 'JSON.stringify({title: document.title, url: location.href})', returnByValue: true }, session);
     return JSON.parse(result.result?.value || '{}');
   } catch { return {}; }
 }
 
-async function announce(type = 'loaded', error = null) {
-  const info = await pageInfo();
-  emit({ type, status: error ? 'error' : 'ready', title: info.title || '', url: info.url || '', width: viewport.width, height: viewport.height, error: error?.message || undefined });
+async function announce(type = 'state', error = null, expected = {}) {
+  const connection = expected.connection || cdp;
+  const session = expected.session || pageSession;
+  const operation = expected.operation ?? pageOperation;
+  const loader = expected.loader || '';
+  const info = await pageInfo(connection, session);
+  if (cdp !== connection || pageSession !== session || pageOperation !== operation || (loader && activeLoaderId && loader !== activeLoaderId)) return false;
+  if (info.url && !(pageStatus === 'loading' && info.url === 'about:blank' && pageURL && pageURL !== 'about:blank')) pageURL = info.url;
+  if (info.title !== undefined) pageTitle = info.title || '';
+  if (error) {
+    pageStatus = 'error';
+    pageError = error instanceof Error ? error.message : String(error);
+  }
+  if (!error && pageStatus !== 'closing' && pageStatus !== 'closed' && pageStatus !== 'none') pageStatus = type === 'loaded' ? 'ready' : pageStatus;
+  pageRevision += 1;
+  emit({ type, status: pageStatus, pageStatus, pageGeneration, pageOperation, revision: pageRevision, title: pageTitle, url: pageURL, width: viewport.width, height: viewport.height, error: pageError || undefined, dialog: dialogState || undefined });
+  return true;
 }
 
 async function setupPage() {
-  const created = await cdp.send('Target.createTarget', { url: 'about:blank' });
-  target = created.targetId;
+  const targets = await cdp.send('Target.getTargets');
+  const existing = (targets.targetInfos || []).find((entry) => entry.type === 'page' && entry.url === 'about:blank') || (targets.targetInfos || []).find((entry) => entry.type === 'page');
+  if (existing) target = existing.targetId;
+  else target = (await cdp.send('Target.createTarget', { url: 'about:blank' })).targetId;
+  for (const entry of targets.targetInfos || []) {
+    if (entry.type === 'page' && entry.targetId !== target) {
+      try { await cdp.send('Target.closeTarget', { targetId: entry.targetId }); } catch { /* an already closed popup is harmless */ }
+    }
+  }
   const attached = await cdp.send('Target.attachToTarget', { targetId: target, flatten: true });
   pageSession = attached.sessionId;
-  cdp.onEvent((event) => { void handleEvent(event); });
+  if (!eventUnsubscribe) eventUnsubscribe = cdp.onEvent((event) => {
+    void handleEvent(event).catch((error) => emit({ type: 'error', error: error instanceof Error ? error.message : 'Browser event handler failed', pageGeneration, pageOperation, revision: pageRevision }));
+  });
+  try { await cdp.send('Target.setDiscoverTargets', { discover: true }); } catch { /* older Chromium may not expose discovery */ }
   await cdp.send('Page.enable', {}, pageSession);
   await cdp.send('Runtime.enable', {}, pageSession);
+  try {
+    await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true }, pageSession);
+    lifecycleEventsEnabled = true;
+  } catch {
+    lifecycleEventsEnabled = false;
+  }
   await setViewport(viewport.width, viewport.height);
-  await startScreencast();
-  emit({ type: 'ready', status: 'ready', width: viewport.width, height: viewport.height });
+  if (desiredVisibility) await startScreencast();
+  await announce('state');
 }
 
 async function ensurePage() {
@@ -150,19 +222,55 @@ async function setViewport(width, height) {
   viewport.width = Math.max(1, Math.min(3840, Math.round(width)));
   viewport.height = Math.max(1, Math.min(2160, Math.round(height)));
   if (cdp && pageSession) await cdp.send('Emulation.setDeviceMetricsOverride', { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: false }, pageSession);
-  emit({ type: 'viewport', width: viewport.width, height: viewport.height });
+  emit({ type: 'viewport', pageOperation, width: viewport.width, height: viewport.height });
 }
 
 async function navigate(url) {
+  pageStatus = 'loading';
+  pageURL = url;
+  pageTitle = '';
+  pageError = null;
+  dialogState = null;
+  pageRevision += 1;
+  emit({ type: 'state', status: 'loading', pageStatus, pageGeneration, pageOperation, revision: pageRevision, url: pageURL, title: pageTitle, width: viewport.width, height: viewport.height });
   await ensurePage();
-  await cdp.send('Page.navigate', { url }, pageSession);
-  await announce('state');
+  const result = await cdp.send('Page.navigate', { url }, pageSession);
+  if (result.loaderId) activeLoaderId = result.loaderId;
+  if (result.errorText) {
+    await announce('state', new Error(result.errorText));
+    return false;
+  }
+  return true;
 }
 
 async function captureFrame() {
-  if (!cdp || !pageSession) return;
-  const result = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 70, fromSurface: true }, pageSession);
-  if (result.data) emit({ type: 'frame', sequence: ++sequence, width: viewport.width, height: viewport.height, data: result.data });
+  const connection = cdp;
+  const session = pageSession;
+  const generation = pageGeneration;
+  const operation = pageOperation;
+  if (!connection || !session) return;
+  const result = await connection.send('Page.captureScreenshot', { format: 'jpeg', quality: 70, fromSurface: true }, session);
+  if (cdp === connection && pageSession === session && pageGeneration === generation && pageOperation === operation && result.data && pageStatus !== 'closed' && pageStatus !== 'none') emit({ type: 'frame', sequence: ++sequence, revision: pageRevision, pageGeneration, pageOperation, width: viewport.width, height: viewport.height, data: result.data });
+}
+
+function validCurrentPage(message, requireIdentity = false) {
+  if (!pageSession || pageStatus === 'none' || pageStatus === 'closed') {
+    emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'no_browser_page', pageGeneration, pageOperation, revision: pageRevision });
+    return false;
+  }
+  if ((requireIdentity || message.pageGeneration) && message.pageGeneration !== pageGeneration) {
+    emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'stale_browser_page', pageGeneration, pageOperation, revision: pageRevision });
+    return false;
+  }
+  if (message.pageOperation !== undefined && operationValue(message.pageOperation) !== pageOperation) {
+    emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'stale_browser_page', pageGeneration, pageOperation, revision: pageRevision });
+    return false;
+  }
+  return true;
+}
+
+function commandResult(message, success, extra = {}) {
+  emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success, pageGeneration, pageOperation, revision: pageRevision, ...extra });
 }
 
 async function startScreencast() {
@@ -178,27 +286,81 @@ async function stopScreencast() {
 }
 
 async function handleEvent(event) {
+  if (event.method === 'Target.targetCreated') {
+    const info = event.params?.targetInfo;
+    if (info?.type === 'page' && info.targetId !== target) {
+      try { await cdp.send('Target.closeTarget', { targetId: info.targetId }); } catch { /* popup may already be gone */ }
+    }
+    return;
+  }
+  if (event.method === 'Target.targetDestroyed' && event.params?.targetId === target && pageStatus !== 'closing' && pageStatus !== 'closed') {
+    pageSession = null;
+    target = null;
+    mainFrameId = '';
+    activeLoaderId = '';
+    screencasting = false;
+    dialogState = null;
+    pageError = null;
+    pageStatus = 'closed';
+    pageURL = '';
+    pageTitle = '';
+    pageRevision += 1;
+    emit({ type: 'closed', status: 'closed', pageStatus, pageGeneration, pageOperation, revision: pageRevision, title: '', url: '', width: viewport.width, height: viewport.height, error: undefined, dialog: undefined });
+    return;
+  }
+  if (event.method === 'Target.targetInfoChanged' && event.params?.targetInfo?.targetId === target) {
+    const info = event.params.targetInfo;
+    if (info.url && allowedDocumentURL(info.url) && !(pageStatus === 'loading' && info.url === 'about:blank' && pageURL && pageURL !== 'about:blank')) pageURL = info.url;
+    if (info.title !== undefined) pageTitle = info.title || '';
+    pageRevision += 1;
+    emit({ type: 'state', status: pageStatus, pageStatus, pageGeneration, pageOperation, revision: pageRevision, title: pageTitle, url: pageURL, width: viewport.width, height: viewport.height, dialog: dialogState || undefined });
+    return;
+  }
   if (!pageSession || event.sessionId !== pageSession) return;
+  if (event.method === 'Page.navigatedWithinDocument' && event.params?.frameId === mainFrameId) {
+    pageURL = event.params.url || pageURL;
+    pageRevision += 1;
+    emit({ type: 'state', status: pageStatus, pageStatus, pageGeneration, pageOperation, revision: pageRevision, title: pageTitle, url: pageURL, width: viewport.width, height: viewport.height, dialog: dialogState || undefined });
+    return;
+  }
   if (event.method === 'Page.frameNavigated' && !event.params.frame.parentId) {
-    if (!allowedDocumentURL(event.params.frame.url)) {
+    const frame = event.params.frame;
+    if (activeLoaderId && frame.loaderId && activeLoaderId !== frame.loaderId && frame.url !== pageURL) return;
+    mainFrameId = frame.id || mainFrameId;
+    if (frame.loaderId) activeLoaderId = frame.loaderId;
+    if (!allowedDocumentURL(frame.url)) {
       blockedNavigation = true;
-      emit({ type: 'error', error: 'Remote page navigation was blocked.' });
+      emit({ type: 'error', error: 'Remote page navigation was blocked.', pageGeneration, pageOperation, revision: pageRevision });
       try { await cdp.send('Page.navigate', { url: 'about:blank' }, pageSession); } catch { /* the viewer will reconnect after a dead CDP stream */ }
       return;
     }
     blockedNavigation = false;
+    pageURL = frame.url || pageURL;
+    pageStatus = 'loading';
+    pageError = null;
+    pageRevision += 1;
+    emit({ type: 'state', status: 'loading', pageStatus, pageGeneration, pageOperation, revision: pageRevision, title: pageTitle, url: pageURL, width: viewport.width, height: viewport.height });
   }
   if (event.method === 'Page.screencastFrame') {
+    const connection = cdp;
+    const session = pageSession;
+    const generation = pageGeneration;
+    const operation = pageOperation;
     const metadata = event.params.metadata || {};
     const now = Date.now();
     if (now - lastFrameAt >= 66) {
       lastFrameAt = now;
-      emit({ type: 'frame', sequence: ++sequence, width: metadata.deviceWidth || viewport.width, height: metadata.deviceHeight || viewport.height, data: event.params.data });
+      if (cdp === connection && pageSession === session && pageGeneration === generation && pageOperation === operation && pageStatus !== 'closed' && pageStatus !== 'none') emit({ type: 'frame', sequence: ++sequence, revision: pageRevision, pageGeneration, pageOperation, width: metadata.deviceWidth || viewport.width, height: metadata.deviceHeight || viewport.height, data: event.params.data });
     }
-    try { await cdp.send('Page.screencastFrameAck', { sessionId: event.params.sessionId }, pageSession); } catch { /* the viewer will reconnect after a dead CDP stream */ }
+    try { await connection.send('Page.screencastFrameAck', { sessionId: event.params.sessionId }, session); } catch { /* the viewer will reconnect after a dead CDP stream */ }
   }
-  if (event.method === 'Page.loadEventFired' && !blockedNavigation) await announce('loaded');
-  if (event.method === 'Page.javascriptDialogOpening') emit({ type: 'dialog', kind: event.params.type, message: event.params.message || '', defaultPrompt: event.params.defaultPrompt || '' });
+  if (event.method === 'Page.lifecycleEvent' && event.params?.name === 'load' && event.params.frameId === mainFrameId && !blockedNavigation && (!activeLoaderId || event.params.loaderId === activeLoaderId)) await announce('loaded', null, { connection: cdp, session: pageSession, operation: pageOperation, loader: event.params.loaderId });
+  if (event.method === 'Page.loadEventFired' && !lifecycleEventsEnabled && !blockedNavigation) await announce('loaded', null, { connection: cdp, session: pageSession, operation: pageOperation });
+  if (event.method === 'Page.javascriptDialogOpening') {
+    dialogState = { dialogId: randomUUID(), kind: event.params.type, message: event.params.message || '', defaultPrompt: event.params.defaultPrompt || '' };
+    pageRevision += 1;
+    emit({ type: 'dialog', pageStatus, pageGeneration, pageOperation, revision: pageRevision, ...dialogState });
+  }
 }
 
 async function input(event) {
@@ -216,43 +378,180 @@ async function input(event) {
   }
 }
 
+async function navigateHistory(delta, message) {
+  if (!validCurrentPage(message)) return undefined;
+  let history;
+  try {
+    history = await cdp.send('Page.getNavigationHistory', {}, pageSession);
+  } catch (error) {
+    commandResult(message, false, { code: 'navigation_failed', error: error instanceof Error ? error.message : 'History navigation failed.' });
+    return undefined;
+  }
+  const index = Number(history.currentIndex);
+  const entries = Array.isArray(history.entries) ? history.entries : [];
+  const targetEntry = Number.isInteger(index) ? entries[index + delta] : undefined;
+  if (!targetEntry || !Number.isInteger(targetEntry.id)) {
+    await announce('state');
+    commandResult(message, true, { code: 'no_history_entry' });
+    return undefined;
+  }
+  try {
+    await cdp.send('Page.navigateToHistoryEntry', { entryId: targetEntry.id }, pageSession);
+    commandResult(message, true);
+  } catch (error) {
+    commandResult(message, false, { code: 'navigation_failed', error: error instanceof Error ? error.message : 'History navigation failed.' });
+  }
+  return undefined;
+}
+
 async function command(message) {
-  if (message.type === 'open' || message.type === 'navigate') return navigate(message.url);
-  if (message.type === 'sync') { await ensurePage(); await announce('state'); return captureFrame(); }
+  if (message.type === 'open' || message.type === 'navigate') {
+    if (!allowedDocumentURL(message.url)) throw new Error('Remote page navigation was blocked.');
+    if (!pageSession || pageStatus === 'none' || pageStatus === 'closed') {
+      pageGeneration = String(message.pageGeneration || randomUUID());
+    } else if (!message.pageGeneration || message.pageGeneration !== pageGeneration) {
+      emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'stale_browser_page', pageGeneration, pageOperation, revision: pageRevision });
+      return announce('state');
+    }
+    if (!acceptOperation(message, true)) {
+      emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'stale_browser_page', pageGeneration, pageOperation, revision: pageRevision });
+      return;
+    }
+    try {
+      const accepted = await navigate(message.url);
+      commandResult(message, accepted, accepted ? {} : { code: 'navigation_failed', error: 'The remote page rejected navigation.' });
+    } catch (error) {
+      pageStatus = 'error';
+      pageError = error instanceof Error ? error.message : 'Remote page navigation failed.';
+      pageRevision += 1;
+      emit({ type: 'state', status: 'error', pageStatus, pageGeneration, pageOperation, revision: pageRevision, url: pageURL, title: pageTitle, error: pageError, width: viewport.width, height: viewport.height });
+      commandResult(message, false, { code: 'navigation_failed', error: pageError });
+    }
+    return;
+  }
+  if (message.type === 'sync') {
+    if (!acceptOperation(message)) {
+      emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'stale_browser_page', pageGeneration, pageOperation, revision: pageRevision });
+      return;
+    }
+    if (!pageSession || pageStatus === 'none' || pageStatus === 'closed') {
+      emit({ type: 'state', status: pageStatus, pageStatus, pageGeneration, pageOperation, revision: pageRevision, title: '', url: '', width: viewport.width, height: viewport.height });
+      return;
+    }
+    await announce('state');
+    if (dialogState) return undefined;
+    return captureFrame();
+  }
   if (message.type === 'resize') return setViewport(message.width, message.height);
   if (message.type === 'visibility') {
-    await ensurePage();
+    desiredVisibility = Boolean(message.visible);
+    if (!pageSession) return undefined;
     if (message.visible) {
       await startScreencast();
-      await captureFrame();
+      if (!dialogState) await captureFrame();
     }
     else await stopScreencast();
     return undefined;
   }
-  if (message.type === 'input') return input(message.event);
-  if (message.type === 'dialog') {
-    await ensurePage();
-    await cdp.send('Page.handleJavaScriptDialog', { accept: Boolean(message.accept), promptText: message.promptText || '' }, pageSession);
-    emit({ type: 'dialogClosed' });
+  if (message.type === 'input') {
+    if (!validCurrentPage(message)) return undefined;
+    try {
+      await input(message.event);
+      commandResult(message, true);
+    } catch (error) {
+      commandResult(message, false, { code: 'input_failed', error: error instanceof Error ? error.message : 'Browser input failed.' });
+    }
     return undefined;
   }
-  if (message.type === 'back') { await ensurePage(); await cdp.send('Page.goBack', {}, pageSession); return announce('state'); }
-  if (message.type === 'forward') { await ensurePage(); await cdp.send('Page.goForward', {}, pageSession); return announce('state'); }
-  if (message.type === 'reload') { await ensurePage(); await cdp.send('Page.reload', {}, pageSession); return announce('state'); }
-  if (message.type === 'ping') { emit({ type: 'pong', requestId: message.requestId }); return undefined; }
-  if (message.type === 'close') { emit({ type: 'closed' }); return shutdown(); }
+  if (message.type === 'dialog') {
+    if (!validCurrentPage(message, true) || !dialogState || message.dialogId !== dialogState.dialogId) {
+      emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'stale_browser_dialog', pageGeneration, pageOperation, revision: pageRevision });
+      return undefined;
+    }
+    try {
+      await cdp.send('Page.handleJavaScriptDialog', { accept: Boolean(message.accept), promptText: message.promptText || '' }, pageSession);
+    } catch (error) {
+      commandResult(message, false, { code: 'dialog_failed', error: error instanceof Error ? error.message : 'Browser dialog failed.' });
+      return undefined;
+    }
+    dialogState = null;
+    pageRevision += 1;
+    emit({ type: 'dialogClosed', pageGeneration, revision: pageRevision });
+    commandResult(message, true);
+    return undefined;
+  }
+  if (message.type === 'back') return navigateHistory(-1, message);
+  if (message.type === 'forward') return navigateHistory(1, message);
+  if (message.type === 'reload') {
+    if (!validCurrentPage(message)) return undefined;
+    try {
+      await cdp.send('Page.reload', {}, pageSession);
+      await announce('state');
+      commandResult(message, true);
+    } catch (error) {
+      commandResult(message, false, { code: 'reload_failed', error: error instanceof Error ? error.message : 'Browser reload failed.' });
+    }
+    return undefined;
+  }
+  if (message.type === 'ping') { emit({ type: 'pong', clientId: message.clientId, requestId: message.requestId }); return undefined; }
+  if (message.type === 'close') {
+    if (!pageSession || pageStatus === 'none' || pageStatus === 'closed') {
+      commandResult(message, true, { code: 'no_browser_page' });
+      return;
+    }
+    if (message.pageGeneration !== pageGeneration) {
+      commandResult(message, false, { code: 'stale_browser_page' });
+      return announce('state');
+    }
+    if (!acceptOperation(message, true)) {
+      commandResult(message, false, { code: 'stale_browser_page' });
+      return;
+    }
+    pageStatus = 'closing';
+    pageRevision += 1;
+    emit({ type: 'state', status: 'closing', pageStatus, pageGeneration, pageOperation, revision: pageRevision, url: pageURL, title: pageTitle, width: viewport.width, height: viewport.height });
+    await shutdown();
+    pageStatus = 'closed';
+    pageURL = '';
+    pageTitle = '';
+    pageError = null;
+    dialogState = null;
+    pageRevision += 1;
+    emit({ type: 'closed', status: 'closed', pageStatus, pageGeneration, pageOperation, revision: pageRevision, title: '', url: '', width: viewport.width, height: viewport.height, error: undefined, dialog: undefined });
+    commandResult(message, true);
+    return;
+  }
   throw new Error('Unknown browser command');
 }
 
 async function shutdown() {
+  try { await stopScreencast(); } catch { /* page may already be gone */ }
+  try { eventUnsubscribe?.(); } catch { /* already detached */ }
+  eventUnsubscribe = null;
   try { cdp?.close(); } catch { /* already closed */ }
   cdp = null;
   pageSession = null;
   target = null;
+  mainFrameId = '';
+  activeLoaderId = '';
+  lifecycleEventsEnabled = false;
   screencasting = false;
   blockedNavigation = false;
-  if (browserProcess && !browserProcess.killed) browserProcess.kill('SIGTERM');
+  const child = browserProcess;
   browserProcess = null;
+  if (child && child.exitCode === null) {
+    child.kill('SIGTERM');
+    await new Promise((resolve) => {
+      let settled = false;
+      const finish = () => { if (!settled) { settled = true; resolve(); } };
+      child.once('exit', finish);
+      setTimeout(() => {
+        if (settled) return;
+        if (child.exitCode === null) child.kill('SIGKILL');
+        setTimeout(finish, 1000);
+      }, 3000);
+    });
+  }
   if (profilePath) {
     try { await rm(profilePath, { recursive: true, force: true }); } catch { /* cleanup is best effort */ }
     profilePath = null;

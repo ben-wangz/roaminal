@@ -9,7 +9,7 @@ import {
 } from './browser-runtime-model';
 
 export abstract class BrowserRuntimeCore {
-  protected abstract handleMessage(data: string): void;
+  protected abstract handleMessage(data: string, sourceSocket?: WebSocket): void;
 
   protected socket: WebSocket | null = null;
   protected reconnectTimer: number | null = null;
@@ -18,16 +18,19 @@ export abstract class BrowserRuntimeCore {
   protected stopped = false;
   protected connectedOnce = false;
   protected pendingNavigation: string | null = null;
-  protected pendingFrame: { width: number; height: number; sequence: number } | null = null;
+  protected pendingFrame: { width: number; height: number; sequence: number; pageGeneration: string | null; revision: number } | null = null;
+  protected highestFrameSequence = 0;
   protected latestResize: ViewportSize | null = null;
   protected lastResizeKey: string | null = null;
   protected generation: string | null = null;
+  protected lastWorkerGeneration: string | null = null;
   protected desiredVisibility = false;
   protected frameSequence = 0;
   protected readonly clientId = requestId();
   protected stateValue: BrowserRuntimeState = {
-    status: 'idle', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
-    generation: null, isPrimaryClient: true, primaryError: null, takeoverPending: false,
+    status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
+    generation: null, pageGeneration: null, pageOperation: 0, revision: 0, synchronized: false, closePending: false,
+    isPrimaryClient: true, primaryError: null, takeoverPending: false,
   };
   protected readonly listeners = new Set<() => void>();
 
@@ -54,27 +57,22 @@ export abstract class BrowserRuntimeCore {
     this.socket = socket;
     socket.onopen = () => {
       if (this.disposed || this.socket !== socket) return;
-      const reconnecting = this.connectedOnce;
       this.connectedOnce = true;
-      this.setState((current) => ({ ...current, status: 'connected', error: null }));
-      const pendingNavigation = this.pendingNavigation;
-      this.pendingNavigation = null;
-      const url = this.stateValue.url;
-      if (pendingNavigation) this.send({ type: 'open', url: pendingNavigation, requestId: requestId() });
-      else if (url) this.send(reconnecting ? { type: 'sync', requestId: requestId() } : { type: 'open', url, requestId: requestId() });
+      this.setState((current) => ({ ...current, status: 'connected', error: null, synchronized: false }));
+      this.send({ type: 'sync', requestId: requestId() });
       this.send({ type: 'visibility', visible: this.desiredVisibility, requestId: requestId() });
     };
     socket.onmessage = (event) => {
       if (this.disposed || this.socket !== socket) return;
-      if (typeof event.data === 'string') this.handleMessage(event.data);
-      else void this.handleFrame(event.data);
+      if (typeof event.data === 'string') this.handleMessage(event.data, socket);
+      else void this.handleFrame(event.data, socket);
     };
     socket.onclose = (event) => {
       if (this.socket !== socket) return;
       this.socket = null;
       this.clearResizeTimer();
       this.generation = null;
-      this.setState((current) => ({ ...current, generation: null, takeoverPending: false }));
+      this.setState((current) => ({ ...current, generation: null, synchronized: false, takeoverPending: false }));
       if (this.disposed || this.stopped) return;
       if (event.code === 1011) {
         this.stopped = true;
@@ -86,8 +84,8 @@ export abstract class BrowserRuntimeCore {
         this.setState((current) => ({ ...current, status: 'error', error: 'Remote browser is unavailable in this deployment.' }));
         return;
       }
-      this.setState((current) => ({ ...current, status: current.url ? 'reconnecting' : 'idle' }));
-      if (this.stateValue.url && this.reconnectTimer === null) {
+      this.setState((current) => ({ ...current, status: 'reconnecting' }));
+      if (this.reconnectTimer === null) {
         this.reconnectTimer = window.setTimeout(() => {
           this.reconnectTimer = null;
           this.connect();
@@ -96,19 +94,53 @@ export abstract class BrowserRuntimeCore {
     };
   }
 
+  protected flushPendingNavigation(): void {
+    if (!this.pendingNavigation || !this.stateValue.synchronized) return;
+    const url = this.pendingNavigation;
+    const sent = this.send({ type: 'open', url, pageGeneration: this.stateValue.pageGeneration || undefined, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
+    if (sent) this.pendingNavigation = null;
+  }
+
   protected setGeneration(value: string): void {
-    if (this.generation === value) return;
+    if (this.generation === value && this.lastWorkerGeneration === value) return;
+    const workerChanged = this.lastWorkerGeneration !== null && this.lastWorkerGeneration !== value;
+    this.lastWorkerGeneration = value;
     this.generation = value;
     this.lastResizeKey = null;
-    this.setState((current) => ({ ...current, generation: value }));
+    this.pendingFrame = null;
+    this.highestFrameSequence = 0;
+    this.setState((current) => workerChanged ? ({
+      ...current,
+      generation: value,
+      pageStatus: 'none',
+      pageGeneration: null,
+      pageOperation: 0,
+      revision: 0,
+      title: '',
+      url: '',
+      error: null,
+      viewport: null,
+      frame: null,
+      dialog: null,
+      synchronized: false,
+      closePending: false,
+      isPrimaryClient: true,
+      primaryError: null,
+      takeoverPending: false,
+    }) : ({ ...current, generation: value }));
     this.scheduleResize();
   }
 
-  protected async handleFrame(value: ArrayBuffer | Blob): Promise<void> {
-    const data = value instanceof Blob ? await value.arrayBuffer() : value;
-    if (this.disposed) return;
-    const metadata = this.pendingFrame || { width: this.stateValue.viewport?.width || 0, height: this.stateValue.viewport?.height || 0, sequence: ++this.frameSequence };
+  protected async handleFrame(value: ArrayBuffer | Blob, sourceSocket: WebSocket | null = this.socket): Promise<void> {
+    const metadata = this.pendingFrame || { width: this.stateValue.viewport?.width || 0, height: this.stateValue.viewport?.height || 0, sequence: ++this.frameSequence, pageGeneration: this.stateValue.pageGeneration, revision: this.stateValue.revision };
     this.pendingFrame = null;
+    this.highestFrameSequence = Math.max(this.highestFrameSequence, metadata.sequence);
+    const data = value instanceof Blob ? await value.arrayBuffer() : value;
+    if (this.disposed || (sourceSocket !== null && this.socket !== sourceSocket)) return;
+    if (metadata.pageGeneration && metadata.pageGeneration !== this.stateValue.pageGeneration) return;
+    if (metadata.revision < this.stateValue.revision) return;
+    if (metadata.sequence < this.highestFrameSequence || metadata.sequence < (this.stateValue.frame?.sequence || 0)) return;
+    if (this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed') return;
     this.setState((current) => ({ ...current, frame: { data, ...metadata } }));
   }
 
@@ -128,7 +160,7 @@ export abstract class BrowserRuntimeCore {
   }
 
   protected scheduleResize(): void {
-    if (this.resizeTimer !== null || !this.stateValue.isPrimaryClient || !this.latestResize || !this.generation) return;
+    if (this.resizeTimer !== null || !this.stateValue.synchronized || !this.stateValue.isPrimaryClient || !this.latestResize || !this.generation || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing') return;
     this.resizeTimer = window.setTimeout(() => {
       this.resizeTimer = null;
       this.flushResize(false);
@@ -137,7 +169,7 @@ export abstract class BrowserRuntimeCore {
 
   protected flushResize(takeover: boolean): boolean {
     const size = this.latestResize || (this.stateValue.viewport ? { ...this.stateValue.viewport } : null);
-    if (!size || !this.generation || this.socket?.readyState !== WebSocket.OPEN) return false;
+    if (!size || !this.stateValue.synchronized || !this.generation || this.stateValue.pageStatus === 'closing' || this.socket?.readyState !== WebSocket.OPEN) return false;
     if (!takeover && !this.stateValue.isPrimaryClient) return false;
     if (!takeover && viewportKey(size) === this.lastResizeKey) return true;
     const sent = this.send({

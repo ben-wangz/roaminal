@@ -45,6 +45,9 @@ export function AppShell() {
   const [executionStatus, setExecutionStatus] = useState<string | null>(null);
   const [executionStatusRuntime, setExecutionStatusRuntime] = useState<TerminalRuntime | null>(null);
   const browserRuntime = useBrowserRuntime();
+  useEffect(() => {
+    if (!auth) browserRuntime.stop();
+  }, [auth, browserRuntime]);
   const mainRuntime = useRef<TerminalRuntime | null>(null);
   const [currentRuntime, setCurrentRuntime] = useState<TerminalRuntime | null>(null);
   useEffect(() => {

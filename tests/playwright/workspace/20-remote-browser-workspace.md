@@ -40,7 +40,9 @@ Roaminal Pod.
    state remain intact. Settings preserves its unsaved-changes guard and
    returns to Browser even when there are no terminal connections.
 8. Open a second Roaminal browser client against the same deployment. Verify
-   both clients receive the same frames and page state. The first client whose
+   it immediately receives the existing page URL, title, status, and frame
+   after activating Browser, without submitting the address again. Both
+   clients receive the same frames and page state. The first client whose
    valid resize is accepted has an active Crown; the other receives a
    `not_primary_client` response, changes to the inactive `Set as primary
    client` Crown, and sends no further automatic resize requests. Clicking the
@@ -48,11 +50,26 @@ Roaminal Pod.
    Confirming `Take over` sends one takeover resize using the latest measured
    dimensions. On success the new client becomes primary and later unique
    sizes are applied. A failed takeover leaves it inactive without a retry
-   loop. Also close the browser WebSocket, refresh the Roaminal page, and
+   loop.
+9. While the page is open, switch each client through Terminal, Connections,
+   Files, and Settings, including a Settings remount and an unsaved-change
+   guard. Returning to Browser shows the same URL, history, cookies, form
+   values, and content. No workspace switch, client disconnect, refresh, or
+   WebSocket cleanup sends a browser `close` command.
+10. Click the icon-only `Close page` button from either client, including from
+   a non-primary client while the other client is hidden or reconnecting.
+   Verify both clients receive the global closed lifecycle event, clear the
+   canvas and page metadata, and show the address form. Two simultaneous close
+   clicks are harmless. Open a new URL and verify both clients show the new
+   single page and no second worker or target exists.
+11. Send delayed commands from the old page after reopening, including close,
+   input, navigation, and dialog responses. They must be rejected or ignored
+   with a resync, must not affect the new page, and must not close either
+   WebSocket. Also close the browser WebSocket, refresh the Roaminal page, and
    expire the access token. Verify reconnect state recovery, explicit re-open
    after a worker restart, and a useful unavailable error. Browser failure
    must not affect terminal APIs or `/healthz`.
-9. Inspect diagnostics and cleanup. No access token, page content, keystroke,
+12. Inspect diagnostics and cleanup. No access token, page content, keystroke,
    password, or complete sensitive URL may appear in
    console output, traces, screenshots, worker logs, or server logs. Confirm
    hiding Browser stops frame delivery and that Chromium profile data is
