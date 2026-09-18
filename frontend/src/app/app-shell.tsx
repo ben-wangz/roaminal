@@ -29,6 +29,8 @@ import { useWorkspaceToolActions } from './use-workspace-tool-actions';
 import { useWorkspaceNavigation } from './use-workspace-navigation';
 import { useFilesystemWorkspace } from '../filesystem/use-filesystem-workspace';
 import { useBrowserRuntime } from '../browser/browser-runtime';
+import { useFilesystemPreviewGuard } from './use-filesystem-preview-guard';
+import { useBrowserWorkspaceActions } from './use-browser-workspace-actions';
 export function AppShell() {
   const appController = useAppController();
   const { controller: connectionController, state: connectionState } = useConnectionInstanceController();
@@ -160,40 +162,28 @@ export function AppShell() {
     onOpenFile: openFilePreview,
   });
   const { instanceId: filesystemInstanceId, instanceReady: filesystemInstanceReady, previewEntry: filesystemPreviewEntry, setPreviewEntry } = filesystemWorkspace;
-  useEffect(() => {
-    const previewBelongsToActiveInstance = Boolean(
-      fileSystemAvailable
-      && filesystemInstanceReady
-      && filesystemInstanceId
-      && filesystemInstanceId === activeInstance?.connectionInstanceId
-      && filesystemPreviewEntry,
-    );
-    if (!previewBelongsToActiveInstance && workspaceContent === 'file-preview') setWorkspaceContent('terminal');
-  }, [activeInstance?.connectionInstanceId, fileSystemAvailable, filesystemInstanceId, filesystemInstanceReady, filesystemPreviewEntry, setWorkspaceContent, workspaceContent]);
-  useEffect(() => {
-    if (page !== 'workspace' && filesystemPreviewEntry) setPreviewEntry(null);
-  }, [filesystemPreviewEntry, page, setPreviewEntry]);
-  const handleBackToTerminal = () => {
-    setWorkspaceContent('terminal');
-    setPreviewEntry(null);
-  };
-  const previousBrowserToolOpen = useRef(workspaceToolOpen);
-  const handleToggleBrowser = useCallback(() => {
-    if (page === 'settings') {
-      if (settingsDirty && !window.confirm('Discard unsaved interface changes?')) return;
-      setSettingsDirty(false);
-      setPage('workspace');
-    }
-    if (workspaceContent === 'browser') {
-      setWorkspaceContent('terminal');
-      setWorkspaceToolOpen(previousBrowserToolOpen.current);
-      return;
-    }
-    previousBrowserToolOpen.current = workspaceToolOpen;
-    setWorkspaceToolOpen(false);
-    setWorkspaceContent('browser');
-    if (page !== 'workspace') setPage('workspace');
-  }, [page, setPage, setSettingsDirty, setWorkspaceContent, setWorkspaceToolOpen, settingsDirty, workspaceContent, workspaceToolOpen]);
+  useFilesystemPreviewGuard({
+    activeInstanceId: activeInstance?.connectionInstanceId,
+    fileSystemAvailable,
+    filesystemInstanceId,
+    filesystemInstanceReady,
+    filesystemPreviewEntry,
+    page,
+    setPreviewEntry,
+    setWorkspaceContent,
+    workspaceContent,
+  });
+  const { handleBackToTerminal, handleToggleBrowser } = useBrowserWorkspaceActions({
+    page,
+    setPage,
+    setPreviewEntry,
+    setSettingsDirty,
+    setWorkspaceContent,
+    setWorkspaceToolOpen,
+    settingsDirty,
+    workspaceContent,
+    workspaceToolOpen,
+  });
   const mobileKeyboard = useMobileKeyboard(
     activeRuntime,
     page === 'workspace' && workspaceContent === 'terminal' && Boolean(activeRuntime),
