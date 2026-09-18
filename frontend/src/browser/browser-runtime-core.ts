@@ -1,5 +1,5 @@
 import { currentAccessToken } from '../auth/auth-client';
-import { createBrowserWebSocket } from '../terminal/connection-socket';
+import { closeRoaminalWebSocket, createBrowserWebSocket, expectRoaminalWebSocketClose } from '../terminal/connection-socket';
 import {
   requestId,
   RESIZE_COALESCE_MS,
@@ -178,5 +178,50 @@ export abstract class BrowserRuntimeCore {
     });
     if (sent) this.lastResizeKey = viewportKey(size);
     return sent;
+  }
+
+  stop(): void {
+    this.stopped = true;
+    this.connectedOnce = false;
+    this.pendingNavigation = null;
+    this.generation = null;
+    this.lastWorkerGeneration = null;
+    this.desiredVisibility = false;
+    this.latestResize = null;
+    this.lastResizeKey = null;
+    this.clearResizeTimer();
+    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    const socket = this.socket;
+    this.socket = null;
+    if (socket) {
+      expectRoaminalWebSocketClose(socket);
+      closeRoaminalWebSocket(socket);
+    }
+    this.setState(() => ({
+      status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
+      generation: null, pageGeneration: null, pageOperation: 0, revision: 0, synchronized: false, closePending: false,
+      isPrimaryClient: true, primaryError: null, takeoverPending: false,
+    }));
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.stopped = true;
+    this.pendingNavigation = null;
+    this.generation = null;
+    this.lastWorkerGeneration = null;
+    this.desiredVisibility = false;
+    this.clearResizeTimer();
+    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    const socket = this.socket;
+    this.socket = null;
+    if (socket) {
+      expectRoaminalWebSocketClose(socket);
+      closeRoaminalWebSocket(socket);
+    }
+    this.listeners.clear();
   }
 }

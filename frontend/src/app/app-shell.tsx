@@ -147,8 +147,7 @@ export function AppShell() {
     showToast,
   });
   const activeRuntimeId = activeLaunchId || view.activeConnectionInstanceId;
-  const activeInstance =
-    connections.find((connection) => connection.connectionInstanceId === activeRuntimeId) || null;
+  const activeInstance = connections.find((connection) => connection.connectionInstanceId === activeRuntimeId) || null;
   const activeRuntime = currentRuntime?.connectionInstanceId === activeRuntimeId ? currentRuntime : null;
   const activeExecutionStatus = activeRuntime && executionStatusRuntime === activeRuntime ? executionStatus : null;
   const fileSystemAvailable = Boolean(activeInstance && activeInstance.type === 'ssh' && activeInstance.lifecycle === 'live' && activeInstance.purpose === 'interactive');
@@ -187,10 +186,7 @@ export function AppShell() {
     workspaceContent,
     workspaceToolOpen,
   });
-  const mobileKeyboard = useMobileKeyboard(
-    activeRuntime,
-    page === 'workspace' && workspaceContent === 'terminal' && Boolean(activeRuntime),
-  );
+  const mobileKeyboard = useMobileKeyboard(activeRuntime, page === 'workspace' && workspaceContent === 'terminal' && Boolean(activeRuntime));
   const { selectVirtualKeyboard, collapseVirtualKeyboard } = useVirtualKeyboardState({
     loginSessionId: actions.currentAuthSessionId,
     page,

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { closeRoaminalWebSocket, expectRoaminalWebSocketClose } from '../terminal/connection-socket';
 import { BrowserRuntimeCore } from './browser-runtime-core';
 import {
   decodeBase64,
@@ -273,50 +272,6 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     this.setState((current) => ({ ...current, dialog: null }));
   }
 
-  stop(): void {
-    this.stopped = true;
-    this.connectedOnce = false;
-    this.pendingNavigation = null;
-    this.generation = null;
-    this.lastWorkerGeneration = null;
-    this.desiredVisibility = false;
-    this.latestResize = null;
-    this.lastResizeKey = null;
-    this.clearResizeTimer();
-    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    const socket = this.socket;
-    this.socket = null;
-    if (socket) {
-      expectRoaminalWebSocketClose(socket);
-      closeRoaminalWebSocket(socket);
-    }
-    this.setState(() => ({
-      status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
-      generation: null, pageGeneration: null, pageOperation: 0, revision: 0, synchronized: false, closePending: false,
-      isPrimaryClient: true, primaryError: null, takeoverPending: false,
-    }));
-  }
-
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.stopped = true;
-    this.pendingNavigation = null;
-    this.generation = null;
-    this.lastWorkerGeneration = null;
-    this.desiredVisibility = false;
-    this.clearResizeTimer();
-    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-    const socket = this.socket;
-    this.socket = null;
-    if (socket) {
-      expectRoaminalWebSocketClose(socket);
-      closeRoaminalWebSocket(socket);
-    }
-    this.listeners.clear();
-  }
 }
 
 export { validAddress };
