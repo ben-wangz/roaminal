@@ -16,27 +16,60 @@ import (
 )
 
 func tmuxLaunchRevision(option connectionoptions.Tmux) string {
-	digest := sha256.Sum256([]byte(fmt.Sprintf("%t\x00%s", option.Enabled, option.SessionName)))
+	digest := sha256.Sum256([]byte(fmt.Sprintf("%t\x00%s\x00%s", option.Enabled, option.SessionName, option.Pwd)))
 	return hex.EncodeToString(digest[:])
 }
 
 // tmuxRemoteCommand intentionally uses only the user's OpenSSH transport and
 // the remote tmux binary. The preflight is kept in the same remote command so
 // a missing tmux never becomes a published Roaminal connection.
-func tmuxRemoteCommand(sessionName, marker string) string {
-	script := fmt.Sprintf(`if ! command -v tmux >/dev/null 2>&1; then
+func tmuxRemoteCommand(sessionName, pwd, marker string) string {
+	return "sh -c " + shellQuote(tmuxRemoteScript(sessionName, pwd, marker))
+}
+
+func tmuxRemoteScript(sessionName, pwd, marker string) string {
+	return fmt.Sprintf(`if ! command -v tmux >/dev/null 2>&1; then
   printf 'Roaminal: tmux command not found\n' >&2
   exit 127
 fi
-tmux ls >/dev/null 2>&1
-status=$?
-if [ "$status" -gt 1 ]; then
+
+configured_pwd=%s
+case "$configured_pwd" in
+  '$HOME')
+    start_dir="$HOME"
+    ;;
+  '$HOME/'*)
+    start_dir="$HOME/${configured_pwd#'$HOME/'}"
+    ;;
+  '~')
+    start_dir="$HOME"
+    ;;
+  '~/'*)
+    start_dir="$HOME/${configured_pwd#'~/'}"
+    ;;
+  /*)
+    start_dir="$configured_pwd"
+    ;;
+  *)
+    printf 'Roaminal: invalid tmux start directory\n' >&2
+    exit 2
+    ;;
+esac
+
+tmux has-session -t %s >/dev/null 2>&1
+session_status=$?
+if [ "$session_status" -gt 1 ]; then
   printf 'Roaminal: tmux session probe failed\n' >&2
-  exit "$status"
+  exit "$session_status"
+fi
+if [ "$session_status" -ne 0 ]; then
+  if ! (cd "$start_dir" >/dev/null 2>&1); then
+    printf 'Roaminal: tmux start directory is not accessible: %%s\n' "$start_dir" >&2
+    exit 1
+  fi
 fi
 printf '\033]777;roaminal;tmux-ready:%s\a'
-exec tmux new-session -A -s %s`, marker, shellQuote(sessionName))
-	return "sh -c " + shellQuote(script)
+exec tmux new-session -A -s %s -c "$start_dir"`, shellQuote(pwd), shellQuote(sessionName), marker, shellQuote(sessionName))
 }
 
 func shellQuote(value string) string {
@@ -61,7 +94,7 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 	now := m.clock.Now().UTC()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName}
 	marker := m.randomToken()
-	argv := []string{m.sshPath, "-tt", "-o", "ControlMaster=yes", "-o", "ControlPersist=yes", "-o", "ControlPath=" + controlPath, "--", alias, tmuxRemoteCommand(option.SessionName, marker)}
+	argv := []string{m.sshPath, "-tt", "-o", "ControlMaster=yes", "-o", "ControlPersist=yes", "-o", "ControlPath=" + controlPath, "--", alias, tmuxRemoteCommand(option.SessionName, option.Pwd, marker)}
 	m.transportPool.mu.Lock()
 	m.transportPool.transports[id] = transport
 	m.transportPool.instances[id] = transport
@@ -103,7 +136,7 @@ func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias strin
 	now := m.clock.Now().UTC()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName, ReuseFromConnectionInstanceID: &sourceID}
 	marker := m.randomToken()
-	argv := []string{m.sshPath, "-tt", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "--", alias, tmuxRemoteCommand(option.SessionName, marker)}
+	argv := []string{m.sshPath, "-tt", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "--", alias, tmuxRemoteCommand(option.SessionName, option.Pwd, marker)}
 	m.transportPool.mu.Lock()
 	if !transportAcceptsReuse(transport) {
 		m.transportPool.mu.Unlock()

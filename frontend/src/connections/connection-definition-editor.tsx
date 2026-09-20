@@ -182,7 +182,7 @@ export function ConnectionDefinitionEditor({ editor, draft, keys, busy, optionsA
               placeholder="$HOME"
             />
           </label>
-          <small className="field-help">Used when the active tmux pane directory cannot be detected. The default is $HOME.</small>
+          <small className="field-help">Used as the initial directory for a newly created tmux session and as the FileSystem fallback when the active tmux pane directory cannot be detected. The default is $HOME.</small>
         </details>
         {(draft.strictHostKeyChecking === 'no' || draft.userKnownHostsFile === '/dev/null') && (
           <div className="risk-warning" role="alert">
