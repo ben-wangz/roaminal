@@ -15,6 +15,12 @@ export type BrowserDialog = {
   defaultPrompt: string;
 };
 
+export type BrowserCopyResult = {
+  text: string;
+  hasSelection: boolean;
+  truncated: boolean;
+};
+
 export type BrowserRuntimeState = {
   status: BrowserRuntimeStatus;
   pageStatus: BrowserPageStatus;
@@ -44,6 +50,10 @@ export type BrowserMessage = {
   error?: string;
   code?: string;
   success?: boolean;
+  requestId?: string;
+  text?: string;
+  hasSelection?: boolean;
+  truncated?: boolean;
   width?: number;
   height?: number;
   sequence?: number;

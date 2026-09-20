@@ -19,22 +19,29 @@ Roaminal Pod.
    assets, redirects, cookies, and an application WebSocket originate from
    the Roaminal Pod. The test browser must see only the Roaminal origin and
    the streamed page surface; it must not issue requests to the fixture.
-4. Verify the toolbar exposes Back, Forward, Reload, page identity, an
-   icon-only Crown primary-client control, and an icon-only Back to terminal
-   action. The page identity shows `Network: Roaminal` and opens the address
-   dialog when clicked. There is no permanent browser address bar. Cancel
-   leaves the current page unchanged. The active Crown has the accessible name
-   `Primary client`.
+4. Verify the toolbar exposes Back, Forward, Reload, page identity, Copy,
+   Paste, an icon-only Crown primary-client control, and an icon-only Back to
+   terminal action. The page identity shows `Network: Roaminal` and opens the
+   address dialog when clicked. There is no permanent browser address bar.
+   Cancel leaves the current page unchanged. The active Crown has the
+   accessible name `Primary client`.
 5. Try invalid, credential-bearing, `file:`, and browser-internal addresses.
    Verify each is rejected without a target request.
 6. Exercise pointer click, drag, wheel, keyboard input, password input,
-   Chinese IME text, and viewport resize. Verify input reaches the fixture
-   page, no terminal receives browser keystrokes, the canvas remains within
-   the workspace, and no local file picker or download is opened. Repeated
-   identical content-host measurements produce no extra resize request. When
-   the host and remote page have different aspect ratios, the complete frame
-   remains visible with letterboxing and pointer coordinates land on the same
-   remote page location.
+   Chinese IME text, local clipboard paste, remote selection copy, and
+   viewport resize. Verify Backspace, Delete, Enter, Tab, arrows, Home, End,
+   PageUp, PageDown, Escape, Insert, function keys, modifier combinations,
+   and printable text reach the fixture page with their key identity intact.
+   Verify Ctrl/Cmd+V and the Paste control insert the local
+   clipboard into the remote page, while Ctrl/Cmd+C and the Copy control place
+   the remote selection in the local clipboard. With no remote selection,
+   Ctrl/Cmd+C keeps its normal remote key behavior. Verify input reaches the
+   fixture page, no terminal receives browser keystrokes, the canvas remains
+   within the workspace, and no local file picker or download is opened.
+   Repeated identical content-host measurements produce no extra resize
+   request. When the host and remote page have different aspect ratios, the
+   complete frame remains visible with letterboxing and pointer coordinates
+   land on the same remote page location.
 7. Switch repeatedly between Browser, Terminal, Connections, and Files while
    a terminal command is running. Browser page state and terminal process
    state remain intact. Settings preserves its unsaved-changes guard and

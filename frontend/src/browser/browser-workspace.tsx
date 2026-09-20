@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Crown, Globe, RefreshCw, Terminal, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardCopy, ClipboardPaste, Crown, Globe, RefreshCw, Terminal, X } from 'lucide-react';
 import type { BrowserRuntime } from './browser-runtime';
 import { useBrowserRuntimeState, validAddress } from './browser-runtime';
 import { Modal } from '../ui/modal';
@@ -83,9 +83,22 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameBoxRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
+  const clipboardShortcutRef = useRef<'copy' | 'paste' | null>(null);
+  const clipboardMessageTimerRef = useRef<number | null>(null);
+  const [clipboardMessage, setClipboardMessage] = useState<string | null>(null);
   const pageOpen = state.pageStatus !== 'none' && state.pageStatus !== 'closed' && Boolean(state.url);
   const firstAddress = state.url || '';
   const openAddress = (url: string) => { runtime.open(url); setDialogOpen(false); };
+
+  const reportClipboard = useCallback((message: string | null) => {
+    if (clipboardMessageTimerRef.current !== null) window.clearTimeout(clipboardMessageTimerRef.current);
+    setClipboardMessage(message);
+    clipboardMessageTimerRef.current = message ? window.setTimeout(() => { clipboardMessageTimerRef.current = null; setClipboardMessage(null); }, 3000) : null;
+  }, []);
+
+  useEffect(() => () => {
+    if (clipboardMessageTimerRef.current !== null) window.clearTimeout(clipboardMessageTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -113,8 +126,9 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
     if (state.pageStatus === 'none' || state.pageStatus === 'closed') {
       setDialogOpen(false);
       setTakeoverDialogOpen(false);
+      reportClipboard(null);
     }
-  }, [state.pageStatus]);
+  }, [reportClipboard, state.pageStatus]);
 
   useEffect(() => {
     if (!active || !frameBoxRef.current) return undefined;
@@ -125,6 +139,47 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
     observer.observe(frameBoxRef.current);
     return () => observer.disconnect();
   }, [active, pageOpen, runtime]);
+
+  const pasteClipboard = useCallback(async () => {
+    try {
+      if (!navigator.clipboard?.readText) throw new Error('clipboard-read-unavailable');
+      const value = await navigator.clipboard.readText();
+      if (!value) {
+        reportClipboard('The local clipboard is empty.');
+        return;
+      }
+      if (!runtime.paste(value)) {
+        reportClipboard('The remote page is not ready for paste.');
+        return;
+      }
+      reportClipboard('Pasted into the remote page.');
+    } catch {
+      reportClipboard('Clipboard access is unavailable.');
+    }
+  }, [reportClipboard, runtime]);
+
+  const copyClipboard = useCallback(async (fallbackKey?: Record<string, unknown>) => {
+    const result = await runtime.copy();
+    if (!result) {
+      reportClipboard('The remote selection could not be copied.');
+      return;
+    }
+    if (!result.hasSelection) {
+      if (fallbackKey) {
+        runtime.input({ ...fallbackKey, event: 'keyDown' });
+        runtime.input({ ...fallbackKey, event: 'keyUp' });
+      }
+      reportClipboard('There is no remote selection to copy.');
+      return;
+    }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard-write-unavailable');
+      await navigator.clipboard.writeText(result.text);
+      reportClipboard(result.truncated ? 'The selection was copied with its length limit applied.' : 'Copied remote selection.');
+    } catch {
+      reportClipboard('Clipboard access is unavailable.');
+    }
+  }, [reportClipboard, runtime]);
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -150,12 +205,40 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
     onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => runtime.input({ kind: 'mouse', event: 'mouseMoved', ...point(event), buttons: event.buttons }),
     onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => runtime.input({ kind: 'mouse', event: 'mouseReleased', ...point(event), button: event.button, buttons: event.buttons }),
     onWheel: (event: React.WheelEvent<HTMLCanvasElement>) => { event.preventDefault(); runtime.input({ kind: 'wheel', ...point(event as unknown as React.PointerEvent<HTMLCanvasElement>), deltaX: event.deltaX, deltaY: event.deltaY }); },
-    onKeyDown: (event: React.KeyboardEvent<HTMLCanvasElement>) => { if (event.key === 'Tab') event.preventDefault(); if (event.nativeEvent.isComposing || composingRef.current || event.nativeEvent.keyCode === 229) return; runtime.input({ kind: 'key', key: event.key, code: event.code, text: event.key.length === 1 ? event.key : '', modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey } }); },
-    onKeyUp: (event: React.KeyboardEvent<HTMLCanvasElement>) => { if (event.nativeEvent.isComposing || composingRef.current || event.nativeEvent.keyCode === 229) return; runtime.input({ kind: 'key', event: 'keyUp', key: event.key, code: event.code, modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey } }); },
+    onKeyDown: (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+      if (event.nativeEvent.isComposing || composingRef.current || event.nativeEvent.keyCode === 229) return;
+      const key = event.key.toLowerCase();
+      const modifiers = { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey };
+      const remoteKey = { kind: 'key', key: event.key, code: event.code, text: '', keyCode: event.nativeEvent.keyCode, location: event.nativeEvent.location, repeat: event.nativeEvent.repeat, isKeypad: event.nativeEvent.location === 3, modifiers };
+      if ((event.ctrlKey || event.metaKey) && key === 'c') {
+        event.preventDefault();
+        clipboardShortcutRef.current = 'copy';
+        void copyClipboard(remoteKey);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && key === 'v') {
+        event.preventDefault();
+        clipboardShortcutRef.current = 'paste';
+        void pasteClipboard();
+        return;
+      }
+      if (event.key === 'Tab' || event.key === ' ' || event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) event.preventDefault();
+      runtime.input({ ...remoteKey, text: event.key.length === 1 ? event.key : '' });
+    },
+    onKeyUp: (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+      const key = event.key.toLowerCase();
+      if (clipboardShortcutRef.current && key === clipboardShortcutRef.current) {
+        event.preventDefault();
+        clipboardShortcutRef.current = null;
+        return;
+      }
+      if (event.nativeEvent.isComposing || composingRef.current || event.nativeEvent.keyCode === 229) return;
+      runtime.input({ kind: 'key', event: 'keyUp', key: event.key, code: event.code, keyCode: event.nativeEvent.keyCode, location: event.nativeEvent.location, repeat: event.nativeEvent.repeat, isKeypad: event.nativeEvent.location === 3, modifiers: { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey } });
+    },
     onCompositionStart: () => { composingRef.current = true; },
     onCompositionEnd: (event: React.CompositionEvent<HTMLCanvasElement>) => { composingRef.current = false; if (event.data) runtime.input({ kind: 'text', text: event.data }); },
     onContextMenu: (event: React.MouseEvent<HTMLCanvasElement>) => event.preventDefault(),
-  }), [point, runtime]);
+  }), [copyClipboard, pasteClipboard, point, runtime]);
 
   return <section className={`browser-workspace ${active ? 'active' : 'inactive'}`} aria-label="Remote browser">
     {pageOpen ? <>
@@ -175,13 +258,15 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
           <Crown size={17} strokeWidth={state.isPrimaryClient ? 2.25 : 1.5} aria-hidden="true" />
         </button>
         <div className="browser-toolbar-actions">
+          <button type="button" className="icon-button" onClick={() => void copyClipboard()} aria-label="Copy remote selection" title="Copy remote selection" disabled={!state.synchronized || state.pageStatus === 'closing'} data-testid="browser-copy"><ClipboardCopy size={17} /></button>
+          <button type="button" className="icon-button" onClick={() => void pasteClipboard()} aria-label="Paste into remote page" title="Paste into remote page" disabled={!state.synchronized || state.pageStatus === 'closing'} data-testid="browser-paste"><ClipboardPaste size={17} /></button>
           <button type="button" className="icon-button browser-close-page" onClick={() => runtime.closePage()} aria-label="Close page" title="Close page" disabled={state.closePending || state.pageStatus === 'closing' || !state.synchronized} data-testid="browser-close-page"><X size={17} /></button>
           <button type="button" className="icon-button" onClick={onBackToTerminal} aria-label="Back to terminal" title="Back to terminal"><Terminal size={17} /></button>
         </div>
       </header>
       <div ref={frameBoxRef} className="browser-frame-wrap"><canvas ref={canvasRef} tabIndex={0} aria-label={state.title || 'Remote page'} {...canvasEvents} />{!state.frame && (state.status === 'connecting' || state.pageStatus === 'loading') && <div className="browser-frame-overlay">Opening remote page...</div>}{state.status === 'reconnecting' && <div className="browser-frame-overlay">Reconnecting...</div>}{state.status === 'error' && <div className="browser-frame-overlay browser-frame-error">{state.error}</div>}{state.pageStatus === 'closing' && <div className="browser-frame-overlay">Closing remote page...</div>}</div>
     </> : <BrowserAddressForm initial={firstAddress} onSubmit={openAddress} />}
-    {pageOpen && <div className="browser-status-line"><span data-status={state.status}>{state.status === 'connected' ? 'Connected' : state.status === 'reconnecting' ? 'Reconnecting' : state.status}</span><span className="browser-primary-status" role={state.primaryError ? 'status' : undefined}>{state.primaryError || (state.viewport ? `${state.viewport.width} × ${state.viewport.height}` : '')}</span></div>}
+    {pageOpen && <div className="browser-status-line"><span data-status={state.status}>{state.status === 'connected' ? 'Connected' : state.status === 'reconnecting' ? 'Reconnecting' : state.status}</span><span className="browser-primary-status" role={clipboardMessage || state.primaryError ? 'status' : undefined}>{clipboardMessage || state.primaryError || (state.viewport ? `${state.viewport.width} × ${state.viewport.height}` : '')}</span></div>}
     {dialogOpen && <div className="browser-dialog-backdrop" role="presentation"><BrowserAddressForm initial={state.url} onSubmit={openAddress} onCancel={() => setDialogOpen(false)} dialog /></div>}
     {takeoverDialogOpen && !state.isPrimaryClient && <PrimaryClientDialog runtime={runtime} onClose={() => setTakeoverDialogOpen(false)} />}
     {state.dialog && <BrowserPageDialog runtime={runtime} dialog={state.dialog} />}

@@ -11,6 +11,8 @@ import {
 export abstract class BrowserRuntimeCore {
   protected abstract handleMessage(data: string, sourceSocket?: WebSocket): void;
 
+  protected onTransportReset(): void {}
+
   protected socket: WebSocket | null = null;
   protected reconnectTimer: number | null = null;
   protected resizeTimer: number | null = null;
@@ -70,6 +72,7 @@ export abstract class BrowserRuntimeCore {
     socket.onclose = (event) => {
       if (this.socket !== socket) return;
       this.socket = null;
+      this.onTransportReset();
       this.clearResizeTimer();
       this.generation = null;
       this.setState((current) => ({ ...current, generation: null, synchronized: false, takeoverPending: false }));
@@ -106,6 +109,7 @@ export abstract class BrowserRuntimeCore {
     const workerChanged = this.lastWorkerGeneration !== null && this.lastWorkerGeneration !== value;
     this.lastWorkerGeneration = value;
     this.generation = value;
+    if (workerChanged) this.onTransportReset();
     this.lastResizeKey = null;
     this.pendingFrame = null;
     this.highestFrameSequence = 0;
@@ -194,6 +198,7 @@ export abstract class BrowserRuntimeCore {
     this.reconnectTimer = null;
     const socket = this.socket;
     this.socket = null;
+    this.onTransportReset();
     if (socket) {
       expectRoaminalWebSocketClose(socket);
       closeRoaminalWebSocket(socket);
@@ -218,6 +223,7 @@ export abstract class BrowserRuntimeCore {
     this.reconnectTimer = null;
     const socket = this.socket;
     this.socket = null;
+    this.onTransportReset();
     if (socket) {
       expectRoaminalWebSocketClose(socket);
       closeRoaminalWebSocket(socket);

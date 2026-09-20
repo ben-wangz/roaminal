@@ -6,12 +6,20 @@ import {
   requestId,
   validAddress,
   viewportKey,
+  type BrowserCopyResult,
   type BrowserDialog,
   type BrowserMessage,
   type BrowserRuntimeState,
 } from './browser-runtime-model';
 
 export class BrowserRuntime extends BrowserRuntimeCore {
+  private readonly pendingCopies = new Map<string, (result: BrowserCopyResult | null) => void>();
+
+  protected onTransportReset(): void {
+    for (const resolve of this.pendingCopies.values()) resolve(null);
+    this.pendingCopies.clear();
+  }
+
   open(address: string): boolean {
     const url = validAddress(address);
     if (!url) {
@@ -165,6 +173,18 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       }));
       return;
     }
+    if (message.type === 'command_result') {
+      const copy = message.requestId ? this.pendingCopies.get(message.requestId) : undefined;
+      if (copy) {
+        this.pendingCopies.delete(message.requestId as string);
+        if (message.success && typeof message.text === 'string') {
+          copy({ text: message.text, hasSelection: message.hasSelection === true, truncated: message.truncated === true });
+        } else {
+          copy(null);
+        }
+        return;
+      }
+    }
     if (message.type === 'command_result' && message.success === false) {
       if (message.pageGeneration && this.stateValue.pageGeneration && message.pageGeneration !== this.stateValue.pageGeneration) return;
       this.setState((current) => ({ ...current, closePending: false, error: message.error || (message.code === 'stale_browser_page' ? 'The remote browser page has changed.' : 'The remote browser command was rejected.') }));
@@ -266,6 +286,36 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'closing') return;
     this.send({ type: 'input', event, pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });
   }
+
+  paste(text: string): boolean {
+    if (!text || !this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing') return false;
+    const codePoints = Array.from(text);
+    const chunkSize = 16 * 1024;
+    let sent = true;
+    for (let offset = 0; offset < codePoints.length; offset += chunkSize) {
+      sent = this.send({
+        type: 'input',
+        event: { kind: 'text', text: codePoints.slice(offset, offset + chunkSize).join('') },
+        pageGeneration: this.stateValue.pageGeneration,
+        pageOperation: this.stateValue.pageOperation,
+        requestId: requestId(),
+      }) && sent;
+    }
+    return sent;
+  }
+
+  copy(): Promise<BrowserCopyResult | null> {
+    if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing') return Promise.resolve(null);
+    const copyRequestID = requestId();
+    return new Promise((resolve) => {
+      this.pendingCopies.set(copyRequestID, resolve);
+      if (!this.send({ type: 'copy', pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: copyRequestID })) {
+        this.pendingCopies.delete(copyRequestID);
+        resolve(null);
+      }
+    });
+  }
+
   handleDialog(accept: boolean, promptText = ''): void {
     if (!this.stateValue.synchronized || !this.stateValue.pageGeneration || !this.stateValue.dialog || this.stateValue.pageStatus === 'closing') return;
     this.send({ type: 'dialog', accept, promptText, dialogId: this.stateValue.dialog.dialogId, pageGeneration: this.stateValue.pageGeneration, pageOperation: this.stateValue.pageOperation, requestId: requestId() });

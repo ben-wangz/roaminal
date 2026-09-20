@@ -144,6 +144,29 @@ describe('browser address validation', () => {
     expect(socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).filter((value) => value.type === 'close')).toHaveLength(1);
   });
 
+  it('bridges remote selection copy results and local clipboard paste input', async () => {
+    globalThis.WebSocket = FakeBrowserWebSocket as unknown as typeof WebSocket;
+    Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' }, window: globalThis });
+    const values = new Map<string, string>([['roaminal_auth_state', JSON.stringify({ accessToken: 'access', refreshToken: 'refresh' })]]);
+    Object.assign(globalThis, { localStorage: { getItem: (key: string) => values.get(key) || null, setItem: () => undefined, removeItem: () => undefined, clear: () => undefined, key: () => null, length: 1 } as unknown as Storage });
+
+    const runtime = new BrowserRuntime();
+    runtime.visibility(true);
+    const socket = FakeBrowserWebSocket.instances[0];
+    socket.open();
+    socket.message(JSON.stringify({ type: 'state', pageStatus: 'ready', pageGeneration: 'page-one', pageOperation: 1, revision: 1, generation: 'worker-one', url: 'https://fixture.test/', title: 'Fixture', width: 800, height: 600 }));
+    const copyPromise = runtime.copy();
+    const copyCommand = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).find((value) => value.type === 'copy');
+    expect(copyCommand).toMatchObject({ pageGeneration: 'page-one', pageOperation: 1 });
+    socket.message(JSON.stringify({ type: 'command_result', requestId: copyCommand?.requestId, success: true, text: 'remote text', hasSelection: true, truncated: false }));
+    await expect(copyPromise).resolves.toEqual({ text: 'remote text', hasSelection: true, truncated: false });
+
+    expect(runtime.paste('local\ntext')).toBe(true);
+    const pasteCommand = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).find((value) => value.type === 'input' && (value.event as Record<string, unknown>)?.kind === 'text');
+    expect(pasteCommand).toMatchObject({ pageGeneration: 'page-one', pageOperation: 1, event: { kind: 'text', text: 'local\ntext' } });
+    runtime.dispose();
+  });
+
   it('waits for the authoritative snapshot before sending a queued open', () => {
     globalThis.WebSocket = FakeBrowserWebSocket as unknown as typeof WebSocket;
     Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' }, window: globalThis });

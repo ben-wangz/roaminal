@@ -34,7 +34,7 @@ func (m *Manager) command(current *viewer, data []byte) error {
 		return m.closePage(current, command)
 	case "sync":
 		return m.syncUnlocked(current)
-	case "back", "forward", "reload", "input", "dialog", "ping":
+	case "back", "forward", "reload", "input", "copy", "dialog", "ping":
 		if typ == "ping" {
 			return m.forwardCommand(current, command)
 		}

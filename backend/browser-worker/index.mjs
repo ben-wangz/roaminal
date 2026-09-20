@@ -5,6 +5,7 @@ import {
   announce,
   captureFrame,
   commandResult,
+  copySelection,
   input,
   navigate,
   navigateHistory,
@@ -72,6 +73,9 @@ async function command(message) {
       commandResult(message, false, { code: 'input_failed', error: error instanceof Error ? error.message : 'Browser input failed.' });
     }
     return undefined;
+  }
+  if (message.type === 'copy') {
+    return copySelection(message);
   }
   if (message.type === 'dialog') {
     if (!validCurrentPage(message, true) || !state.dialogState || message.dialogId !== state.dialogState.dialogId) {
