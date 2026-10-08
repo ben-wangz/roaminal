@@ -41,6 +41,8 @@ func (m *Manager) command(current *viewer, data []byte) error {
 		return m.forwardPageCommand(current, command)
 	case "resize":
 		return m.resize(current, command)
+	case "settings":
+		return m.configureDisplay(current, command)
 	case "visibility":
 		return m.visibility(current, command)
 	default:

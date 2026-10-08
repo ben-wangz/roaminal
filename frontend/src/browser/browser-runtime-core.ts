@@ -4,6 +4,7 @@ import {
   requestId,
   RESIZE_COALESCE_MS,
   viewportKey,
+  DEFAULT_BROWSER_DISPLAY_SETTINGS,
   type BrowserCopyResult,
   type BrowserMessage,
   type BrowserRuntimeState,
@@ -37,7 +38,7 @@ export abstract class BrowserRuntimeCore {
   protected frameSequence = 0;
   protected readonly clientId = requestId();
   protected stateValue: BrowserRuntimeState = {
-    status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
+    status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, displaySettings: DEFAULT_BROWSER_DISPLAY_SETTINGS, frame: null, dialog: null,
     generation: null, pageGeneration: null, pageOperation: 0, revision: 0, synchronized: false, closePending: false,
     isPrimaryClient: true, primaryError: null, takeoverPending: false,
   };
@@ -131,6 +132,7 @@ export abstract class BrowserRuntimeCore {
       url: '',
       error: null,
       viewport: null,
+      displaySettings: DEFAULT_BROWSER_DISPLAY_SETTINGS,
       frame: null,
       dialog: null,
       synchronized: false,
@@ -210,7 +212,7 @@ export abstract class BrowserRuntimeCore {
   }
 
   protected scheduleResize(): void {
-    if (this.resizeTimer !== null || !this.stateValue.synchronized || !this.stateValue.isPrimaryClient || !this.latestResize || !this.generation || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing') return;
+    if (this.resizeTimer !== null || this.stateValue.displaySettings.viewportMode !== 'auto' || !this.stateValue.synchronized || !this.stateValue.isPrimaryClient || !this.latestResize || !this.generation || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing') return;
     this.resizeTimer = window.setTimeout(() => {
       this.resizeTimer = null;
       this.flushResize(false);
@@ -218,7 +220,9 @@ export abstract class BrowserRuntimeCore {
   }
 
   protected flushResize(takeover: boolean): boolean {
-    const size = this.latestResize || (this.stateValue.viewport ? { ...this.stateValue.viewport } : null);
+    const size = this.stateValue.displaySettings.viewportMode === 'fixed'
+      ? (this.stateValue.viewport ? { ...this.stateValue.viewport } : null)
+      : (this.latestResize || (this.stateValue.viewport ? { ...this.stateValue.viewport } : null));
     if (!size || !this.stateValue.synchronized || !this.generation || this.stateValue.pageStatus === 'closing' || this.socket?.readyState !== WebSocket.OPEN) return false;
     if (!takeover && !this.stateValue.isPrimaryClient) return false;
     if (!takeover && viewportKey(size) === this.lastResizeKey) return true;
@@ -250,7 +254,7 @@ export abstract class BrowserRuntimeCore {
       closeRoaminalWebSocket(socket);
     }
     this.setState(() => ({
-      status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, frame: null, dialog: null,
+      status: 'idle', pageStatus: 'none', title: '', url: '', error: null, viewport: null, displaySettings: DEFAULT_BROWSER_DISPLAY_SETTINGS, frame: null, dialog: null,
       generation: null, pageGeneration: null, pageOperation: 0, revision: 0, synchronized: false, closePending: false,
       isPrimaryClient: true, primaryError: null, takeoverPending: false,
     }));

@@ -25,9 +25,9 @@ const (
 	browserCommandTimeout = 20 * time.Second
 
 	minViewportWidth  = 1
-	maxViewportWidth  = 3840
+	maxViewportWidth  = 1920
 	minViewportHeight = 1
-	maxViewportHeight = 2160
+	maxViewportHeight = 1080
 )
 
 type viewportSize struct {
@@ -61,6 +61,7 @@ type process struct {
 	pageTitle      string
 	pageError      string
 	pageDialog     map[string]any
+	display        browserDisplaySettings
 	latestFrame    []byte
 	pending        map[string]*pendingBrowserRequest
 }
@@ -166,8 +167,8 @@ func (m *Manager) Handle(ctx context.Context, w http.ResponseWriter, r *http.Req
 			if err := m.command(viewer, command); err != nil {
 				// Browser commands that can be rejected by another viewer are
 				// reported on the WebSocket and do not tear down the viewer.
-				if isResizeCommand(command) {
-					m.sendCommandError(viewer, err)
+				if isResizeCommand(command) || isDisplaySettingsCommand(command) {
+					m.sendCommandError(viewer, err, isDisplaySettingsCommand(command))
 					continue
 				}
 				_ = conn.Close(websocket.StatusPolicyViolation, err.Error())

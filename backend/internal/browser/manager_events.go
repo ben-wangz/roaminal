@@ -96,6 +96,10 @@ func (m *Manager) broadcastEvent(runtime *process, data []byte) {
 		if width, ok := integerField(event["width"]); ok {
 			if height, ok := integerField(event["height"]); ok {
 				runtime.viewport = normalizeViewport(viewportSize{Width: width, Height: height})
+				display := runtime.displaySettings()
+				event["viewportMode"] = display.viewportMode
+				event["frameRate"] = display.frameRate
+				event["quality"] = display.quality
 			}
 		}
 	}
@@ -141,6 +145,9 @@ func (m *Manager) stateEventLocked(current *viewer) map[string]any {
 		"generation":     current.runtime.generation,
 		"width":          current.runtime.viewport.Width,
 		"height":         current.runtime.viewport.Height,
+		"viewportMode":   current.runtime.displaySettings().viewportMode,
+		"frameRate":      current.runtime.displaySettings().frameRate,
+		"quality":        current.runtime.displaySettings().quality,
 		"pageStatus":     pageStatus,
 		"pageGeneration": current.runtime.pageGeneration,
 		"pageOperation":  current.runtime.pageOperation,

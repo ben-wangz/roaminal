@@ -119,6 +119,52 @@ describe('browser address validation', () => {
     runtime.dispose();
   });
 
+  it('sends the first measured automatic viewport after the page becomes synchronized', async () => {
+    globalThis.WebSocket = FakeBrowserWebSocket as unknown as typeof WebSocket;
+    Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' }, window: globalThis });
+    const values = new Map<string, string>([['roaminal_auth_state', JSON.stringify({ accessToken: 'access', refreshToken: 'refresh' })]]);
+    Object.assign(globalThis, { localStorage: { getItem: (key: string) => values.get(key) || null, setItem: () => undefined, removeItem: () => undefined, clear: () => undefined, key: () => null, length: 1 } as unknown as Storage });
+
+    const runtime = new BrowserRuntime();
+    runtime.visibility(true);
+    runtime.open('http://service.namespace:8080');
+    runtime.resize(1460, 820);
+    const socket = FakeBrowserWebSocket.instances[0];
+    socket.open();
+    socket.message(JSON.stringify({ type: 'state', pageStatus: 'none', generation: 'worker-one', width: 1280, height: 720 }));
+    expect(socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).filter((value) => value.type === 'resize')).toHaveLength(0);
+    socket.message(JSON.stringify({ type: 'state', pageStatus: 'loading', pageGeneration: 'page-one', generation: 'worker-one', url: 'http://service.namespace:8080/', width: 1280, height: 720 }));
+    await settleResize();
+    const firstResize = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).find((value) => value.type === 'resize');
+    expect(firstResize).toMatchObject({ width: 1460, height: 820, generation: 'worker-one', primaryIntent: true });
+    runtime.dispose();
+  });
+
+  it('applies fixed viewport and capture controls only through shared settings', async () => {
+    globalThis.WebSocket = FakeBrowserWebSocket as unknown as typeof WebSocket;
+    Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' }, window: globalThis });
+    const values = new Map<string, string>([['roaminal_auth_state', JSON.stringify({ accessToken: 'access', refreshToken: 'refresh' })]]);
+    Object.assign(globalThis, { localStorage: { getItem: (key: string) => values.get(key) || null, setItem: () => undefined, removeItem: () => undefined, clear: () => undefined, key: () => null, length: 1 } as unknown as Storage });
+
+    const runtime = new BrowserRuntime();
+    runtime.visibility(true);
+    const socket = FakeBrowserWebSocket.instances[0];
+    socket.open();
+    socket.message(JSON.stringify({ type: 'state', pageStatus: 'ready', pageGeneration: 'page-one', generation: 'worker-one', url: 'https://fixture.test/', width: 1280, height: 720, primary: true }));
+    expect(runtime.configureDisplay({ viewportMode: 'fixed', frameRate: 10, quality: 55 }, { width: 1440, height: 900 })).toBe(true);
+    const fixedCommand = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).find((value) => value.type === 'settings');
+    expect(fixedCommand).toMatchObject({ viewportMode: 'fixed', width: 1440, height: 900, frameRate: 10, quality: 55, primaryIntent: true });
+    socket.message(JSON.stringify({ type: 'state', pageStatus: 'ready', pageGeneration: 'page-one', generation: 'worker-one', url: 'https://fixture.test/', width: 1440, height: 900, viewportMode: 'fixed', frameRate: 10, quality: 55, primary: true }));
+    runtime.resize(1600, 900);
+    await settleResize();
+    expect(socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).filter((value) => value.type === 'resize')).toHaveLength(0);
+    expect(runtime.getSnapshot()).toMatchObject({ displaySettings: { viewportMode: 'fixed', frameRate: 10, quality: 55 }, viewport: { width: 1440, height: 900 } });
+    expect(runtime.configureDisplay({ viewportMode: 'fixed', frameRate: 15, quality: 70 }, { width: 1440, height: 900 })).toBe(true);
+    const settings = socket.sent.map((value) => JSON.parse(value) as Record<string, unknown>).filter((value) => value.type === 'settings').at(-1);
+    expect(settings).toMatchObject({ viewportMode: 'fixed', width: 1440, height: 900, frameRate: 15, quality: 70 });
+    runtime.dispose();
+  });
+
   it('attaches without a local URL, closes explicitly, and never closes on stop', () => {
     globalThis.WebSocket = FakeBrowserWebSocket as unknown as typeof WebSocket;
     Object.assign(globalThis, { location: { protocol: 'https:', host: 'roaminal.test' }, window: globalThis });

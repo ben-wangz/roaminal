@@ -6,11 +6,13 @@ import {
   captureFrame,
   commandResult,
   copySelection,
+  configureDisplay,
   input,
   navigate,
   navigateHistory,
   setViewport,
   shutdown,
+  setLifecycleState,
   startScreencast,
   stopScreencast,
   validCurrentPage,
@@ -59,11 +61,16 @@ async function command(message) {
     state.desiredVisibility = Boolean(message.visible);
     if (!state.pageSession) return undefined;
     if (message.visible) {
+      await setLifecycleState('active');
       await startScreencast();
       if (!state.dialogState) await captureFrame();
-    } else await stopScreencast();
+    } else {
+      await stopScreencast();
+      await setLifecycleState('frozen');
+    }
     return undefined;
   }
+  if (message.type === 'settings') return configureDisplay(message);
   if (message.type === 'input') {
     if (!validCurrentPage(message)) return undefined;
     try {

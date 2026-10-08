@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ClipboardCopy, ClipboardPaste, Crown, Globe, RefreshCw, Terminal, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardCopy, ClipboardPaste, Crown, Globe, RefreshCw, SlidersHorizontal, Terminal, X } from 'lucide-react';
 import type { BrowserRuntime } from './browser-runtime';
 import { useBrowserRuntimeState, validAddress } from './browser-runtime';
 import { Modal } from '../ui/modal';
@@ -87,8 +87,25 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
   const clipboardMessageTimerRef = useRef<number | null>(null);
   const [clipboardMessage, setClipboardMessage] = useState<string | null>(null);
   const pageOpen = state.pageStatus !== 'none' && state.pageStatus !== 'closed' && Boolean(state.url);
+  const displayControlsDisabled = !state.synchronized || !state.isPrimaryClient || state.pageStatus === 'closing';
   const firstAddress = state.url || '';
   const openAddress = (url: string) => { runtime.open(url); setDialogOpen(false); };
+  const configurePageSize = (value: string) => {
+    if (value === 'auto') {
+      runtime.configureDisplay({ ...state.displaySettings, viewportMode: 'auto' });
+      return;
+    }
+    const [width, height] = value.split('x').map(Number);
+    runtime.configureDisplay({ ...state.displaySettings, viewportMode: 'fixed' }, { width, height });
+  };
+  const configureFrameRate = (value: string) => {
+    const frameRate = Number(value);
+    if (frameRate === 5 || frameRate === 10 || frameRate === 15) runtime.configureDisplay({ ...state.displaySettings, frameRate }, state.viewport || undefined);
+  };
+  const configureQuality = (value: string) => {
+    const quality = Number(value);
+    if (quality === 40 || quality === 55 || quality === 70) runtime.configureDisplay({ ...state.displaySettings, quality }, state.viewport || undefined);
+  };
 
   const reportClipboard = useCallback((message: string | null) => {
     if (clipboardMessageTimerRef.current !== null) window.clearTimeout(clipboardMessageTimerRef.current);
@@ -263,6 +280,37 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
           <button type="button" className="icon-button browser-close-page" onClick={() => runtime.closePage()} aria-label="Close page" title="Close page" disabled={state.closePending || state.pageStatus === 'closing' || !state.synchronized} data-testid="browser-close-page"><X size={17} /></button>
           <button type="button" className="icon-button" onClick={onBackToTerminal} aria-label="Back to terminal" title="Back to terminal"><Terminal size={17} /></button>
         </div>
+        <details className="browser-display-menu">
+          <summary className="icon-button" aria-label="Browser display settings" title="Browser display settings" data-testid="browser-display-settings"><SlidersHorizontal size={17} /></summary>
+          <div className="browser-display-panel">
+            <label>
+              <span>Page size</span>
+              <select aria-label="Page size" value={state.displaySettings.viewportMode === 'auto' ? 'auto' : `${state.viewport?.width || 1280}x${state.viewport?.height || 720}`} onChange={(event) => configurePageSize(event.target.value)} disabled={displayControlsDisabled}>
+                <option value="auto">Automatic</option>
+                <option value="1280x720">1280 × 720</option>
+                <option value="1440x900">1440 × 900</option>
+                <option value="1600x900">1600 × 900</option>
+                <option value="1920x1080">1920 × 1080</option>
+              </select>
+            </label>
+            <label>
+              <span>Frame rate</span>
+              <select aria-label="Frame rate" value={state.displaySettings.frameRate} onChange={(event) => configureFrameRate(event.target.value)} disabled={displayControlsDisabled}>
+                <option value="5">5 fps</option>
+                <option value="10">10 fps</option>
+                <option value="15">15 fps</option>
+              </select>
+            </label>
+            <label>
+              <span>Image quality</span>
+              <select aria-label="Image quality" value={state.displaySettings.quality} onChange={(event) => configureQuality(event.target.value)} disabled={displayControlsDisabled}>
+                <option value="40">Low · 40%</option>
+                <option value="55">Balanced · 55%</option>
+                <option value="70">High · 70%</option>
+              </select>
+            </label>
+          </div>
+        </details>
       </header>
       <div ref={frameBoxRef} className="browser-frame-wrap"><canvas ref={canvasRef} tabIndex={0} aria-label={state.title || 'Remote page'} {...canvasEvents} />{!state.frame && (state.status === 'connecting' || state.pageStatus === 'loading') && <div className="browser-frame-overlay">Opening remote page...</div>}{state.status === 'reconnecting' && <div className="browser-frame-overlay">Reconnecting...</div>}{state.status === 'error' && <div className="browser-frame-overlay browser-frame-error">{state.error}</div>}{state.pageStatus === 'closing' && <div className="browser-frame-overlay">Closing remote page...</div>}</div>
     </> : <BrowserAddressForm initial={firstAddress} onSubmit={openAddress} />}

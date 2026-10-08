@@ -17,6 +17,8 @@ export const state = {
   lifecycleEventsEnabled: false,
   sequence: 0,
   lastFrameAt: 0,
+  frameRate: 10,
+  quality: 55,
   screencasting: false,
   blockedNavigation: false,
   desiredVisibility: false,

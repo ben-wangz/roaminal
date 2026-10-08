@@ -21,6 +21,18 @@ export type BrowserCopyResult = {
   truncated: boolean;
 };
 
+export type BrowserDisplaySettings = {
+  viewportMode: 'auto' | 'fixed';
+  frameRate: 5 | 10 | 15;
+  quality: 40 | 55 | 70;
+};
+
+export const DEFAULT_BROWSER_DISPLAY_SETTINGS: BrowserDisplaySettings = {
+  viewportMode: 'auto',
+  frameRate: 10,
+  quality: 55,
+};
+
 export type BrowserRuntimeState = {
   status: BrowserRuntimeStatus;
   pageStatus: BrowserPageStatus;
@@ -28,6 +40,7 @@ export type BrowserRuntimeState = {
   url: string;
   error: string | null;
   viewport: { width: number; height: number } | null;
+  displaySettings: BrowserDisplaySettings;
   frame: BrowserFrame | null;
   dialog: BrowserDialog | null;
   generation: string | null;
@@ -56,6 +69,9 @@ export type BrowserMessage = {
   truncated?: boolean;
   width?: number;
   height?: number;
+  viewportMode?: BrowserDisplaySettings['viewportMode'];
+  frameRate?: number;
+  quality?: number;
   sequence?: number;
   data?: string;
   generation?: string;
@@ -74,9 +90,9 @@ export type BrowserMessage = {
 export type ViewportSize = { width: number; height: number };
 
 const MIN_VIEWPORT_WIDTH = 1;
-const MAX_VIEWPORT_WIDTH = 3840;
+const MAX_VIEWPORT_WIDTH = 1920;
 const MIN_VIEWPORT_HEIGHT = 1;
-const MAX_VIEWPORT_HEIGHT = 2160;
+const MAX_VIEWPORT_HEIGHT = 1080;
 export const RESIZE_COALESCE_MS = 16;
 
 export function requestId(): string {

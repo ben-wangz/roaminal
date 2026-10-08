@@ -20,16 +20,20 @@ Roaminal Pod.
    the Roaminal Pod. The test browser must see only the Roaminal origin and
    the streamed page surface; it must not issue requests to the fixture.
 4. Verify the toolbar exposes Back, Forward, Reload, page identity, Copy,
-   Paste, an icon-only Crown primary-client control, and an icon-only Back to
-   terminal action. The page identity shows `Network: Roaminal` and opens the
-   address dialog when clicked. There is no permanent browser address bar.
-   Cancel leaves the current page unchanged. The active Crown has the
-   accessible name `Primary client`.
+   Paste, the icon-only Crown primary-client control, display settings, and an
+   icon-only Back to terminal action. The page identity shows `Network:
+   Roaminal` and opens the address dialog when clicked. There is no permanent
+   browser address bar. Cancel leaves the current page unchanged. The active
+   Crown has the accessible name `Primary client`. Display settings expose
+   page size, frame rate, and image quality; secondary clients can inspect but
+   cannot change them.
 5. Try invalid, credential-bearing, `file:`, and browser-internal addresses.
    Verify each is rejected without a target request.
-6. Exercise pointer click, drag, wheel, keyboard input, password input,
-   Chinese IME text, local clipboard paste, remote selection copy, and
-   viewport resize. Verify Backspace, Delete, Enter, Tab, arrows, Home, End,
+6. On first open, verify the remote viewport follows the active browser
+   workspace dimensions after the initial page state synchronizes. Exercise
+   pointer click, drag, wheel, keyboard input, password input, Chinese IME
+   text, local clipboard paste, remote selection copy, and viewport resize.
+   Verify Backspace, Delete, Enter, Tab, arrows, Home, End,
    PageUp, PageDown, Escape, Insert, function keys, modifier combinations,
    and printable text reach the fixture page with their key identity intact.
    Verify Ctrl/Cmd+V and the Paste control insert the local
@@ -39,9 +43,12 @@ Roaminal Pod.
    fixture page, no terminal receives browser keystrokes, the canvas remains
    within the workspace, and no local file picker or download is opened.
    Repeated identical content-host measurements produce no extra resize
-   request. When the host and remote page have different aspect ratios, the
-   complete frame remains visible with letterboxing and pointer coordinates
-   land on the same remote page location.
+   request. Select a fixed page-size preset and resize the local workspace;
+   the remote viewport remains at the selected dimensions until returning to
+   Automatic. Verify the 5, 10, and 15 fps options and Low, Balanced, and High
+   image quality options update the shared stream. When the host and remote
+   page have different aspect ratios, the complete frame remains visible with
+   letterboxing and pointer coordinates land on the same remote page location.
 7. Switch repeatedly between Browser, Terminal, Connections, and Files while
    a terminal command is running. Browser page state and terminal process
    state remain intact. Settings preserves its unsaved-changes guard and
@@ -52,17 +59,20 @@ Roaminal Pod.
    clients receive the same frames and page state. The first client whose
    valid resize is accepted has an active Crown; the other receives a
    `not_primary_client` response, changes to the inactive `Set as primary
-   client` Crown, and sends no further automatic resize requests. Clicking the
-   inactive Crown opens `Take over primary client?`; Cancel sends nothing.
-   Confirming `Take over` sends one takeover resize using the latest measured
-   dimensions. On success the new client becomes primary and later unique
-   sizes are applied. A failed takeover leaves it inactive without a retry
-   loop.
+   client` Crown, and sends no further automatic resize or display-setting
+   changes. Its display controls are disabled. Clicking the inactive Crown
+   opens `Take over primary client?`; Cancel sends nothing. Confirming `Take
+   over` sends one takeover resize using the latest measured dimensions in
+   Automatic mode, or retains the shared fixed dimensions in Fixed mode. On
+   success the new client becomes primary and later permitted changes apply.
+   A failed takeover leaves it inactive without a retry loop.
 9. While the page is open, switch each client through Terminal, Connections,
    Files, and Settings, including a Settings remount and an unsaved-change
    guard. Returning to Browser shows the same URL, history, cookies, form
-   values, and content. No workspace switch, client disconnect, refresh, or
-   WebSocket cleanup sends a browser `close` command.
+   values, and content. Hidden pages stop receiving frames and are frozen when
+   Chromium supports lifecycle freezing; returning to Browser resumes them.
+   No workspace switch, client disconnect, refresh, or WebSocket cleanup sends
+   a browser `close` command.
 10. Click the icon-only `Close page` button from either client, including from
    a non-primary client while the other client is hidden or reconnecting.
    Verify both clients receive the global closed lifecycle event, clear the

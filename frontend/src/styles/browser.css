@@ -13,6 +13,15 @@
 .browser-primary-client.inactive { color: var(--muted); }
 .browser-primary-client.inactive:hover:not(:disabled), .browser-primary-client.inactive:focus-visible { color: var(--yellow); }
 .browser-primary-client:disabled { cursor: wait; opacity: .55; }
+.browser-display-menu { position: relative; flex: 0 0 34px; }
+.browser-display-menu > summary { list-style: none; cursor: pointer; }
+.browser-display-menu > summary::-webkit-details-marker { display: none; }
+.browser-display-menu > summary:focus-visible { outline: 1px solid var(--cyan); outline-offset: 1px; }
+.browser-display-menu[open] > summary { color: var(--cyan); background: var(--hover-wash); }
+.browser-display-panel { position: absolute; z-index: 9; top: calc(100% + 8px); right: 0; width: min(276px, calc(100vw - 20px)); display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-1); box-shadow: 0 12px 32px rgba(0,0,0,.34); }
+.browser-display-panel label { min-width: 0; display: grid; grid-template-columns: minmax(78px, 1fr) minmax(126px, 1.25fr); align-items: center; gap: 8px; color: var(--text); font-size: .68rem; }
+.browser-display-panel select { width: 100%; min-width: 0; min-height: 32px; border: 1px solid var(--border); background: var(--base); color: var(--text-bright); padding: 0 7px; font-size: .67rem; }
+.browser-display-panel select:disabled { cursor: not-allowed; opacity: .55; }
 .browser-close-page { flex: 0 0 34px; }
 .browser-close-page:disabled { cursor: wait; opacity: .55; }
 .browser-frame-wrap { position: relative; min-width: 0; min-height: 0; flex: 1 1 auto; display: grid; place-items: center; overflow: hidden; background: #111; }
@@ -46,6 +55,9 @@
 .browser-takeover-dialog p { margin: 0; color: var(--text); font-size: .75rem; line-height: 1.5; }
 @media (max-width: 600px) {
   .browser-toolbar { gap: 3px; padding-inline: 6px; }
+  .browser-navigation .icon-button, .browser-toolbar-actions .icon-button, .browser-primary-client, .browser-display-menu, .browser-display-menu > summary { width: 28px; height: 28px; flex-basis: 28px; }
+  .browser-navigation, .browser-toolbar-actions { gap: 0; }
+  .browser-display-menu { flex: 0 0 28px; }
   .browser-page-identity { padding-inline: 5px; }
   .browser-address-panel { padding: 20px 16px; }
 }

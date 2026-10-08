@@ -74,6 +74,9 @@ func (m *Manager) resize(current *viewer, command map[string]json.RawMessage) er
 		m.rejectResize(current, "not_primary_client", "Another browser client controls the viewport.", generation, size)
 		return nil
 	}
+	if runtime.displaySettings().viewportMode == "fixed" {
+		size = runtime.viewport
+	}
 	previousPrimary := m.primary
 	previousPrimaryKnown := m.primaryKnown
 	m.primary = current.clientID
@@ -93,12 +96,15 @@ func (m *Manager) resize(current *viewer, command map[string]json.RawMessage) er
 		m.broadcastPrimaryLocked()
 	}
 	m.enqueueLocked(current, map[string]any{
-		"type":       "resize_accepted",
-		"generation": runtime.generation,
-		"width":      size.Width,
-		"height":     size.Height,
-		"primary":    true,
-		"takeover":   takeover,
+		"type":         "resize_accepted",
+		"generation":   runtime.generation,
+		"width":        size.Width,
+		"height":       size.Height,
+		"viewportMode": runtime.displaySettings().viewportMode,
+		"frameRate":    runtime.displaySettings().frameRate,
+		"quality":      runtime.displaySettings().quality,
+		"primary":      true,
+		"takeover":     takeover,
 	})
 	m.mu.Unlock()
 	return nil
@@ -112,9 +118,13 @@ func (m *Manager) rejectResize(current *viewer, code, message, generation string
 	}
 	event := map[string]any{"type": "resize_rejected", "code": code, "error": message, "primary": false}
 	if current.runtime == m.process {
+		settings := current.runtime.displaySettings()
 		event["generation"] = current.runtime.generation
 		event["width"] = current.runtime.viewport.Width
 		event["height"] = current.runtime.viewport.Height
+		event["viewportMode"] = settings.viewportMode
+		event["frameRate"] = settings.frameRate
+		event["quality"] = settings.quality
 	} else {
 		if generation != "" {
 			event["generation"] = generation
@@ -127,13 +137,19 @@ func (m *Manager) rejectResize(current *viewer, code, message, generation string
 	m.enqueueLocked(current, event)
 }
 
-func (m *Manager) sendCommandError(current *viewer, err error) {
+func (m *Manager) sendCommandError(current *viewer, err error, settings bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.viewers[current]; !ok {
 		return
 	}
-	m.enqueueLocked(current, map[string]any{"type": "error", "error": err.Error(), "code": "invalid_browser_command"})
+	typ := "error"
+	code := "invalid_browser_command"
+	if settings {
+		typ = "settings_rejected"
+		code = "browser_worker_unavailable"
+	}
+	m.enqueueLocked(current, map[string]any{"type": typ, "error": err.Error(), "code": code})
 }
 
 func isResizeCommand(data []byte) bool {
@@ -141,4 +157,11 @@ func isResizeCommand(data []byte) bool {
 		Type string `json:"type"`
 	}
 	return json.Unmarshal(data, &command) == nil && command.Type == "resize"
+}
+
+func isDisplaySettingsCommand(data []byte) bool {
+	var command struct {
+		Type string `json:"type"`
+	}
+	return json.Unmarshal(data, &command) == nil && command.Type == "settings"
 }

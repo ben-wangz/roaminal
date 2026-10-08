@@ -52,7 +52,7 @@ func (m *Manager) ensureProcess() (*process, error) {
 	if err != nil || generation == "" {
 		generation = fmt.Sprintf("browser-%d", time.Now().UnixNano())
 	}
-	runtime := &process{cmd: cmd, stdin: stdin, generation: generation, viewport: viewportSize{Width: 1280, Height: 720}, pageStatus: "none", pending: make(map[string]*pendingBrowserRequest)}
+	runtime := &process{cmd: cmd, stdin: stdin, generation: generation, viewport: viewportSize{Width: 1280, Height: 720}, pageStatus: "none", display: defaultBrowserDisplaySettings(), pending: make(map[string]*pendingBrowserRequest)}
 	m.process = runtime
 	m.primary = ""
 	m.primaryKnown = false

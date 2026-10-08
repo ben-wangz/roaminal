@@ -56,6 +56,7 @@ async function setupPage() {
     state.lifecycleEventsEnabled = false;
   }
   await setViewport(viewport.width, viewport.height);
+  await setLifecycleState(state.desiredVisibility ? 'active' : 'frozen');
   if (state.desiredVisibility) await startScreencast();
   await announce('state');
 }
@@ -66,8 +67,8 @@ export async function ensurePage() {
 }
 
 export async function setViewport(width, height) {
-  viewport.width = Math.max(1, Math.min(3840, Math.round(width)));
-  viewport.height = Math.max(1, Math.min(2160, Math.round(height)));
+  viewport.width = Math.max(1, Math.min(1920, Math.round(width)));
+  viewport.height = Math.max(1, Math.min(1080, Math.round(height)));
   if (state.cdp && state.pageSession) await state.cdp.send('Emulation.setDeviceMetricsOverride', { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: false }, state.pageSession);
   emit({ type: 'viewport', pageOperation: state.pageOperation, width: viewport.width, height: viewport.height });
 }
@@ -96,7 +97,7 @@ export async function captureFrame() {
   const generation = state.pageGeneration;
   const operation = state.pageOperation;
   if (!connection || !session) return;
-  const result = await connection.send('Page.captureScreenshot', { format: 'jpeg', quality: 70, fromSurface: true }, session);
+  const result = await connection.send('Page.captureScreenshot', { format: 'jpeg', quality: state.quality, fromSurface: true }, session);
   if (state.cdp === connection && state.pageSession === session && state.pageGeneration === generation && state.pageOperation === operation && result.data && state.pageStatus !== 'closed' && state.pageStatus !== 'none') emit({ type: 'frame', sequence: ++state.sequence, revision: state.pageRevision, pageGeneration: state.pageGeneration, pageOperation: state.pageOperation, width: viewport.width, height: viewport.height, data: result.data });
 }
 
@@ -122,7 +123,10 @@ export function commandResult(message, success, extra = {}) {
 
 export async function startScreencast() {
   if (state.screencasting || !state.cdp || !state.pageSession) return;
-  await state.cdp.send('Page.startScreencast', { format: 'jpeg', quality: 70, maxWidth: 3840, maxHeight: 2160, everyNthFrame: 1 }, state.pageSession);
+  await state.cdp.send('Page.startScreencast', {
+    format: 'jpeg', quality: state.quality, maxWidth: 1920, maxHeight: 1080,
+    everyNthFrame: Math.max(1, Math.floor(60 / state.frameRate)),
+  }, state.pageSession);
   state.screencasting = true;
 }
 
@@ -130,6 +134,28 @@ export async function stopScreencast() {
   if (!state.screencasting || !state.cdp || !state.pageSession) return;
   await state.cdp.send('Page.stopScreencast', {}, state.pageSession);
   state.screencasting = false;
+}
+
+export async function setLifecycleState(value) {
+  if (!state.cdp || !state.pageSession) return;
+  try { await state.cdp.send('Page.setWebLifecycleState', { state: value }, state.pageSession); } catch { /* older Chromium may not expose lifecycle freezing */ }
+}
+
+export async function configureDisplay(message) {
+  const frameRate = Number(message.frameRate);
+  const quality = Number(message.quality);
+  if (![5, 10, 15].includes(frameRate) || ![40, 55, 70].includes(quality)) throw new Error('Invalid browser display settings');
+  const wasVisible = state.desiredVisibility;
+  const wasScreencasting = state.screencasting;
+  if (wasScreencasting) await stopScreencast();
+  state.frameRate = frameRate;
+  state.quality = quality;
+  if (viewport.width !== Number(message.width) || viewport.height !== Number(message.height)) await setViewport(message.width, message.height);
+  if (wasVisible) {
+    await setLifecycleState('active');
+    await startScreencast();
+    if (!state.dialogState) await captureFrame();
+  }
 }
 
 async function handleEvent(event) {
@@ -195,7 +221,7 @@ async function handleEvent(event) {
     const operation = state.pageOperation;
     const metadata = event.params.metadata || {};
     const now = Date.now();
-    if (now - state.lastFrameAt >= 66) {
+    if (state.screencasting && now - state.lastFrameAt >= Math.ceil(1000 / state.frameRate)) {
       state.lastFrameAt = now;
       if (state.cdp === connection && state.pageSession === session && state.pageGeneration === generation && state.pageOperation === operation && state.pageStatus !== 'closed' && state.pageStatus !== 'none') emit({ type: 'frame', sequence: ++state.sequence, revision: state.pageRevision, pageGeneration: state.pageGeneration, pageOperation: state.pageOperation, width: metadata.deviceWidth || viewport.width, height: metadata.deviceHeight || viewport.height, data: event.params.data });
     }

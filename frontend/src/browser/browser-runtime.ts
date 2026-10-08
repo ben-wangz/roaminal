@@ -6,10 +6,20 @@ import {
   requestId,
   validAddress,
   viewportKey,
+  type BrowserDisplaySettings,
+  type ViewportSize,
   type BrowserDialog,
   type BrowserMessage,
   type BrowserRuntimeState,
 } from './browser-runtime-model';
+
+function displaySettingsFromMessage(message: BrowserMessage, current: BrowserDisplaySettings): BrowserDisplaySettings {
+  return {
+    viewportMode: message.viewportMode === 'fixed' ? 'fixed' : message.viewportMode === 'auto' ? 'auto' : current.viewportMode,
+    frameRate: message.frameRate === 5 || message.frameRate === 10 || message.frameRate === 15 ? message.frameRate : current.frameRate,
+    quality: message.quality === 40 || message.quality === 55 || message.quality === 70 ? message.quality : current.quality,
+  };
+}
 
 export class BrowserRuntime extends BrowserRuntimeCore {
   open(address: string): boolean {
@@ -85,6 +95,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
         url: empty ? '' : (message.url ?? current.url),
         error: empty ? null : (message.error || (pageStatus === 'error' ? 'Unable to open the remote page.' : null)),
         viewport: message.width && message.height ? { width: message.width, height: message.height } : current.viewport,
+        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
         pageGeneration: empty ? (message.pageGeneration ?? current.pageGeneration) : (message.pageGeneration ?? current.pageGeneration),
         pageOperation: typeof message.pageOperation === 'number' ? message.pageOperation : current.pageOperation,
         revision: typeof message.revision === 'number' ? message.revision : current.revision,
@@ -110,6 +121,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       this.setState((current) => ({
         ...current,
         viewport: size || current.viewport,
+        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
         isPrimaryClient: true,
         primaryError: null,
         takeoverPending: false,
@@ -121,9 +133,17 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       this.handleResizeRejected(message);
       return;
     }
+    if (message.type === 'settings_rejected') {
+      this.handleResizeRejected(message);
+      return;
+    }
     if (message.type === 'viewport' && message.width && message.height) {
       this.applyAuthority(message);
-      this.setState((current) => ({ ...current, viewport: { width: message.width as number, height: message.height as number } }));
+      this.setState((current) => ({
+        ...current,
+        viewport: { width: message.width as number, height: message.height as number },
+        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
+      }));
       return;
     }
     if (message.type === 'error' && (message.code === 'not_primary_client' || message.code === 'primary_client_required' || message.code === 'stale_browser_generation')) {
@@ -201,6 +221,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
         isPrimaryClient: false,
         generation: message.generation || current.generation,
         viewport: authoritativeViewport || current.viewport,
+        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
         primaryError: message.error || 'Another browser client controls the viewport.',
         takeoverPending: false,
       }));
@@ -209,11 +230,11 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     if (code === 'stale_browser_generation') {
       this.clearResizeTimer();
       this.generation = null;
-      this.setState((current) => ({ ...current, generation: null, viewport: authoritativeViewport || current.viewport, takeoverPending: false, primaryError: message.error || 'The remote browser generation has changed.' }));
+      this.setState((current) => ({ ...current, generation: null, viewport: authoritativeViewport || current.viewport, displaySettings: displaySettingsFromMessage(message, current.displaySettings), takeoverPending: false, primaryError: message.error || 'The remote browser generation has changed.' }));
       this.send({ type: 'sync', requestId: requestId() });
       return;
     }
-    this.setState((current) => ({ ...current, viewport: authoritativeViewport || current.viewport, takeoverPending: false, primaryError: message.error || 'The remote browser rejected the viewport change.' }));
+    this.setState((current) => ({ ...current, viewport: authoritativeViewport || current.viewport, displaySettings: displaySettingsFromMessage(message, current.displaySettings), takeoverPending: false, primaryError: message.error || 'The remote browser rejected the viewport change.' }));
   }
 
   navigate(address: string): boolean { return this.open(address); }
@@ -249,7 +270,29 @@ export class BrowserRuntime extends BrowserRuntimeCore {
     const size = normalizeViewport(width, height);
     if (!size) return;
     this.latestResize = size;
-    if (this.stateValue.isPrimaryClient) this.scheduleResize();
+    if (this.stateValue.isPrimaryClient && this.stateValue.displaySettings.viewportMode === 'auto') this.scheduleResize();
+  }
+
+  configureDisplay(settings: BrowserDisplaySettings, fixedViewport?: ViewportSize): boolean {
+    if (!this.stateValue.synchronized || !this.stateValue.isPrimaryClient || !this.generation || this.stateValue.pageStatus === 'none' || this.stateValue.pageStatus === 'closed' || this.stateValue.pageStatus === 'closing') return false;
+    const size = settings.viewportMode === 'fixed'
+      ? fixedViewport
+      : this.latestResize || (this.stateValue.viewport ? { ...this.stateValue.viewport } : undefined);
+    if (!size) return false;
+    const normalized = normalizeViewport(size.width, size.height);
+    if (!normalized) return false;
+    this.clearResizeTimer();
+    return this.send({
+      type: 'settings',
+      viewportMode: settings.viewportMode,
+      width: normalized.width,
+      height: normalized.height,
+      frameRate: settings.frameRate,
+      quality: settings.quality,
+      generation: this.generation,
+      primaryIntent: true,
+      requestId: requestId(),
+    });
   }
 
   takeOver(): boolean {
