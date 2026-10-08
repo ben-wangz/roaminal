@@ -96,10 +96,7 @@ func (m *Manager) broadcastEvent(runtime *process, data []byte) {
 		if width, ok := integerField(event["width"]); ok {
 			if height, ok := integerField(event["height"]); ok {
 				runtime.viewport = normalizeViewport(viewportSize{Width: width, Height: height})
-				display := runtime.displaySettings()
-				event["viewportMode"] = display.viewportMode
-				event["frameRate"] = display.frameRate
-				event["quality"] = display.quality
+				runtime.addDisplaySettings(event)
 			}
 		}
 	}

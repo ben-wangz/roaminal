@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ClipboardCopy, ClipboardPaste, Crown, Globe, RefreshCw, SlidersHorizontal, Terminal, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardCopy, ClipboardPaste, Crown, Globe, RefreshCw, Terminal, X } from 'lucide-react';
 import type { BrowserRuntime } from './browser-runtime';
 import { useBrowserRuntimeState, validAddress } from './browser-runtime';
+import { BrowserDisplayControls } from './browser-display-controls';
 import { Modal } from '../ui/modal';
 
 type Props = { runtime: BrowserRuntime; active: boolean; onBackToTerminal: () => void };
@@ -280,37 +281,14 @@ export function BrowserWorkspace({ runtime, active, onBackToTerminal }: Props) {
           <button type="button" className="icon-button browser-close-page" onClick={() => runtime.closePage()} aria-label="Close page" title="Close page" disabled={state.closePending || state.pageStatus === 'closing' || !state.synchronized} data-testid="browser-close-page"><X size={17} /></button>
           <button type="button" className="icon-button" onClick={onBackToTerminal} aria-label="Back to terminal" title="Back to terminal"><Terminal size={17} /></button>
         </div>
-        <details className="browser-display-menu">
-          <summary className="icon-button" aria-label="Browser display settings" title="Browser display settings" data-testid="browser-display-settings"><SlidersHorizontal size={17} /></summary>
-          <div className="browser-display-panel">
-            <label>
-              <span>Page size</span>
-              <select aria-label="Page size" value={state.displaySettings.viewportMode === 'auto' ? 'auto' : `${state.viewport?.width || 1280}x${state.viewport?.height || 720}`} onChange={(event) => configurePageSize(event.target.value)} disabled={displayControlsDisabled}>
-                <option value="auto">Automatic</option>
-                <option value="1280x720">1280 × 720</option>
-                <option value="1440x900">1440 × 900</option>
-                <option value="1600x900">1600 × 900</option>
-                <option value="1920x1080">1920 × 1080</option>
-              </select>
-            </label>
-            <label>
-              <span>Frame rate</span>
-              <select aria-label="Frame rate" value={state.displaySettings.frameRate} onChange={(event) => configureFrameRate(event.target.value)} disabled={displayControlsDisabled}>
-                <option value="5">5 fps</option>
-                <option value="10">10 fps</option>
-                <option value="15">15 fps</option>
-              </select>
-            </label>
-            <label>
-              <span>Image quality</span>
-              <select aria-label="Image quality" value={state.displaySettings.quality} onChange={(event) => configureQuality(event.target.value)} disabled={displayControlsDisabled}>
-                <option value="40">Low · 40%</option>
-                <option value="55">Balanced · 55%</option>
-                <option value="70">High · 70%</option>
-              </select>
-            </label>
-          </div>
-        </details>
+        <BrowserDisplayControls
+          settings={state.displaySettings}
+          viewport={state.viewport}
+          disabled={displayControlsDisabled}
+          onPageSizeChange={configurePageSize}
+          onFrameRateChange={configureFrameRate}
+          onQualityChange={configureQuality}
+        />
       </header>
       <div ref={frameBoxRef} className="browser-frame-wrap"><canvas ref={canvasRef} tabIndex={0} aria-label={state.title || 'Remote page'} {...canvasEvents} />{!state.frame && (state.status === 'connecting' || state.pageStatus === 'loading') && <div className="browser-frame-overlay">Opening remote page...</div>}{state.status === 'reconnecting' && <div className="browser-frame-overlay">Reconnecting...</div>}{state.status === 'error' && <div className="browser-frame-overlay browser-frame-error">{state.error}</div>}{state.pageStatus === 'closing' && <div className="browser-frame-overlay">Closing remote page...</div>}</div>
     </> : <BrowserAddressForm initial={firstAddress} onSubmit={openAddress} />}

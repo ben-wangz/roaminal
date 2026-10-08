@@ -30,6 +30,13 @@ func (p *process) displaySettings() browserDisplaySettings {
 	return settings
 }
 
+func (p *process) addDisplaySettings(event map[string]any) {
+	settings := p.displaySettings()
+	event["viewportMode"] = settings.viewportMode
+	event["frameRate"] = settings.frameRate
+	event["quality"] = settings.quality
+}
+
 func (m *Manager) configureDisplay(current *viewer, command map[string]json.RawMessage) error {
 	mode := rawString(command["viewportMode"])
 	frameRate, frameRateOK := integerRaw(command["frameRate"])

@@ -1,25 +1,11 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { BrowserRuntimeCore } from './browser-runtime-core';
+import { resizeRejectionEffects } from './browser-runtime-authority';
 import {
-  decodeBase64,
-  normalizeViewport,
-  requestId,
-  validAddress,
-  viewportKey,
-  type BrowserDisplaySettings,
-  type ViewportSize,
-  type BrowserDialog,
-  type BrowserMessage,
-  type BrowserRuntimeState,
+  browserDisplaySettingsFromMessage, decodeBase64, normalizeViewport, requestId,
+  validAddress, viewportKey, type BrowserDisplaySettings, type ViewportSize,
+  type BrowserDialog, type BrowserMessage, type BrowserRuntimeState,
 } from './browser-runtime-model';
-
-function displaySettingsFromMessage(message: BrowserMessage, current: BrowserDisplaySettings): BrowserDisplaySettings {
-  return {
-    viewportMode: message.viewportMode === 'fixed' ? 'fixed' : message.viewportMode === 'auto' ? 'auto' : current.viewportMode,
-    frameRate: message.frameRate === 5 || message.frameRate === 10 || message.frameRate === 15 ? message.frameRate : current.frameRate,
-    quality: message.quality === 40 || message.quality === 55 || message.quality === 70 ? message.quality : current.quality,
-  };
-}
 
 export class BrowserRuntime extends BrowserRuntimeCore {
   open(address: string): boolean {
@@ -95,7 +81,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
         url: empty ? '' : (message.url ?? current.url),
         error: empty ? null : (message.error || (pageStatus === 'error' ? 'Unable to open the remote page.' : null)),
         viewport: message.width && message.height ? { width: message.width, height: message.height } : current.viewport,
-        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
+        displaySettings: browserDisplaySettingsFromMessage(message, current.displaySettings),
         pageGeneration: empty ? (message.pageGeneration ?? current.pageGeneration) : (message.pageGeneration ?? current.pageGeneration),
         pageOperation: typeof message.pageOperation === 'number' ? message.pageOperation : current.pageOperation,
         revision: typeof message.revision === 'number' ? message.revision : current.revision,
@@ -121,7 +107,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       this.setState((current) => ({
         ...current,
         viewport: size || current.viewport,
-        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
+        displaySettings: browserDisplaySettingsFromMessage(message, current.displaySettings),
         isPrimaryClient: true,
         primaryError: null,
         takeoverPending: false,
@@ -129,11 +115,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       this.scheduleResize();
       return;
     }
-    if (message.type === 'resize_rejected') {
-      this.handleResizeRejected(message);
-      return;
-    }
-    if (message.type === 'settings_rejected') {
+    if (message.type === 'resize_rejected' || message.type === 'settings_rejected') {
       this.handleResizeRejected(message);
       return;
     }
@@ -142,7 +124,7 @@ export class BrowserRuntime extends BrowserRuntimeCore {
       this.setState((current) => ({
         ...current,
         viewport: { width: message.width as number, height: message.height as number },
-        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
+        displaySettings: browserDisplaySettingsFromMessage(message, current.displaySettings),
       }));
       return;
     }
@@ -208,33 +190,12 @@ export class BrowserRuntime extends BrowserRuntimeCore {
   }
 
   private handleResizeRejected(message: BrowserMessage): void {
-    const code = message.code || '';
-    const authoritativeViewport = message.width && message.height ? { width: message.width, height: message.height } : null;
-    if (message.generation && message.generation !== this.generation) {
-      this.generation = message.generation;
-      this.lastResizeKey = null;
-    }
-    if (code === 'not_primary_client' || code === 'primary_client_required') {
-      this.clearResizeTimer();
-      this.setState((current) => ({
-        ...current,
-        isPrimaryClient: false,
-        generation: message.generation || current.generation,
-        viewport: authoritativeViewport || current.viewport,
-        displaySettings: displaySettingsFromMessage(message, current.displaySettings),
-        primaryError: message.error || 'Another browser client controls the viewport.',
-        takeoverPending: false,
-      }));
-      return;
-    }
-    if (code === 'stale_browser_generation') {
-      this.clearResizeTimer();
-      this.generation = null;
-      this.setState((current) => ({ ...current, generation: null, viewport: authoritativeViewport || current.viewport, displaySettings: displaySettingsFromMessage(message, current.displaySettings), takeoverPending: false, primaryError: message.error || 'The remote browser generation has changed.' }));
-      this.send({ type: 'sync', requestId: requestId() });
-      return;
-    }
-    this.setState((current) => ({ ...current, viewport: authoritativeViewport || current.viewport, displaySettings: displaySettingsFromMessage(message, current.displaySettings), takeoverPending: false, primaryError: message.error || 'The remote browser rejected the viewport change.' }));
+    const effects = resizeRejectionEffects(message, this.generation, this.stateValue);
+    if (effects.clearResizeTimer) this.clearResizeTimer();
+    if (effects.runtimeGeneration !== undefined) this.generation = effects.runtimeGeneration;
+    if (effects.resetLastResizeKey) this.lastResizeKey = null;
+    this.setState((current) => ({ ...current, ...effects.state }));
+    if (effects.synchronize) this.send({ type: 'sync', requestId: requestId() });
   }
 
   navigate(address: string): boolean { return this.open(address); }

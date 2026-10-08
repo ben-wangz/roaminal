@@ -87,6 +87,14 @@ export type BrowserMessage = {
   defaultPrompt?: string;
 };
 
+export function browserDisplaySettingsFromMessage(message: BrowserMessage, current: BrowserDisplaySettings): BrowserDisplaySettings {
+  return {
+    viewportMode: message.viewportMode === 'fixed' ? 'fixed' : message.viewportMode === 'auto' ? 'auto' : current.viewportMode,
+    frameRate: message.frameRate === 5 || message.frameRate === 10 || message.frameRate === 15 ? message.frameRate : current.frameRate,
+    quality: message.quality === 40 || message.quality === 55 || message.quality === 70 ? message.quality : current.quality,
+  };
+}
+
 export type ViewportSize = { width: number; height: number };
 
 const MIN_VIEWPORT_WIDTH = 1;

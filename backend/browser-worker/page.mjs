@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { maxClipboardTextLength, selectionTextExpression } from './clipboard-model.mjs';
 import { launchChromium } from './cdp.mjs';
 import { keyDispatchParameters } from './keyboard.mjs';
+import { setLifecycleState } from './page-lifecycle.mjs';
+import { captureFrame, startScreencast, stopScreencast } from './screencast.mjs';
 import { allowedDocumentURL, emit, operationValue, state, viewport } from './state.mjs';
 async function pageInfo(connection = state.cdp, session = state.pageSession) {
   if (!connection || !session) return {};
@@ -91,16 +93,6 @@ export async function navigate(url) {
   return true;
 }
 
-export async function captureFrame() {
-  const connection = state.cdp;
-  const session = state.pageSession;
-  const generation = state.pageGeneration;
-  const operation = state.pageOperation;
-  if (!connection || !session) return;
-  const result = await connection.send('Page.captureScreenshot', { format: 'jpeg', quality: state.quality, fromSurface: true }, session);
-  if (state.cdp === connection && state.pageSession === session && state.pageGeneration === generation && state.pageOperation === operation && result.data && state.pageStatus !== 'closed' && state.pageStatus !== 'none') emit({ type: 'frame', sequence: ++state.sequence, revision: state.pageRevision, pageGeneration: state.pageGeneration, pageOperation: state.pageOperation, width: viewport.width, height: viewport.height, data: result.data });
-}
-
 export function validCurrentPage(message, requireIdentity = false) {
   if (!state.pageSession || state.pageStatus === 'none' || state.pageStatus === 'closed') {
     emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success: false, code: 'no_browser_page', pageGeneration: state.pageGeneration, pageOperation: state.pageOperation, revision: state.pageRevision });
@@ -119,43 +111,6 @@ export function validCurrentPage(message, requireIdentity = false) {
 
 export function commandResult(message, success, extra = {}) {
   emit({ type: 'command_result', clientId: message.clientId, requestId: message.requestId, success, pageGeneration: state.pageGeneration, pageOperation: state.pageOperation, revision: state.pageRevision, ...extra });
-}
-
-export async function startScreencast() {
-  if (state.screencasting || !state.cdp || !state.pageSession) return;
-  await state.cdp.send('Page.startScreencast', {
-    format: 'jpeg', quality: state.quality, maxWidth: 1920, maxHeight: 1080,
-    everyNthFrame: Math.max(1, Math.floor(60 / state.frameRate)),
-  }, state.pageSession);
-  state.screencasting = true;
-}
-
-export async function stopScreencast() {
-  if (!state.screencasting || !state.cdp || !state.pageSession) return;
-  await state.cdp.send('Page.stopScreencast', {}, state.pageSession);
-  state.screencasting = false;
-}
-
-export async function setLifecycleState(value) {
-  if (!state.cdp || !state.pageSession) return;
-  try { await state.cdp.send('Page.setWebLifecycleState', { state: value }, state.pageSession); } catch { /* older Chromium may not expose lifecycle freezing */ }
-}
-
-export async function configureDisplay(message) {
-  const frameRate = Number(message.frameRate);
-  const quality = Number(message.quality);
-  if (![5, 10, 15].includes(frameRate) || ![40, 55, 70].includes(quality)) throw new Error('Invalid browser display settings');
-  const wasVisible = state.desiredVisibility;
-  const wasScreencasting = state.screencasting;
-  if (wasScreencasting) await stopScreencast();
-  state.frameRate = frameRate;
-  state.quality = quality;
-  if (viewport.width !== Number(message.width) || viewport.height !== Number(message.height)) await setViewport(message.width, message.height);
-  if (wasVisible) {
-    await setLifecycleState('active');
-    await startScreencast();
-    if (!state.dialogState) await captureFrame();
-  }
 }
 
 async function handleEvent(event) {

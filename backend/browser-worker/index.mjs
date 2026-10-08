@@ -1,20 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
+import { configureDisplay } from './display-settings.mjs';
 import { acceptOperation, allowedDocumentURL, emit, state, viewport } from './state.mjs';
+import { setLifecycleState } from './page-lifecycle.mjs';
+import { captureFrame, startScreencast, stopScreencast } from './screencast.mjs';
 import {
   announce,
-  captureFrame,
   commandResult,
   copySelection,
-  configureDisplay,
   input,
   navigate,
   navigateHistory,
   setViewport,
   shutdown,
-  setLifecycleState,
-  startScreencast,
-  stopScreencast,
   validCurrentPage,
 } from './page.mjs';
 
