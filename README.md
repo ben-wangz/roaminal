@@ -62,7 +62,8 @@ validation, and [API](docs/api.md) for the HTTP and WebSocket contract.
 
 ## Containers and Kubernetes
 
-For local integration only, build and run with Podman. Release images are
+For local integration, build and run with Podman. To run a published runtime
+image on one host, see [Podman usage](docs/podman/usage.md). Release images are
 published by the tag-triggered GitHub Actions; do not use this command to push
 an artifact:
 
@@ -121,6 +122,7 @@ requirements.
 - [API reference](docs/api.md)
 - [Configuration](docs/configuration.md)
 - [Security model](docs/security.md)
+- [Podman usage](docs/podman/usage.md)
 - [Deployment and rollout](docs/deployment.md)
 - [Backup and recovery](docs/backup-recovery.md)
 - [Troubleshooting](docs/troubleshooting.md)

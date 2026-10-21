@@ -13,9 +13,11 @@ Deployment users consume them; they do not build or push release artifacts.
 Select the Chart version. Its `appVersion` and default image tag are synchronized
 with the linked runtime image. Maintainers use [release automation](releasing.md).
 
-## Local container
+## Podman
 
-Use Podman only for local integration; do not push this image as a release.
+For a single-host run using a published runtime image, see
+[Podman usage](podman/usage.md). The build below is for local integration; do
+not push this image as a release.
 
 ```sh
 IMAGE=roaminal:dev-$(git rev-parse --short HEAD)
