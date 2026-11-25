@@ -99,7 +99,7 @@ export function WorkspaceToolSurface({
   const collapseButton = useRef<HTMLButtonElement>(null);
   const previousOpen = useRef(false);
   const compact = window.matchMedia(SIDEBAR_BREAKPOINT_QUERY).matches;
-  const { resizable, resizing, resizeBounds, resizeHandle, style, valueNow, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown } = useWorkspaceToolResize(surface, open);
+  const { resizable, resizing, resizeBounds, resizeHandle, style, valueNow, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onLostPointerCapture, onKeyDown } = useWorkspaceToolResize(surface, open);
 
   useEffect(() => {
     if (open && !previousOpen.current && compact && (tool === 'connections' || tool === 'files')) collapseButton.current?.focus();
@@ -174,6 +174,7 @@ export function WorkspaceToolSurface({
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
+          onLostPointerCapture={onLostPointerCapture}
         />}
         <header className="workspace-tool-header">
           <div className="workspace-tool-title">

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/ben-wangz/roaminal/backend/internal/config"
@@ -31,16 +32,14 @@ func NewWithRepositories(cfg config.Config, authRepository ports.AuthRepository,
 	passwordKey := sha256.Sum256([]byte(cfg.Password))
 	fingerprintHash := sha256.Sum256(append([]byte("roaminal-password-fingerprint-v1:"), passwordKey[:]...))
 	m := &Manager{cfg: cfg, authRepository: authRepository, enrollmentRepo: deps.Enrollment, clock: deps.Clock, ids: deps.IDs, random: deps.Random, fingerprint: hex.EncodeToString(fingerprintHash[:]), refresh: make(map[string]domain.AuthSessionRecord), access: make(map[string]accessEntry), challenges: make(map[string]challenge), pending: make(map[string]pendingEntry), enrollmentChange: make(chan struct{})}
-	// Fail closed at startup: an existing-but-unusable enrollment file is an
-	// error, never an invitation to enroll.
+	// Fail closed at startup without touching auth records if enrollment
+	// cannot be verified. Only confirmed absence can allow enrollment setup.
 	startup, exists, err := m.loadEnrollmentLocked()
 	if err != nil {
 		return nil, err
 	}
 	if exists {
-		enrollment := startup
-		m.enrollment = &enrollment
-		m.enrollmentState = enrollmentConfigured
+		m.enrollment = &startup
 	}
 	records, err := authRepository.LoadAuth(context.Background())
 	if err != nil {
@@ -75,5 +74,8 @@ func (m *Manager) persistLocked() error {
 		entries = append(entries, entry)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
-	return m.authRepository.SaveAuth(context.Background(), entries)
+	if err := m.authRepository.SaveAuth(context.Background(), entries); err != nil {
+		return fmt.Errorf("%w: %w", ErrSessionStorage, err)
+	}
+	return nil
 }

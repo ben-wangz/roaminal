@@ -21,6 +21,15 @@ five standard projects plus dynamic resizing.
 5. Repeat through SSH and tmux. The remote PTY and active tmux client adapt to
    the current screen; reconnect/attach must not restore a stale larger size.
 6. Verify hover preview fixed geometry cannot resize the main PTY.
+7. On desktop, drag the Connections panel separator and release outside the
+   handle. Verify it stops at the released width, restores text selection, and
+   accepts another drag. Interrupt another drag by releasing pointer capture
+   (or switching browser windows); moving afterward must not change its width.
+   Repeat with the primary button released while a second mouse button remains
+   down: the next move must stop resizing without applying that move. Close the
+   panel during a drag and verify the next open starts a fresh drag. Reload and
+   confirm the last applied width persists exactly once per drag; the mobile
+   drawer must remain non-resizable.
 
 ## Pass gate
 

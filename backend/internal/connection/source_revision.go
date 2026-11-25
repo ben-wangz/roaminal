@@ -10,6 +10,8 @@ import (
 	"io"
 	"os/exec"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 )
 
 const sourceRevisionOutputLimit = 1 << 20
@@ -29,6 +31,7 @@ func (m *Manager) sourceRevision(alias string) (string, error) {
 		"-o", "ControlPath=none",
 		"--", alias,
 	)
+	cmd.Env = processenv.Environment()
 	writer := &boundedHashWriter{hash: sha256.New(), limit: sourceRevisionOutputLimit}
 	cmd.Stdout = writer
 	cmd.Stderr = io.Discard

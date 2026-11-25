@@ -38,7 +38,7 @@ func TestTerminateSessionRunsExitHook(t *testing.T) {
 		t.Fatal(err)
 	}
 	hookCalled := make(chan ExitStatus, 1)
-	session.onExit = func(status ExitStatus) { hookCalled <- status }
+	session.onExit = func(_ context.Context, status ExitStatus) { hookCalled <- status }
 	manager.sessions[id] = session
 	manager.startLoops(session)
 

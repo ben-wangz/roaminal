@@ -12,6 +12,10 @@ updateStrategy:
 terminationGracePeriodSeconds: 30
 automountServiceAccountToken: false
 
+# Stop the application without removing database resources or mounts.
+maintenance:
+  enabled: false
+
 serviceAccount:
   create: false
   name: ""
@@ -102,7 +106,27 @@ webPush:
   vapidPrivateKeyKey: vapid-private-key
   subjectKey: subject
 
+# PostgreSQL is opt-in. Set existingSecret for an external database; leave it
+# empty in PostgreSQL mode to use a managed CloudNativePG Cluster.
+database:
+  driver: sqlite
+  postgres:
+    existingSecret: ""
+    dsnKey: dsn
+    # Optional CA for an external PostgreSQL endpoint.
+    caSecret:
+      name: ""
+      key: ca.crt
+    managed:
+      database: roaminal
+      username: roaminal
+      bootstrapRevision: 1
+      storage:
+        size: 10Gi
+        storageClass: ""
+
 persistence:
+  # Required for the database binding and native workspace/SSH files.
   enabled: true
   existingClaim: ""
   storageClass: ""
@@ -118,6 +142,7 @@ persistence:
     state: state
     workspace: workspace
     ssh: ssh
+  # Deprecated compatibility keys. The application state volume is PVC-only.
   emptyDir:
     medium: ""
     sizeLimit: ""
@@ -193,7 +218,8 @@ probes:
     enabled: true
     periodSeconds: 2
     timeoutSeconds: 1
-    failureThreshold: 15
+    # Allow the runtime's bounded 60-second PostgreSQL startup retry.
+    failureThreshold: 60
   readiness:
     enabled: true
     periodSeconds: 5

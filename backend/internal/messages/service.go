@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -79,39 +78,6 @@ func New(repository ports.MessageRepository, ids ports.IDGenerator) *Service {
 
 func NewWithNotifier(repository ports.MessageRepository, ids ports.IDGenerator, notifier ports.MessageNotifier) *Service {
 	return &Service{repository: repository, ids: ids, notifier: notifier}
-}
-
-func (s *Service) AppendMessage(draft domain.MessageDraft) (domain.MessageRecord, bool, error) {
-	if s == nil || s.repository == nil || s.ids == nil {
-		return domain.MessageRecord{}, false, ErrStoreUnavailable
-	}
-	if draft.MessageID == "" {
-		id, err := s.ids.NewID()
-		if err != nil || id == "" {
-			if err == nil {
-				err = errors.New("empty message id")
-			}
-			log.Printf("level=INFO event=agent_message_store_failed code=%q error_type=%T", ErrStoreUnavailable.Error(), err)
-			return domain.MessageRecord{}, false, fmt.Errorf("%w: %v", ErrStoreUnavailable, err)
-		}
-		draft.MessageID = id
-	}
-	started := time.Now()
-	record, duplicate, err := s.repository.AppendMessage(draft)
-	duration := time.Since(started).Milliseconds()
-	if err != nil {
-		log.Printf("level=INFO event=agent_message_store_failed code=%q kind=%q target_session=%q duration_ms=%d error_type=%T", ErrStoreUnavailable.Error(), draft.Kind, draft.TmuxSessionName, duration, err)
-		return domain.MessageRecord{}, false, fmt.Errorf("%w: %v", ErrStoreUnavailable, err)
-	}
-	if duplicate {
-		log.Printf("level=INFO event=agent_message_duplicate message_id=%q kind=%q sequence=%d target_session=%q matching_connection_count=%d duration_ms=%d", record.MessageID, record.Kind, record.Sequence, record.TmuxSessionName, len(record.ConnectionInstanceIDs), duration)
-		return record, true, nil
-	}
-	log.Printf("level=INFO event=agent_message_appended message_id=%q kind=%q sequence=%d target_session=%q matching_connection_count=%d duration_ms=%d", record.MessageID, record.Kind, record.Sequence, record.TmuxSessionName, len(record.ConnectionInstanceIDs), duration)
-	if s.notifier != nil {
-		s.notifier.Notify(record)
-	}
-	return record, false, nil
 }
 
 func (s *Service) List(limit int, cursor string) (Page, error) {
@@ -216,5 +182,3 @@ func decodeCursor(cursor string) (uint64, error) {
 	}
 	return sequence, nil
 }
-
-var _ ports.MessageAppender = (*Service)(nil)

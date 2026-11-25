@@ -48,11 +48,13 @@ type Options struct {
 	Sender               Sender
 	PreferenceRepository ports.NotificationPreferenceRepository
 	UserKey              string
-	Clock                ports.Clock
-	QueueSize            int
-	RetryAttempts        int
-	RetryDelay           time.Duration
-	SendTimeout          time.Duration
+	// SessionActive returns an error when authorization cannot be verified.
+	SessionActive func(string) (bool, error)
+	Clock         ports.Clock
+	QueueSize     int
+	RetryAttempts int
+	RetryDelay    time.Duration
+	SendTimeout   time.Duration
 }
 
 type ConfigResponse struct {
@@ -92,14 +94,15 @@ type notificationJob struct {
 }
 
 type Service struct {
-	repository  ports.PushSubscriptionRepository
-	preferences ports.NotificationPreferenceRepository
-	userKey     string
-	ids         ports.IDGenerator
-	clock       ports.Clock
-	sender      Sender
-	publicKey   string
-	enabled     bool
+	repository    ports.PushSubscriptionRepository
+	preferences   ports.NotificationPreferenceRepository
+	userKey       string
+	ids           ports.IDGenerator
+	clock         ports.Clock
+	sender        Sender
+	sessionActive func(string) (bool, error)
+	publicKey     string
+	enabled       bool
 
 	queue         chan notificationJob
 	retryAttempts int
@@ -148,9 +151,9 @@ func New(repository ports.PushSubscriptionRepository, ids ports.IDGenerator, opt
 			return nil, fmt.Errorf("%w: initialize sender: %v", ErrUnavailable, err)
 		}
 	}
-	// A custom sender is useful for tests and alternate providers, but browser
-	// registration still needs the public VAPID key to be advertised.
-	enabled := sender != nil && hasPublicKey
+	// A public key and a login session check are required even with a custom
+	// sender. Never enable subscriptions that cannot be authorized for delivery.
+	enabled := sender != nil && hasPublicKey && options.SessionActive != nil
 	service := &Service{
 		repository:    repository,
 		preferences:   options.PreferenceRepository,
@@ -158,6 +161,7 @@ func New(repository ports.PushSubscriptionRepository, ids ports.IDGenerator, opt
 		ids:           ids,
 		clock:         options.Clock,
 		sender:        sender,
+		sessionActive: options.SessionActive,
 		publicKey:     publicKey,
 		enabled:       enabled,
 		queue:         make(chan notificationJob, options.QueueSize),

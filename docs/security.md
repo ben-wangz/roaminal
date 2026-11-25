@@ -10,39 +10,31 @@ purpose-bound pending token: before enrollment it may open TOTP setup only,
 after enrollment only TOTP verification. Normal access and refresh tokens are
 issued after a verified code. The browser retains access and refresh tokens
 only in origin-local storage; pending tokens, setup secrets, and codes stay
-in component memory. Authentication sessions persist only refresh-token hashes,
-the password fingerprint, and the enrollment binding; the TOTP credential is
-kept separately in the private `2fa-secret` file below. Refresh rotates tokens
-and is allowed only while the session stays bound to the current enrollment.
-Changing the password revokes prior login sessions.
+in component memory. The database stores refresh-token hashes, not plaintext
+refresh tokens. Refresh rotates tokens and requires the login session to stay
+bound to the current password and TOTP enrollment. Changing the password
+revokes prior login sessions.
 
 ## Resetting TOTP enrollment
 
-The TOTP secret lives in `<state root>/2fa-secret` (`~/.roaminal/2fa-secret`
-by default, or its `state/` child in private-child layouts; the same
-directory as `auth-sessions.json`). The file holds the Base32 secret, an
-enrollment identity, and the last consumed time step; it is created with
-`0600` permissions inside a `0700` directory and is never logged, exported,
-or sent to generic APIs outside the setup stage.
+If the authenticator is lost, [stop Roaminal and use offline maintenance](deployment.md#offline-maintenance)
+with the same durable state mount and the existing, bound database. Run:
 
-To reset authentication without losing connection definitions, instances, or
-workspace data: delete `2fa-secret` from the running backend filesystem (for
-example with `kubectl exec` into the Pod), then log out and log back in. The
-next login asks for the password and then offers initial enrollment; no
-restart is required. Logout remains usable while old credentials are invalid.
-Re-enrollment invalidates every older token, refresh session, and open
-stream. A missing file means unconfigured; an empty, malformed, or unreadable
-file is an error that denies login until the file is repaired or removed;
-the backend also refuses to start against such a file. Deleting or reading
-the file is within the operator's authority; the backend does not encrypt it
-against process-level filesystem access. Perform deletion while login and
-setup are idle: an external delete racing an in-flight enrollment write is
-not transactional.
+```sh
+roaminal admin totp reset --confirm
+```
 
-State directories use `0700`; state files use `0600`, fsync, and atomic rename.
-Protect the authentication Secret and unified PVC as credential material: the
-PVC includes workspace files, SSH keys, and terminal scrollback. Never put
-tokens in URLs, logs, screenshots, reports, or proxy access logs.
+The reset clears the database's enrollment, replay state, and all existing
+login sessions in one transaction. It does not delete connection definitions
+or workspace data. Restart with the same DB configuration and sign in with the
+password to enroll a new authenticator. Deleting the legacy `2fa-secret` file
+does not reset enrollment. Database errors deny login; they do not trigger
+re-enrollment.
+
+Protect the authentication Secret, database credentials, local mounts, and
+backups. The database and logical exports contain the TOTP secret and terminal
+snapshots; the PVC can contain workspace files and SSH keys. Never put tokens
+in URLs, logs, screenshots, reports, or proxy access logs.
 
 The container runs as UID/GID 1000 with a read-only root filesystem, no added
 capabilities, no privilege escalation, and no host/runtime socket. Never expose

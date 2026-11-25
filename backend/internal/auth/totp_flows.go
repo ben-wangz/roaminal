@@ -29,9 +29,8 @@ func (m *Manager) Login(challengeID, response, userAgent string) (LoginPending, 
 	if m.locked {
 		return LoginPending{}, ErrLocked
 	}
-	m.reconcileLocked()
-	if m.enrollmentState == enrollmentStorageError {
-		return LoginPending{}, ErrEnrollmentStorage
+	if err := m.reconcileLocked(); err != nil {
+		return LoginPending{}, err
 	}
 	if !verifyProof(m.cfg.Password, c, response) {
 		m.failedAttempts++
@@ -44,7 +43,7 @@ func (m *Manager) Login(challengeID, response, userAgent string) (LoginPending, 
 	// The password proof is accepted but the global failure budget stays:
 	// a valid password must not reset TOTP failure accounting, and a fresh
 	// pending token must not bypass it.
-	if m.enrollmentState == enrollmentConfigured {
+	if m.enrollment != nil {
 		token, expires, err := m.newPendingLocked(pendingVerify, m.enrollment.EnrollmentID, userAgent)
 		if err != nil {
 			return LoginPending{}, err
@@ -71,14 +70,13 @@ func verifyProof(password string, c challenge, response string) bool {
 func (m *Manager) Setup(pendingToken string) (TOTPSetup, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
-	if m.enrollmentState == enrollmentStorageError {
-		return TOTPSetup{}, ErrEnrollmentStorage
+	if err := m.reconcileLocked(); err != nil {
+		return TOTPSetup{}, err
 	}
 	if m.locked {
 		return TOTPSetup{}, ErrLocked
 	}
-	if m.enrollmentState == enrollmentConfigured {
+	if m.enrollment != nil {
 		return TOTPSetup{}, ErrAlreadyConfigured
 	}
 	entry, hash, ok := m.pendingLocked(pendingToken)
@@ -102,14 +100,13 @@ func (m *Manager) Setup(pendingToken string) (TOTPSetup, error) {
 func (m *Manager) ConfirmSetup(pendingToken, code string) (TOTPConfirmResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
+	if err := m.reconcileLocked(); err != nil {
+		return TOTPConfirmResult{}, err
+	}
 	if m.locked {
 		return TOTPConfirmResult{}, ErrLocked
 	}
-	if m.enrollmentState == enrollmentStorageError {
-		return TOTPConfirmResult{}, ErrEnrollmentStorage
-	}
-	if m.enrollmentState == enrollmentConfigured {
+	if m.enrollment != nil {
 		// Another confirmation already won; this pending stage is dead.
 		return TOTPConfirmResult{}, ErrAlreadyConfigured
 	}
@@ -126,10 +123,8 @@ func (m *Manager) ConfirmSetup(pendingToken, code string) (TOTPConfirmResult, er
 		return TOTPConfirmResult{}, err
 	}
 	record := domain.TOTPEnrollmentRecord{FormatVersion: domain.TOTPFormatVersion, EnrollmentID: enrollmentID, Secret: entry.candidate.secret, LastAcceptedTimeStep: step}
-	// Durable enrollment first: success is never returned before the
-	// enrollment is on disk, and the enrollment binding alone is enough to
-	// reject every pre-existing session even if a crash happens before the
-	// session invalidation write below.
+	// The enrollment must be durable before success is reported. Its binding
+	// rejects prior login sessions even if a crash precedes invalidation below.
 	if err := m.saveEnrollmentLocked(record); err != nil {
 		// Do not let an enrollment write failure look like a bad user code.
 		// The caller must keep the service fail-closed and offer repair/remove
@@ -138,8 +133,9 @@ func (m *Manager) ConfirmSetup(pendingToken, code string) (TOTPConfirmResult, er
 	}
 	// Every pending setup credential, access token, and refresh session
 	// dies with the completed enrollment; the first confirmation wins.
-	if err := m.adoptEnrollmentLocked(record); err != nil {
-		return TOTPConfirmResult{}, fmt.Errorf("invalidate authentication sessions: %w", ErrEnrollmentStorage)
+	m.replaceEnrollmentLocked(&record)
+	if err := m.finishEnrollmentInvalidationLocked(); err != nil {
+		return TOTPConfirmResult{}, err
 	}
 	m.failedAttempts = 0
 	return TOTPConfirmResult{ReauthenticationRequired: true}, nil
@@ -151,55 +147,46 @@ func (m *Manager) ConfirmSetup(pendingToken, code string) (TOTPConfirmResult, er
 func (m *Manager) VerifyTOTP(pendingToken, code, userAgent string) (Tokens, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
+	if err := m.reconcileLocked(); err != nil {
+		return Tokens{}, err
+	}
 	if m.locked {
 		return Tokens{}, ErrLocked
 	}
-	if m.enrollmentState == enrollmentStorageError {
-		return Tokens{}, ErrEnrollmentStorage
-	}
-	if m.enrollmentState != enrollmentConfigured {
+	enrollment := m.enrollment
+	if enrollment == nil {
 		return Tokens{}, ErrInvalidPending
 	}
 	entry, hash, ok := m.pendingLocked(pendingToken)
-	if !ok || entry.purpose != pendingVerify || entry.enrollmentID != m.enrollment.EnrollmentID {
+	if !ok || entry.purpose != pendingVerify || entry.enrollmentID != enrollment.EnrollmentID {
 		return Tokens{}, ErrInvalidPending
 	}
-	step, valid := validateTOTPCode(m.enrollment.Secret, code, m.clock.Now())
+	step, valid := validateTOTPCode(enrollment.Secret, code, m.clock.Now())
 	if !valid {
 		return Tokens{}, m.recordPendingFailureLocked(hash, entry)
 	}
-	if step <= m.enrollment.LastAcceptedTimeStep {
+	if step <= enrollment.LastAcceptedTimeStep {
 		// The time step was already consumed; codes for it stay invalid
 		// across attempts, restarts, and concurrent verifications.
 		return Tokens{}, m.recordPendingFailureLocked(hash, entry)
 	}
-	// Recheck the file before writing so a deleted enrollment is never
-	// recreated merely to persist a cached time step.
-	current, exists, err := m.loadEnrollmentLocked()
-	if err != nil {
-		m.enrollmentState = enrollmentStorageError
-		m.invalidateCredentialsLocked()
-		return Tokens{}, ErrEnrollmentStorage
+	// Recheck the enrollment before writing so a reset is never undone merely
+	// to persist a cached time step. A failed read does not consume the code.
+	if err := m.reconcileLocked(); err != nil {
+		return Tokens{}, err
 	}
-	if !exists || current != *m.enrollment {
-		if exists {
-			if err := m.adoptEnrollmentLocked(current); err != nil {
-				return Tokens{}, ErrEnrollmentStorage
-			}
-		} else {
-			if err := m.dropEnrollmentLocked(); err != nil {
-				return Tokens{}, ErrEnrollmentStorage
-			}
-		}
+	if !sameEnrollmentIdentity(m.enrollment, enrollment) {
 		return Tokens{}, ErrInvalidPending
 	}
+	if step <= m.enrollment.LastAcceptedTimeStep {
+		return Tokens{}, m.recordPendingFailureLocked(hash, entry)
+	}
+	current := *m.enrollment
 	current.LastAcceptedTimeStep = step
 	if err := m.saveEnrollmentLocked(current); err != nil {
 		return Tokens{}, ErrEnrollmentStorage
 	}
-	enrollment := current
-	m.enrollment = &enrollment
+	m.enrollment = &current
 	delete(m.pending, hash)
 	tokens, err := m.issueLocked(userAgent)
 	if err != nil {
@@ -215,29 +202,4 @@ func (m *Manager) saveEnrollmentLocked(record domain.TOTPEnrollmentRecord) error
 	ctx, cancel := m.enrollmentCheckContext()
 	defer cancel()
 	return m.enrollmentRepo.SaveEnrollment(ctx, record)
-}
-
-// adoptEnrollmentLocked switches to a newly durable enrollment identity and
-// invalidates every credential issued for any previous state.
-func (m *Manager) adoptEnrollmentLocked(record domain.TOTPEnrollmentRecord) error {
-	enrollment := record
-	m.enrollment = &enrollment
-	m.enrollmentState = enrollmentConfigured
-	if err := m.invalidateCredentialsLocked(); err != nil {
-		m.enrollmentState = enrollmentStorageError
-		return err
-	}
-	return nil
-}
-
-// dropEnrollmentLocked switches to the unconfigured state and invalidates
-// every credential issued for the deleted enrollment.
-func (m *Manager) dropEnrollmentLocked() error {
-	m.enrollment = nil
-	m.enrollmentState = enrollmentUnconfigured
-	if err := m.invalidateCredentialsLocked(); err != nil {
-		m.enrollmentState = enrollmentStorageError
-		return err
-	}
-	return nil
 }

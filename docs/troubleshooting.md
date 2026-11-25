@@ -7,12 +7,27 @@ application log and pod events, then inspect the worker path and image contents.
 The process deliberately fails fast so the container restart policy can recover
 it; it does not hot-restart a broken worker in place.
 
+## `/healthz` is `200` but `/readyz` is `503`
+
+The worker is available, but the database readiness check did not pass. Check
+application logs, the bound database and volume, and file permissions for
+SQLite. For PostgreSQL, check connectivity, the DSN Secret, and TLS hostname
+and CA verification. A DB outage can make Roaminal unready without failing the
+liveness probe. Do not switch drivers or remove `database-binding.json` to get
+past a failure; [restore the matching DB and state](backup-recovery.md#restore).
+
 ## Startup rejects configuration
 
 Check `ROAMINAL_ACCEPT_TERMS=true`, a non-empty password, an existing absolute
 `ROAMINAL_CWD`, and the numeric/duration bounds in
 [configuration](configuration.md). A port already in use is reported as a
 startup error and is never moved automatically.
+
+If startup reports a required legacy import, [complete it offline](deployment.md#cut-over-from-legacy-files).
+If the database does not match the state directory, restore the matching pair
+or [activate a verified transfer](backup-recovery.md#switching-databases). If the
+state directory is locked, stop any serving instance or maintenance command
+using that mount before retrying.
 
 ## Login or refresh fails
 
@@ -22,13 +37,11 @@ discard the old token after a successful refresh. Changing the configured
 password or restarting with a generated password revokes existing login sessions.
 
 Login always requires a TOTP code after the password. If the authenticator is
-lost, reset enrollment by deleting `<state root>/2fa-secret` inside the running
-Pod, then log out and log back in (see
-[`security.md`](security.md#resetting-totp-enrollment)). A `503 auth enrollment
-storage unavailable` login error means that file exists but is empty,
-malformed, or unreadable; repair or remove it; enrollment is never offered
-from a broken file. Reused codes are rejected: wait for the next 30-second
-code after confirming enrollment or a rejected attempt.
+lost, use [offline TOTP reset](security.md#resetting-totp-enrollment). A
+`503 auth enrollment storage unavailable` login error means Roaminal could not
+read or update enrollment in the database. Check database readiness and logs;
+the error does not trigger re-enrollment. Reused codes are rejected: wait for
+the next 30-second code.
 
 ## WebSocket closes immediately
 
@@ -102,11 +115,11 @@ Download the matching private GitHub Actions artifact
 values, and use the included JavaScript and `.map` files with a source-map
 viewer. The runtime image intentionally does not serve `.map` files.
 
-## PVC pod is not ready
+## PVC mounts fail
 
-Confirm the unified RWO PVC is bound and its root is writable by UID/GID 1000.
-The init container creates `state/`, `workspace/`, and `ssh/`; it does not repair
-ownership or permissions on an existing mount. A read-only SSH Secret/projected
-volume is valid, but `/workspace` and the state subpath must remain writable.
-Inspect probe events and `kubectl logs`; do not expose or edit the worker process
-directly.
+For either driver, confirm the unified RWO claim is bound and its root is
+writable by UID/GID 1000. The init container creates the `state/`, `workspace/`,
+and `ssh/` subpaths and prepares `state/db/` for SQLite; it does not fix volume
+ownership. `/workspace` and the state subpath must be writable by the runtime
+user; the state subpath must not be group- or world-writable. Read-only SSH
+Secret or projected mounts are valid. Inspect Pod events and init container logs.

@@ -33,7 +33,7 @@ func TestLiveDeletionWithoutRestart(t *testing.T) {
 		t.Fatal("stream watchers were not notified of deletion")
 	}
 	// Logout stays idempotent, then login offers initial enrollment again.
-	if err := f.mgr.Logout(tokens.RefreshToken, tokens.AccessToken); err != nil {
+	if _, err := f.mgr.Logout(tokens.RefreshToken, tokens.AccessToken); err != nil {
 		t.Fatal(err)
 	}
 	pending := f.passwordLogin(t)

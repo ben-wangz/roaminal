@@ -10,12 +10,24 @@ and phone landscape.
    textarea becomes focused so the browser's native software keyboard opens.
    No `.mobile-terminal-composer`, application-owned input box, or Send control
    is rendered. Dismissing the native keyboard restores the normal chrome.
-2. Type unique text through the native keyboard and capture runtime input
-   frames. Verify text and native Enter reach the active xterm runtime exactly
-   once. Repeat with Chinese IME composition and full-width punctuation; the
-   existing IME fallback handles committed text without a mobile-only rewrite.
+2. On the affected physical phone and native keyboard, type a non-sensitive
+   test word and capture the order of `composition*`, `keydown`/`keyup`,
+   `beforeinput`/`input` (including `inputType` and `isComposing`), textarea
+   selection/value edit boundaries, and outgoing terminal input frames. Compare
+   those frames with terminal echo to distinguish duplicate sends from duplicate
+   rendering; redact terminal contents after the comparison. Verify the word
+   and native Enter reach the active xterm runtime exactly once. Repeat with a
+   commit before and after `compositionend`, including an unpaired post-end
+   `insertText` with `isComposing=false`, intervening keydown 229, two deliberate
+   identical selections, consecutive compositions, and standalone
+   full-width punctuation. Compare punctuation typed immediately after a
+   commit and after a pause, then press Enter. Check native sequences that
+   replace a visible candidate after `compositionend` separately from edits
+   that append punctuation. Verify the commit, punctuation, and Enter reach
+   the terminal exactly once and in that order, and no candidate text is sent.
    Repeat after a visual viewport resize and while a focusout event is pending;
-   no duplicate frame or input sent to an old runtime is allowed.
+   no duplicate frame or input sent to an old runtime is allowed. Browser
+   emulation alone cannot establish native IME correctness.
 3. Close the native keyboard and open Virtual keyboard from the shared
    icon-only workspace rail. The surface is visible below the terminal and
    contains the Common mode by

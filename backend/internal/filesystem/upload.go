@@ -10,9 +10,10 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
+// Upload limits exclude multipart framing.
 const (
-	maxUploadBytes = int64(10 << 30)
-	maxUploadFiles = 10_000
+	MaxUploadBytes = int64(10 << 30)
+	MaxUploadFiles = 10_000
 )
 
 type uploadJob struct {
@@ -63,8 +64,11 @@ func (s *Service) CancelUpload(instanceID, uploadID string) (UploadStatus, error
 	s.mu.Unlock()
 	if job == nil {
 		record, err := s.uploadRepo.LoadUpload(context.Background(), uploadID)
-		if isUploadNotFound(err) || err != nil {
+		if isUploadNotFound(err) {
 			return UploadStatus{}, ErrUploadNotFound
+		}
+		if err != nil {
+			return UploadStatus{}, err
 		}
 		if record.ConnectionInstanceID != instanceID {
 			return UploadStatus{}, ErrUploadNotFound
@@ -91,69 +95,69 @@ func (s *Service) CancelUpload(instanceID, uploadID string) (UploadStatus, error
 	return job.snapshot(), nil
 }
 
-func (s *Service) runUpload(ctx context.Context, id, conflictPolicy string, job *uploadJob) {
+func (s *Service) runUpload(ctx context.Context, id, conflictPolicy string, job *uploadJob, reservation *uploadReservation) {
+	defer reservation.cleanup()
+	defer job.cancel()
 	job.setStatus(func(status *UploadStatus) { status.Status = "running" })
-	target, err := s.resolveUploadTarget(ctx, id, job.root, job.snapshot().TargetPath)
-	if err == nil && conflictPolicy == "refuse" {
-		var conflicts []string
-		conflicts, err = s.uploadConflicts(ctx, id, job.root, job.snapshot().TargetPath, job.files)
-		if len(conflicts) > 0 {
-			job.setStatus(func(status *UploadStatus) {
-				status.Status = "failed"
-				for _, value := range conflicts {
-					status.Failures = append(status.Failures, UploadFailure{Path: value, Code: "filesystem_upload_conflict"})
-				}
-			})
-			job.cleanup()
-			return
-		}
-	}
-	if err != nil {
-		job.fail(err)
-		job.cleanup()
-		return
-	}
-	lease, err := s.remote.AcquireRemoteTransfer(ctx, id)
-	if err != nil {
-		job.fail(mapRemoteError(err))
-		job.cleanup()
-		return
-	}
-	defer lease.Close()
-	info := lease.Info()
-	rsAvailable, probeErr := s.rsyncAvailable(ctx, id)
-	if probeErr != nil {
-		job.fail(mapRemoteError(probeErr))
-		job.cleanup()
-		return
-	}
-	if rsAvailable {
-		if rsync, lookErr := exec.LookPath("rsync"); lookErr == nil {
-			job.setStatus(func(status *UploadStatus) { status.Transport = "rsync" })
-			err = runRsync(ctx, rsync, info, job, target, conflictPolicy)
-			if err != nil {
-				s.invalidateRsync(id)
-			}
-		} else {
-			job.setStatus(func(status *UploadStatus) { status.Transport = "scp" })
-			err = runScp(ctx, id, info, job, target, conflictPolicy, s)
-		}
-	} else {
-		job.setStatus(func(status *UploadStatus) { status.Transport = "scp" })
-		err = runScp(ctx, id, info, job, target, conflictPolicy, s)
-	}
-	if errors.Is(ctx.Err(), context.Canceled) {
+	conflicts, err := s.transferUpload(ctx, id, conflictPolicy, job)
+	switch {
+	case errors.Is(ctx.Err(), context.Canceled):
 		job.setStatus(func(status *UploadStatus) { status.Status = "cancelled" })
-	} else if err != nil {
+	case len(conflicts) > 0:
+		job.setStatus(func(status *UploadStatus) {
+			status.Status = "failed"
+			for _, value := range conflicts {
+				status.Failures = append(status.Failures, UploadFailure{Path: value, Code: "filesystem_upload_conflict"})
+			}
+		})
+	case err != nil:
 		job.fail(err)
-	} else {
+	default:
 		job.setStatus(func(status *UploadStatus) {
 			status.Status = "completed"
 			status.BytesSent = status.BytesTotal
 			status.CurrentPath = ""
 		})
 	}
-	job.cleanup()
+}
+
+func (s *Service) transferUpload(ctx context.Context, id, conflictPolicy string, job *uploadJob) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	relativeTarget := job.snapshot().TargetPath
+	target, err := s.resolveUploadTarget(ctx, id, job.root, relativeTarget)
+	if err != nil {
+		return nil, err
+	}
+	if conflictPolicy == "refuse" {
+		conflicts, err := s.uploadConflicts(ctx, id, job.root, relativeTarget, job.files)
+		if len(conflicts) > 0 || err != nil {
+			return conflicts, err
+		}
+	}
+	lease, err := s.remote.AcquireRemoteTransfer(ctx, id)
+	if err != nil {
+		return nil, mapRemoteError(err)
+	}
+	defer lease.Close()
+	info := lease.Info()
+	rsAvailable, err := s.rsyncAvailable(ctx, id)
+	if err != nil {
+		return nil, mapRemoteError(err)
+	}
+	if rsAvailable {
+		if rsync, lookErr := exec.LookPath("rsync"); lookErr == nil {
+			job.setStatus(func(status *UploadStatus) { status.Transport = "rsync" })
+			err := runRsync(ctx, rsync, info, job, target, conflictPolicy)
+			if err != nil {
+				s.invalidateRsync(id)
+			}
+			return nil, err
+		}
+	}
+	job.setStatus(func(status *UploadStatus) { status.Transport = "scp" })
+	return nil, runScp(ctx, id, info, job, target, conflictPolicy, s)
 }
 
 func (s *Service) resolveUploadTarget(ctx context.Context, id string, root RootContext, relative string) (string, error) {

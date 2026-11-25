@@ -12,6 +12,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
 )
 
@@ -128,7 +129,7 @@ func (i *Inventory) fingerprint(name string) (int, string, error) {
 	}
 	cmd := exec.Command(i.KeygenPath, "-lf", "/dev/stdin", "-E", "sha256")
 	cmd.Stdin = file
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	cmd.Env = append(processenv.Environment(), "LC_ALL=C")
 	out, runErr := cmd.Output()
 	_ = file.Close()
 	if runErr != nil {

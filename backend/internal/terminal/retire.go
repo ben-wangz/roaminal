@@ -8,119 +8,151 @@ import (
 	"time"
 )
 
-// retireSession is the only path that removes a connection instance from the
-// active store. The audit copy is committed before the active directory is
-// deleted, so a persistence failure leaves data recoverable.
-func (m *Manager) retireSession(ctx context.Context, session *Session) error {
-	session.mu.Lock()
-	if session.retired {
-		session.mu.Unlock()
+const retirementTimeout = 30 * time.Second
+
+// retireSession saves the final PTY checkpoint before retiring the connection
+// instance. On failure, leave active data for retry or startup recovery.
+func (m *Manager) retireSession(parent context.Context, session *Session) error {
+	ctx, cancel := m.storage.withContext(parent)
+	defer cancel()
+	// Join an existing retirement rather than reporting success before its
+	// archive commits. A failed attempt can be retried while budget remains.
+	if err := session.retireMu.lock(ctx); err != nil {
+		return err
+	}
+	defer session.retireMu.Unlock()
+	if session.retired.Load() {
 		return nil
 	}
-	if session.retiring {
-		session.mu.Unlock()
-		return nil
+	if err := session.awaitExitHook(ctx); err != nil {
+		return err
 	}
-	session.retiring = true
-	session.mu.Unlock()
+	session.retiring.Store(true)
+	defer session.retiring.Store(false)
 
-	defer func() {
-		session.mu.Lock()
-		session.retiring = false
-		session.mu.Unlock()
-	}()
-
-	session.waitReadLoop()
+	if err := session.waitReadLoop(ctx); err != nil {
+		return fmt.Errorf("drain PTY: %w", err)
+	}
 	if m.hasPersistence() {
-		if err := session.saveSnapshotFinal(); err != nil {
+		if err := session.saveSnapshotWithClosed(ctx, true); err != nil {
 			return fmt.Errorf("save final snapshot: %w", err)
 		}
-		session.mu.Lock()
-		session.meta.UpdatedAt = m.now().UTC()
-		meta := session.meta
-		session.mu.Unlock()
-		if err := m.saveMeta(meta); err != nil {
+	}
+	if err := session.mu.lock(ctx); err != nil {
+		return err
+	}
+	session.closeClientsLocked()
+	session.meta.UpdatedAt = m.now().UTC()
+	meta := session.meta
+	session.mu.Unlock()
+	if m.hasPersistence() {
+		if err := m.saveMetaContext(ctx, meta); err != nil {
 			return fmt.Errorf("save final metadata: %w", err)
 		}
-		if err := m.archivePersistedInstance(ctx, meta.ID); err != nil {
-			return fmt.Errorf("archive session: %w", err)
-		}
-		if err := m.deletePersistedInstance(ctx, meta.ID); err != nil {
-			return fmt.Errorf("remove active session: %w", err)
+		if err := m.retirePersistedInstance(ctx, meta.ID); err != nil {
+			return err
 		}
 	}
 
-	session.mu.Lock()
-	for client := range session.clients {
-		client.close()
-	}
-	session.clients = make(map[*Client]struct{})
-	session.controlOwner = nil
-	session.retired = true
-	id := session.meta.ID
-	session.mu.Unlock()
-
-	m.mu.Lock()
-	if current := m.sessions[id]; current == session {
-		delete(m.sessions, id)
-	}
-	m.mu.Unlock()
+	m.removeRetired(session, meta.ID)
 	if m.worker != nil {
-		if err := m.worker.CloseSession(ctx, id); err != nil && !errors.Is(err, os.ErrNotExist) {
-			fmt.Fprintf(os.Stderr, "Roaminal worker session %s cleanup warning: %v\n", id, err)
+		if err := m.worker.CloseSession(ctx, meta.ID); err != nil && !errors.Is(err, os.ErrNotExist) && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "Roaminal worker session %s cleanup warning: %v\n", meta.ID, err)
 		}
 	}
 	return nil
 }
 
-func (s *Session) waitReadLoop() {
-	if s.readDone == nil {
-		return
+func (m *Manager) removeRetired(session *Session, id string) {
+	session.retired.Store(true)
+	m.mu.Lock()
+	if m.sessions[id] == session {
+		delete(m.sessions, id)
 	}
-	select {
-	case <-s.readDone:
-		return
-	case <-time.After(2 * time.Second):
+	if m.pending[id] == session {
+		delete(m.pending, id)
 	}
-	// A process can exit while the PTY reader remains blocked. Closing the
-	// descriptor releases it without waiting indefinitely during cleanup.
-	s.mu.Lock()
+	m.mu.Unlock()
+}
+
+func (s *Session) closeClientsLocked() {
+	for client := range s.clients {
+		client.close()
+	}
+	clear(s.clients)
+	s.controlOwner = nil
+}
+
+func (s *Session) closePTY() {
 	if s.pty != nil {
 		_ = s.pty.Close()
 	}
-	s.mu.Unlock()
+}
+
+func (s *Session) waitReadLoop(ctx context.Context) error {
+	if s.readDone == nil {
+		return ctx.Err()
+	}
 	select {
 	case <-s.readDone:
+		return ctx.Err()
+	case <-ctx.Done():
+		s.closePTY()
+		return ctx.Err()
+	case <-time.After(2 * time.Second):
+	}
+	// A process can exit while a child still holds the PTY open.
+	s.closePTY()
+	select {
+	case <-s.readDone:
+		return ctx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-time.After(500 * time.Millisecond):
+		return errors.New("PTY reader did not stop")
 	}
 }
 
-func (m *Manager) terminateSession(ctx context.Context, session *Session, lifecycle string) error {
-	session.mu.Lock()
-	if session.retired {
+func (m *Manager) terminateSession(parent context.Context, session *Session, lifecycle string) error {
+	ctx, stop := context.WithTimeout(parent, retirementTimeout)
+	defer stop()
+	ctx, cancel := m.storage.withContext(ctx)
+	defer cancel()
+	defer session.closePTY()
+	if err := session.mu.lock(ctx); err != nil {
+		// PTY and process handles are immutable after publication. A stalled
+		// input, attach or checkpoint must not prevent signalling the process.
+		_ = terminateSessionProcessGroup(ctx, session.cmd)
+		return err
+	}
+	if session.retired.Load() {
 		session.mu.Unlock()
 		return os.ErrNotExist
 	}
-	cmd := session.cmd
-	session.closed = true
-	session.meta.Lifecycle = lifecycle
-	session.meta.UpdatedAt = m.now().UTC()
-	if session.pty != nil {
-		_ = session.pty.Close()
+	if !session.closed {
+		session.closed = true
+		session.meta.Lifecycle = lifecycle
+		if lifecycle == "interrupted" {
+			session.meta.BackendRuntimeID = m.runtimeID
+		}
+		session.meta.UpdatedAt = m.now().UTC()
 	}
-	for client := range session.clients {
-		client.close()
+	if session.snapshotTimer != nil {
+		session.snapshotTimer.Stop()
+		session.snapshotTimer = nil
 	}
-	session.clients = make(map[*Client]struct{})
-	session.controlOwner = nil
+	session.closeClientsLocked()
+	hook := session.takeExitHookLocked()
+	ephemeral := session.ephemeral
 	session.mu.Unlock()
-	terminateErr := terminateSessionProcessGroup(ctx, cmd)
-	if onExit := session.takeExitHook(); onExit != nil {
+
+	terminateErr := terminateSessionProcessGroup(ctx, session.cmd)
+	if hook != nil {
 		// Explicit termination is not a successful process exit. The hook still
-		// must run so resources owned by the process can be released.
-		onExit(ExitStatus{})
+		// releases resources owned by the process.
+		hook(ctx, ExitStatus{})
 	}
-	if session.ephemeral {
+	if ephemeral {
 		m.finishEphemeral(ctx, session)
 		return terminateErr
 	}

@@ -9,15 +9,17 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 	"github.com/creack/pty"
 )
 
 const defaultTerminalType = "xterm-256color"
 
 func (m *Manager) Start(ctx context.Context) error {
-	metas, err := m.listPersistedInstances(ctx)
+	metas, err := m.repositories.listInstances(ctx)
 	if err != nil {
 		return err
 	}
@@ -29,25 +31,23 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) retirePersisted(_ context.Context, meta domain.ConnectionInstanceMeta) error {
+func (m *Manager) retirePersisted(ctx context.Context, meta domain.ConnectionInstanceMeta) error {
 	if meta.Lifecycle == "live" || meta.Lifecycle == "" {
 		meta.Lifecycle = "interrupted"
 		meta.BackendRuntimeID = m.runtimeID
 		meta.UpdatedAt = m.now().UTC()
-		if err := m.saveMeta(meta); err != nil {
+		if err := m.saveMetaContext(ctx, meta); err != nil {
 			return err
 		}
 	}
-	if err := m.archivePersistedInstance(context.Background(), meta.ID); err != nil {
-		return err
-	}
-	return m.deletePersistedInstance(context.Background(), meta.ID)
+	return m.retirePersistedInstance(ctx, meta.ID)
 }
 
 func (m *Manager) startSession(ctx context.Context, meta domain.ConnectionInstanceMeta, cwd string, createWorker bool) (*Session, error) {
 	workerReady := false
 	if createWorker {
 		if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
+			m.closeUnpublishedWorker(meta.ID)
 			return nil, err
 		}
 		workerReady = true
@@ -55,7 +55,7 @@ func (m *Manager) startSession(ctx context.Context, meta domain.ConnectionInstan
 	session, err := m.startShell(meta, cwd)
 	if err != nil {
 		if workerReady {
-			_ = m.worker.CloseSession(ctx, meta.ID)
+			m.closeUnpublishedWorker(meta.ID)
 		}
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (m *Manager) startCommand(meta domain.ConnectionInstanceMeta, cwd string, a
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	cmd.Dir = cwd
-	cmd.Env = terminalEnvironment(os.Environ(), append([]string{"TERM=" + meta.TerminalType, "ROAMINAL_TERMINAL_ID=" + meta.ID}, extraEnv...))
+	cmd.Env = terminalEnvironment(processenv.Environment(), append([]string{"TERM=" + meta.TerminalType, "ROAMINAL_TERMINAL_ID=" + meta.ID}, extraEnv...))
 	file, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(meta.Cols), Rows: uint16(meta.Rows)})
 	if err != nil {
 		return nil, fmt.Errorf("start bash: %w", err)
@@ -150,17 +150,24 @@ func replaceEnvironment(environment []string, replacements map[string]string) []
 	return result
 }
 
-func (m *Manager) startLoops(session *Session) { go session.readLoop(); go session.waitLoop() }
-func (m *Manager) abortSession(ctx context.Context, session *Session, workerReady bool) {
-	session.mu.Lock()
-	session.closed = true
-	cmd := session.cmd
-	_ = session.pty.Close()
-	session.mu.Unlock()
-	_ = terminateSessionProcessGroup(ctx, cmd)
-	if workerReady {
-		_ = m.worker.CloseSession(ctx, session.meta.ID)
-	}
+func (m *Manager) startLoops(session *Session) {
+	go session.readLoop(session.meta.ID)
+	go session.waitLoop()
+}
+func (m *Manager) abortSession(ctx context.Context, session *Session) {
+	// The regular wait loop was never started for an unpublished process.
+	go func() { _ = session.cmd.Wait() }()
+	session.closePTY()
+	_ = terminateSessionProcessGroup(ctx, session.cmd)
+	m.closeUnpublishedWorker(session.meta.ID)
+}
+
+func (m *Manager) closeUnpublishedWorker(id string) {
+	// The caller may have cancelled after the worker processed create. Allow
+	// a short cleanup during normal serving; shutdown closes the whole worker.
+	ctx, cancel := context.WithTimeout(m.createCtx, time.Second)
+	defer cancel()
+	_ = m.worker.CloseSession(ctx, id)
 }
 func findRCFile() string {
 	paths := []string{os.Getenv("ROAMINAL_SHELL_RC"), filepath.Join(mustWD(), "shell", "roaminal-bashrc"), "/opt/roaminal/shell/roaminal-bashrc"}

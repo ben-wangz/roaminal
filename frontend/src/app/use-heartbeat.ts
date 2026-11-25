@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
-import { refresh } from '../auth/auth-client';
 import type { AuthState } from '../auth/auth-storage';
 import { heartbeat } from '../status/heartbeat';
 import { startPollLoop, type PollLoopDisposer } from '../status/poll-loop';
@@ -11,7 +10,6 @@ export { sameConnectionSummaries, sameHeartbeat } from '../connections/connectio
 
 type Params = {
   auth: AuthState | null;
-  setAuth: Dispatch<SetStateAction<AuthState | null>>;
   activeLaunchId: string | null;
   page: AppPage;
   setPage: Dispatch<SetStateAction<AppPage>>;
@@ -29,7 +27,6 @@ const DISCONNECT_AFTER_FAILURES = 2;
 // still reloads.
 export function useHeartbeat({
   auth,
-  setAuth,
   activeLaunchId,
   page,
   setPage,
@@ -72,14 +69,15 @@ export function useHeartbeat({
       if (paused.current || signal.aborted || (err as Error).name === 'AbortError') return;
       failures.current += 1;
       if (failures.current >= DISCONNECT_AFTER_FAILURES) controller.setHeartbeatConnected(false);
-      if ((err as Error).message === 'unauthorized') setAuth(await refresh());
+      // The API wrapper already attempted refresh for this request, if needed.
     } finally {
       controller.endSync();
     }
-  }, [activeLaunchId, controller, page, setActiveView, setAuth, setPage, viewRef]);
+  }, [activeLaunchId, controller, page, setActiveView, setPage, viewRef]);
 
+  const signedIn = auth !== null;
   useEffect(() => {
-    if (!auth) {
+    if (!signedIn) {
       paused.current = false;
       loopRef.current = null;
       return undefined;
@@ -91,7 +89,7 @@ export function useHeartbeat({
       if (loopRef.current === loop) loopRef.current = null;
       loop();
     };
-  }, [auth, sync]);
+  }, [signedIn, sync]);
 
   return useCallback(async () => {
     paused.current = true;

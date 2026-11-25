@@ -5,8 +5,8 @@ contexts and never print tokens.
 
 ## Procedure and assertions
 
-1. Without auth, verify `/healthz`, `/api/v2/version`, and login challenge endpoints
-   have their documented public behavior. Representative protected routes from
+1. Without auth, verify `/healthz`, `/readyz`, `/api/v2/version`, and login
+   challenge endpoints have their documented public behavior. Representative protected routes from
    every current family return `401` JSON errors: login sessions and heartbeat;
    connection instances, launches, definitions, SSH keys, Agent initializations,
    messages, notification config/preferences/subscriptions, remote monitor,

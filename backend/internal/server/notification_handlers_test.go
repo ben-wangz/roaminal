@@ -33,6 +33,7 @@ func TestNotificationSubscriptionAPIIsAuthenticatedAndKeepsKeysPrivate(t *testin
 	}
 	service, err := notifications.New(repositories.PushSubscriptions, identity.UUIDGenerator{}, notifications.Options{
 		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com", Sender: notificationTestSender{},
+		SessionActive: authManager.IsSessionActive,
 	})
 	if err != nil {
 		t.Fatal(err)

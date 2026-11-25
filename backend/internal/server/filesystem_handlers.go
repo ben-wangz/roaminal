@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
 	"github.com/ben-wangz/roaminal/backend/internal/filesystem"
 )
 
@@ -87,6 +88,10 @@ func writeFilesystemError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "filesystem_no_transport"
 	case errors.Is(err, filesystem.ErrTransportUnavailable):
 		status, code = http.StatusServiceUnavailable, "filesystem_transport_unavailable"
+	case errors.Is(err, connectionoptions.ErrOptionsUnavailable):
+		retryable := true
+		writeCodedErrorWithRetry(w, http.StatusServiceUnavailable, "FileSystem options temporarily unavailable", "filesystem_options_unavailable", nil, &retryable)
+		return
 	case errors.Is(err, filesystem.ErrRootUnavailable):
 		status, code = http.StatusConflict, "filesystem_root_unavailable"
 	case errors.Is(err, filesystem.ErrInvalidPath):
@@ -113,6 +118,11 @@ func writeFilesystemError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "filesystem_content_unavailable"
 	case errors.Is(err, filesystem.ErrInvalidRange):
 		status, code = http.StatusRequestedRangeNotSatisfiable, "filesystem_range_invalid"
+	case errors.Is(err, filesystem.ErrUploadManifestInvalid):
+		status, code = http.StatusBadRequest, "filesystem_upload_manifest_invalid"
+	case errors.Is(err, filesystem.ErrUploadStagingCapacity):
+		writeCodedError(w, http.StatusServiceUnavailable, "local upload staging capacity is exhausted", "filesystem_upload_staging_capacity", nil)
+		return
 	case errors.Is(err, filesystem.ErrUploadNotFound):
 		status, code = http.StatusNotFound, "filesystem_upload_not_found"
 	case errors.Is(err, filesystem.ErrUploadConflict):

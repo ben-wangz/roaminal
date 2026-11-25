@@ -12,7 +12,7 @@ import (
 // current enrollment identity; refresh sessions from any other identity are
 // rejected on every later boundary.
 func (m *Manager) issueLocked(userAgent string) (Tokens, error) {
-	if m.enrollmentState != enrollmentConfigured || m.enrollment == nil {
+	if m.enrollment == nil || m.enrollmentUnreadable || m.enrollmentInvalidationPending {
 		return Tokens{}, ErrNotConfigured
 	}
 	now := m.clock.Now().UTC()
@@ -46,10 +46,14 @@ func (m *Manager) issueLocked(userAgent string) (Tokens, error) {
 func (m *Manager) Authenticate(token string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
-	entry, ok := m.access[hashToken(strings.TrimSpace(token))]
-	if !ok || !entry.ExpiresAt.After(m.clock.Now().UTC()) {
+	reconcileErr := m.reconcileLocked()
+	entry := m.access[hashToken(strings.TrimSpace(token))]
+	now := m.clock.Now().UTC()
+	if !entry.ExpiresAt.After(now) || !m.sessionUsableLocked(m.refresh[entry.SessionID], now) {
 		return "", ErrUnauthorized
+	}
+	if reconcileErr != nil {
+		return "", reconcileErr
 	}
 	return entry.SessionID, nil
 }
@@ -60,21 +64,13 @@ func (m *Manager) Authenticate(token string) (string, error) {
 func (m *Manager) Refresh(token, userAgent string) (Tokens, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
-	if m.enrollmentState == enrollmentStorageError {
-		return Tokens{}, ErrEnrollmentStorage
-	}
-	hash := hashToken(strings.TrimSpace(token))
-	var old domain.AuthSessionRecord
-	var sessionID string
-	for id, entry := range m.refresh {
-		if hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) {
-			old, sessionID = entry, id
-			break
-		}
-	}
-	if sessionID == "" || !old.RefreshExpiresAt.After(m.clock.Now().UTC()) || old.PasswordFingerprint != m.fingerprint || !m.sessionBoundLocked(old) {
+	reconcileErr := m.reconcileLocked()
+	sessionID, old := m.refreshByTokenLocked(token)
+	if !m.sessionUsableLocked(old, m.clock.Now().UTC()) {
 		return Tokens{}, ErrUnauthorized
+	}
+	if reconcileErr != nil {
+		return Tokens{}, reconcileErr
 	}
 	previous := old
 	oldAccess := make(map[string]accessEntry)
@@ -119,4 +115,17 @@ func (m *Manager) Refresh(token, userAgent string) (Tokens, error) {
 		return Tokens{}, err
 	}
 	return Tokens{AccessToken: access, AccessTokenExpiresAt: now.Add(m.cfg.AuthAccessTTL), RefreshToken: refresh, RefreshTokenExpiresAt: old.RefreshExpiresAt, SessionID: sessionID}, nil
+}
+
+func (m *Manager) refreshByTokenLocked(token string) (string, domain.AuthSessionRecord) {
+	token = strings.TrimSpace(token)
+	if token != "" {
+		hash := hashToken(token)
+		for id, entry := range m.refresh {
+			if hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) {
+				return id, entry
+			}
+		}
+	}
+	return "", domain.AuthSessionRecord{}
 }

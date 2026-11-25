@@ -6,11 +6,11 @@ Priority: P0. Capabilities: core. Viewports: all five standard projects.
 
 - Start with a fresh browser context and no Roaminal keys in local storage.
 - Register the mandatory diagnostics listeners before navigation.
-- The release must have a completed TOTP enrollment. Record the Base32 secret
-  through the operator path (`kubectl exec` reading `<state root>/2fa-secret`
-  as described in `docs/security.md`), or complete PW-AUTH-005 enrollment
-  first and keep its secret. Compute codes locally with standard TOTP
-  parameters: six digits, 30-second period, SHA-1, one step of tolerance.
+- The release must have a completed TOTP enrollment. Use the dedicated test
+  enrollment secret kept by the operator, or complete enrollment in
+  [PW-AUTH-005](05-mandatory-totp.md) first. Do not query the database for
+  credentials. Compute codes locally: six digits, 30-second period, SHA-1,
+  one step of tolerance.
 
 ## Procedure and assertions
 

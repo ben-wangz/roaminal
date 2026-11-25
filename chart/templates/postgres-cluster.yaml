@@ -1,0 +1,28 @@
+{{- if include "roaminal.postgres.managed" . }}
+{{- $managed := .Values.database.postgres.managed }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "roaminal.postgres.clusterName" . | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  instances: 1
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: {{ $managed.database | quote }}
+      owner: {{ $managed.username | quote }}
+      secret:
+        name: {{ include "roaminal.postgres.secretName" . | quote }}
+  storage:
+    size: {{ $managed.storage.size | quote }}
+    {{- with $managed.storage.storageClass }}
+    storageClass: {{ . | quote }}
+    {{- end }}
+{{- end }}

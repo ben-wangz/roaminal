@@ -109,9 +109,15 @@ func writeAuthError(w http.ResponseWriter, err error) {
 	case errors.Is(err, auth.ErrAlreadyConfigured):
 		writeError(w, 409, "TOTP enrollment already configured")
 	case errors.Is(err, auth.ErrEnrollmentStorage):
-		writeError(w, 503, "auth enrollment storage unavailable")
+		writeCodedError(w, http.StatusServiceUnavailable, "auth enrollment storage unavailable", "auth_enrollment_storage_unavailable", nil)
+	case errors.Is(err, auth.ErrSessionStorage):
+		writeCodedError(w, http.StatusServiceUnavailable, "auth session storage unavailable", "auth_session_storage_unavailable", nil)
+	case errors.Is(err, auth.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+	case errors.Is(err, auth.ErrUnauthorized):
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 	default:
-		writeError(w, 401, "unauthorized")
+		writeError(w, http.StatusInternalServerError, "internal error")
 	}
 }
 
@@ -141,11 +147,11 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	sessionID, _ := s.auth.Authenticate(bearer(r))
-	if sessionID == "" {
-		sessionID, _ = s.auth.SessionIDForRefresh(body.RefreshToken)
+	sessionID, err := s.auth.Logout(body.RefreshToken, bearer(r))
+	if err != nil {
+		writeAuthError(w, err)
+		return
 	}
-	_ = s.auth.Logout(body.RefreshToken, bearer(r))
 	if s.notifications != nil && sessionID != "" {
 		if err := s.notifications.DeleteAll(r.Context(), sessionID); err != nil {
 			logNotificationCleanup("logout", err)
@@ -158,15 +164,11 @@ func noStoreAuthResponse(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 }
 
-func (s *Server) revokeAuthSession(w http.ResponseWriter, r *http.Request, _ string) {
+func (s *Server) revokeAuthSession(w http.ResponseWriter, r *http.Request, sessionID string) {
 	noStoreAuthResponse(w)
 	id := r.PathValue("authSessionId")
-	if err := s.auth.Revoke(id); err != nil {
-		if errors.Is(err, auth.ErrNotFound) {
-			writeError(w, 404, "not found")
-		} else {
-			writeError(w, 500, "internal error")
-		}
+	if err := s.auth.Revoke(sessionID, id); err != nil {
+		writeAuthError(w, err)
 		return
 	}
 	if s.notifications != nil {
@@ -178,17 +180,14 @@ func (s *Server) revokeAuthSession(w http.ResponseWriter, r *http.Request, _ str
 }
 func (s *Server) logoutOthers(w http.ResponseWriter, r *http.Request, sessionID string) {
 	noStoreAuthResponse(w)
-	otherSessions := s.auth.List(sessionID)
-	if err := s.auth.LogoutOthers(sessionID); err != nil {
-		writeError(w, 500, "internal error")
+	otherSessionIDs, err := s.auth.LogoutOthers(sessionID)
+	if err != nil {
+		writeAuthError(w, err)
 		return
 	}
 	if s.notifications != nil {
-		for _, other := range otherSessions {
-			if other.ID == sessionID {
-				continue
-			}
-			if err := s.notifications.DeleteAll(r.Context(), other.ID); err != nil {
+		for _, otherID := range otherSessionIDs {
+			if err := s.notifications.DeleteAll(r.Context(), otherID); err != nil {
 				logNotificationCleanup("logout_others", err)
 			}
 		}
@@ -200,7 +199,7 @@ func (s *Server) currentSession(w http.ResponseWriter, _ *http.Request, sessionI
 	noStoreAuthResponse(w)
 	result, err := s.auth.Current(sessionID)
 	if err != nil {
-		writeError(w, 401, "unauthorized")
+		writeAuthError(w, err)
 		return
 	}
 	writeJSON(w, 200, result)
@@ -208,5 +207,10 @@ func (s *Server) currentSession(w http.ResponseWriter, _ *http.Request, sessionI
 
 func (s *Server) authSessions(w http.ResponseWriter, _ *http.Request, sessionID string) {
 	noStoreAuthResponse(w)
-	writeJSON(w, 200, authSessionCollectionResponse{Sessions: s.auth.List(sessionID)})
+	sessions, err := s.auth.List(sessionID)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, 200, authSessionCollectionResponse{Sessions: sessions})
 }

@@ -10,11 +10,10 @@ import (
 	"strings"
 )
 
-// Prune removes subscriptions belonging to expired login sessions.
-// It is intentionally best effort at startup: notification availability must
-// not prevent the terminal service from starting.
-func (s *Service) Prune(ctx context.Context, active func(string) bool) error {
-	if s == nil || s.repository == nil || active == nil {
+// Prune removes subscriptions only after confirming their login session is
+// inactive. Startup treats a failed check as best effort and retains them.
+func (s *Service) Prune(ctx context.Context) error {
+	if s == nil || s.repository == nil || s.sessionActive == nil {
 		return nil
 	}
 	records, err := s.repository.ListPushSubscriptions(ctx)
@@ -23,10 +22,14 @@ func (s *Service) Prune(ctx context.Context, active func(string) bool) error {
 	}
 	removed := 0
 	for _, record := range records {
-		if active(record.AuthenticationSessionID) {
+		active, err := s.sessionActive(record.AuthenticationSessionID)
+		if err != nil {
+			return err
+		}
+		if active {
 			continue
 		}
-		if err := s.DeleteByID(ctx, record.ID); err != nil {
+		if err := s.Delete(ctx, record.AuthenticationSessionID, record.ID); err != nil {
 			return err
 		}
 		removed++

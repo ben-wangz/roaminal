@@ -26,6 +26,9 @@ license notices in their module distributions:
 - `github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc` (transitive OTP dependency) - MIT
 - `github.com/golang-jwt/jwt/v5 v5.3.1` (transitive Web Push dependency) - MIT
 - `gopkg.in/yaml.v3 v3.0.1` - MIT
+- GORM v2 and the `gorm.io/driver/sqlite` and `gorm.io/driver/postgres` drivers - MIT
+- `github.com/jackc/pgx/v5` (PostgreSQL client) - MIT
+- `github.com/mattn/go-sqlite3` (transitive SQLite driver) - MIT; SQLite itself is public domain
 
 ## Direct JavaScript dependencies
 
@@ -34,7 +37,8 @@ Runtime packages:
 - React and React DOM - MIT
 - `@xterm/xterm`, `@xterm/headless`, `@xterm/addon-fit`,
   `@xterm/addon-ligatures`, `@xterm/addon-progress`, `@xterm/addon-search`, and
-  `@xterm/addon-serialize` - MIT
+  `@xterm/addon-serialize` - MIT; see `LICENSES/xterm.js.txt`. The frontend
+  patches the pinned `@xterm/xterm` browser bundle at build time for IME input.
 - `lucide-react` - ISC
 - `@fontsource/monaspace-neon` and its bundled Monaspace Neon font files -
   SIL Open Font License 1.1; see `LICENSES/OFL-1.1.txt`

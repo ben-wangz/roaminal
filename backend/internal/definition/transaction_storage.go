@@ -1,6 +1,7 @@
 package definition
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -36,23 +37,46 @@ func readDefinitionTransaction(path string) (*definitionTransaction, bool, error
 	if err != nil {
 		return nil, false, err
 	}
+	transaction, err := decodeDefinitionTransaction(data)
+	return transaction, err == nil, err
+}
+
+func decodeDefinitionTransaction(data []byte) (*definitionTransaction, error) {
 	if len(data) > definitionJournalMaxBytes {
-		return nil, false, errors.New("definition transaction journal exceeds size limit")
+		return nil, errors.New("definition transaction journal exceeds size limit")
 	}
 	var transaction definitionTransaction
-	if err := json.Unmarshal(data, &transaction); err != nil {
-		return nil, false, fmt.Errorf("decode definition transaction journal: %w", err)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&transaction); err != nil || dec.Decode(new(any)) != io.EOF {
+		return nil, errors.New("invalid definition transaction journal")
 	}
 	if transaction.Version != definitionTransactionVersion || transaction.ID == "" {
-		return nil, false, errors.New("unsupported definition transaction journal")
+		return nil, errors.New("unsupported definition transaction journal")
 	}
 	if transaction.Phase != definitionTransactionPrepared && transaction.Phase != definitionTransactionCommitted {
-		return nil, false, errors.New("invalid definition transaction phase")
+		return nil, errors.New("invalid definition transaction phase")
 	}
-	if len(transaction.Config.Data) > sshfs.ConfigMaxBytes || len(transaction.Options.Data) > connectionoptions.MaxBytes {
-		return nil, false, errors.New("definition transaction snapshot exceeds size limit")
+	if !validTransactionSnapshot(transaction.Config, sshfs.ConfigMaxBytes) || !validTransactionSnapshot(transaction.Options, connectionoptions.MaxBytes) {
+		return nil, errors.New("invalid definition transaction snapshot")
 	}
-	return &transaction, true, nil
+	return &transaction, nil
+}
+
+func validTransactionSnapshot(snapshot transactionSnapshot, limit int) bool {
+	return len(snapshot.Data) <= limit && (snapshot.Exists || len(snapshot.Data) == 0)
+}
+
+// LegacyMutationBackups returns the pre-mutation file snapshots. The old
+// journal stored no intended digest, so a prepared journal cannot safely
+// forward-commit. Require the operator to reconcile the copied SSH file.
+func LegacyMutationBackups(data []byte) (config, options connectionoptions.Snapshot, prepared bool, err error) {
+	tx, err := decodeDefinitionTransaction(data)
+	if err != nil {
+		return config, options, false, err
+	}
+	return connectionoptions.Snapshot{Exists: tx.Config.Exists, Data: tx.Config.Data},
+		connectionoptions.Snapshot{Exists: tx.Options.Exists, Data: tx.Options.Data}, tx.Phase == definitionTransactionPrepared, nil
 }
 
 func writeDefinitionTransaction(path string, transaction *definitionTransaction) error {

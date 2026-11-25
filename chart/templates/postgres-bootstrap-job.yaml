@@ -1,0 +1,94 @@
+{{- if include "roaminal.postgres.managed" . }}
+{{- $spec := include "roaminal.postgres.bootstrapJobSpec" . }}
+{{- $hash := list (fromYaml $spec) .Values.database.postgres.managed.bootstrapRevision | toJson | sha256sum | trunc 12 }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s" (include "roaminal.postgres.bootstrapName" . | trunc 50 | trimSuffix "-") $hash | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  {{- $spec | nindent 2 }}
+{{- end }}
+
+{{- define "roaminal.postgres.bootstrapJobSpec" -}}
+backoffLimit: 2
+activeDeadlineSeconds: 180
+template:
+  spec:
+    serviceAccountName: {{ include "roaminal.postgres.bootstrapName" . | quote }}
+    automountServiceAccountToken: false
+    enableServiceLinks: false
+    restartPolicy: Never
+    terminationGracePeriodSeconds: 5
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      seccompProfile:
+        type: RuntimeDefault
+    {{- with .Values.imagePullSecrets }}
+    imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    containers:
+      - name: bootstrap-postgres
+        image: {{ include "roaminal.image" . | quote }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/usr/local/bin/roaminal", "db", "bootstrap-postgres"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+        env:
+          - name: ROAMINAL_DB_BOOTSTRAP_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: ROAMINAL_DB_BOOTSTRAP_SECRET
+            value: {{ include "roaminal.postgres.secretName" . | quote }}
+          - name: ROAMINAL_DB_BOOTSTRAP_MARKER
+            value: {{ include "roaminal.postgres.bootstrapName" . | quote }}
+          - name: ROAMINAL_DB_BOOTSTRAP_OWNER
+            value: {{ .Release.Name | quote }}
+          - name: ROAMINAL_DB_BOOTSTRAP_HOST
+            value: {{ include "roaminal.postgres.host" . | quote }}
+          - name: ROAMINAL_DB_BOOTSTRAP_DATABASE
+            value: {{ .Values.database.postgres.managed.database | quote }}
+          - name: ROAMINAL_DB_BOOTSTRAP_USERNAME
+            value: {{ .Values.database.postgres.managed.username | quote }}
+          - name: ROAMINAL_DB_BOOTSTRAP_DSN_KEY
+            value: {{ .Values.database.postgres.dsnKey | quote }}
+          - name: ROAMINAL_DB_BOOTSTRAP_CA_FILE
+            value: {{ include "roaminal.postgres.caFile" . | quote }}
+        volumeMounts:
+          - name: bootstrap-api
+            mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+            readOnly: true
+    volumes:
+      - name: bootstrap-api
+        projected:
+          defaultMode: 288 # 0440; readable by the Job's fsGroup
+          sources:
+            # Omitting audience requests the Kubernetes API audience.
+            - serviceAccountToken:
+                expirationSeconds: 600
+                path: token
+            - configMap:
+                name: kube-root-ca.crt
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+{{- end -}}

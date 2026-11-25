@@ -45,12 +45,131 @@ helm upgrade --install roaminal ./chart \
 For an image in a private registry, set `image.registry`, `image.repository`,
 `image.tag` or `image.digest`, and `imagePullSecrets` as appropriate.
 
-## Storage
+## Database
 
-Set `persistence.existingClaim` to reuse a pre-provisioned unified PVC. The
-claim must contain the `state/`, `workspace/`, and `ssh/` directories. The
-chart keeps chart-created PVCs on uninstall; verify backups before deliberately
-deleting the claim.
+SQLite is the default and requires `persistence.enabled: true`. Roaminal
+stores it at `/home/roaminal/.roaminal/db/roaminal.sqlite3` on the state PVC.
+Before startup the init container restores private modes on the state and SQLite
+`db/` directories, the database and its sidecars, and the local binding. These
+paths must be owned by the Roaminal UID (1000 by default); symlinks and multiply
+linked files are rejected. The init container does not repair ownership,
+change legacy files, or recursively chmod the PVC.
+The whole state directory is mounted so SQLite sidecars stay with the DB. Use
+SQLite-compatible storage and take SQLite-aware backups or consistent offline
+snapshots, not copies of just the live database file.
+
+The chart sets `ROAMINAL_DB_DRIVER`, `ROAMINAL_DB_SQLITE_PATH`, and
+`ROAMINAL_DB_POSTGRES_DSN` explicitly, with an empty inactive setting. Do not
+set DB env via `extraEnv` or `extraEnvFrom`. Use a Roaminal image that supports
+these settings, `db prepare-state`, and `/readyz`. Startup and liveness still
+use `/healthz`. Keep
+more than 60 seconds for PostgreSQL startup retries when tuning the startup
+probe (the default window is 120 seconds).
+
+### External PostgreSQL
+
+Provision a database and a non-superuser role. Put the full PostgreSQL URI
+(endpoint, database, user, password, and TLS options) in a required Secret in
+the release namespace, never in Helm values or a ConfigMap. Use verified TLS
+(`sslmode=verify-full`). No CloudNativePG resources or bootstrap RBAC are
+created in this mode.
+
+```yaml
+database:
+  driver: postgres
+  postgres:
+    existingSecret: roaminal-postgres
+    dsnKey: dsn
+    # Optional: omit this block if the URI uses system trust.
+    caSecret:
+      name: postgres-ca
+      key: ca.crt
+```
+
+If specified, the CA Secret must also be in the release namespace. Its selected
+key is mounted read-only at `/etc/roaminal/postgres-ca/ca.crt`; reference that
+path with `sslrootcert` in the URI. Secret updates do not change a running
+container's env. Coordinate database role rotation, Secret updates, and a
+controlled restart. PostgreSQL stores database records, not the local database
+binding, workspace files, or native SSH files.
+
+### Managed PostgreSQL
+
+Install the CloudNativePG Operator and `Cluster` CRD separately and pin their
+version. The reference version is [CloudNativePG v1.30.2][cnpg]; it supports
+Kubernetes 1.34–1.36. SQLite and external PostgreSQL do not need this Operator.
+
+```yaml
+database:
+  driver: postgres
+  postgres:
+    managed:
+      storage:
+        size: 10Gi
+        storageClass: "" # Use the default class.
+```
+
+Leave `database.postgres.existingSecret` empty. The chart declares one
+CloudNativePG instance and a separate database PVC. The credential Job runs
+`roaminal db bootstrap-postgres` in the same pinned image as the application.
+It creates a release-qualified `kubernetes.io/basic-auth` Secret with
+`username`, `password`, and the URI under `database.postgres.dsnKey` (default
+`dsn`). The `Cluster` uses that Secret for `initdb`; the app uses the URI for
+`<cluster>-rw.<namespace>.svc` with verified TLS. The app mounts only `ca.crt`
+from the Operator-generated `<cluster>-ca` Secret.
+
+The Job is not a Helm hook. Argo CD sync waves run the bootstrap identity and
+RBAC at `-2`, the Job at `-1`, and the Cluster and Deployment at `0`. The Job
+does not wait for PostgreSQL: it must complete before the Cluster is applied.
+Helm does not use Argo waves; required Secret references block startup until
+credentials and CA exist, and the app retries startup against the same URI.
+Use `helm upgrade --install --wait --wait-for-jobs --timeout 15m` with the
+release, chart, namespace and values, increasing the timeout for slow volumes
+or image pulls. A connection failure never triggers password regeneration.
+
+The bootstrap Job uses a dedicated ServiceAccount and a short-lived projected
+API token. It can `get` only the named credential Secret and marker ConfigMap,
+and `create` Secrets and ConfigMaps in the release namespace. Kubernetes RBAC
+cannot constrain `create` by name. Use an admission policy matching this
+ServiceAccount on CREATE to restrict it to the exact rendered names (no
+`generateName`), a `kubernetes.io/basic-auth` Secret, and an empty marker
+ConfigMap. The app Pods do not automount API tokens.
+
+The Job name changes only when its spec or
+`database.postgres.managed.bootstrapRevision` changes. The Secret and marker
+names stay stable, and the Job never overwrites a Secret. Treat the managed
+database name, username, and DSN key as part of the installation identity, not
+routine upgrade settings. Back up the database, credential Secret, and marker
+together. The Secret and marker are created at
+runtime and are not owned by the Job or tracked by Helm or Argo CD. The Cluster
+is marked to keep on Helm removal and not to prune or delete in Argo CD.
+CloudNativePG owns its PVCs, so deleting the Cluster may garbage-collect them;
+verify the PV reclaim policy (use `Retain` if required) and keep verified
+backups before deleting the Cluster or namespace.
+
+If the Secret is missing but the marker remains, bootstrap waits for the
+Secret and fails closed. Pause reconciliation before recovery. With initialized
+storage, restore the matching Secret and marker or explicitly reset the DB role
+and restore matching credentials; do not clear the guard and generate a new
+password against those volumes. If both objects are lost, recover them before
+reinstalling against retained data. Clear a stranded marker and bump
+`bootstrapRevision` only after verifying PostgreSQL never initialized.
+
+[cnpg]: https://github.com/cloudnative-pg/cloudnative-pg/releases/tag/v1.30.2
+
+## Storage and maintenance
+
+Both drivers require `persistence.enabled: true`. Even with PostgreSQL, the
+unified PVC retains the local database binding, workspace, and default SSH
+storage, independently of the PostgreSQL PVC. Set `persistence.existingClaim`
+to reuse a claim. The init container creates missing directories if the claim
+is writable by UID/GID 1000. The chart keeps chart-created PVCs on uninstall;
+verify backups before deliberately deleting the claim.
+
+Set `maintenance.enabled: true` to scale only the Roaminal Deployment to zero
+without removing storage or database resources. Wait for the old Pod to exit
+before an offline backup or migration. Changing drivers does not migrate data;
+complete and verify the offline import before disabling maintenance.
 
 The container root filesystem is read-only. The chart always mounts a writable
 `emptyDir` at `/tmp` for SSH multiplexing sockets; configure its medium and
@@ -147,18 +266,14 @@ Controller.
 ## Security and lifecycle
 
 The defaults run UID/GID 1000 with `RuntimeDefault` seccomp, no privilege
-escalation, all capabilities dropped, and a read-only root filesystem. The
-chart does not create RBAC resources and disables ServiceAccount token
-automounting by default. Do not override these settings without reviewing the
-security and storage consequences.
+escalation, all capabilities dropped, and a read-only root filesystem. The app
+does not automount ServiceAccount tokens. Only managed PostgreSQL adds
+credential RBAC. Configure the storage provisioner so UID/GID 1000 can create
+and use the directories; the init container does not repair ownership.
 
-An init container creates the three directories on an empty unified PVC. It
-does not repair ownership or permissions on an existing mount. Configure the
-storage provisioner so UID/GID 1000 can create and use the directories.
-
-Every upgrade uses `Recreate` and interrupts active terminal, SSH, and tmux
-processes. Back up the complete unified PVC because it contains SSH material as
-well as state and workspace data.
+The single serving replica uses `Recreate`; replacing it interrupts live
+connection instances even with PostgreSQL. Back up the complete unified PVC
+because it contains SSH material as well as state and workspace data.
 
 ## ForgeKit versions
 

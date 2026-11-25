@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
@@ -57,7 +58,9 @@ func (s *Server) createConnectionInstance(w http.ResponseWriter, r *http.Request
 		result, err = s.terms.Create(r.Context(), cwd, body.Cols, body.Rows)
 	}
 	if err != nil {
-		if errors.Is(err, ports.ErrTransportDraining) {
+		if errors.Is(err, definition.ErrUnavailable) {
+			writeError(w, http.StatusServiceUnavailable, "connection definition temporarily unavailable", "definition")
+		} else if errors.Is(err, ports.ErrTransportDraining) {
 			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")
 		} else if errors.Is(err, ports.ErrTransportUnavailable) {
 			writeError(w, http.StatusConflict, "ssh transport unavailable", "transport")
@@ -85,7 +88,9 @@ func (s *Server) createConnectionLaunch(w http.ResponseWriter, r *http.Request, 
 	}
 	result, err := s.terms.CreateRemoteLaunchOwned(r.Context(), body.ConnectionDefinitionID, body.Cols, body.Rows, stringValue(body.ReuseFromConnectionInstanceID), sessionID)
 	if err != nil {
-		if errors.Is(err, ports.ErrTmuxNotEnabled) {
+		if errors.Is(err, definition.ErrUnavailable) {
+			writeError(w, http.StatusServiceUnavailable, "connection definition temporarily unavailable", "definition")
+		} else if errors.Is(err, ports.ErrTmuxNotEnabled) {
 			writeError(w, http.StatusConflict, "tmux is not enabled for this connection", "tmux")
 		} else if errors.Is(err, ports.ErrTransportDraining) {
 			writeError(w, http.StatusConflict, "ssh transport is draining", "transport")

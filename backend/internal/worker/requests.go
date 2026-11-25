@@ -10,7 +10,7 @@ func (c *Client) request(ctx context.Context, header requestHeader, payload []by
 	header.SchemaVersion = SchemaVersion
 	header.CorrelationID = correlationID
 	waiter := c.register(correlationID)
-	if err := c.send(header, payload); err != nil {
+	if err := c.send(ctx, header, payload); err != nil {
 		c.unregister(correlationID, waiter)
 		return Result{}, err
 	}
@@ -55,13 +55,13 @@ func (c *Client) Write(terminalID, sequence string, payload []byte) error {
 	if !validSequence(sequence) {
 		return errors.New("invalid worker sequence")
 	}
-	return c.send(requestHeader{Op: "write", Protocol: Protocol, TerminalID: terminalID, Sequence: sequence}, payload)
+	return c.send(context.Background(), requestHeader{Op: "write", Protocol: Protocol, TerminalID: terminalID, Sequence: sequence}, payload)
 }
 func (c *Client) Resize(terminalID, sequence string, cols, rows int) error {
 	if !validSequence(sequence) || cols < 2 || cols > 1000 || rows < 1 || rows > 1000 {
 		return errors.New("invalid worker resize")
 	}
-	return c.send(requestHeader{Op: "resize", Protocol: Protocol, TerminalID: terminalID, Sequence: sequence, Cols: intValue(cols), Rows: intValue(rows)}, nil)
+	return c.send(context.Background(), requestHeader{Op: "resize", Protocol: Protocol, TerminalID: terminalID, Sequence: sequence, Cols: intValue(cols), Rows: intValue(rows)}, nil)
 }
 func (c *Client) Snapshot(ctx context.Context, terminalID, sequence string) ([]byte, string, error) {
 	result, err := c.request(ctx, requestHeader{Op: "snapshot", Protocol: Protocol, TerminalID: terminalID, ThroughSequence: sequence}, nil)
@@ -80,9 +80,11 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	}
 	c.stopping.Store(true)
 	_, err := c.request(ctx, requestHeader{Op: "shutdown", Protocol: Protocol}, nil)
+	// Even if the request never reached the pipe, wake the writer and
+	// terminate the process group within the caller's remaining budget.
 	_ = c.stdin.Close()
-	_ = terminateProcessGroup(ctx, c.cmd)
-	return err
+	c.fail(ErrUnavailable)
+	return errors.Join(err, terminateProcessGroup(ctx, c.cmd))
 }
 func (c *Client) Available() bool {
 	select {

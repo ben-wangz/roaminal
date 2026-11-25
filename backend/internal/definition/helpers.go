@@ -1,6 +1,9 @@
 package definition
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
@@ -41,58 +44,45 @@ func (s *Service) knownKeys() map[string]bool {
 	return result
 }
 
-func (s *Service) enrich(collection *sshconfig.Collection) {
+func (s *Service) enrich(collection *sshconfig.Collection) (map[string]connectionoptions.Tmux, error) {
 	if s.options == nil {
 		collection.TmuxOptionsSource = connectionoptions.Source{Status: "unavailable", Reason: "options store unavailable"}
-		return
+		return nil, connectionoptions.ErrOptionsUnavailable
 	}
-	if !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing" {
-		loaded, loadErr := s.options.Load(nil)
-		collection.TmuxOptionsSource = loaded.Source
-		if loadErr != nil && collection.TmuxOptionsSource.Reason == "" {
-			collection.TmuxOptionsSource.Reason = loadErr.Error()
-		}
-		return
-	}
-	loaded, loadErr := s.options.Load(sshAliases(*collection))
+	// A mutation may use options for an alias not currently present in the
+	// native file; the collection and its ETag expose only visible options.
+	loaded, err := s.options.Load(nil)
 	collection.TmuxOptionsSource = loaded.Source
-	if loadErr != nil {
-		if collection.TmuxOptionsSource.Reason == "" {
-			collection.TmuxOptionsSource.Reason = loadErr.Error()
+	if err != nil {
+		if collection.TmuxOptionsSource.Status == "" {
+			collection.TmuxOptionsSource.Status = "unavailable"
 		}
-		return
+		if collection.TmuxOptionsSource.Reason == "" {
+			collection.TmuxOptionsSource.Reason = connectionoptions.ErrOptionsUnavailable.Error()
+		}
+		return nil, err
 	}
+	visible := make(map[string]connectionoptions.Tmux)
 	for index := range collection.Definitions {
 		definition := &collection.Definitions[index]
-		if option, ok := loaded.Options[definition.HostAlias]; ok && definition.Type == "ssh" {
+		if definition.Type != "ssh" {
+			continue
+		}
+		pwd := connectionoptions.DefaultPwd
+		if option, ok := loaded.Options[definition.HostAlias]; ok {
+			visible[definition.HostAlias] = option
 			if option.Enabled {
 				definition.Tmux = &sshconfig.TmuxOptions{Enabled: true, SessionName: option.SessionName}
 			}
-			definition.FileSystem = &sshconfig.FileSystemOptions{Pwd: option.Pwd}
-		} else if definition.Type == "ssh" {
-			definition.FileSystem = &sshconfig.FileSystemOptions{Pwd: connectionoptions.DefaultPwd}
+			pwd = option.Pwd
 		}
+		definition.FileSystem = &sshconfig.FileSystemOptions{Pwd: pwd}
 	}
-}
-
-func sshAliases(collection sshconfig.Collection) map[string]bool {
-	return sshAliasesFromDefinitions(collection.Definitions)
-}
-
-func sshAliasesFromRepo(repo *sshconfig.Repository, keys map[string]bool) map[string]bool {
-	collection, err := repo.Collection(keys)
-	if err != nil {
-		return map[string]bool{}
+	if s.mutations != nil {
+		// JSON orders the alias keys; the native tag is opaque and fixed-width.
+		data, _ := json.Marshal(visible)
+		digest := sha256.Sum256(append([]byte(collection.ETag), data...))
+		collection.ETag = `"` + hex.EncodeToString(digest[:]) + `"`
 	}
-	return sshAliases(collection)
-}
-
-func sshAliasesFromDefinitions(definitions []sshconfig.Definition) map[string]bool {
-	aliases := make(map[string]bool)
-	for _, item := range definitions {
-		if item.Type == "ssh" {
-			aliases[item.HostAlias] = true
-		}
-	}
-	return aliases
+	return loaded.Options, nil
 }

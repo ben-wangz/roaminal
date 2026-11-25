@@ -71,6 +71,42 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if .Values.serviceAccount.create -}}{{- default (include "roaminal.fullname" .) .Values.serviceAccount.name -}}{{- else -}}{{- default "default" .Values.serviceAccount.name -}}{{- end -}}
 {{- end -}}
 
+{{/* Managed PostgreSQL is selected only by an explicit driver setting. */}}
+{{- define "roaminal.postgres.managed" -}}
+{{- if and (eq .Values.database.driver "postgres") (not .Values.database.postgres.existingSecret) -}}true{{- end -}}
+{{- end -}}
+
+{{/* Stay within CloudNativePG's 50-character limit without losing release identity. */}}
+{{- define "roaminal.postgres.clusterName" -}}
+{{- $release := .Release.Name -}}
+{{- $name := printf "pg-%s" ($release | replace "." "-") -}}
+{{- if or (gt (len $name) 50) (contains "." $release) -}}
+{{- printf "%s-%s" (trunc 37 $name | trimSuffix "-") (sha256sum $release | trunc 12) -}}
+{{- else -}}
+{{- $name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "roaminal.postgres.secretName" -}}
+{{- .Values.database.postgres.existingSecret | default (printf "%s-credentials" (include "roaminal.postgres.clusterName" .)) -}}
+{{- end -}}
+{{- define "roaminal.postgres.bootstrapName" -}}
+{{- printf "%s-bootstrap" (include "roaminal.postgres.clusterName" .) -}}
+{{- end -}}
+{{- define "roaminal.postgres.host" -}}
+{{- printf "%s-rw.%s.svc" (include "roaminal.postgres.clusterName" .) .Release.Namespace -}}
+{{- end -}}
+{{- define "roaminal.postgres.caSecretName" -}}
+{{- if include "roaminal.postgres.managed" . -}}
+{{- printf "%s-ca" (include "roaminal.postgres.clusterName" .) -}}
+{{- else if eq .Values.database.driver "postgres" -}}
+{{- .Values.database.postgres.caSecret.name -}}
+{{- end -}}
+{{- end -}}
+{{- define "roaminal.postgres.caFile" -}}
+/etc/roaminal/postgres-ca/ca.crt
+{{- end -}}
+
 {{/* Fail early for values that could produce an unusable or unsafe workload. */}}
 {{- define "roaminal.validateValues" -}}
 {{- if ne (int .Values.replicaCount) 1 -}}
@@ -90,8 +126,29 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if not .Values.app.acceptTerms -}}
 {{- fail "app.acceptTerms must be explicitly true before installing Roaminal" -}}
 {{- end -}}
-{{- if and (not .Values.persistence.enabled) .Values.persistence.existingClaim -}}
-{{- fail "persistence.existingClaim cannot be set when persistence.enabled is false" -}}
+{{- if not .Values.persistence.enabled -}}
+{{- fail "persistence.enabled must be true for a durable database binding and workspace" -}}
+{{- end -}}
+{{- if .Values.automountServiceAccountToken -}}
+{{- fail "Roaminal application Pods must not automount ServiceAccount tokens" -}}
+{{- end -}}
+{{- if include "roaminal.postgres.managed" . -}}
+{{- $postgres := .Values.database.postgres -}}
+{{- if $postgres.caSecret.name -}}
+{{- fail "database.postgres.caSecret.name is only for external PostgreSQL; managed PostgreSQL uses the CloudNativePG CA" -}}
+{{- end -}}
+{{- if has $postgres.dsnKey (list "username" "password") -}}
+{{- fail "database.postgres.dsnKey must not shadow username or password in the managed PostgreSQL Secret" -}}
+{{- end -}}
+{{- if has $postgres.managed.database (list "postgres" "template0" "template1") -}}
+{{- fail "database.postgres.managed.database must not use a built-in database name" -}}
+{{- end -}}
+{{- if or (eq $postgres.managed.username "postgres") (hasPrefix "pg_" $postgres.managed.username) -}}
+{{- fail "database.postgres.managed.username must not use a reserved PostgreSQL role name" -}}
+{{- end -}}
+{{- if eq (include "roaminal.serviceAccountName" .) (include "roaminal.postgres.bootstrapName" .) -}}
+{{- fail "the application ServiceAccount must not use the managed PostgreSQL bootstrap identity" -}}
+{{- end -}}
 {{- end -}}
 {{- if ne .Values.persistence.volumeMode "Filesystem" -}}
 {{- fail "persistence.volumeMode must be Filesystem because the chart uses subPath directories" -}}
@@ -114,7 +171,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- $reservedEnv := list "ROAMINAL_HOST" "ROAMINAL_PORT" "ROAMINAL_PASSWORD" "ROAMINAL_WEBSOCKET_PING_INTERVAL" "ROAMINAL_SCROLLBACK_LINES" "ROAMINAL_MAX_CONNECTION_INSTANCES" "ROAMINAL_MAX_CLIENTS_PER_CONNECTION_INSTANCE" "ROAMINAL_DEBUG" "ROAMINAL_ACCEPT_TERMS" "ROAMINAL_CWD" "ROAMINAL_AUTH_ACCESS_TTL" "ROAMINAL_AUTH_REFRESH_TTL" "ROAMINAL_AUTH_MAX_ATTEMPTS" "ROAMINAL_CLIENT_DIAGNOSTICS_ENABLED" "ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY" "ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY" "ROAMINAL_WEB_PUSH_SUBJECT" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_DIR" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_TARGET_MIB" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_MAX_AGE" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CACHE_CLEANUP_INTERVAL" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_CONVERSIONS" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_SOURCE_MIB" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_OUTPUT_MIB" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_STATIC_PIXELS" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_FRAMES" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_MAX_ANIMATED_PIXELS" "ROAMINAL_FILESYSTEM_IMAGE_PREVIEW_CONVERSION_TIMEOUT" -}}
 {{- range .Values.extraEnv }}
-{{- if has .name $reservedEnv }}{{- fail (printf "extraEnv cannot override reserved variable %s" .name) }}{{- end }}
+{{- if or (has .name $reservedEnv) (hasPrefix "ROAMINAL_DB_" .name) }}{{- fail (printf "extraEnv cannot override reserved variable %s" .name) }}{{- end }}
 {{- end }}
 {{- range .Values.ssh.fileMounts }}
 {{- if not (regexMatch `^/home/roaminal/\.ssh/[^/]+$` .mountPath) }}{{- fail (printf "ssh.fileMounts mountPath must be a direct file below /home/roaminal/.ssh: %s" .mountPath) }}{{- end }}

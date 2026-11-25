@@ -83,7 +83,8 @@ func (s *Service) SyncOnce(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	for _, view := range s.terms.ConnectionInstanceViews() {
+	views := s.terms.ConnectionInstanceViews()
+	for _, view := range views {
 		select {
 		case <-ctx.Done():
 			return
@@ -93,7 +94,7 @@ func (s *Service) SyncOnce(ctx context.Context) {
 			continue
 		}
 		instanceCtx, cancel := context.WithTimeout(ctx, syncInstanceTimeout)
-		err := s.syncInstance(instanceCtx, view)
+		err := s.syncInstance(instanceCtx, view, views)
 		cancel()
 		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("level=INFO event=agent_state_sync_failed connection_instance_id=%q tmux_session=%q error_type=%T", view.ConnectionInstanceID, view.TmuxSessionName, err)
@@ -105,8 +106,8 @@ func eligibleSyncView(view ports.ConnectionInstanceView) bool {
 	return view.ID != "" && view.Type == "ssh" && view.Lifecycle == "live" && view.TmuxEnabled && strings.TrimSpace(view.TmuxSessionName) != ""
 }
 
-func (s *Service) syncInstance(ctx context.Context, view ports.ConnectionInstanceView) error {
-	endpointKey, record, target, known := s.cachedTarget(view)
+func (s *Service) syncInstance(ctx context.Context, view ports.ConnectionInstanceView, views []ports.ConnectionInstanceView) error {
+	target, known := s.cachedTarget(view)
 	if !known {
 		effective, err := s.terms.ResolveEndpoint(ctx, view.ID)
 		if err != nil {
@@ -116,26 +117,23 @@ func (s *Service) syncInstance(ctx context.Context, view ports.ConnectionInstanc
 		if err != nil {
 			return s.recordSyncFailure(view, "invalid", err)
 		}
-		endpointKey, record, target = endpoint.Key, EndpointRecord{}, Target{EndpointKey: endpoint.Key, SessionName: view.TmuxSessionName}
-		if stored, ok := s.store.Get(endpointKey); ok {
-			record = stored
-		}
+		target = Target{EndpointKey: endpoint.Key, SessionName: view.TmuxSessionName}
 		if err := s.rememberEndpoint(endpoint, view); err != nil {
-			return s.recordSyncFailureForTarget(endpointKey, target, syncStatusUnavailable, err)
+			return s.recordSyncFailureForTarget(target.EndpointKey, target, syncStatusUnavailable, err)
 		}
 		s.rememberTarget(view, target)
 	}
 	if _, err := s.terms.RemoteTransferInfo(view.ID); err != nil {
-		return s.recordSyncFailureForTarget(endpointKey, target, "unavailable", err)
+		return s.recordSyncFailureForTarget(target.EndpointKey, target, "unavailable", err)
 	}
 	snapshot, err := s.readRemoteState(ctx, view.ID, view.TmuxSessionName)
 	if err != nil {
-		return s.recordSyncFailureForTarget(endpointKey, target, syncErrorStatus(err), err)
+		return s.recordSyncFailureForTarget(target.EndpointKey, target, syncErrorStatus(err), err)
 	}
 	if err := validateSnapshot(snapshot, view.TmuxSessionName); err != nil {
-		return s.recordSyncFailureForTarget(endpointKey, target, syncStatusInvalid, err)
+		return s.recordSyncFailureForTarget(target.EndpointKey, target, syncStatusInvalid, err)
 	}
-	return s.acceptSnapshot(endpointKey, target, view, record, snapshot)
+	return s.acceptSnapshot(target, view, views, snapshot)
 }
 
 func (s *Service) rememberEndpoint(endpoint Endpoint, view ports.ConnectionInstanceView) error {
@@ -151,18 +149,15 @@ func (s *Service) rememberEndpoint(endpoint Endpoint, view ports.ConnectionInsta
 	})
 }
 
-func (s *Service) cachedTarget(view ports.ConnectionInstanceView) (string, EndpointRecord, Target, bool) {
+func (s *Service) cachedTarget(view ports.ConnectionInstanceView) (Target, bool) {
 	s.mu.Lock()
 	target, bound := s.bindings[view.ID]
 	s.mu.Unlock()
 	if !bound || target.SessionName != view.TmuxSessionName {
-		return "", EndpointRecord{}, Target{}, false
+		return Target{}, false
 	}
-	record, ok := s.store.Get(target.EndpointKey)
-	if !ok {
-		return "", EndpointRecord{}, Target{}, false
-	}
-	return target.EndpointKey, record, target, true
+	_, ok := s.store.Get(target.EndpointKey)
+	return target, ok
 }
 
 func (s *Service) rememberTarget(view ports.ConnectionInstanceView, target Target) {
@@ -191,15 +186,20 @@ func (s *Service) recordSyncFailure(view ports.ConnectionInstanceView, status st
 
 func (s *Service) recordSyncFailureForTarget(endpointKey string, target Target, status string, cause error) error {
 	return s.store.Update(endpointKey, func(record *EndpointRecord) error {
-		value := record.Targets[target.SessionName]
-		value.SessionName = target.SessionName
-		value.SyncStatus = status
-		value.LastSyncedAt = s.now().UTC()
-		value.SyncError = safeSyncError(cause)
-		record.Targets[target.SessionName] = value
-		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
+		s.setSyncMetadata(record, target.SessionName, status, cause)
 		return nil
 	})
+}
+
+func (s *Service) setSyncMetadata(record *EndpointRecord, sessionName, status string, cause error) {
+	now := s.now().UTC()
+	value := record.Targets[sessionName]
+	value.SessionName = sessionName
+	value.SyncStatus = status
+	value.LastSyncedAt = now
+	value.SyncError = safeSyncError(cause)
+	record.Targets[sessionName] = value
+	record.UpdatedAt = now.Format(time.RFC3339Nano)
 }
 
 func safeSyncError(err error) string {

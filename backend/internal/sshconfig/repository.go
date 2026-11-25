@@ -74,9 +74,6 @@ func (r *Repository) Read(knownKeys map[string]bool) (Document, string, ConfigSo
 		capability.Reason = "config cannot be read"
 		data = nil
 	}
-	if info != nil {
-		capability.Readable = true
-	}
 	if writable, reason := r.root.CanWrite("config"); writable {
 		capability.Writable = true
 	} else if capability.Reason == "" {
@@ -198,47 +195,4 @@ type Edit struct {
 	StrictHostKeyChecking *string
 	UserKnownHostsFile    *string
 	ServerAliveInterval   *uint32
-}
-
-func (r *Repository) Update(ifMatch string, knownKeys map[string]bool, alias string, edit Edit) (Collection, error) {
-	return r.Mutate(ifMatch, knownKeys, func(doc Document) ([]byte, error) { return patchBlock(doc, alias, edit) })
-}
-func (r *Repository) Create(ifMatch string, knownKeys map[string]bool, edit Edit) (Collection, error) {
-	return r.Mutate(ifMatch, knownKeys, func(doc Document) ([]byte, error) {
-		if !validAlias(edit.HostAlias) {
-			return nil, errors.New("invalid host alias")
-		}
-		for _, definition := range doc.Definitions(knownKeys) {
-			if definition.HostAlias == edit.HostAlias {
-				return nil, errors.New("host alias already exists")
-			}
-		}
-		return appendBlock(doc, edit), nil
-	})
-}
-func (r *Repository) Delete(ifMatch string, knownKeys map[string]bool, alias string) (Collection, error) {
-	return r.Mutate(ifMatch, knownKeys, func(doc Document) ([]byte, error) {
-		block := findBlock(doc, alias)
-		if block == nil {
-			return nil, os.ErrNotExist
-		}
-		return append(append([]byte{}, doc.Bytes[:block.Start]...), doc.Bytes[block.End:]...), nil
-	})
-}
-func (r *Repository) Duplicate(ifMatch string, knownKeys map[string]bool, alias, newAlias string) (Collection, error) {
-	return r.Mutate(ifMatch, knownKeys, func(doc Document) ([]byte, error) {
-		if !validAlias(newAlias) {
-			return nil, errors.New("invalid host alias")
-		}
-		if findBlock(doc, newAlias) != nil {
-			return nil, errors.New("host alias already exists")
-		}
-		block := findBlock(doc, alias)
-		if block == nil {
-			return nil, os.ErrNotExist
-		}
-		definition := definitionFromBlock(*block, knownKeys, nil)
-		definition.HostAlias = newAlias
-		return appendBlock(doc, Edit{HostAlias: newAlias, HostName: definition.HostName, User: definition.User, Port: definition.Port, IdentityFileNames: definition.IdentityFileNames, IdentitiesOnly: definition.IdentitiesOnly, StrictHostKeyChecking: definition.StrictHostKeyChecking, UserKnownHostsFile: definition.UserKnownHostsFile, ServerAliveInterval: definition.ServerAliveInterval}), nil
-	})
 }

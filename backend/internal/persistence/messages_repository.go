@@ -15,7 +15,7 @@ func (a *repositoryAdapter) AppendMessage(draft domain.MessageDraft) (domain.Mes
 	if err != nil {
 		return domain.MessageRecord{}, false, a.store.markError(err)
 	}
-	if err := validateMessageDraft(draft); err != nil {
+	if err := ValidateMessageDraft(draft); err != nil {
 		return domain.MessageRecord{}, false, err
 	}
 	now := time.Now().UTC()

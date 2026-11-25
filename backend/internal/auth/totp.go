@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -9,8 +10,9 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
-// enrollmentCheckContext bounds each live state check so a stalled filesystem
-// cannot hold the authentication mutex indefinitely.
+var errEnrollmentReplayRegression = errors.New("TOTP replay checkpoint moved backwards")
+
+// enrollmentCheckContext bounds live enrollment repository operations.
 func (m *Manager) enrollmentCheckContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), EnrollmentCheckTimeout)
 }
@@ -19,101 +21,99 @@ func (m *Manager) enrollmentCheckContext() (context.Context, context.CancelFunc)
 func (m *Manager) loadEnrollmentLocked() (domain.TOTPEnrollmentRecord, bool, error) {
 	ctx, cancel := m.enrollmentCheckContext()
 	defer cancel()
-	record, exists, err := m.enrollmentRepo.LoadEnrollment(ctx)
-	if err != nil {
-		return domain.TOTPEnrollmentRecord{}, true, err
-	}
-	return record, exists, nil
+	return m.enrollmentRepo.LoadEnrollment(ctx)
 }
 
-// reconcileLocked is the single state reconciler. Every authentication
-// boundary calls it so enrollment deletion, restoration, or corruption is
-// detected without a restart and never trusts an indefinitely cached secret.
-func (m *Manager) reconcileLocked() {
+// reconcileLocked must succeed before any credential can authorize access.
+// A failed read proves neither deletion nor change; keep the last verified
+// record and credentials to compare against a subsequent successful read.
+func (m *Manager) reconcileLocked() error {
 	record, exists, err := m.loadEnrollmentLocked()
+	same := exists && sameEnrollmentIdentity(m.enrollment, &record)
+	if err == nil && same && record.LastAcceptedTimeStep < m.enrollment.LastAcceptedTimeStep {
+		// Restoring a lower replay checkpoint for the same secret must not
+		// make an already accepted code usable while this runtime is serving.
+		err = errEnrollmentReplayRegression
+	}
 	if err != nil {
-		if m.enrollmentState != enrollmentStorageError {
-			m.enrollmentState = enrollmentStorageError
-			_ = m.invalidateCredentialsLocked()
-			// Report the unusable file server-side; the message never
-			// contains secret material.
-			log.Printf("level=ERROR event=auth_enrollment_storage_denied error=%v", err)
+		if !m.enrollmentUnreadable {
+			m.enrollmentUnreadable = true
+			m.signalEnrollmentChangeLocked()
+			log.Printf("level=ERROR event=auth_enrollment_storage_denied error_type=%T replay_regressed=%t", err, errors.Is(err, errEnrollmentReplayRegression))
 		}
-		return
+		// A previously confirmed change still needs a durable wipe, even
+		// when the latest read alone would not justify deleting anything.
+		_ = m.finishEnrollmentInvalidationLocked()
+		return ErrEnrollmentStorage
 	}
+	m.enrollmentUnreadable = false
 	switch {
-	case !exists:
-		if m.enrollmentState != enrollmentUnconfigured {
-			m.enrollmentState = enrollmentUnconfigured
-			m.enrollment = nil
-			if err := m.invalidateCredentialsLocked(); err != nil {
-				// The in-memory credentials are already gone, but do not offer
-				// enrollment while durable invalidation is unavailable.
-				m.enrollmentState = enrollmentStorageError
-			}
-		}
-	case m.enrollmentState == enrollmentConfigured && m.enrollment != nil && record == *m.enrollment:
-		// Same enrollment record. Time-step consumption is written
-		// synchronously before credentials are granted, so the cache stays
-		// authoritative and no reread is needed.
-	default:
-		// A new enrollment identity appeared (first durable enrollment,
-		// restored backup, or repair after a storage error). All previously
-		// issued credentials and pending stages belong to the old state.
-		m.enrollmentState = enrollmentConfigured
-		enrollment := record
-		m.enrollment = &enrollment
-		if err := m.invalidateCredentialsLocked(); err != nil {
-			m.enrollmentState = enrollmentStorageError
-		}
+	case !exists && m.enrollment != nil:
+		m.replaceEnrollmentLocked(nil)
+	case exists && !same:
+		m.replaceEnrollmentLocked(&record)
+	case same && record.LastAcceptedTimeStep > m.enrollment.LastAcceptedTimeStep:
+		// A replay checkpoint may have committed even if the caller did not
+		// receive the write response. Progress does not change the identity.
+		m.enrollment = &record
 	}
+	return m.finishEnrollmentInvalidationLocked()
 }
 
-// invalidateCredentialsLocked clears pending login/setup credentials, access
-// tokens, and refresh sessions of the previous enrollment state, persists the
-// invalidation, and wakes stream watchers. Callers set the new enrollment
-// state and cached record themselves before or right after this call; this
-// helper never touches them.
-func (m *Manager) invalidateCredentialsLocked() error {
-	m.pending = make(map[string]pendingEntry)
-	m.access = make(map[string]accessEntry)
-	m.challenges = make(map[string]challenge)
-	m.refresh = make(map[string]domain.AuthSessionRecord)
-	if err := m.persistLocked(); err != nil {
-		// Access stays denied: the in-memory clear above plus enrollment
-		// binding reject every old credential even if this write failed.
-		// Surface the failure server-side without leaking record contents.
+func sameEnrollmentIdentity(a, b *domain.TOTPEnrollmentRecord) bool {
+	return a != nil && b != nil && a.FormatVersion == b.FormatVersion && a.EnrollmentID == b.EnrollmentID && a.Secret == b.Secret
+}
+
+func (m *Manager) replaceEnrollmentLocked(record *domain.TOTPEnrollmentRecord) {
+	m.enrollment = record
+	clear(m.pending)
+	clear(m.access)
+	clear(m.challenges)
+	clear(m.refresh)
+	m.enrollmentInvalidationPending = true
+	m.signalEnrollmentChangeLocked()
+}
+
+// A confirmed change invalidates credentials immediately, even if storage
+// writes fail or an old enrollment is restored. Do not permit new enrollment
+// or login until the durable invalidation also succeeds.
+func (m *Manager) finishEnrollmentInvalidationLocked() error {
+	if !m.enrollmentInvalidationPending {
+		return nil
+	}
+	ctx, cancel := m.enrollmentCheckContext()
+	defer cancel()
+	if err := m.authRepository.SaveAuth(ctx, nil); err != nil {
 		log.Printf("level=ERROR event=auth_session_invalidation_failed error_type=%T", err)
-		if m.enrollmentChange != nil {
-			close(m.enrollmentChange)
-			m.enrollmentChange = make(chan struct{})
-		}
-		return err
+		return ErrEnrollmentStorage
 	}
-	if m.enrollmentChange != nil {
-		close(m.enrollmentChange)
-		m.enrollmentChange = make(chan struct{})
-	}
+	m.enrollmentInvalidationPending = false
 	return nil
 }
 
-// EnrollmentChanged returns a channel that is closed whenever enrollment
-// identity changes, the enrollment file is deleted, or its storage turns
-// unusable. Long-lived streams watch it to disconnect promptly.
+func (m *Manager) signalEnrollmentChangeLocked() {
+	close(m.enrollmentChange)
+	m.enrollmentChange = make(chan struct{})
+}
+
+// EnrollmentChanged returns a channel that is closed on a verified change
+// or when enrollment becomes unreadable. Streams use it to disconnect promptly.
 func (m *Manager) EnrollmentChanged() <-chan struct{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.enrollmentChange
 }
 
-// StartEnrollmentWatch reconciles enrollment state on a short interval so
-// already-open connections cannot stay authorized after the secret file is
-// deleted from the running backend.
-func (m *Manager) StartEnrollmentWatch(ctx context.Context, interval time.Duration) {
+// StartEnrollmentWatch reconciles enrollment periodically so idle streams
+// disconnect when enrollment changes or becomes unverifiable. The returned
+// channel closes after cancellation and any in-progress reconciliation.
+func (m *Manager) StartEnrollmentWatch(ctx context.Context, interval time.Duration) <-chan struct{} {
 	if interval <= 0 {
 		interval = time.Second
 	}
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -122,18 +122,19 @@ func (m *Manager) StartEnrollmentWatch(ctx context.Context, interval time.Durati
 				return
 			case <-ticker.C:
 				m.mu.Lock()
-				m.reconcileLocked()
+				_ = m.reconcileLocked()
 				m.mu.Unlock()
 			}
 		}
 	}()
+	return done
 }
 
 // sessionBoundLocked reports whether a persisted session belongs to the
 // currently enrolled identity. Sessions without a binding are legacy
 // pre-TOTP credentials and are always rejected.
 func (m *Manager) sessionBoundLocked(entry domain.AuthSessionRecord) bool {
-	return m.enrollmentState == enrollmentConfigured && m.enrollment != nil && entry.EnrollmentID == m.enrollment.EnrollmentID
+	return m.enrollment != nil && entry.EnrollmentID == m.enrollment.EnrollmentID
 }
 
 // newPendingLocked creates a purpose-bound short-lived pending credential

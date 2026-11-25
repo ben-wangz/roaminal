@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"unicode/utf8"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func (s *Session) waitLoop() {
@@ -41,41 +43,59 @@ func (s *Session) waitLoop() {
 		s.meta.ExitSignal = &value
 	}
 	s.meta.UpdatedAt = s.manager.now().UTC()
-	ephemeral := s.ephemeral
-	if s.manager.hasPersistence() && !ephemeral {
-		_ = s.manager.saveMeta(s.meta)
-	}
+	id, ephemeral := s.meta.ID, s.ephemeral
 	s.broadcastMessageLocked(terminatedStreamMessage(s.exitStatus))
-	if err != nil && !errors.Is(err, os.ErrProcessDone) {
-		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", s.meta.ID, err)
-	}
-	onExit := s.onExit
-	s.onExit = nil
+	onExit := s.takeExitHookLocked()
 	s.mu.Unlock()
+	defer s.closePTY()
+	if err != nil && !errors.Is(err, os.ErrProcessDone) {
+		fmt.Fprintf(os.Stderr, "Roaminal session %s exited: %v\n", id, err)
+	}
+	parent, stop := context.WithTimeout(context.Background(), retirementTimeout)
+	defer stop()
+	ctx, cancel := s.manager.storage.withContext(parent)
+	defer cancel()
 	if onExit != nil {
-		onExit(*status)
+		onExit(ctx, *status)
 	}
 	if ephemeral {
-		s.manager.finishEphemeral(context.Background(), s)
+		s.manager.finishEphemeral(ctx, s)
 		return
 	}
-	if err := s.manager.retireSession(context.Background(), s); err != nil {
-		fmt.Fprintf(os.Stderr, "Roaminal session %s cleanup warning: %v\n", s.meta.ID, err)
+	if err := s.manager.retireSession(ctx, s); err != nil && !errors.Is(err, context.Canceled) {
+		fmt.Fprintf(os.Stderr, "Roaminal connection instance %s cleanup warning: %v\n", id, err)
 	}
 }
 
-// takeExitHook claims the process-exit callback for explicit termination
-// paths. Those paths mark the session closed before cmd.Wait returns, so the
-// normal wait loop cannot invoke the callback itself.
-func (s *Session) takeExitHook() func(ExitStatus) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.ephemeral {
-		s.lastActivity = s.manager.now()
-	}
+func (s *Session) takeExitHookLocked() ports.TerminalExitHook {
 	hook := s.onExit
-	s.onExit = nil
-	return hook
+	if hook == nil {
+		return nil
+	}
+	done := make(chan struct{})
+	s.onExit, s.exitHookDone = nil, done
+	return func(ctx context.Context, status ExitStatus) {
+		defer close(done)
+		_ = s.manager.storage.run(ctx, func(ctx context.Context) error {
+			hook(ctx, status)
+			return nil
+		})
+	}
+}
+
+func (s *Session) awaitExitHook(ctx context.Context) error {
+	if err := s.mu.lock(ctx); err != nil {
+		return err
+	}
+	done := s.exitHookDone
+	s.mu.Unlock()
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+	}
+	return ctx.Err()
 }
 
 func statusCode(status *ExitStatus) int {
@@ -84,7 +104,7 @@ func statusCode(status *ExitStatus) int {
 	}
 	return *status.ExitCode
 }
-func (s *Session) readLoop() {
+func (s *Session) readLoop(id string) {
 	if s.readDone != nil {
 		defer close(s.readDone)
 	}
@@ -95,8 +115,8 @@ func (s *Session) readLoop() {
 			s.handleOutput(buffer[:n])
 		}
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				fmt.Fprintf(os.Stderr, "Roaminal PTY read %s: %v\n", s.meta.ID, err)
+			if !errors.Is(err, io.EOF) && !errors.Is(err, os.ErrClosed) {
+				fmt.Fprintf(os.Stderr, "Roaminal PTY read %s: %v\n", id, err)
 			}
 			return
 		}

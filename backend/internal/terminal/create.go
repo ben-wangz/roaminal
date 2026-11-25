@@ -21,32 +21,33 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 	if cols < 2 || cols > 1000 || rows < 1 || rows > 1000 {
 		return Summary{}, errors.New("invalid terminal dimensions")
 	}
-	m.mu.Lock()
-	if len(m.sessions)+len(m.pending)+m.createReservations >= m.connectionLimit() {
-		m.mu.Unlock()
-		return Summary{}, ErrConnectionCapacity
+	ctx, finish, err := m.beginCreate(ctx)
+	if err != nil {
+		return Summary{}, err
 	}
-	m.createReservations++
+	published := false
+	defer func() { finish(published) }()
+	m.mu.RLock()
+	sessions := make([]*Session, 0, len(m.sessions))
+	for _, session := range m.sessions {
+		sessions = append(sessions, session)
+	}
+	m.mu.RUnlock()
 	type activity struct {
 		cwd                  string
 		updatedAt, createdAt time.Time
 		id                   string
 	}
-	activities := make([]activity, 0, len(m.sessions))
-	for _, session := range m.sessions {
-		session.mu.Lock()
-		activities = append(activities, activity{cwd: session.meta.Cwd, updatedAt: session.meta.UpdatedAt, createdAt: session.meta.CreatedAt, id: session.meta.ID})
+	activities := make([]activity, 0, len(sessions))
+	for _, session := range sessions {
+		if err := session.mu.lock(ctx); err != nil {
+			return Summary{}, err
+		}
+		if !session.closed {
+			activities = append(activities, activity{cwd: session.meta.Cwd, updatedAt: session.meta.UpdatedAt, createdAt: session.meta.CreatedAt, id: session.meta.ID})
+		}
 		session.mu.Unlock()
 	}
-	m.mu.Unlock()
-	reserved := true
-	defer func() {
-		if reserved {
-			m.mu.Lock()
-			m.createReservations--
-			m.mu.Unlock()
-		}
-	}()
 	sort.Slice(activities, func(i, j int) bool {
 		if activities[i].updatedAt.Equal(activities[j].updatedAt) {
 			if activities[i].createdAt.Equal(activities[j].createdAt) {
@@ -85,18 +86,64 @@ func (m *Manager) Create(ctx context.Context, cwd string, cols, rows int) (Summa
 		return Summary{}, err
 	}
 	if m.hasPersistence() {
-		if err := m.saveMeta(meta); err != nil {
-			m.abortSession(ctx, session, true)
+		if err := m.saveMetaContext(ctx, meta); err != nil {
+			m.abortSession(ctx, session)
 			return Summary{}, err
 		}
 	}
+	result, err := m.publishSession(ctx, session)
+	if err != nil {
+		m.abortSession(ctx, session)
+		return Summary{}, err
+	}
+	published = true
+	return result, nil
+}
+
+func (m *Manager) beginCreate(parent context.Context) (context.Context, func(bool), error) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.stopping {
+		return nil, nil, os.ErrProcessDone
+	}
+	if len(m.sessions)+len(m.pending)+m.createReservations >= m.connectionLimit() {
+		return nil, nil, ErrConnectionCapacity
+	}
+	m.createReservations++
+	m.creates.Add(1)
+	ctx, cancel := cancelWith(parent, m.createCtx)
+	return ctx, func(published bool) {
+		cancel()
+		if !published {
+			m.mu.Lock()
+			m.createReservations--
+			m.mu.Unlock()
+		}
+		m.creates.Done()
+	}, nil
+}
+
+// Transfer ownership of the process from creation to the manager's shutdown list.
+func (m *Manager) publishSession(ctx context.Context, session *Session) (Summary, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.stopping {
+		return Summary{}, os.ErrProcessDone
+	}
+	if err := ctx.Err(); err != nil {
+		return Summary{}, err
+	}
 	m.createReservations--
-	reserved = false
-	m.sessions[id] = session
-	m.mu.Unlock()
+	id := session.meta.ID
+	result := m.summaryLocked(session) // The session is not yet shared.
+	if session.ephemeral {
+		m.pending[id] = session
+		go m.watchPending(session)
+	} else {
+		m.sessions[id] = session
+	}
 	m.startLoops(session)
-	return m.summary(session), nil
+	return result, nil
 }
 
 func (m *Manager) Delete(ctx context.Context, id string) error {

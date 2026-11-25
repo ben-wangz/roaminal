@@ -30,8 +30,7 @@ const (
 	TOTPDigits     = 6
 	TOTPSkewSteps  = 1
 	TOTPSecretSize = 20
-	// EnrollmentCheckTimeout bounds a single live-deletion state check so
-	// authentication boundaries never block on an unhealthy filesystem.
+	// EnrollmentCheckTimeout bounds live enrollment reconciliation I/O.
 	EnrollmentCheckTimeout = time.Second
 	// LoginNextStepSetup and LoginNextStepVerify are the two possible
 	// post-password stages of the mandatory TOTP login.
@@ -46,6 +45,7 @@ var (
 	ErrNotFound          = errors.New("auth session not found")
 	ErrInvalidPending    = errors.New("invalid or expired pending token")
 	ErrEnrollmentStorage = errors.New("auth enrollment storage error")
+	ErrSessionStorage    = errors.New("auth session storage error")
 	ErrAlreadyConfigured = errors.New("TOTP enrollment already configured")
 	ErrNotConfigured     = errors.New("TOTP enrollment not configured")
 )
@@ -116,20 +116,6 @@ type challenge struct {
 	ExpiresAt time.Time
 }
 
-type enrollmentStatus uint8
-
-const (
-	// enrollmentUnconfigured means the private enrollment file is absent:
-	// password proof may only reach restricted TOTP setup.
-	enrollmentUnconfigured enrollmentStatus = iota
-	// enrollmentConfigured means a valid enrollment is cached and every login
-	// must complete TOTP verification.
-	enrollmentConfigured
-	// enrollmentStorageError means the file exists but cannot be trusted.
-	// Enrollment and business access stay denied until it is corrected.
-	enrollmentStorageError
-)
-
 type pendingPurpose uint8
 
 const (
@@ -153,23 +139,24 @@ type pendingEntry struct {
 }
 
 type Manager struct {
-	mu               sync.Mutex
-	cfg              config.Config
-	authRepository   ports.AuthRepository
-	enrollmentRepo   ports.TOTPEnrollmentRepository
-	clock            ports.Clock
-	ids              ports.IDGenerator
-	random           ports.RandomSource
-	fingerprint      string
-	refresh          map[string]domain.AuthSessionRecord
-	access           map[string]accessEntry
-	challenges       map[string]challenge
-	pending          map[string]pendingEntry
-	enrollmentState  enrollmentStatus
-	enrollment       *domain.TOTPEnrollmentRecord
-	enrollmentChange chan struct{}
-	failedAttempts   int
-	locked           bool
+	mu                            sync.Mutex
+	cfg                           config.Config
+	authRepository                ports.AuthRepository
+	enrollmentRepo                ports.TOTPEnrollmentRepository
+	clock                         ports.Clock
+	ids                           ports.IDGenerator
+	random                        ports.RandomSource
+	fingerprint                   string
+	refresh                       map[string]domain.AuthSessionRecord
+	access                        map[string]accessEntry
+	challenges                    map[string]challenge
+	pending                       map[string]pendingEntry
+	enrollment                    *domain.TOTPEnrollmentRecord // last successfully verified record, or nil if absent
+	enrollmentUnreadable          bool
+	enrollmentInvalidationPending bool
+	enrollmentChange              chan struct{}
+	failedAttempts                int
+	locked                        bool
 }
 
 type Dependencies struct {

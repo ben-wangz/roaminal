@@ -4,18 +4,12 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
-func (m *Manager) createReuse(ctx context.Context, definitionID string, cols, rows int, sourceID string) (Summary, error) {
-	return m.createReuseOwned(ctx, definitionID, cols, rows, sourceID, "")
-}
-
-func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, cols, rows int, sourceID, ownerID string) (Summary, error) {
-	if m.sshPath == "" || m.configRepo == nil {
-		return Summary{}, ErrTransportUnavailable
-	}
+func (m *Manager) createReuseOwned(ctx context.Context, definitionID, alias string, resolved definition.RuntimeSSH, cols, rows int, sourceID, ownerID string) (Summary, error) {
 	m.transportPool.mu.Lock()
 	transport := m.transportPool.instances[sourceID]
 	if transport != nil && transport.OwnerID != sourceID {
@@ -35,15 +29,13 @@ func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, col
 	if source.ID == "" || source.Type != "ssh" || source.Lifecycle != "live" || source.SourceState != "current" {
 		return Summary{}, ErrTransportUnavailable
 	}
-	m.transportPool.mu.Lock()
-	revision := transport.SourceRevision
-	draining, alias := transport.Draining, transport.Alias
-	m.transportPool.mu.Unlock()
-	currentRevision, fingerprintErr := m.sourceRevision(alias)
-	if fingerprintErr != nil {
-		return Summary{}, ErrTransportUnavailable
+	if transport.Alias != alias || source.SourceHostAlias == nil || *source.SourceHostAlias != alias {
+		return Summary{}, errors.New("reuse definition does not match transport")
 	}
-	if draining || revision != currentRevision {
+	m.transportPool.mu.Lock()
+	stale := transport.Draining || transport.SourceRevision != resolved.SourceRevision
+	m.transportPool.mu.Unlock()
+	if stale {
 		m.transportPool.mu.Lock()
 		transport.Draining = true
 		transport.SourceState = "changed"
@@ -53,20 +45,15 @@ func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, col
 	if !m.transportReady(transport) {
 		return Summary{}, ErrTransportUnavailable
 	}
-	definitionAlias, err := aliasFromDefinitionID(definitionID)
-	if err != nil || definitionAlias != alias || source.SourceHostAlias == nil || *source.SourceHostAlias != definitionAlias {
-		return Summary{}, errors.New("reuse definition does not match transport")
-	}
-	if option, ok := m.tmuxOptionForAlias(definitionAlias); ok {
-		return m.createReuseTmux(ctx, definitionID, definitionAlias, option, transport, cols, rows, sourceID, ownerID)
+	if resolved.Option.Enabled {
+		return m.createReuseTmux(ctx, definitionID, alias, resolved, transport, cols, rows, sourceID, ownerID)
 	}
 	id, err := m.newID()
 	if err != nil {
 		return Summary{}, err
 	}
-	aliasPtr := definitionAlias
-	meta := newReuseMeta(m, id, definitionID, &aliasPtr, cols, rows, sourceID)
-	argv := []string{m.sshPath, "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "--", definitionAlias}
+	meta := newReuseMeta(m, id, definitionID, &alias, cols, rows, sourceID)
+	argv := []string{m.sshPath, "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "--", alias}
 	m.transportPool.mu.Lock()
 	// ControlPersist keeps the mux usable after the original owner exits as
 	// long as at least one channel still references it. Only an explicitly
@@ -78,8 +65,8 @@ func (m *Manager) createReuseOwned(ctx context.Context, definitionID string, col
 	transport.Channels++
 	m.transportPool.instances[id] = transport
 	m.transportPool.mu.Unlock()
-	result, err := m.CreateProcessWithExit(ctx, meta, argv, nil, func(_ ports.TerminalExitStatus) {
-		m.finishInstance(context.Background(), id, true)
+	result, err := m.CreateProcessWithExit(ctx, meta, argv, nil, func(ctx context.Context, _ ports.TerminalExitStatus) {
+		m.finishInstance(ctx, id, true)
 	})
 	if err != nil {
 		m.transportPool.mu.Lock()

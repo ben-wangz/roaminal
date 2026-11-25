@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
-	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 )
 
 func tmuxLaunchRevision(option connectionoptions.Tmux) string {
@@ -76,7 +76,8 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
-func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias string, definition *sshconfig.Definition, sourceRevision string, option connectionoptions.Tmux, cols, rows int, ownerID string) (Summary, error) {
+func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias string, resolved definition.RuntimeSSH, cols, rows int, ownerID string) (Summary, error) {
+	option := resolved.Option
 	if !connectionoptions.ValidSessionName(option.SessionName) {
 		return Summary{}, connectionoptions.ErrInvalidSessionName
 	}
@@ -89,7 +90,7 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 		return Summary{}, err
 	}
 	controlPath := filepath.Join(transportDir, "ctl")
-	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: sourceRevision, SourceState: "current", TmuxLaunchRevision: tmuxLaunchRevision(option), OwnerID: id, Channels: 1}
+	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: resolved.SourceRevision, SourceState: "current", TmuxLaunchRevision: tmuxLaunchRevision(option), OwnerID: id, Channels: 1}
 	aliasPtr := alias
 	now := m.clock.Now().UTC()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "pending", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias, TmuxEnabled: true, TmuxSessionName: option.SessionName}
@@ -103,8 +104,7 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 		if value != marker {
 			return
 		}
-		current, ok := m.tmuxOptionForAlias(alias)
-		if !ok || current.SessionName != option.SessionName || !current.Enabled {
+		if !m.tmuxLaunchCurrent(alias, resolved) {
 			_ = m.AbortPending(context.Background(), id)
 			return
 		}
@@ -113,8 +113,8 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 			_ = m.AbortPending(context.Background(), id)
 		}
 	}
-	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(_ ports.TerminalExitStatus) {
-		m.finishInstance(context.Background(), id, true)
+	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(ctx context.Context, _ ports.TerminalExitStatus) {
+		m.finishInstance(ctx, id, true)
 	})
 	if err != nil {
 		m.transportPool.mu.Lock()
@@ -127,7 +127,8 @@ func (m *Manager) createRemoteTmux(ctx context.Context, definitionID, alias stri
 	return result, nil
 }
 
-func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias string, option connectionoptions.Tmux, transport *Transport, cols, rows int, sourceID, ownerID string) (Summary, error) {
+func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias string, resolved definition.RuntimeSSH, transport *Transport, cols, rows int, sourceID, ownerID string) (Summary, error) {
+	option := resolved.Option
 	id, err := m.newID()
 	if err != nil {
 		return Summary{}, err
@@ -149,8 +150,7 @@ func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias strin
 		if value != marker {
 			return
 		}
-		current, ok := m.tmuxOptionForAlias(alias)
-		if !ok || current.SessionName != option.SessionName || !current.Enabled {
+		if !m.tmuxLaunchCurrent(alias, resolved) {
 			_ = m.AbortPending(context.Background(), id)
 			return
 		}
@@ -159,8 +159,8 @@ func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias strin
 			_ = m.AbortPending(context.Background(), id)
 		}
 	}
-	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(_ ports.TerminalExitStatus) {
-		m.finishInstance(context.Background(), id, true)
+	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, nil, ownerID, onMarker, func(ctx context.Context, _ ports.TerminalExitStatus) {
+		m.finishInstance(ctx, id, true)
 	})
 	if err != nil {
 		m.transportPool.mu.Lock()
@@ -172,25 +172,7 @@ func (m *Manager) createReuseTmux(ctx context.Context, definitionID, alias strin
 	return result, nil
 }
 
-func (m *Manager) tmuxOptionForAlias(alias string) (connectionoptions.Tmux, bool) {
-	aliases := map[string]bool{alias: true}
-	if m.configRepo != nil {
-		if collection, err := m.configRepo.Collection(keySet(m.keys)); err == nil {
-			if !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing" {
-				return connectionoptions.Tmux{}, false
-			}
-			aliases = make(map[string]bool)
-			for _, definition := range collection.Definitions {
-				if definition.Type == "ssh" {
-					aliases[definition.HostAlias] = true
-				}
-			}
-		}
-	}
-	options, err := m.tmuxOptions(aliases)
-	if err != nil {
-		return connectionoptions.Tmux{}, false
-	}
-	option, ok := options[alias]
-	return option, ok && option.Enabled
+func (m *Manager) tmuxLaunchCurrent(alias string, expected definition.RuntimeSSH) bool {
+	current, err := m.definitions.ResolveSSH(alias, m.sourceRevision)
+	return err == nil && current == expected
 }

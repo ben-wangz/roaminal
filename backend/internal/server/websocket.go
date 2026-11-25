@@ -45,7 +45,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	}
 	authSessionID, err := s.auth.Authenticate(websocketToken(r))
 	if err != nil {
-		writeError(w, 401, "unauthorized")
+		writeAuthError(w, err)
 		return
 	}
 	if err := ctx.Err(); err != nil {

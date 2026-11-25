@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/clock"
@@ -103,6 +104,11 @@ type Manager struct {
 	sessions           map[string]*Session
 	pending            map[string]*Session
 	createReservations int
+	creates            sync.WaitGroup
+	createCtx          context.Context
+	stopCreating       context.CancelFunc
+	stopping           bool
+	storage            *repositoryScope
 	fatal              chan error
 	runtimeID          string
 }
@@ -111,7 +117,9 @@ var _ ports.TerminalRuntime = (*Manager)(nil)
 
 type Session struct {
 	manager        *Manager
-	mu             sync.Mutex
+	mu             cleanupMutex
+	snapshotMu     cleanupMutex
+	retireMu       cleanupMutex
 	meta           domain.ConnectionInstanceMeta
 	cmd            *exec.Cmd
 	pty            *os.File
@@ -130,10 +138,11 @@ type Session struct {
 	closed         bool
 	exitStatus     *ExitStatus
 	command        string
-	onExit         func(ExitStatus)
+	onExit         ports.TerminalExitHook
+	exitHookDone   chan struct{}
 	readDone       chan struct{}
-	retiring       bool
-	retired        bool
+	retiring       atomic.Bool
+	retired        atomic.Bool
 	ephemeral      bool
 	published      bool
 	onMarker       func(string)
@@ -146,7 +155,10 @@ func NewManagerWithRepositories(cfg config.Config, repositories Repositories, te
 	if runtimeClock == nil {
 		runtimeClock = clock.System{}
 	}
-	return &Manager{cfg: cfg, repositories: repositories, worker: terminalWorker, clock: runtimeClock, ids: ids, runtimeID: runtimeID, sessions: make(map[string]*Session), pending: make(map[string]*Session), fatal: make(chan error, 1)}
+	createCtx, stopCreating := context.WithCancel(context.Background())
+	return &Manager{cfg: cfg, repositories: repositories, worker: terminalWorker, clock: runtimeClock, ids: ids, runtimeID: runtimeID,
+		sessions: make(map[string]*Session), pending: make(map[string]*Session), storage: newRepositoryScope(),
+		createCtx: createCtx, stopCreating: stopCreating, fatal: make(chan error, 1)}
 }
 func (m *Manager) Fatal() <-chan error   { return m.fatal }
 func (m *Manager) WorkerFatal(err error) { m.fail(err) }
@@ -166,27 +178,27 @@ func (m *Manager) PersistenceDegraded() bool {
 func (m *Manager) hasPersistence() bool { return m.repositories.available() }
 
 func (m *Manager) saveMeta(meta domain.ConnectionInstanceMeta) error {
-	return m.repositories.saveMeta(context.Background(), meta)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return m.saveMetaContext(ctx, meta)
+}
+
+func (m *Manager) saveMetaContext(ctx context.Context, meta domain.ConnectionInstanceMeta) error {
+	return m.storage.run(ctx, func(ctx context.Context) error { return m.repositories.saveMeta(ctx, meta) })
 }
 
 func (m *Manager) loadSnapshot(ctx context.Context, id string) ([]byte, error) {
-	return m.repositories.loadSnapshot(ctx, domain.ConnectionInstanceID(id))
+	var payload []byte
+	err := m.storage.run(ctx, func(ctx context.Context) error {
+		var err error
+		payload, err = m.repositories.loadSnapshot(ctx, domain.ConnectionInstanceID(id))
+		return err
+	})
+	return payload, err
 }
 
-func (m *Manager) markPersistenceDegraded(id string) {
-	if m.repositories.Instances != nil {
-		_ = m.repositories.Instances.MarkConnectionInstanceDegraded(context.Background(), domain.ConnectionInstanceID(id))
-	}
-}
-
-func (m *Manager) listPersistedInstances(ctx context.Context) ([]domain.ConnectionInstanceMeta, error) {
-	return m.repositories.listInstances(ctx)
-}
-
-func (m *Manager) archivePersistedInstance(ctx context.Context, id string) error {
-	return m.repositories.archiveInstance(ctx, domain.ConnectionInstanceID(id))
-}
-
-func (m *Manager) deletePersistedInstance(ctx context.Context, id string) error {
-	return m.repositories.deleteInstance(ctx, domain.ConnectionInstanceID(id))
+func (m *Manager) retirePersistedInstance(ctx context.Context, id string) error {
+	return m.storage.run(ctx, func(ctx context.Context) error {
+		return m.repositories.retireInstance(ctx, domain.ConnectionInstanceID(id))
+	})
 }

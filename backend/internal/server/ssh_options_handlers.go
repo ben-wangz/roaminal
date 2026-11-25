@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
 )
@@ -18,6 +19,12 @@ func (s *Server) definitionError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusPreconditionFailed, "config etag does not match", "if_match")
 	case errors.Is(err, sshconfig.ErrFieldNotEditable):
 		writeError(w, http.StatusUnprocessableEntity, err.Error(), "field")
+	case errors.Is(err, definition.ErrMutationConflict):
+		writeError(w, http.StatusConflict, "pending connection definition update conflicts with the SSH config", "definition")
+	case errors.Is(err, definition.ErrUnavailable):
+		writeError(w, http.StatusServiceUnavailable, "connection definition temporarily unavailable", "definition")
+	case errors.Is(err, connectionoptions.ErrOptionsUnavailable):
+		writeError(w, http.StatusServiceUnavailable, "SSH connection options temporarily unavailable", "connection_options")
 	case errors.Is(err, os.ErrNotExist):
 		writeError(w, http.StatusNotFound, "definition not found")
 	case errors.Is(err, connectionoptions.ErrOptionsSymlink), errors.Is(err, connectionoptions.ErrOptionsNotWritable):

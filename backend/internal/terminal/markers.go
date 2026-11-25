@@ -38,9 +38,7 @@ func (s *Session) parseMarkersLocked(chunk []byte) []byte {
 			s.meta.AutomaticTitle = title
 			s.meta.SyncEffectiveTitle()
 			s.meta.UpdatedAt = s.manager.now().UTC()
-			if s.manager.hasPersistence() && !s.ephemeral {
-				_ = s.manager.saveMeta(s.meta)
-			}
+			s.saveMarkerMetaLocked()
 			s.broadcastMetaLocked()
 			cleaned.Write(remainder[:len(titlePrefix)+endRel+1])
 			index = escape + len(titlePrefix) + endRel + 1
@@ -66,6 +64,13 @@ func (s *Session) parseMarkersLocked(chunk []byte) []byte {
 	}
 	return cleaned.Bytes()
 }
+
+func (s *Session) saveMarkerMetaLocked() {
+	if !s.ephemeral && !s.closed && !s.retiring.Load() && !s.retired.Load() && s.manager.hasPersistence() {
+		_ = s.manager.saveMeta(s.meta)
+	}
+}
+
 func isControlPrefix(value []byte, full string) bool {
 	return len(value) < len(full) && strings.HasPrefix(full, string(value))
 }
@@ -96,7 +101,7 @@ func (s *Session) applyMarkerLocked(marker string) {
 			if path := string(decoded); filepath.IsAbs(path) {
 				s.meta.Cwd = path
 				s.meta.UpdatedAt = s.manager.now().UTC()
-				_ = s.manager.saveMeta(s.meta)
+				s.saveMarkerMetaLocked()
 				s.broadcastMetaLocked()
 			}
 		}
@@ -128,9 +133,7 @@ func (s *Session) applyMarkerLocked(marker string) {
 		if s.controlOwner == nil {
 			s.attention = true
 		}
-		if s.manager.hasPersistence() && !s.ephemeral {
-			_ = s.manager.saveMeta(s.meta)
-		}
+		s.saveMarkerMetaLocked()
 		s.broadcastMessageLocked(executionCompletedStreamMessage(s.currentExecID, record))
 		s.currentExec, s.currentExecID = nil, ""
 	case "tmux-ready":

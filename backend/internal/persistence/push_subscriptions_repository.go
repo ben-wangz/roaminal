@@ -34,7 +34,7 @@ func (a *repositoryAdapter) UpsertPushSubscription(ctx context.Context, subscrip
 	if err != nil {
 		return domain.PushSubscriptionRecord{}, a.store.markError(err)
 	}
-	if err := validatePushSubscriptionFile(pushSubscriptionFile{FormatVersion: StorageSchemaVersion, Subscriptions: []domain.PushSubscriptionRecord{subscription}}); err != nil {
+	if err := ValidatePushSubscription(subscription); err != nil {
 		return domain.PushSubscriptionRecord{}, err
 	}
 	for index := range file.Subscriptions {
@@ -48,7 +48,7 @@ func (a *repositoryAdapter) UpsertPushSubscription(ctx context.Context, subscrip
 		file.Subscriptions = append(file.Subscriptions[:index], file.Subscriptions[index+1:]...)
 		break
 	}
-	if len(file.Subscriptions) >= maxPushSubscriptions {
+	if len(file.Subscriptions) >= MaxPushSubscriptions {
 		return domain.PushSubscriptionRecord{}, errors.New("push subscription limit reached")
 	}
 	file.Subscriptions = append(file.Subscriptions, subscription)

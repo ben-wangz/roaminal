@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { xtermImePatch } from './xterm-ime-patch';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), xtermImePatch()],
   build: {
     target: 'es2022',
     outDir: 'dist',

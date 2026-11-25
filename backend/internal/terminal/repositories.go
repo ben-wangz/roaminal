@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
@@ -15,6 +16,9 @@ type Repositories struct {
 	Audit               ports.AuditRepository
 	Snapshots           ports.TerminalSnapshotRepository
 	PersistenceDegraded func() bool
+
+	// Optional transactional archive-and-delete; otherwise use Audit then Instances.
+	RetireConnectionInstance func(context.Context, domain.ConnectionInstanceID) error
 }
 
 func (r Repositories) available() bool {
@@ -50,16 +54,22 @@ func (r Repositories) listInstances(ctx context.Context) ([]domain.ConnectionIns
 	return r.Instances.ListConnectionInstances(ctx)
 }
 
-func (r Repositories) archiveInstance(ctx context.Context, id domain.ConnectionInstanceID) error {
-	if r.Audit == nil {
+func (r Repositories) retireInstance(ctx context.Context, id domain.ConnectionInstanceID) error {
+	if r.RetireConnectionInstance != nil {
+		if err := r.RetireConnectionInstance(ctx, id); err != nil {
+			return fmt.Errorf("retire connection instance: %w", err)
+		}
 		return nil
 	}
-	return r.Audit.ArchiveConnectionInstance(ctx, id)
-}
-
-func (r Repositories) deleteInstance(ctx context.Context, id domain.ConnectionInstanceID) error {
-	if r.Instances == nil {
-		return nil
+	if r.Audit != nil {
+		if err := r.Audit.ArchiveConnectionInstance(ctx, id); err != nil {
+			return fmt.Errorf("archive connection instance: %w", err)
+		}
 	}
-	return r.Instances.DeleteConnectionInstance(ctx, id)
+	if r.Instances != nil {
+		if err := r.Instances.DeleteConnectionInstance(ctx, id); err != nil {
+			return fmt.Errorf("remove active connection instance: %w", err)
+		}
+	}
+	return nil
 }

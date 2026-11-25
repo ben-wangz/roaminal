@@ -14,7 +14,8 @@ Viewport: desktop. Run serially.
    the original rows intact, and never overwrites a Host block.
 4. Open the same source in contexts A and B. Save a change in A, then submit B's
    stale form. B receives an ETag conflict and must refresh before writing; A's
-   newer change remains intact.
+   newer change remains intact. Repeat with only the FileSystem PWD changed in A:
+   the tag changes, but the native config bytes, mode, and inode remain intact.
 5. Rename the source alias in A and refresh Settings > Connection definitions. Verify its
    tmux and FileSystem options follow the new alias, the old option entry is not
    recreated, and no option becomes a synthetic disabled/default value.

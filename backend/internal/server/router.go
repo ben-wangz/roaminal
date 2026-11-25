@@ -13,6 +13,7 @@ func (s *Server) newAPIRouter() http.Handler {
 		return methodRoute{method: s.authenticatedRoute(fn)}
 	}
 	mux.Handle("/healthz", plain(http.MethodGet, s.health))
+	mux.Handle("/readyz", plain(http.MethodGet, s.readiness))
 	mux.Handle(api.HTTPPrefix+"/version", plain(http.MethodGet, s.versionInfo))
 	if s.cfg.ClientDiagnosticsEnabled && s.diagnostics != nil {
 		mux.Handle(api.HTTPPrefix+"/client-diagnostics", protected(http.MethodPost, s.clientDiagnostics))

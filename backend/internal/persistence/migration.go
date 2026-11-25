@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
 // legacySessionRecord is intentionally decoder-only. It describes the 0.2
@@ -35,6 +33,7 @@ type legacySessionRecord struct {
 	SourceState                       string          `json:"sourceState"`
 	ExitCode                          *int            `json:"exitCode"`
 	ExitSignal                        *string         `json:"exitSignal"`
+	HostVerificationAssessment        string          `json:"hostVerificationAssessment"`
 	ReuseFromConnectionInstanceID     *string         `json:"reuseFromConnectionInstanceId"`
 	ReconnectFromConnectionInstanceID *string         `json:"reconnectFromConnectionInstanceId"`
 	RelaunchFromConnectionInstanceID  *string         `json:"relaunchFromConnectionInstanceId"`
@@ -109,18 +108,11 @@ func migrateLegacySessionFile(store *Store, backupDir, name string) error {
 	if err != nil {
 		return err
 	}
-	var record legacySessionRecord
-	if err := decodeStrict(data, &record); err != nil {
+	meta, err := decodeFlatInstance(data)
+	if err != nil {
 		return fmt.Errorf("decode %s: %w", name, err)
 	}
-	id := record.ID
-	if id == "" {
-		id = record.ConnectionInstanceID
-	}
-	if record.AutomaticTitle == "" {
-		record.AutomaticTitle = record.Title
-	}
-	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: record.BackendRuntimeID, ConnectionDefinitionID: record.ConnectionDefinitionID, Type: record.Type, Purpose: record.Purpose, SourceHostAlias: record.SourceHostAlias, Lifecycle: record.Lifecycle, SourceState: record.SourceState, AutomaticTitle: record.AutomaticTitle, TitleOverride: record.TitleOverride, InitialCwd: record.InitialCwd, Cwd: record.Cwd, Cols: record.Cols, Rows: record.Rows, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, ExitCode: record.ExitCode, ExitSignal: record.ExitSignal, ReuseFromConnectionInstanceID: record.ReuseFromConnectionInstanceID, GenerationStatus: record.GenerationStatus, GenerationError: record.GenerationError, TmuxEnabled: record.TmuxEnabled, TmuxSessionName: record.TmuxSessionName, TmuxPrefixKey: record.TmuxPrefixKey, TmuxPrefixSource: record.TmuxPrefixSource}
+	id := meta.ID
 	if err := store.SaveConnectionInstance(meta); err != nil {
 		return fmt.Errorf("save %s: %w", name, err)
 	}

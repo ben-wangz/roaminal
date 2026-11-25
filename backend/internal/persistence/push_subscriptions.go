@@ -13,7 +13,8 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
-const maxPushSubscriptions = 1024
+// MaxPushSubscriptions bounds the number of stored delivery endpoints.
+const MaxPushSubscriptions = 1024
 
 type pushSubscriptionFile struct {
 	FormatVersion int                             `json:"formatVersion"`
@@ -74,17 +75,14 @@ func validatePushSubscriptionFile(file pushSubscriptionFile) error {
 	if file.FormatVersion != StorageSchemaVersion {
 		return fmt.Errorf("unsupported push subscription schema version %d", file.FormatVersion)
 	}
-	if len(file.Subscriptions) > maxPushSubscriptions {
+	if len(file.Subscriptions) > MaxPushSubscriptions {
 		return errors.New("push subscription retention limit exceeded")
 	}
 	seenIDs := make(map[string]struct{}, len(file.Subscriptions))
 	seenEndpoints := make(map[string]struct{}, len(file.Subscriptions))
 	for _, record := range file.Subscriptions {
-		if !uuidPattern.MatchString(record.ID) {
-			return errors.New("push subscription id is invalid")
-		}
-		if !uuidPattern.MatchString(record.AuthenticationSessionID) {
-			return errors.New("push subscription login session id is invalid")
+		if err := validatePushSubscriptionIdentity(record); err != nil {
+			return err
 		}
 		if _, exists := seenIDs[record.ID]; exists {
 			return errors.New("duplicate push subscription id")
@@ -94,12 +92,37 @@ func validatePushSubscriptionFile(file pushSubscriptionFile) error {
 			return errors.New("duplicate push subscription endpoint")
 		}
 		seenEndpoints[record.Endpoint] = struct{}{}
-		if err := validatePushSubscriptionValues(record.Endpoint, record.AuthKey, record.P256dhKey); err != nil {
+		if err := validatePushSubscriptionData(record); err != nil {
 			return err
 		}
-		if record.CreatedAt.IsZero() || record.UpdatedAt.IsZero() || record.UpdatedAt.Before(record.CreatedAt) {
-			return errors.New("push subscription timestamps are invalid")
-		}
+	}
+	return nil
+}
+
+// ValidatePushSubscription checks a durable browser push subscription record.
+func ValidatePushSubscription(record domain.PushSubscriptionRecord) error {
+	if err := validatePushSubscriptionIdentity(record); err != nil {
+		return err
+	}
+	return validatePushSubscriptionData(record)
+}
+
+func validatePushSubscriptionIdentity(record domain.PushSubscriptionRecord) error {
+	if !uuidPattern.MatchString(record.ID) {
+		return errors.New("push subscription id is invalid")
+	}
+	if !uuidPattern.MatchString(record.AuthenticationSessionID) {
+		return errors.New("push subscription login session id is invalid")
+	}
+	return nil
+}
+
+func validatePushSubscriptionData(record domain.PushSubscriptionRecord) error {
+	if err := validatePushSubscriptionValues(record.Endpoint, record.AuthKey, record.P256dhKey); err != nil {
+		return err
+	}
+	if record.CreatedAt.IsZero() || record.UpdatedAt.IsZero() || record.UpdatedAt.Before(record.CreatedAt) {
+		return errors.New("push subscription timestamps are invalid")
 	}
 	return nil
 }

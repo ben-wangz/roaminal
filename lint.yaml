@@ -133,13 +133,42 @@ commands:
         --set ingress.tlsSecret=roaminal-tls-ci >/dev/null;
         helm template roaminal chart --namespace chart-ci
         --set app.acceptTerms=true
-        --set persistence.enabled=false --set ssh.source=volume
+        --set database.driver=postgres --set database.postgres.existingSecret=postgres-ci
+        --set persistence.existingClaim=roaminal-data-ci --set ssh.source=volume
         --set ssh.volume.name=ssh-projected
-        --set-json 'extraVolumes=[{"name":"ssh-projected","projected":{"sources":[]}}]'
-        >/dev/null;
+        --set-json 'extraVolumes=[{"name":"ssh-projected","projected":{"sources":[{"configMap":{"name":"ssh-projected-ci"}}]}}]'
+        --set database.postgres.caSecret.name=postgres-ca-ci >/dev/null;
         helm template roaminal chart --namespace chart-ci
         --set app.acceptTerms=true --set app.clientDiagnosticsEnabled=false
-        >/dev/null
+        --set database.postgres.existingSecret=ignored-in-sqlite >/dev/null;
+        helm template roaminal chart --namespace chart-ci --kube-version 1.34.0
+        --set app.acceptTerms=true --set maintenance.enabled=true
+        --set database.driver=postgres --set database.postgres.dsnKey=uri
+        --set database.postgres.managed.storage.storageClass=postgres-ci >/dev/null
+
+  - name: "Helm managed PostgreSQL determinism"
+    cmd: "sh"
+    args:
+      - "-c"
+      - |-
+        set -eu
+        render() {
+          helm template roaminal chart --namespace chart-ci --kube-version 1.34.0 \
+            --set app.acceptTerms=true --set database.driver=postgres "$@"
+        }
+        job_name() {
+          render --show-only templates/postgres-bootstrap-job.yaml "$@" | grep -m1 '^  name:'
+        }
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        render >"$tmp/first"
+        render >"$tmp/second"
+        cmp "$tmp/first" "$tmp/second"
+        name=$(job_name)
+        retry=$(job_name --set database.postgres.managed.bootstrapRevision=2)
+        updated=$(job_name --set image.pullPolicy=Always)
+        test "$name" != "$retry"
+        test "$name" != "$updated"
 
   - name: "Helm chart validation cases"
     cmd: "sh"
@@ -155,13 +184,19 @@ commands:
         --set app.authMaxAttempts=1000 >/dev/null;
         helm template roaminal chart --namespace chart-ci
         --set app.acceptTerms=true
-        --set persistence.enabled=false
-        --set persistence.emptyDir.medium=Memory
-        --set persistence.emptyDir.sizeLimit=1Gi >/dev/null;
+        --set database.driver=postgres --set database.postgres.existingSecret=postgres-ci
+        --set persistence.existingClaim=roaminal-data-ci
+        --set probes.startup.failureThreshold=90 >/dev/null;
         if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=false >/dev/null 2>&1; then exit 1; fi;
         if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set app.scrollbackLines=50001 >/dev/null 2>&1; then exit 1; fi;
         if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set ssh.source=secret >/dev/null 2>&1; then exit 1; fi;
-        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set persistence.enabled=false --set persistence.existingClaim=invalid >/dev/null 2>&1; then exit 1; fi
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set persistence.enabled=false >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set persistence.enabled=false --set database.driver=postgres --set database.postgres.existingSecret=postgres-ci >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set persistence.enabled=false --set database.driver=postgres >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set database.driver=invalid >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set database.driver=postgres --set database.postgres.dsnKey=password >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set database.driver=postgres --set database.postgres.caSecret.name=external-ca >/dev/null 2>&1; then exit 1; fi;
+        if helm template roaminal chart --namespace chart-ci --set app.acceptTerms=true --set-json 'extraEnv=[{"name":"ROAMINAL_DB_DRIVER","value":"postgres"}]' >/dev/null 2>&1; then exit 1; fi
 
   - name: "Workflow YAML syntax"
     cmd: "ruby"

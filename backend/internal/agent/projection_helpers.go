@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/hex"
+	"maps"
 	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
@@ -15,16 +16,36 @@ func messageFallbackLabel(record EndpointRecord, sessionName string) string {
 	return endpointDisplay(record.User, record.Host, record.Port) + " / tmux:" + sessionName
 }
 
-func (s *Service) matchingConnectionInstances(endpointKey, sessionName string, record EndpointRecord) []string {
-	if s.terms == nil {
-		return nil
+// The scheduler captures views before opening the checkpoint transaction:
+// gathering them can take connection locks or run SSH subprocesses.
+func (s *Service) transitionDraft(view ports.ConnectionInstanceView, views []ports.ConnectionInstanceView, target Target, record EndpointRecord, from string, snapshot remoteAgentState, key string) *domain.MessageDraft {
+	matching := s.matchingConnectionInstances(views, target, record)
+	if len(matching) == 0 && view.ConnectionInstanceID != "" {
+		matching = []string{view.ConnectionInstanceID}
 	}
-	views := s.terms.ConnectionInstanceViews()
+	severity := "info"
+	if snapshot.State == "error" {
+		severity = "error"
+	} else if snapshot.State == "relax" {
+		severity = "success"
+	}
+	last := snapshot.Records[len(snapshot.Records)-1]
+	return &domain.MessageDraft{
+		Kind: "agent_state_transition", Severity: severity, AgentType: snapshot.Provider,
+		PresentationKey: "agent_state_transition", OccurredAt: last.Timestamp.UTC(), ReceivedAt: s.now().UTC(),
+		EndpointKey: target.EndpointKey, FallbackLabel: messageFallbackLabel(record, target.SessionName),
+		ConnectionLabel: notificationConnectionLabel(views, matching, record), TmuxSessionName: target.SessionName,
+		TmuxSessionID: snapshot.Tmux.SessionID, TmuxSessionCreated: snapshot.Tmux.SessionCreated,
+		ConnectionInstanceIDs: matching, AgentStateFrom: from, AgentStateTo: snapshot.State,
+		ConnectionDefinitionIDs: matchingConnectionDefinitions(views, matching, view),
+		AgentRuntimeID:          snapshot.RuntimeID, AgentStateIndex: snapshot.LatestIndex,
+		IdempotencyKey: key,
+	}
+}
+
+func (s *Service) matchingConnectionInstances(views []ports.ConnectionInstanceView, target Target, record EndpointRecord) []string {
 	s.mu.Lock()
-	bindings := make(map[string]Target, len(s.bindings))
-	for id, target := range s.bindings {
-		bindings[id] = target
-	}
+	bindings := maps.Clone(s.bindings)
 	s.mu.Unlock()
 	aliases := make(map[string]struct{}, len(record.Aliases))
 	for _, alias := range record.Aliases {
@@ -35,8 +56,8 @@ func (s *Service) matchingConnectionInstances(endpointKey, sessionName string, r
 		if view.Lifecycle != "live" || view.ID == "" {
 			continue
 		}
-		if target, bound := bindings[view.ID]; bound {
-			if target.EndpointKey == endpointKey && target.SessionName == sessionName {
+		if boundTarget, bound := bindings[view.ID]; bound {
+			if boundTarget == target {
 				result = append(result, connectionInstanceID(view))
 			}
 			continue
@@ -45,20 +66,20 @@ func (s *Service) matchingConnectionInstances(endpointKey, sessionName string, r
 		if view.SourceHostAlias != nil {
 			alias = *view.SourceHostAlias
 		}
-		if _, aliasMatches := aliases[alias]; aliasMatches && view.TmuxSessionName == sessionName {
+		if _, aliasMatches := aliases[alias]; aliasMatches && view.TmuxSessionName == target.SessionName {
 			result = append(result, connectionInstanceID(view))
 		}
 	}
 	return uniqueStrings(result)
 }
 
-func (s *Service) notificationConnectionLabel(matchingIDs []string, record EndpointRecord) string {
-	if s.terms != nil && len(matchingIDs) > 0 {
+func notificationConnectionLabel(views []ports.ConnectionInstanceView, matchingIDs []string, record EndpointRecord) string {
+	if len(matchingIDs) > 0 {
 		matched := make(map[string]struct{}, len(matchingIDs))
 		for _, id := range matchingIDs {
 			matched[id] = struct{}{}
 		}
-		for _, view := range s.terms.ConnectionInstanceViews() {
+		for _, view := range views {
 			if _, ok := matched[view.ConnectionInstanceID]; !ok {
 				if _, ok = matched[view.ID]; !ok {
 					continue
@@ -79,6 +100,38 @@ func (s *Service) notificationConnectionLabel(matchingIDs []string, record Endpo
 		}
 	}
 	return "Remote"
+}
+
+func matchingConnectionDefinitions(views []ports.ConnectionInstanceView, instanceIDs []string, fallback ports.ConnectionInstanceView) []string {
+	seen := make(map[string]struct{}, len(instanceIDs)+1)
+	result := make([]string, 0, len(instanceIDs)+1)
+	for _, candidate := range views {
+		matched := false
+		for _, id := range instanceIDs {
+			if id == candidate.ID || id == candidate.ConnectionInstanceID {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		definitionID := candidate.ConnectionDefinitionID
+		if definitionID == "" {
+			continue
+		}
+		if _, exists := seen[definitionID]; exists {
+			continue
+		}
+		seen[definitionID] = struct{}{}
+		result = append(result, definitionID)
+	}
+	if fallback.ConnectionDefinitionID != "" {
+		if _, exists := seen[fallback.ConnectionDefinitionID]; !exists {
+			result = append(result, fallback.ConnectionDefinitionID)
+		}
+	}
+	return result
 }
 
 func connectionInstanceID(view ports.ConnectionInstanceView) string {

@@ -132,22 +132,18 @@ func (m *Manager) PromotePending(id string, meta domain.ConnectionInstanceMeta) 
 	return m.projectSummary(result), err
 }
 
-func (m *Manager) CreatePendingProcessOwned(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit func(ports.TerminalExitStatus)) (Summary, error) {
+func (m *Manager) CreatePendingProcessOwned(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit ports.TerminalExitHook) (Summary, error) {
 	result, err := m.instances.CreatePendingProcessOwned(ctx, meta, argv, extraEnv, ownerID, onMarker, onExit)
 	return m.projectSummary(result), err
 }
 
-func (m *Manager) CreateProcessWithExit(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit func(ports.TerminalExitStatus)) (Summary, error) {
+func (m *Manager) CreateProcessWithExit(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit ports.TerminalExitHook) (Summary, error) {
 	result, err := m.instances.CreateProcessWithExit(ctx, meta, argv, extraEnv, onExit)
 	return m.projectSummary(result), err
 }
 
 func (m *Manager) MarkSourceState(id, state string) error {
 	return m.instances.MarkSourceState(id, state)
-}
-
-func (m *Manager) MarkGenerationResult(id, state, detail string) error {
-	return m.instances.MarkGenerationResult(id, state, detail)
 }
 
 func (m *Manager) SetTitle(id string, title *string) (Summary, error) {

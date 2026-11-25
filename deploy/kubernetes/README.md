@@ -8,24 +8,22 @@ Chart.
 deployments. It is intentionally empty until this deployment needs to override
 a Chart default; an empty file changes nothing.
 
-For an existing older multi-volume installation, follow the migration procedure in
-[`docs/deployment.md`](../../docs/deployment.md) before installing the chart.
-The procedure explicitly backs up the three source PVCs, copies them into the
-single Chart PVC under `state/`, `workspace/`, and `ssh/`, and leaves the source
-PVCs untouched until the operator verifies the result.
+The Chart runs one serving replica and requires a Roaminal PVC with either
+DB driver. SQLite is the default at
+`/home/roaminal/.roaminal/db/roaminal.sqlite3` on that PVC. PostgreSQL is opt-in;
+see the [Chart database guide](../../chart/README.md#database) for external DSN
+Secrets and managed CloudNativePG.
 
-Do not apply files from this directory directly to Kubernetes. Use the values
-file with the published Chart, for example:
+Before upgrading from a file-backed runtime, follow the
+[offline cutover](../../docs/deployment.md#cut-over-from-legacy-files). Keep
+`maintenance.enabled: true` while you dry-run the read-only legacy copy, then
+apply and verify it against the target DB. If moving from three PVCs,
+[prepare the unified claim](../../docs/deployment.md#migrating-from-an-older-multi-volume-deployment)
+first; the old PVCs remain intact. For installations already using a DB,
+[export, import, and activate](../../docs/backup-recovery.md#switching-databases)
+before changing the serving database.
 
-```sh
-helm upgrade --install roaminal \
-  oci://ghcr.io/ben-wangz/roaminal-charts/roaminal \
-  --version '<chart-version>' \
-  --namespace develop --create-namespace \
-  --values deploy/kubernetes/values.yaml \
-  --set auth.existingSecret=roaminal \
-  --set app.acceptTerms=true
-```
-
-This README remains the discoverable migration entry point for installations
-that still use the older multi-volume layout.
+Do not apply files from this directory directly to Kubernetes. Pass
+`--values deploy/kubernetes/values.yaml` when using the
+[published Chart](../../chart/README.md#forgekit-versions). Use a Chart and
+image that both support the database settings.

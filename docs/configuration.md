@@ -45,18 +45,40 @@ error; when no password is supplied a new random password is printed once at
 startup, so stable passwords are required for login sessions to survive a
 restart. Invalid values fail startup rather than being clamped.
 
-The state directory is `~/.roaminal`. It contains login sessions,
-per-login-session `workspace-layouts.json`, Agent endpoint projections and
-latest per-tmux state snapshots, `messages.json`, `push-subscriptions.json`,
-notification preferences, upload records, active
-`connection-instances/<id>/metadata.json` and `terminal.snapshot` files, audit
-copies under `audit/connection-instances/`, and
-`ssh-connection-options.yaml` for Roaminal-only tmux/FileSystem settings.
-When remote Browser is enabled, the Chromium profile remains temporary below
-`/tmp`.
-Temporary upload staging is also below `uploads/`. SSH config and key material
-remain under `~/.ssh/`. When enabled, recent redacted browser diagnostics are
-stored below `diagnostics/` with bounded retention.
+## Database and local state
+
+Database settings are environment-only:
+
+| Environment | Behavior |
+| --- | --- |
+| `ROAMINAL_DB_DRIVER` | `sqlite` when unset or empty; set `postgres` to opt in. |
+| `ROAMINAL_DB_SQLITE_PATH` | SQLite only. An absolute path; defaults to `$HOME/.roaminal/db/roaminal.sqlite3` (`/home/roaminal/.roaminal/db/roaminal.sqlite3` in the runtime image). |
+| `ROAMINAL_DB_POSTGRES_DSN` | PostgreSQL only. A full `postgres://` or `postgresql://` TCP URI with `sslmode=verify-full`. |
+
+Leave the inactive driver's setting unset or empty. Invalid settings fail
+startup; Roaminal does not fall back to another driver. Put the SQLite database
+and its sidecar files on a durable directory mount with SQLite-compatible
+locking and a private database directory (`0700`).
+
+In Helm, use `database.*` values rather than `extraEnv` or `extraEnvFrom` for
+DB settings. Keep the PostgreSQL DSN in a same-namespace Secret, not in values,
+ConfigMaps, or logs. If using a CA Secret, the Chart mounts it at
+`/etc/roaminal/postgres-ca/ca.crt`; use that path for `sslrootcert` in the DSN.
+A Secret change does not update running environment variables. Coordinate DB
+credential rotation, the Secret update, and a controlled restart. See the
+[Chart database options](../chart/README.md#database).
+
+The database stores login sessions and TOTP enrollment, workspace layouts,
+connection instance records and snapshots (including audit copies), Agent
+projections, messages, notification records, upload job records, and Roaminal's
+SSH connection options. Keep `$HOME/.roaminal` durable with either driver: it
+contains `database-binding.json`, local configuration, bounded browser
+diagnostics, and temporary upload staging. The state directory must be writable
+by the runtime user, not by other users. Native SSH config and keys stay under
+`~/.ssh/`; workspace files remain on their own mount. Chromium profiles are
+temporary under `/tmp`. See [backup and recovery](backup-recovery.md).
+
+## Feature configuration
 
 The Agent component bundle directory is read-only input to Agent initialization
 and normally comes from the container image. The installed component uses only

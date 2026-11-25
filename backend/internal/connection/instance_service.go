@@ -109,12 +109,12 @@ func (s *InstanceService) PromotePending(id string, meta domain.ConnectionInstan
 	return connectionSummary(item), err
 }
 
-func (s *InstanceService) CreatePendingProcessOwned(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit func(ports.TerminalExitStatus)) (Summary, error) {
+func (s *InstanceService) CreatePendingProcessOwned(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit ports.TerminalExitHook) (Summary, error) {
 	item, err := s.runtime.CreatePendingProcessOwned(ctx, meta, argv, extraEnv, ownerID, onMarker, onExit)
 	return connectionSummary(item), err
 }
 
-func (s *InstanceService) CreateProcessWithExit(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit func(ports.TerminalExitStatus)) (Summary, error) {
+func (s *InstanceService) CreateProcessWithExit(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit ports.TerminalExitHook) (Summary, error) {
 	item, err := s.runtime.CreateProcessWithExit(ctx, meta, argv, extraEnv, onExit)
 	return connectionSummary(item), err
 }
@@ -123,8 +123,8 @@ func (s *InstanceService) MarkSourceState(id, state string) error {
 	return s.runtime.MarkSourceState(id, state)
 }
 
-func (s *InstanceService) MarkGenerationResult(id, state, detail string) error {
-	return s.runtime.MarkGenerationResult(id, state, detail)
+func (s *InstanceService) MarkGenerationResult(ctx context.Context, id, state, detail string) error {
+	return s.runtime.MarkGenerationResult(ctx, id, state, detail)
 }
 
 func (s *InstanceService) SetTitle(id string, title *string) (Summary, error) {

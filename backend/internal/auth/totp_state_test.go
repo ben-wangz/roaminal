@@ -130,20 +130,18 @@ func TestRuntimeCorruptionDeniesEverythingUntilCorrected(t *testing.T) {
 	if err := os.WriteFile(path, []byte("garbage"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.mgr.Authenticate(tokens.AccessToken); !errors.Is(err, ErrUnauthorized) {
-		t.Fatal("access granted while enrollment storage is broken")
+	if _, err := f.mgr.Authenticate(tokens.AccessToken); !errors.Is(err, ErrEnrollmentStorage) {
+		t.Fatalf("access during corrupt enrollment: %v", err)
 	}
-	if _, err := f.mgr.Refresh(tokens.RefreshToken, "browser"); !errors.Is(err, ErrUnauthorized) && !errors.Is(err, ErrEnrollmentStorage) {
-		t.Fatalf("refresh granted while enrollment storage is broken: %v", err)
+	if _, err := f.mgr.Refresh(tokens.RefreshToken, "browser"); !errors.Is(err, ErrEnrollmentStorage) {
+		t.Fatalf("refresh during corrupt enrollment: %v", err)
 	}
 	challenge, _ := f.mgr.Challenge()
-	if _, err := f.mgr.Login(challenge.ChallengeID, "00", ""); !errors.Is(err, ErrUnauthorized) && !errors.Is(err, ErrEnrollmentStorage) {
-		t.Fatalf("login during storage error: %v", err)
+	if _, err := f.mgr.Login(challenge.ChallengeID, Proof(f.cfg.Password, challenge), ""); !errors.Is(err, ErrEnrollmentStorage) {
+		t.Fatalf("login during corrupt enrollment: %v", err)
 	}
-	// Restoring a valid enrollment with the same identity re-enables access
-	// controls; credentials issued before the error stay invalid.
-	if _, err := f.mgr.Refresh(tokens.RefreshToken, "browser"); !errors.Is(err, ErrUnauthorized) && !errors.Is(err, ErrEnrollmentStorage) {
-		t.Fatalf("refresh token survived a storage error window: %v", err)
+	if records, err := f.repos.Auth.LoadAuth(t.Context()); err != nil || len(records) != 1 {
+		t.Fatalf("corruption destroyed durable session state: %d records, %v", len(records), err)
 	}
 }
 
@@ -151,8 +149,11 @@ func TestEnrollmentWatchDetectsDeletionPeriodically(t *testing.T) {
 	f := newFixture(t)
 	f.fullLoginFromScratch(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	f.mgr.StartEnrollmentWatch(ctx, 10*time.Millisecond)
+	done := f.mgr.StartEnrollmentWatch(ctx, 10*time.Millisecond)
+	defer func() {
+		cancel()
+		<-done
+	}()
 	changed := f.mgr.EnrollmentChanged()
 	if err := os.Remove(filepath.Join(f.store.Root, "2fa-secret")); err != nil {
 		t.Fatal(err)
@@ -162,7 +163,6 @@ func TestEnrollmentWatchDetectsDeletionPeriodically(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("periodic watch did not detect deletion")
 	}
-	cancel()
 }
 
 func TestSessionBoundInterfaceGuard(t *testing.T) {
@@ -177,8 +177,8 @@ func TestSessionBoundInterfaceGuard(t *testing.T) {
 	if len(records) != 1 || records[0].EnrollmentID == "" {
 		t.Fatalf("persisted session missing enrollment binding: %+v", records)
 	}
-	if !f.mgr.IsSessionActive(tokens.SessionID) {
-		t.Fatal("active session reported inactive")
+	if active, err := f.mgr.IsSessionActive(tokens.SessionID); err != nil || !active {
+		t.Fatalf("active session reported inactive: %v", err)
 	}
 }
 

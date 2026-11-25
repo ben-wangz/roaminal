@@ -96,8 +96,8 @@ func (s *Store) Update(key string, fn func(*EndpointRecord) error) error {
 	if s.err != nil {
 		return s.err
 	}
-	value, existed := s.state.Endpoints[key]
-	previous := cloneRecord(value)
+	previous, existed := s.state.Endpoints[key]
+	value := cloneRecord(previous)
 	if value.Targets == nil {
 		value.Targets = map[string]TargetState{}
 	}

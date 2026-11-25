@@ -75,9 +75,6 @@ func (s *Service) beginTransaction(config sshconfig.Snapshot, options connection
 	if s.journalPath == "" {
 		return nil, nil
 	}
-	if err := s.recoverPendingTransaction(); err != nil {
-		return nil, err
-	}
 	transaction, err := newDefinitionTransaction(config, options)
 	if err != nil {
 		return nil, err
@@ -131,8 +128,8 @@ func (s *Service) restoreTransaction(transaction *definitionTransaction) error {
 			restoreErrors = append(restoreErrors, err)
 		}
 	}
-	if s.options != nil {
-		if err := s.options.Restore(connectionoptions.Snapshot{Exists: transaction.Options.Exists, Data: transaction.Options.Data}); err != nil {
+	if s.legacyOptions != nil {
+		if err := s.legacyOptions.Restore(connectionoptions.Snapshot{Exists: transaction.Options.Exists, Data: transaction.Options.Data}); err != nil {
 			restoreErrors = append(restoreErrors, err)
 		}
 	}

@@ -2,15 +2,11 @@ package filesystem
 
 import (
 	"bytes"
-	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 func TestRemoteScriptsUseNulProtocolAndBoundedContent(t *testing.T) {
@@ -78,55 +74,6 @@ func TestParseDirectoryAcceptsDetectedMIMEField(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Name != "README" || entries[0].MIMEType != "text/plain" {
 		t.Fatalf("unexpected detected entry: %#v", entries)
-	}
-}
-
-func TestCreateUploadRequiresManifestParts(t *testing.T) {
-	alias := "fixture"
-	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
-	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
-		switch {
-		case command.Script == configuredRootScript:
-			return rootOutput("/workspace"), nil
-		case command.Script == uploadTargetScript:
-			return []byte(uploadTargetMarker + "\x00/workspace\x00"), nil
-		default:
-			return nil, errors.New("unexpected upload command")
-		}
-	}
-	service := New(fake, nil)
-	root, err := service.Root(context.Background(), "instance")
-	if err != nil {
-		t.Fatal(err)
-	}
-	status, err := service.CreateUpload(context.Background(), "instance", UploadManifest{
-		RootRevision: root.Revision,
-		TargetPath:   ".",
-		Files:        []UploadManifestFile{{Part: "file-0", RelativePath: "existing.txt", Size: 4}},
-	}, nil)
-	if !errors.Is(err, ErrContentUnavailable) || status.UploadID != "" {
-		t.Fatalf("expected missing staged part to be rejected, status=%#v err=%v", status, err)
-	}
-}
-
-func TestCreateUploadRejectsUnsafeManifestBeforeStaging(t *testing.T) {
-	alias := "fixture"
-	fake := &fakeExecutor{summary: ports.ConnectionInstanceView{ID: "instance", Type: "ssh", Lifecycle: "live", SourceHostAlias: &alias}}
-	fake.run = func(command ports.RemoteCommand) ([]byte, error) {
-		return rootOutput("/workspace"), nil
-	}
-	service := New(fake, nil)
-	root, err := service.Root(context.Background(), "instance")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = service.CreateUpload(context.Background(), "instance", UploadManifest{
-		RootRevision: root.Revision,
-		TargetPath:   "../outside",
-		Files:        []UploadManifestFile{{Part: "file-0", RelativePath: "file.txt", Size: 0}},
-	}, nil)
-	if !errors.Is(err, ErrPathOutsideRoot) {
-		t.Fatalf("expected outside-root error, got %v", err)
 	}
 }
 

@@ -77,14 +77,14 @@ func (r *transportTestRuntime) PendingOwner(string) string { return "" }
 func (r *transportTestRuntime) PromotePending(string, domain.ConnectionInstanceMeta) (ports.TerminalInstanceSummary, error) {
 	return ports.TerminalInstanceSummary{}, errors.New("not implemented")
 }
-func (r *transportTestRuntime) CreatePendingProcessOwned(context.Context, domain.ConnectionInstanceMeta, []string, []string, string, func(string), func(ports.TerminalExitStatus)) (ports.TerminalInstanceSummary, error) {
+func (r *transportTestRuntime) CreatePendingProcessOwned(context.Context, domain.ConnectionInstanceMeta, []string, []string, string, func(string), ports.TerminalExitHook) (ports.TerminalInstanceSummary, error) {
 	return ports.TerminalInstanceSummary{}, errors.New("not implemented")
 }
-func (r *transportTestRuntime) CreateProcessWithExit(context.Context, domain.ConnectionInstanceMeta, []string, []string, func(ports.TerminalExitStatus)) (ports.TerminalInstanceSummary, error) {
+func (r *transportTestRuntime) CreateProcessWithExit(context.Context, domain.ConnectionInstanceMeta, []string, []string, ports.TerminalExitHook) (ports.TerminalInstanceSummary, error) {
 	return ports.TerminalInstanceSummary{}, errors.New("not implemented")
 }
 func (r *transportTestRuntime) MarkSourceState(string, string) error { return nil }
-func (r *transportTestRuntime) MarkGenerationResult(string, string, string) error {
+func (r *transportTestRuntime) MarkGenerationResult(context.Context, string, string, string) error {
 	return nil
 }
 func (r *transportTestRuntime) SetTitle(string, *string) (ports.TerminalInstanceSummary, error) {

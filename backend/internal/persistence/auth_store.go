@@ -80,6 +80,11 @@ type legacyAuthFile struct {
 	Sessions      []legacyAuthSession `json:"sessions"`
 }
 
+func (s legacyAuthSession) unboundRecord() AuthSession {
+	return AuthSession{ID: s.ID, PasswordFingerprint: s.PasswordFingerprint, RefreshTokenHash: s.RefreshTokenHash,
+		CreatedAt: s.CreatedAt, LastSeenAt: s.LastSeenAt, RefreshExpiresAt: s.RefreshExpiresAt, RotatedAt: s.RotatedAt, UserAgent: s.UserAgent}
+}
+
 func (s *Store) migrateLegacyAuth(path string, data []byte) (AuthFile, error) {
 	var legacy legacyAuthFile
 	if err := decodeStrict(data, &legacy); err != nil {
@@ -92,7 +97,7 @@ func (s *Store) migrateLegacyAuth(path string, data []byte) (AuthFile, error) {
 	current := AuthFile{FormatVersion: StorageSchemaVersion, Sessions: make([]AuthSession, 0, len(legacy.Sessions))}
 	layouts := make([]workspaceLayoutRecord, 0, len(legacy.Sessions))
 	for _, old := range legacy.Sessions {
-		converted := AuthSession{ID: old.ID, PasswordFingerprint: old.PasswordFingerprint, RefreshTokenHash: old.RefreshTokenHash, CreatedAt: old.CreatedAt, LastSeenAt: old.LastSeenAt, RefreshExpiresAt: old.RefreshExpiresAt, RotatedAt: old.RotatedAt, UserAgent: old.UserAgent}
+		converted := old.unboundRecord()
 		if err := validateAuthSession(converted); err != nil {
 			return AuthFile{}, migrationError(backup, "validate 0.2 authentication record", err)
 		}

@@ -20,26 +20,28 @@ func randomName(prefix string) string {
 // never follows an existing target symlink and does not repair ownership or
 // permissions supplied by a mounted Secret.
 func (r *Root) AtomicReplace(name string, data []byte, max int) error {
+	_, err := r.AtomicReplaceChecked(name, data, max, nil)
+	return err
+}
+
+// AtomicReplaceChecked runs check immediately before publishing a staged
+// regular file. The bool reports whether rename succeeded, even if directory
+// sync fails. A checked write publishes a file with exact mode 0600.
+func (r *Root) AtomicReplaceChecked(name string, data []byte, max int, check func() error) (bool, error) {
 	if err := validateName(name); err != nil {
-		return err
+		return false, err
 	}
 	if len(data) > max {
-		return errors.New("ssh file exceeds size limit")
+		return false, errors.New("ssh file exceeds size limit")
 	}
 	ok, reason := r.CanWrite(name)
 	if !ok {
-		return fmt.Errorf("%w: %s", ErrNotWritable, reason)
-	}
-	if !r.Available() {
-		return ErrUnavailable
-	}
-	if info, err := r.root.Lstat(name); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return ErrNotWritable
+		return false, fmt.Errorf("%w: %s", ErrNotWritable, reason)
 	}
 	tmp := randomName(".roaminal-")
 	f, err := r.root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return err
+		return false, err
 	}
 	cleanup := true
 	defer func() {
@@ -47,29 +49,53 @@ func (r *Root) AtomicReplace(name string, data []byte, max int) error {
 			_ = r.root.Remove(tmp)
 		}
 	}()
+	if check != nil {
+		if err := f.Chmod(0o600); err != nil {
+			_ = f.Close()
+			return false, err
+		}
+	}
 	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
-		return err
+		return false, err
 	}
 	if err := f.Sync(); err != nil {
 		_ = f.Close()
-		return err
+		return false, err
 	}
 	if err := f.Close(); err != nil {
-		return err
+		return false, err
 	}
 	// Re-check the destination immediately before rename. os.Root prevents
 	// traversal outside the directory, while this rejects a replacement link.
-	if info, err := r.root.Lstat(name); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return ErrNotWritable
+	if info, err := r.root.Lstat(name); err == nil && !info.Mode().IsRegular() {
+		return false, ErrNotWritable
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+		return false, err
+	}
+	if check != nil {
+		if err := check(); err != nil {
+			return false, err
+		}
 	}
 	if err := r.root.Rename(tmp, name); err != nil {
-		return err
+		return false, err
 	}
 	cleanup = false
-	return syncDirectory(r.name)
+	return true, r.SyncDirectory()
+}
+
+// SyncDirectory persists renames in the directory held by this root.
+func (r *Root) SyncDirectory() error {
+	if !r.Available() {
+		return ErrUnavailable
+	}
+	dir, err := r.root.Open(".")
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func syncDirectory(path string) error {

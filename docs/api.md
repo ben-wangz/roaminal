@@ -3,7 +3,7 @@
 JSON API requests use `Content-Type: application/json`, are limited to 1 MiB, and
 reject unknown fields. FileSystem uploads use multipart form data and are
 limited to 10 GiB of file content plus multipart overhead. Browser requests
-must use the current page Origin. The public endpoints are `/healthz`,
+must use the current page Origin. The public endpoints are `/healthz`, `/readyz`,
 `/api/v2/version`, and the authentication challenge/login plus mandatory
 TOTP setup/confirm/verify/refresh/logout routes; other API endpoints require
 `Authorization: Bearer <access-token>`.
@@ -13,9 +13,16 @@ short-lived purpose-bound `pendingToken`; normal tokens are issued only by
 `POST /api/v2/auth/2fa/verify`. Errors use
 `{"error":"message","code":"stable_code","retryable":false}` and may include `field`, `requestId`, and bounded `details`.
 
+If the TOTP enrollment cannot be verified, requests that need that check
+return a retryable `503` with code `auth_enrollment_storage_unavailable`.
+Open protected WebSockets disconnect. A failed enrollment read does not
+revoke refresh tokens, but a confirmed reset or change does. Invalid,
+expired, or revoked refresh tokens still return `401`.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/healthz` | Backend and terminal-worker health (`503` while unavailable) |
+| GET | `/healthz` | Terminal-worker availability for startup and liveness (`503` while unavailable) |
+| GET | `/readyz` | Terminal-worker and database readiness (`503` if either check fails) |
 | GET | `/api/v2/version` | Product, API version, process `bootId`, and diagnostic capability |
 | POST | `/api/v2/auth/challenge`, `/api/v2/auth/login`, `/api/v2/auth/refresh`, `/api/v2/auth/logout` | Login and session lifecycle |
 | POST | `/api/v2/auth/2fa/setup` | Return the enrollment candidate (provisioning URI, secret, local QR) for a setup pending token |
@@ -76,8 +83,15 @@ reject stale writes with a conflict.
 `PUT /api/v2/connection-instances/order` accepts `connectionInstanceIds`;
 retired IDs are ignored and current omitted instances are appended.
 Definition writes require the current `ETag` in `If-Match`; stale or missing
-tags return `412` or `428`. Capacity and transport state errors return `409`
-with stable codes such as `capacity`, `transport`, or `no_remote_transport`.
+tags return `412` or `428`. The tag covers the native SSH source and visible
+Roaminal options. A `PUT` that changes only tmux or FileSystem options does not
+need a writable SSH config; it still requires a readable definition. If the
+committed definition cannot be read, SSH creation and reuse return `503` rather
+than starting a different transport. A FileSystem request that needs stored
+options returns `503 filesystem_options_unavailable` if it cannot read them;
+`$HOME` is the default only when no override is stored.
+Capacity and transport state errors return `409` with codes such as
+`capacity`, `transport`, or `no_remote_transport`.
 
 Local creation accepts `connectionDefinitionId: "local"`, optional absolute
 `initialCwd`, and `cols: 2..1000` / `rows: 1..1000`. Remote creation uses an SSH
@@ -95,11 +109,11 @@ newest-first and accepts an opaque `before` cursor; it is retained for at most
 metadata only; provider session IDs, tmux socket fingerprints, credentials,
 endpoint keys, and remote state history are not returned.
 
-Web Push sends only newly persisted Agent state transitions allowed by the
-matching connection preference: `running -> relax` or `running -> error`. The
-message center shows all standard state transitions. The server keeps
-subscription endpoints and encryption keys in private state and never returns
-them. The browser's global notification switch controls local delivery and
+The Agent checkpoint and its transition message commit together. After commit,
+Web Push can send a newly recorded transition allowed by the matching
+connection preference: `running -> relax` or `running -> error`. Push delivery
+is best effort. The message center shows all standard state transitions. The
+server keeps subscription endpoints and encryption keys private. The browser's global notification switch controls local delivery and
 removes all subscriptions for the current login session when turned
 off. If VAPID configuration is absent, the config endpoint reports Web Push
 disabled.
@@ -130,10 +144,23 @@ short-lived. Paths are constrained below the resolved root; symlink content is
 not read through the API. `stat` uses the filename extension first and uses the
 SSH target's `file(1)` MIME result only when the extension is not recognized.
 
-Uploads are asynchronous multipart requests with a file manifest and file parts.
+Uploads use `multipart/form-data`. Send the JSON `manifest` field first, then
+one file part for each manifest entry, named by its `part` field. File parts
+can arrive in any order and their sizes must match the manifest. Each request
+allows a 4 MiB manifest, up to 10,000 files and 10 GiB of file data, and 16 MiB
+of total multipart overhead (including the manifest).
+
+Roaminal streams payloads into the private `upload-staging/` area under its state
+directory. All connection instances share 8 upload slots and a 10 GiB declared
+payload budget across incoming, queued, and running uploads. Exhausted capacity
+returns retryable `503 filesystem_upload_staging_capacity`. Leave disk headroom
+for filesystem overhead and other application state. Reservations are released
+after payload removal; if removal fails, the reservation is held until restart.
+Interrupted uploads are not resumed and their staging is removed on startup.
+
 Conflict policies are `refuse` (default), `overwrite`, and `update-if-newer`.
 The server uses `rsync` when both sides support it and falls back to `scp`.
-Poll the upload resource until it reaches a terminal status; `DELETE` cancels
+Poll the accepted upload until it reaches a terminal status; `DELETE` cancels
 an active upload.
 
 ## Agent

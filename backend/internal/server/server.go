@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strings"
@@ -46,6 +47,7 @@ type Server struct {
 	agentProjection   agent.ProjectionService
 	messages          *messages.Service
 	notifications     *notifications.Service
+	databaseReady     func(context.Context) error
 }
 
 type Dependencies struct {
@@ -69,6 +71,7 @@ type Dependencies struct {
 	AgentProjection   agent.ProjectionService
 	Messages          *messages.Service
 	Notifications     *notifications.Service
+	DatabaseReady     func(context.Context) error
 }
 
 // New constructs the complete HTTP application graph once. Optional feature
@@ -95,6 +98,7 @@ func New(deps Dependencies) *Server {
 	s.agentProjection = deps.AgentProjection
 	s.messages = deps.Messages
 	s.notifications = deps.Notifications
+	s.databaseReady = deps.DatabaseReady
 	s.api = s.newAPIRouter()
 	s.handler = http.HandlerFunc(s.serve)
 	return s
@@ -113,7 +117,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if isAuthPath(r.URL.Path) {
 		noStoreAuthResponse(w)
 	}
-	if strings.HasPrefix(r.URL.Path, api.HTTPPrefix+"/") || r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, api.WebSocketPrefix+"/") {
+	if strings.HasPrefix(r.URL.Path, api.HTTPPrefix+"/") || r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || strings.HasPrefix(r.URL.Path, api.WebSocketPrefix+"/") {
 		if r.Method != http.MethodOptions && !s.sameOrigin(r) {
 			writeError(w, http.StatusForbidden, "origin denied")
 			return
@@ -184,7 +188,7 @@ func (s *Server) authenticatedRoute(fn authenticatedHandler) http.Handler {
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	if !s.worker.Available() {
+	if s.worker == nil || !s.worker.Available() {
 		writeError(w, http.StatusServiceUnavailable, "terminal worker unavailable")
 		return
 	}
@@ -202,7 +206,7 @@ func (s *Server) withAuth(w http.ResponseWriter, r *http.Request, fn authenticat
 	}
 	sessionID, err := s.auth.Authenticate(bearer(r))
 	if err != nil {
-		writeError(w, 401, "unauthorized")
+		writeAuthError(w, err)
 		return
 	}
 	fn(w, r, sessionID)

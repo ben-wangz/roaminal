@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	maxStoredMessages = 500
-	messageMaxAge     = 7 * 24 * time.Hour
+	// MaxStoredMessages bounds retained messages independently of the last sequence.
+	MaxStoredMessages = 500
+	// MessageMaxAge is the retention window measured from receipt time.
+	MessageMaxAge = 7 * 24 * time.Hour
 )
 
 type messageFile struct {
@@ -107,11 +109,11 @@ func validateMessageFile(file messageFile) error {
 			return errors.New("duplicate message idempotency key")
 		}
 		seenKeys[record.IdempotencyKey] = struct{}{}
-		if err := validateMessageDraft(record.MessageDraft); err != nil {
+		if err := ValidateMessageDraft(record.MessageDraft); err != nil {
 			return err
 		}
 	}
-	if len(file.Messages) > maxStoredMessages {
+	if len(file.Messages) > MaxStoredMessages {
 		return errors.New("message retention limit exceeded")
 	}
 	if len(file.Messages) > 0 && file.Messages[len(file.Messages)-1].Sequence != previous {
@@ -120,7 +122,8 @@ func validateMessageFile(file messageFile) error {
 	return nil
 }
 
-func validateMessageDraft(draft domain.MessageDraft) error {
+// ValidateMessageDraft enforces the message write contract for durable adapters.
+func ValidateMessageDraft(draft domain.MessageDraft) error {
 	if draft.MessageID == "" || draft.IdempotencyKey == "" || draft.EndpointKey == "" || draft.FallbackLabel == "" || draft.TmuxSessionName == "" || draft.TmuxSessionID == "" || draft.TmuxSessionCreated < 0 {
 		return errors.New("message identity is incomplete")
 	}
@@ -172,7 +175,7 @@ func validAgentState(value string) bool {
 
 func pruneMessageFile(file *messageFile, now time.Time) bool {
 	changed := false
-	cutoff := now.Add(-messageMaxAge)
+	cutoff := now.Add(-MessageMaxAge)
 	retained := file.Messages[:0]
 	for _, record := range file.Messages {
 		if record.ReceivedAt.Before(cutoff) {
@@ -181,8 +184,8 @@ func pruneMessageFile(file *messageFile, now time.Time) bool {
 		}
 		retained = append(retained, record)
 	}
-	if len(retained) > maxStoredMessages {
-		retained = retained[len(retained)-maxStoredMessages:]
+	if len(retained) > MaxStoredMessages {
+		retained = retained[len(retained)-MaxStoredMessages:]
 		changed = true
 	}
 	if changed {

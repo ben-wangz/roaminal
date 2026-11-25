@@ -22,7 +22,7 @@ func (s *Server) listConnectionDefinitions(w http.ResponseWriter, _ *http.Reques
 	}
 	collection, err := s.definitions.Collection()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "config unavailable")
+		s.definitionError(w, err)
 		return
 	}
 	w.Header().Set("ETag", collection.ETag)

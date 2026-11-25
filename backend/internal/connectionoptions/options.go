@@ -23,6 +23,7 @@ var (
 	ErrInvalidPwd         = errors.New("invalid FileSystem pwd")
 	ErrOptionsNotWritable = errors.New("SSH connection options are not writable")
 	ErrOptionsSymlink     = errors.New("SSH connection options must not be a symlink")
+	ErrOptionsUnavailable = errors.New("SSH connection options are temporarily unavailable")
 )
 
 type Tmux struct {
@@ -167,14 +168,9 @@ func (s *Store) UpdateAlias(alias string, value Tmux, present bool) error {
 		delete(decoded.Connections, alias)
 		return s.saveFileLocked(decoded)
 	}
-	if alias == "" || (value.Enabled && !ValidSessionName(value.SessionName)) {
-		return ErrInvalidSessionName
-	}
-	if value.Pwd == "" {
-		value.Pwd = DefaultPwd
-	}
-	if !ValidPwd(value.Pwd) {
-		return ErrInvalidPwd
+	value, err = NormalizeAliasOption(alias, value)
+	if err != nil {
+		return err
 	}
 	settings := connectionSettings{FileSystem: &filesystemSettings{Pwd: value.Pwd}}
 	if value.Enabled {

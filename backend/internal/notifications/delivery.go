@@ -99,6 +99,13 @@ func (s *Service) sendWithRetry(payload []byte, record domain.PushSubscriptionRe
 	var lastOutcome SendOutcome
 	var lastErr error
 	for attempt := 1; attempt <= s.retryAttempts; attempt++ {
+		if err := s.context.Err(); err != nil {
+			return SendOutcome{}, err
+		}
+		active, err := s.sessionActive(record.AuthenticationSessionID)
+		if err != nil || !active {
+			return SendOutcome{}, ErrUnavailable
+		}
 		ctx, cancel := context.WithTimeout(s.context, s.sendTimeout)
 		outcome, err := s.sender.Send(ctx, payload, record)
 		cancel()

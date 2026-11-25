@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 )
 
 func (c *Client) Start(ctx context.Context) error {
@@ -19,6 +21,7 @@ func (c *Client) Start(ctx context.Context) error {
 		c.cmd = exec.Command(c.path)
 	}
 	c.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
+	c.cmd.Env = processenv.Environment()
 	stdin, err := c.cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -38,35 +41,22 @@ func (c *Client) Start(ctx context.Context) error {
 	go c.readLoop()
 	go func() {
 		err := c.cmd.Wait()
+		c.exited.Store(true)
 		if err == nil {
 			err = ErrUnavailable
 		}
 		c.fail(err)
 	}()
-	correlationID := c.newID()
-	waiter := c.register(correlationID)
-	if err := c.send(requestHeader{Op: "hello", Protocol: Protocol, SchemaVersion: SchemaVersion, CorrelationID: correlationID}, nil); err != nil {
-		c.unregister(correlationID, waiter)
-		c.fail(err)
-		return err
-	}
 	handshakeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	select {
-	case err := <-c.ready:
-		return err
-	case result := <-waiter:
-		if result.Header.Op == "ready" && result.Header.Protocol == Protocol && result.Header.Engine == "xterm-headless" {
-			return nil
-		}
-		err := errors.New("terminal worker handshake failed")
-		c.fail(err)
-		return err
-	case <-handshakeCtx.Done():
-		c.unregister(correlationID, waiter)
-		c.fail(handshakeCtx.Err())
-		return handshakeCtx.Err()
+	result, err := c.request(handshakeCtx, requestHeader{Op: "hello", Protocol: Protocol}, nil)
+	if err == nil && (result.Header.Op != "ready" || result.Header.Protocol != Protocol || result.Header.Engine != "xterm-headless") {
+		err = errors.New("terminal worker handshake failed")
 	}
+	if err != nil {
+		c.fail(err)
+	}
+	return err
 }
 
 func (c *Client) register(requestID string) chan Result {
@@ -124,7 +114,7 @@ func (c *Client) fail(err error) {
 			waiter <- Result{Header: responseHeader{Op: "error", Protocol: Protocol, Message: err.Error(), SchemaVersion: SchemaVersion, CorrelationID: id, Sequence: "1", EventID: c.newID(), OccurredAt: c.now().UTC()}}
 		}
 		c.waitMu.Unlock()
-		if c.cmd != nil && c.cmd.Process != nil && c.cmd.ProcessState == nil && !c.stopping.Load() {
+		if c.cmd != nil && c.cmd.Process != nil && !c.exited.Load() && !c.stopping.Load() {
 			_ = syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
 		}
 		if c.onFatal != nil && !c.stopping.Load() {

@@ -1,0 +1,53 @@
+{{- if include "roaminal.postgres.managed" . }}
+{{- $name := include "roaminal.postgres.bootstrapName" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ include "roaminal.postgres.secretName" . | quote }}]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ $name | quote }}]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name | quote }}
+    namespace: {{ .Release.Namespace | quote }}
+{{- end }}

@@ -21,7 +21,7 @@ func (s *Server) browserWebsocket(w http.ResponseWriter, r *http.Request) {
 	defer stopEnrollmentWatch()
 	authSessionID, err := s.auth.Authenticate(websocketToken(r))
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+		writeAuthError(w, err)
 		return
 	}
 	if err := ctx.Err(); err != nil {

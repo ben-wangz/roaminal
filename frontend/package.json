@@ -33,6 +33,8 @@
     "@vitejs/plugin-react": "6.0.4",
     "eslint": "10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "happy-dom": "21.0.4",
+    "magic-string": "0.30.21",
     "react-test-renderer": "^19.2.8",
     "typescript": "^5.8.3",
     "typescript-eslint": "8.66.0",

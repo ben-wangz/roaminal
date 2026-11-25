@@ -55,26 +55,9 @@ func (s *Store) decodeLocked() (file, os.FileInfo, Source, error) {
 	if err != nil {
 		return file{}, info, Source{Status: "unreadable", Reason: "options file cannot be read"}, err
 	}
-	if len(data) > MaxBytes {
-		return file{}, info, Source{Status: "invalid", Reason: "options file exceeds size limit"}, ErrInvalidFormat
-	}
-	var decoded file
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&decoded); err != nil {
-		return file{}, info, Source{Status: "invalid", Reason: "options file is not valid YAML"}, fmt.Errorf("%w: %v", ErrInvalidFormat, err)
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err == nil || (!errors.Is(err, io.EOF) && !strings.Contains(err.Error(), "EOF")) {
-		return file{}, info, Source{Status: "invalid", Reason: "options file contains multiple documents"}, ErrInvalidFormat
-	}
-	if (decoded.FormatVersion != 1 && decoded.FormatVersion != FormatVersion) || decoded.Connections == nil {
-		return file{}, info, Source{Status: "invalid", Reason: "unsupported options format"}, ErrInvalidFormat
-	}
-	for alias, settings := range decoded.Connections {
-		if _, _, err := optionFromSettings(alias, settings); err != nil {
-			return file{}, info, Source{Status: "invalid", Reason: err.Error()}, err
-		}
+	decoded, err := decodeOptions(data)
+	if err != nil {
+		return file{}, info, Source{Status: "invalid", Reason: err.Error()}, err
 	}
 	source := Source{Status: "available", Readable: true}
 	if writable, reason := s.canWrite(info); writable {
@@ -83,6 +66,47 @@ func (s *Store) decodeLocked() (file, os.FileInfo, Source, error) {
 		source.Reason = reason
 	}
 	return decoded, info, source, nil
+}
+
+// DecodeLegacyOptions reads both supported file formats without probing
+// writability or dropping options for aliases absent from the SSH config.
+func DecodeLegacyOptions(data []byte) (map[string]Tmux, error) {
+	decoded, err := decodeOptions(data)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]Tmux, len(decoded.Connections))
+	for alias, settings := range decoded.Connections {
+		if option, present, _ := optionFromSettings(alias, settings); present {
+			result[alias] = option
+		}
+	}
+	return result, nil
+}
+
+func decodeOptions(data []byte) (file, error) {
+	if len(data) > MaxBytes {
+		return file{}, ErrInvalidFormat
+	}
+	var decoded file
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&decoded); err != nil {
+		return file{}, fmt.Errorf("%w: %v", ErrInvalidFormat, err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil || (!errors.Is(err, io.EOF) && !strings.Contains(err.Error(), "EOF")) {
+		return file{}, ErrInvalidFormat
+	}
+	if (decoded.FormatVersion != 1 && decoded.FormatVersion != FormatVersion) || decoded.Connections == nil {
+		return file{}, ErrInvalidFormat
+	}
+	for alias, settings := range decoded.Connections {
+		if _, _, err := optionFromSettings(alias, settings); err != nil {
+			return file{}, err
+		}
+	}
+	return decoded, nil
 }
 
 func optionFromSettings(alias string, settings connectionSettings) (Tmux, bool, error) {

@@ -1,4 +1,9 @@
 {{- include "roaminal.validateValues" . -}}
+{{- $postgresCA := include "roaminal.postgres.caSecretName" . -}}
+{{- $annotations := dict -}}
+{{- if include "roaminal.postgres.managed" . -}}
+{{- $_ := set $annotations "argocd.argoproj.io/sync-wave" "0" -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,13 +11,12 @@ metadata:
   namespace: {{ .Release.Namespace | quote }}
   labels:
     {{- include "roaminal.labels" (dict "context" $ "extra" nil) | nindent 4 }}
-  {{- $annotations := include "roaminal.annotations" (dict "context" $ "extra" .Values.commonAnnotations) }}
-  {{- if $annotations }}
+  {{- with include "roaminal.annotations" (dict "context" $ "extra" $annotations) }}
   annotations:
-    {{- $annotations | nindent 4 }}
+    {{- . | nindent 4 }}
   {{- end }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ ternary 0 (int .Values.replicaCount) .Values.maintenance.enabled }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   strategy:
     {{- toYaml .Values.updateStrategy | nindent 4 }}
@@ -31,7 +35,7 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "roaminal.serviceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName | quote }}
@@ -80,6 +84,8 @@ spec:
                   mkdir -m 700 "$path"
                 fi
               done
+              exec /usr/local/bin/roaminal db prepare-state \
+                --state-dir "/mnt/roaminal-data/{{ .Values.persistence.paths.state }}"{{ if eq .Values.database.driver "sqlite" }} --create-sqlite-dir{{ end }}
           securityContext:
             {{- toYaml .Values.initContainerSecurityContext | nindent 12 }}
           volumeMounts:
@@ -96,6 +102,26 @@ spec:
               containerPort: {{ .Values.app.port }}
               protocol: TCP
           env:
+            - name: ROAMINAL_DB_DRIVER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: databaseDriver
+            - name: ROAMINAL_DB_SQLITE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "roaminal.configMapName" . }}
+                  key: databaseSQLitePath
+            - name: ROAMINAL_DB_POSTGRES_DSN
+              {{- if eq .Values.database.driver "postgres" }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "roaminal.postgres.secretName" . | quote }}
+                  key: {{ .Values.database.postgres.dsnKey | quote }}
+                  optional: false
+              {{- else }}
+              value: ""
+              {{- end }}
             - name: ROAMINAL_HOST
               valueFrom:
                 configMapKeyRef:
@@ -265,6 +291,11 @@ spec:
               mountPath: /tmp
             - name: filesystem-image-preview-cache
               mountPath: /var/cache/roaminal/filesystem-image-previews
+            {{- if $postgresCA }}
+            - name: postgres-ca
+              mountPath: {{ include "roaminal.postgres.caFile" . | dir | quote }}
+              readOnly: true
+            {{- end }}
             - name: roaminal-data
               mountPath: /home/roaminal/.roaminal
               subPath: {{ .Values.persistence.paths.state }}
@@ -307,7 +338,7 @@ spec:
           {{- if .Values.probes.readiness.enabled }}
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
             timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
@@ -339,21 +370,19 @@ spec:
             {{- if .Values.filesystemImagePreview.cache.emptyDir.sizeLimit }}
             sizeLimit: {{ .Values.filesystemImagePreview.cache.emptyDir.sizeLimit | quote }}
             {{- end }}
+        {{- if $postgresCA }}
+        - name: postgres-ca
+          secret:
+            secretName: {{ $postgresCA | quote }}
+            optional: false
+            defaultMode: 292 # 0444; project only the public CA certificate
+            items:
+              - key: {{ ternary "ca.crt" .Values.database.postgres.caSecret.key (not .Values.database.postgres.existingSecret) | quote }}
+                path: {{ include "roaminal.postgres.caFile" . | base | quote }}
+        {{- end }}
         - name: roaminal-data
-          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "roaminal.pvcName" . }}
-          {{- else }}
-          emptyDir:
-            {{- if or .Values.persistence.emptyDir.medium .Values.persistence.emptyDir.sizeLimit }}
-            {{- if .Values.persistence.emptyDir.medium }}
-            medium: {{ .Values.persistence.emptyDir.medium | quote }}
-            {{- end }}
-            {{- if .Values.persistence.emptyDir.sizeLimit }}
-            sizeLimit: {{ .Values.persistence.emptyDir.sizeLimit | quote }}
-            {{- end }}
-            {{- end }}
-          {{- end }}
         {{- if eq .Values.ssh.source "secret" }}
         - name: ssh-directory
           secret:

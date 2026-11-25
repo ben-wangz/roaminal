@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 )
 
 type transferCapability struct {
@@ -25,6 +26,7 @@ func runRsync(ctx context.Context, binary string, info ports.RemoteTransferInfo,
 	}
 	args = append(args, filepath.Join(job.staging, "."), remoteSpec(info.Alias, target))
 	command := exec.CommandContext(ctx, binary, args...)
+	command.Env = processenv.Environment()
 	command.Stdout = &rsyncProgressWriter{job: job}
 	command.Stderr = io.Discard
 	if err := command.Run(); err != nil {
@@ -94,6 +96,7 @@ func runScp(ctx context.Context, id string, info ports.RemoteTransferInfo, job *
 		job.setStatus(func(status *UploadStatus) { status.CurrentPath = file.Manifest.RelativePath })
 		args := []string{"-p", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + info.ControlPath, "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", "--", file.Path, scpRemoteSpec(info.Alias, path.Join(target, file.Manifest.RelativePath))}
 		command := exec.CommandContext(ctx, scp, args...)
+		command.Env = processenv.Environment()
 		command.Stdout = io.Discard
 		command.Stderr = io.Discard
 		if err := command.Run(); err != nil {

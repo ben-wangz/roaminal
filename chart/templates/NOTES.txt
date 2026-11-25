@@ -15,5 +15,10 @@ No Ingress was created. Expose the ClusterIP Service through a TLS-aware reverse
 that preserves same-origin requests and WebSocket upgrades.
 {{- end }}
 
+{{- if .Values.maintenance.enabled }}
+Maintenance is enabled: the application is scaled to zero. Database resources remain in place.
+{{- else }}
 The workload intentionally uses one replica and Recreate updates. An upgrade interrupts
-active terminal, SSH, and tmux processes. Back up the unified PVC before uninstalling.
+active terminal, SSH, and tmux processes.
+{{- end }}
+Back up the unified PVC and, in PostgreSQL mode, the database and its credentials.

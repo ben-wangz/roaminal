@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 	"github.com/ben-wangz/roaminal/backend/internal/sshfs"
@@ -99,13 +100,16 @@ func TestRefreshSourcesIsolatesUnrelatedChangesAndPreservesHistoricalAccess(t *t
 	if err := os.WriteFile(sshPath, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	repo := sshconfig.New(root)
+	definitions, err := definition.New(sshconfig.New(root), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	aliasAlpha, aliasBeta := "alpha", "beta"
 	runtime := newTransportTestRuntime(
 		ports.TerminalInstanceSummary{ID: "a-instance", ConnectionInstanceID: "a-instance", Type: "ssh", Purpose: "interactive", Lifecycle: "live", SourceState: "current", SourceHostAlias: &aliasAlpha},
 		ports.TerminalInstanceSummary{ID: "b-instance", ConnectionInstanceID: "b-instance", Type: "ssh", Purpose: "interactive", Lifecycle: "live", SourceState: "current", SourceHostAlias: &aliasBeta},
 	)
-	manager := &Manager{configRepo: repo, sshPath: sshPath, instances: NewInstanceService(runtime), transportPool: newTransportPool()}
+	manager := &Manager{definitions: definitions, sshPath: sshPath, instances: NewInstanceService(runtime), transportPool: newTransportPool()}
 	alpha := &Transport{OwnerID: "a-instance", Alias: "alpha", SourceRevision: "", Channels: 1, SourceState: "current"}
 	beta := &Transport{OwnerID: "b-instance", Alias: "beta", SourceRevision: "", Channels: 1, SourceState: "current"}
 	alpha.SourceRevision, err = manager.sourceRevision(alpha.Alias)

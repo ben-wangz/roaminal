@@ -2,66 +2,70 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/config"
 )
 
 const sessionProcessGroupGrace = 2 * time.Second
 
-func (m *Manager) Shutdown(ctx context.Context) {
-	m.mu.RLock()
-	sessions := make([]*Session, 0, len(m.sessions)+len(m.pending))
-	for _, session := range m.sessions {
-		sessions = append(sessions, session)
-	}
-	for _, session := range m.pending {
-		sessions = append(sessions, session)
-	}
-	m.mu.RUnlock()
-	stopDone := make(chan struct{}, len(sessions))
-	for _, session := range sessions {
-		go func(session *Session) {
-			session.mu.Lock()
-			cmd := session.cmd
-			session.closed = true
-			session.meta.Lifecycle = "interrupted"
-			session.meta.BackendRuntimeID = session.manager.runtimeID
-			session.meta.UpdatedAt = m.now().UTC()
-			if session.snapshotTimer != nil {
-				session.snapshotTimer.Stop()
-				session.snapshotTimer = nil
-			}
-			if session.pty != nil {
-				_ = session.pty.Close()
-			}
-			session.mu.Unlock()
-			_ = terminateSessionProcessGroup(ctx, cmd)
-			if onExit := session.takeExitHook(); onExit != nil {
-				onExit(ExitStatus{})
-			}
-			var err error
-			if session.ephemeral {
-				m.finishEphemeral(ctx, session)
-			} else {
-				err = m.retireSession(ctx, session)
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Roaminal session %s shutdown cleanup warning: %v\n", session.meta.ID, err)
-			}
-			stopDone <- struct{}{}
-		}(session)
-	}
-	for range sessions {
-		<-stopDone
-	}
-	deadline, cancel := context.WithTimeout(ctx, 5*time.Second)
+func (m *Manager) Shutdown(parent context.Context) {
+	ctx, cancel := context.WithTimeout(parent, config.DefaultShutdownDeadline)
 	defer cancel()
-	if m.worker != nil {
-		_ = m.worker.Shutdown(deadline)
+	deadline, _ := ctx.Deadline()
+	// Leave some time for worker shutdown even if all retirement stages stall.
+	reserve := min(time.Until(deadline)/4, time.Second)
+	if reserve < 0 {
+		reserve = 0
 	}
+	retireCtx, stopRetirement := context.WithDeadline(ctx, deadline.Add(-reserve))
+	defer stopRetirement()
+
+	m.mu.Lock()
+	m.stopping = true
+	m.stopCreating()
+	sessions := make(map[string]*Session, len(m.sessions)+len(m.pending))
+	for id, session := range m.sessions {
+		sessions[id] = session
+	}
+	for id, session := range m.pending {
+		sessions[id] = session
+	}
+	m.mu.Unlock()
+
+	var retirements sync.WaitGroup
+	for id, session := range sessions {
+		retirements.Go(func() {
+			if err := m.terminateSession(retireCtx, session, "interrupted"); err != nil && !errors.Is(err, os.ErrNotExist) {
+				fmt.Fprintf(os.Stderr, "Roaminal connection instance %s shutdown cleanup warning: %v\n", id, err)
+			}
+		})
+	}
+	done := make(chan struct{})
+	go func() { retirements.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-retireCtx.Done():
+	}
+	// A periodic save or an earlier natural retirement can still be in flight.
+	// Cancel those operations too and prevent any late worker from writing.
+	m.storage.stop()
+	if m.worker != nil {
+		workerCtx, stopWorker := context.WithTimeout(ctx, 5*time.Second)
+		_ = m.worker.Shutdown(workerCtx)
+		stopWorker()
+	}
+	<-done
+	m.creates.Wait()
+	// Some storage calls (e.g. a SQLite fsync) can outlive context cancellation.
+	// Do not return to the store/state-lock owner while a writer is still active.
+	m.storage.inFlight.Wait()
 }
 
 func signalProcessGroup(cmd *exec.Cmd, signal syscall.Signal) error {

@@ -141,11 +141,47 @@ func TestChallengeLoginAndRefreshRotation(t *testing.T) {
 	if _, err := f.mgr.Authenticate(tokens.AccessToken); !errors.Is(err, ErrUnauthorized) {
 		t.Fatalf("old access token remains valid: %v", err)
 	}
-	if err := f.mgr.Logout(next.RefreshToken, ""); err != nil {
+	if _, err := f.mgr.Logout(next.RefreshToken, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.mgr.Current(next.SessionID); !errors.Is(err, ErrUnauthorized) {
 		t.Fatal("logout did not revoke session")
+	}
+}
+
+func TestLogoutCanRevokeItsSessionDuringAnEnrollmentOutage(t *testing.T) {
+	f := newFixture(t)
+	first := f.fullLoginFromScratch(t)
+	f.clock.Advance(TOTPPeriod * time.Second)
+	second := f.fullLogin(t)
+	f.mgr.enrollmentRepo = &faultEnrollmentRead{TOTPEnrollmentRepository: f.repos.TOTPEnrollment}
+
+	if id, err := f.mgr.Logout(first.RefreshToken, ""); err != nil || id != first.SessionID {
+		t.Fatalf("logout during enrollment outage failed: %v", err)
+	}
+	records := loadAuthRows(t, f)
+	if len(records) != 1 || records[0].ID != second.SessionID {
+		t.Fatal("logout failed to preserve the unrelated session")
+	}
+	f.mgr.enrollmentRepo = f.repos.TOTPEnrollment
+	if _, err := f.mgr.Refresh(first.RefreshToken, "browser"); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("logged out session revived: %v", err)
+	}
+	if _, err := f.mgr.Refresh(second.RefreshToken, "browser"); err != nil {
+		t.Fatalf("unrelated session did not recover: %v", err)
+	}
+}
+
+func TestExpiredCredentialsRemainUnauthorizedDuringEnrollmentOutage(t *testing.T) {
+	f := newFixture(t)
+	tokens := f.fullLoginFromScratch(t)
+	f.clock.Advance(f.cfg.AuthRefreshTTL)
+	f.mgr.enrollmentRepo = &faultEnrollmentRead{TOTPEnrollmentRepository: f.repos.TOTPEnrollment}
+	if _, err := f.mgr.Authenticate(tokens.AccessToken); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expired access not confirmed invalid: %v", err)
+	}
+	if _, err := f.mgr.Refresh(tokens.RefreshToken, "browser"); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expired refresh not confirmed invalid: %v", err)
 	}
 }
 

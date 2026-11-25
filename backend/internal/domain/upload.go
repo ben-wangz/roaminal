@@ -23,6 +23,17 @@ type UploadJobRecord struct {
 	UpdatedAt            time.Time             `json:"updatedAt"`
 }
 
+// InterruptUpload marks persisted in-flight metadata as terminal without
+// replaying files or inventing a completion timestamp.
+func InterruptUpload(record *UploadJobRecord) bool {
+	if record.Status != "queued" && record.Status != "running" {
+		return false
+	}
+	record.Status = "failed"
+	record.Failures = append(record.Failures, UploadFailureRecord{Code: "filesystem_upload_failed", Error: "Upload interrupted by restart"})
+	return true
+}
+
 type UploadFailureRecord struct {
 	Path  string `json:"path"`
 	Code  string `json:"code"`

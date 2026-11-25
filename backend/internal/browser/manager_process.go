@@ -8,11 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/identity"
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 )
 
 func (m *Manager) ensureProcess() (*process, error) {
@@ -62,23 +62,7 @@ func (m *Manager) ensureProcess() (*process, error) {
 }
 
 func browserEnvironment(chromiumPath string) []string {
-	env := make([]string, 0, len(os.Environ())+1)
-	for _, current := range os.Environ() {
-		key, _, _ := strings.Cut(current, "=")
-		switch key {
-		case "ROAMINAL_PASSWORD", "ROAMINAL_WEB_PUSH_VAPID_PRIVATE_KEY", "ROAMINAL_WEB_PUSH_VAPID_PUBLIC_KEY", "ROAMINAL_WEB_PUSH_SUBJECT":
-			continue
-		}
-		env = append(env, current)
-	}
-	entry := "ROAMINAL_BROWSER_CHROMIUM_PATH=" + chromiumPath
-	for index, current := range env {
-		if strings.HasPrefix(current, "ROAMINAL_BROWSER_CHROMIUM_PATH=") {
-			env[index] = entry
-			return env
-		}
-	}
-	return append(env, entry)
+	return append(processenv.Environment(), "ROAMINAL_BROWSER_CHROMIUM_PATH="+chromiumPath)
 }
 
 func (m *Manager) readProcess(runtime *process, stdout io.Reader) {

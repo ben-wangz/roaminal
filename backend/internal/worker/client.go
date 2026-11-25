@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -39,16 +40,16 @@ type Client struct {
 	queuedBytes int64
 	waitMu      sync.Mutex
 	waiters     map[string]chan Result
-	ready       chan error
 	done        chan struct{}
 	closeOnce   sync.Once
-	callbackMu  sync.Mutex
 	onFatal     func(error)
 	stopping    atomic.Bool
+	exited      atomic.Bool
 	clock       ports.Clock
 	ids         ports.IDGenerator
 }
 type writeRequest struct {
+	ctx       context.Context
 	data      []byte
 	queueSize int
 	done      chan error
@@ -70,7 +71,7 @@ func New(path string, onFatal func(error), dependencies ...Dependencies) *Client
 	if deps.IDs == nil {
 		deps.IDs = identity.UUIDGenerator{Random: random.CryptoSource{}}
 	}
-	return &Client{path: path, waiters: make(map[string]chan Result), ready: make(chan error, 1), done: make(chan struct{}), onFatal: onFatal, clock: deps.Clock, ids: deps.IDs}
+	return &Client{path: path, waiters: make(map[string]chan Result), done: make(chan struct{}), onFatal: onFatal, clock: deps.Clock, ids: deps.IDs}
 }
 
 func (c *Client) now() time.Time { return c.clock.Now() }

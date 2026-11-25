@@ -3,11 +3,13 @@ package connection
 import (
 	"context"
 	"errors"
-	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 )
 
 type EffectiveEndpoint = ports.EffectiveEndpoint
@@ -42,7 +44,9 @@ func (m *Manager) resolveEndpointAlias(ctx context.Context, sshPath, alias strin
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(probeCtx, sshPath, "-o", "CanonicalizeHostname=no", "-G", "--", alias).Output()
+	cmd := exec.CommandContext(probeCtx, sshPath, "-o", "CanonicalizeHostname=no", "-G", "--", alias)
+	cmd.Env = processenv.Environment()
+	output, err := cmd.Output()
 	if err != nil {
 		return EffectiveEndpoint{}, err
 	}

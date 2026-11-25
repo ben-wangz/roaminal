@@ -54,7 +54,7 @@ func (a *repositoryAdapter) UpsertNotificationPreference(ctx context.Context, pr
 	if err != nil {
 		return domain.NotificationPreference{}, a.store.markError(err)
 	}
-	if err := validateNotificationPreference(preference); err != nil {
+	if err := ValidateNotificationPreference(preference); err != nil {
 		return domain.NotificationPreference{}, err
 	}
 	for index := range file.Preferences {
@@ -67,7 +67,7 @@ func (a *repositoryAdapter) UpsertNotificationPreference(ctx context.Context, pr
 			return preference, nil
 		}
 	}
-	if len(file.Preferences) >= maxNotificationPreferences {
+	if len(file.Preferences) >= MaxNotificationPreferences {
 		return domain.NotificationPreference{}, errors.New("notification preference limit reached")
 	}
 	file.Preferences = append(file.Preferences, preference)

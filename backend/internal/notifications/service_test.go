@@ -31,7 +31,7 @@ func TestServiceRegistersAndSendsSafePayload(t *testing.T) {
 	repo := &fakeRepository{}
 	sender := &fakeSender{outcomes: []SendOutcome{{StatusCode: 201}}}
 	service, err := New(repo, &fakeIDs{}, Options{
-		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com",
+		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com", SessionActive: alwaysActive,
 		Sender: sender, PreferenceRepository: repo, UserKey: "test-user", RetryDelay: time.Millisecond,
 	})
 	if err != nil {
@@ -79,7 +79,7 @@ func TestServiceRetriesTransientAndRemovesExpiredSubscription(t *testing.T) {
 		{StatusCode: 201},
 	}}
 	service, err := New(repo, &fakeIDs{}, Options{
-		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com",
+		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com", SessionActive: alwaysActive,
 		Sender: sender, PreferenceRepository: repo, UserKey: "test-user", RetryDelay: time.Millisecond,
 	})
 	if err != nil {
@@ -104,7 +104,7 @@ func TestServiceRetriesTransientAndRemovesExpiredSubscription(t *testing.T) {
 	repo2 := &fakeRepository{}
 	sender2 := &fakeSender{outcomes: []SendOutcome{{StatusCode: 410, Permanent: true}, {StatusCode: 201}}}
 	service2, err := New(repo2, &fakeIDs{}, Options{
-		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com",
+		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com", SessionActive: alwaysActive,
 		Sender: sender2, PreferenceRepository: repo2, UserKey: "test-user", RetryDelay: time.Millisecond,
 	})
 	if err != nil {
@@ -126,9 +126,67 @@ func TestServiceRetriesTransientAndRemovesExpiredSubscription(t *testing.T) {
 	}
 }
 
+func alwaysActive(string) (bool, error) { return true, nil }
+
+func TestServicePreservesUnverifiedSubscriptionsAndBlocksDelivery(t *testing.T) {
+	repo := &fakeRepository{}
+	sender := &fakeSender{outcomes: []SendOutcome{{StatusCode: 503, Retryable: true}, {StatusCode: 201}}}
+	checkErr := errors.New("enrollment read unavailable")
+	active, authErr := false, checkErr
+	checksBeforeFailure := -1
+	service, err := New(repo, &fakeIDs{}, Options{
+		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com",
+		Sender: sender, PreferenceRepository: repo, UserKey: "test-user", RetryDelay: time.Millisecond,
+		SessionActive: func(string) (bool, error) {
+			if checksBeforeFailure == 0 {
+				return false, checkErr
+			}
+			checksBeforeFailure--
+			return active, authErr
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if _, err := service.Register(t.Context(), "session-1", validSubscriptionInput(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetPreference(t.Context(), PreferenceInput{ConnectionDefinitionID: "definition-1", TmuxSessionName: "team", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Prune(t.Context()); !errors.Is(err, checkErr) || len(repo.records) != 1 {
+		t.Fatalf("unverified subscription pruned: %v", err)
+	}
+	notify := func() {
+		t.Helper()
+		service.Notify(completedRecord())
+		if err := service.Wait(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	notify()
+	if sender.calls() != 0 || len(repo.records) != 1 {
+		t.Fatal("unverified subscription was sent to or pruned")
+	}
+	active, authErr, checksBeforeFailure = true, nil, 1
+	notify()
+	if sender.calls() != 1 || len(repo.records) != 1 {
+		t.Fatal("delivery did not resume or retry ignored the failed session check")
+	}
+	active, checksBeforeFailure = false, -1
+	notify()
+	if sender.calls() != 1 {
+		t.Fatal("inactive subscription was sent to")
+	}
+	if err := service.Prune(t.Context()); err != nil || len(repo.records) != 0 {
+		t.Fatalf("confirmed inactive subscription not pruned: %v", err)
+	}
+}
+
 func TestServiceRejectsInvalidSubscription(t *testing.T) {
 	service, err := New(&fakeRepository{}, &fakeIDs{}, Options{
-		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com", Sender: &fakeSender{},
+		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com", SessionActive: alwaysActive, Sender: &fakeSender{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +202,7 @@ func TestServiceSuppressesUnsupportedTransitionsAndPreferences(t *testing.T) {
 	repo := &fakeRepository{}
 	sender := &fakeSender{}
 	service, err := New(repo, &fakeIDs{}, Options{
-		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com",
+		PublicKey: "test-public", PrivateKey: "test-private", Subject: "mailto:test@example.com", SessionActive: alwaysActive,
 		Sender: sender, PreferenceRepository: repo, UserKey: "test-user", RetryDelay: time.Millisecond,
 	})
 	if err != nil {

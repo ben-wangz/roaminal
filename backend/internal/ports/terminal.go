@@ -14,6 +14,9 @@ type TerminalExitStatus struct {
 	Signal   *int `json:"signal"`
 }
 
+// TerminalExitHook releases resources before the final checkpoint is archived.
+type TerminalExitHook func(context.Context, TerminalExitStatus)
+
 // TerminalRuntime is the connection-instance lifecycle port implemented by
 // the terminal feature. Connection orchestration depends on capabilities,
 // not on the PTY manager or its worker implementation.
@@ -45,10 +48,10 @@ type TerminalRuntime interface {
 	TouchPending(string)
 	PendingOwner(string) string
 	PromotePending(string, domain.ConnectionInstanceMeta) (TerminalInstanceSummary, error)
-	CreatePendingProcessOwned(context.Context, domain.ConnectionInstanceMeta, []string, []string, string, func(string), func(TerminalExitStatus)) (TerminalInstanceSummary, error)
-	CreateProcessWithExit(context.Context, domain.ConnectionInstanceMeta, []string, []string, func(TerminalExitStatus)) (TerminalInstanceSummary, error)
+	CreatePendingProcessOwned(context.Context, domain.ConnectionInstanceMeta, []string, []string, string, func(string), TerminalExitHook) (TerminalInstanceSummary, error)
+	CreateProcessWithExit(context.Context, domain.ConnectionInstanceMeta, []string, []string, TerminalExitHook) (TerminalInstanceSummary, error)
 	MarkSourceState(string, string) error
-	MarkGenerationResult(string, string, string) error
+	MarkGenerationResult(context.Context, string, string, string) error
 	SetTitle(string, *string) (TerminalInstanceSummary, error)
 	AbortPending(context.Context, string) error
 }

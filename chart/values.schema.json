@@ -13,7 +13,13 @@
     "replicaCount": {"type": "integer", "const": 1},
     "updateStrategy": {"type": "object", "required": ["type"], "properties": {"type": {"type": "string", "enum": ["Recreate"]}}, "additionalProperties": true},
     "terminationGracePeriodSeconds": {"type": "integer", "minimum": 1},
-    "automountServiceAccountToken": {"type": "boolean"},
+    "automountServiceAccountToken": {"type": "boolean", "const": false},
+    "maintenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}},
+      "required": ["enabled"]
+    },
     "serviceAccount": {
       "type": "object",
       "additionalProperties": false,
@@ -92,11 +98,56 @@
       },
       "required": ["existingSecret", "vapidPublicKeyKey", "vapidPrivateKeyKey", "subjectKey"]
     },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "driver": {"type": "string", "enum": ["sqlite", "postgres"]},
+        "postgres": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existingSecret": {"$ref": "#/definitions/optionalSecretName"},
+            "dsnKey": {"$ref": "#/definitions/secretKey"},
+            "caSecret": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {"$ref": "#/definitions/optionalSecretName"},
+                "key": {"$ref": "#/definitions/secretKey"}
+              },
+              "required": ["name", "key"]
+            },
+            "managed": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "database": {"$ref": "#/definitions/postgresIdentifier"},
+                "username": {"$ref": "#/definitions/postgresIdentifier"},
+                "bootstrapRevision": {"type": "integer", "minimum": 1},
+                "storage": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "size": {"type": "string", "minLength": 1},
+                    "storageClass": {"type": "string"}
+                  },
+                  "required": ["size", "storageClass"]
+                }
+              },
+              "required": ["database", "username", "bootstrapRevision", "storage"]
+            }
+          },
+          "required": ["existingSecret", "dsnKey", "caSecret", "managed"]
+        }
+      },
+      "required": ["driver", "postgres"]
+    },
     "persistence": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": {"type": "boolean"},
+        "enabled": {"type": "boolean", "const": true},
         "existingClaim": {"type": "string"},
         "storageClass": {"type": "string"},
         "accessModes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
@@ -275,8 +326,19 @@
     "extraVolumeMounts": {"type": "array", "items": {"type": "object"}},
     "extraDeploy": {"type": "array", "items": {"type": "object"}}
   },
-  "required": ["replicaCount", "image", "app", "auth", "webPush", "persistence", "tmp", "filesystemImagePreview", "ssh", "service", "ingress", "probes"],
+  "required": ["replicaCount", "maintenance", "image", "app", "auth", "webPush", "database", "persistence", "tmp", "filesystemImagePreview", "ssh", "service", "ingress", "probes"],
   "definitions": {
+    "optionalSecretName": {
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*)?$"
+    },
+    "secretKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,253}$",
+      "not": {"anyOf": [{"const": "."}, {"pattern": "^\\.\\."}]}
+    },
+    "postgresIdentifier": {"type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$"},
     "probe": {
       "type": "object",
       "additionalProperties": false,

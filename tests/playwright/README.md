@@ -48,9 +48,9 @@ Verify all of the following:
    one ready endpoint. No Service exposes the terminal worker or a storage/runtime
    socket.
 6. Through the exact URL assigned to `ROAMINAL_E2E_BASE_URL`, `GET /healthz`
-   returns `200 {"status":"ok"}` and `GET /api/v2/version` returns
-   `name=roaminal`, the expected API version, product version, and a non-empty
-   `bootId`. Access the Service/Ingress directly; never use a port-forward.
+   and `GET /readyz` both return `200 {"status":"ok"}`. `GET /api/v2/version`
+   returns `name=roaminal`, the expected API version, product version, and a
+   non-empty `bootId`. Access the Service/Ingress directly; never use a port-forward.
 
 If the release is missing or any readiness condition fails, do not start
 Playwright. Deploy or repair the system by following the **Kubernetes with
@@ -123,9 +123,9 @@ The standard SSH/tmux fixture is documented in
 the first SSH/tmux case and reset it between cases that require a clean remote
 home. The fixture must accept an Ed25519 key owned by the test release, must
 not contain production data, and must be safe for shell exit, tmux session
-creation, and repeated connections. Tests that mutate `~/.ssh/config`,
-`~/.roaminal/ssh-connection-options.yaml`, SSH keys, login sessions, or the
-connection count run serially unless every worker has its own release and PVC.
+creation, and repeated connections. Tests that mutate `~/.ssh/config`, connection
+options, SSH keys, login sessions, or the connection count run serially unless
+every worker has its own release and PVC.
 
 Before a run, retain the Helm deployment-gate record together with the Roaminal
 version and `bootId`, browser/project name, viewport, and enabled capabilities.

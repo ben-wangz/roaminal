@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 )
 
 const auxiliaryOutputLimit = 8 * 1024
@@ -128,6 +129,7 @@ func (m *Manager) OpenRemote(ctx context.Context, id string, command RemoteComma
 	args := m.auxiliarySSHArgs(transport)
 	args = append(args, remoteCommandInvocation(command)...)
 	cmd := exec.CommandContext(ctx, m.sshPath, args...)
+	cmd.Env = processenv.Environment()
 	if command.Stdin == nil {
 		cmd.Stdin = strings.NewReader(command.Script)
 	} else {
@@ -178,6 +180,7 @@ func (m *Manager) runAuxiliaryInput(ctx context.Context, transport *Transport, i
 	args := []string{"-T", "-o", "ControlMaster=no", "-o", "ControlPersist=no", "-o", "ControlPath=" + transport.ControlPath, "-o", "CanonicalizeHostname=no", "-o", "ProxyCommand=/bin/false", "-o", "BatchMode=yes", "-o", "ClearAllForwardings=yes", "-o", "PermitLocalCommand=no", "-o", "RemoteCommand=none", "--", transport.Alias}
 	args = append(args, remoteArgs...)
 	command := exec.CommandContext(ctx, m.sshPath, args...)
+	command.Env = processenv.Environment()
 	stdout, stderr := &cappedBuffer{limit: auxiliaryOutputLimit}, &cappedBuffer{limit: auxiliaryOutputLimit}
 	command.Stdout, command.Stderr = stdout, stderr
 	command.Stdin = input

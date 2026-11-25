@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
-	"github.com/ben-wangz/roaminal/backend/internal/sshkey"
+	"github.com/ben-wangz/roaminal/backend/internal/processenv"
 )
 
 func (m *Manager) watchSources(ctx context.Context) {
@@ -30,10 +30,21 @@ func (m *Manager) watchSources(ctx context.Context) {
 }
 
 func (m *Manager) refreshSources() {
-	if m.configRepo == nil {
+	if m.definitions == nil {
 		return
 	}
-	collection, err := m.configRepo.Collection(keySet(m.keys))
+	m.transportPool.mu.Lock()
+	transports := make([]*Transport, 0, len(m.transportPool.transports))
+	aliases := map[string]bool{}
+	for _, transport := range m.transportPool.transports {
+		transports = append(transports, transport)
+		aliases[transport.Alias] = true
+	}
+	m.transportPool.mu.Unlock()
+	if len(transports) == 0 {
+		return
+	}
+	collection, err := m.definitions.NativeCollection()
 	if err != nil {
 		return
 	}
@@ -41,49 +52,54 @@ func (m *Manager) refreshSources() {
 	revisions := map[string]string{}
 	unresolved := map[string]bool{}
 	for _, definition := range collection.Definitions {
-		if definition.Type == "ssh" {
-			current[definition.HostAlias] = true
-			if revision, fingerprintErr := m.sourceRevision(definition.HostAlias); fingerprintErr == nil {
-				revisions[definition.HostAlias] = revision
-			} else {
-				// An inconclusive per-alias probe must not look like a deleted
-				// Host block. Keep the existing transport usable and retry on
-				// the next watcher tick.
-				unresolved[definition.HostAlias] = true
-			}
+		alias := definition.HostAlias
+		if definition.Type != "ssh" || !aliases[alias] || current[alias] {
+			continue
 		}
+		current[alias] = true
+		if revision, err := m.sourceRevision(alias); err == nil {
+			revisions[alias] = revision
+		} else {
+			// An inconclusive probe is not evidence of a changed source.
+			unresolved[alias] = true
+		}
+	}
+	// Do not hold the definition lock while probing every live alias. Discard
+	// a pass that overlapped a native edit or cannot confirm a committed view.
+	if latest, err := m.definitions.NativeCollection(); err != nil || latest.ETag != collection.ETag {
+		return
 	}
 	configUnavailable := !collection.ConfigSource.Readable && collection.ConfigSource.Status != "missing"
 	for _, warning := range collection.ConfigSource.Warnings {
 		if warning.Class == "include_ignored" {
-			// The repository cannot see aliases supplied by an Include. Treat
-			// missing aliases as inconclusive instead of deleting live state.
+			// Aliases supplied by an Include are not visible here.
 			configUnavailable = true
 			break
 		}
 	}
-	m.transportPool.mu.Lock()
-	transports := make([]*Transport, 0, len(m.transportPool.transports))
-	for _, transport := range m.transportPool.transports {
-		transports = append(transports, transport)
-	}
-	m.transportPool.mu.Unlock()
 	for _, transport := range transports {
 		state := transportSourceState(transport, revisions, unresolved, configUnavailable, current)
 		if state == "" {
 			continue
 		}
 		m.transportPool.mu.Lock()
-		// Source changes block new connection-instance reuse, but they do
-		// not tear down the control socket while existing instances still
-		// depend on it. The final owner/auxiliary release performs cleanup.
+		if m.transportPool.transports[transport.OwnerID] != transport {
+			m.transportPool.mu.Unlock()
+			continue
+		}
+		// Drain only this transport and the instances still attached to it.
+		// A newer connection with the same alias may already be current.
 		transport.Draining = true
 		transport.SourceState = state
-		m.transportPool.mu.Unlock()
-		for _, summary := range m.Summaries() {
-			if summary.SourceHostAlias != nil && *summary.SourceHostAlias == transport.Alias {
-				_ = m.instances.MarkSourceState(summary.ID, state)
+		var instanceIDs []string
+		for id, attached := range m.transportPool.instances {
+			if attached == transport {
+				instanceIDs = append(instanceIDs, id)
 			}
+		}
+		m.transportPool.mu.Unlock()
+		for _, id := range instanceIDs {
+			_ = m.instances.MarkSourceState(id, state)
 		}
 	}
 }
@@ -101,12 +117,6 @@ func transportSourceState(transport *Transport, revisions map[string]string, unr
 	return ""
 }
 
-func (m *Manager) stopTransport(_ context.Context, transport *Transport) {
-	if m.sshPath != "" {
-		_ = exec.Command(m.sshPath, "-F", "none", "-S", transport.ControlPath, "-O", "exit", "--", transport.Alias).Run()
-	}
-	_ = os.RemoveAll(filepath.Dir(transport.ControlPath))
-}
 func (m *Manager) transportReady(transport *Transport) bool {
 	if !m.validControlPath(transport.ControlPath) {
 		return false
@@ -114,7 +124,9 @@ func (m *Manager) transportReady(transport *Transport) bool {
 	if m.sshPath == "" {
 		return false
 	}
-	return exec.Command(m.sshPath, "-F", "none", "-S", transport.ControlPath, "-O", "check", "--", transport.Alias).Run() == nil
+	cmd := exec.Command(m.sshPath, "-F", "none", "-S", transport.ControlPath, "-O", "check", "--", transport.Alias)
+	cmd.Env = processenv.Environment()
+	return cmd.Run() == nil
 }
 
 func (m *Manager) validControlPath(path string) bool {
@@ -174,8 +186,7 @@ func (m *Manager) prepareRuntimeDir(id string) (string, error) {
 	return current, nil
 }
 
-// shortPathToken keeps temporary mux paths well below the Unix socket path
-// limit while retaining enough entropy to avoid collisions between sessions.
+// shortPathToken keeps temporary mux paths below the Unix socket path limit.
 func shortPathToken(id string) string {
 	token := strings.NewReplacer("-", "", "/", "", "\\", "").Replace(id)
 	if token == "" {
@@ -228,14 +239,4 @@ func aliasFromDefinitionID(id string) (string, error) {
 		return "", errors.New("invalid ssh definition id")
 	}
 	return string(data), nil
-}
-func keySet(keys *sshkey.Inventory) map[string]bool {
-	if keys == nil {
-		return map[string]bool{}
-	}
-	result := map[string]bool{}
-	for _, key := range keys.List() {
-		result[key.FileName] = true
-	}
-	return result
 }

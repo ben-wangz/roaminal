@@ -32,7 +32,7 @@ type RemoteExecutor = ports.RemoteExecutor
 
 type Service struct {
 	remote  ports.RemoteFileSystem
-	options *connectionoptions.Store
+	options connectionoptions.Reader
 	clock   ports.Clock
 	random  ports.RandomSource
 	now     func() time.Time
@@ -44,6 +44,7 @@ type Service struct {
 	transfers   map[string]transferCapability
 	uploadRepo  ports.UploadRepository
 	stagingRoot string
+	staging     uploadStagingBudget
 }
 
 type Dependencies struct {
@@ -51,15 +52,15 @@ type Dependencies struct {
 	Random ports.RandomSource
 }
 
-func New(executor RemoteExecutor, options *connectionoptions.Store, dependencies ...Dependencies) *Service {
+func New(executor RemoteExecutor, options connectionoptions.Reader, dependencies ...Dependencies) *Service {
 	return NewWithRemote(newRemoteFileSystemAdapter(executor), options, nil, "", dependencies...)
 }
 
-func NewWithRepositories(executor RemoteExecutor, options *connectionoptions.Store, uploadRepo ports.UploadRepository, stateRoot string, dependencies ...Dependencies) *Service {
+func NewWithRepositories(executor RemoteExecutor, options connectionoptions.Reader, uploadRepo ports.UploadRepository, stateRoot string, dependencies ...Dependencies) *Service {
 	return NewWithRemote(newRemoteFileSystemAdapter(executor), options, uploadRepo, stateRoot, dependencies...)
 }
 
-func NewWithRemote(remote ports.RemoteFileSystem, options *connectionoptions.Store, uploadRepo ports.UploadRepository, stateRoot string, dependencies ...Dependencies) *Service {
+func NewWithRemote(remote ports.RemoteFileSystem, options connectionoptions.Reader, uploadRepo ports.UploadRepository, stateRoot string, dependencies ...Dependencies) *Service {
 	deps := Dependencies{Clock: systemclock.System{}, Random: random.CryptoSource{}}
 	if len(dependencies) > 0 {
 		if dependencies[0].Clock != nil {
@@ -74,7 +75,7 @@ func NewWithRemote(remote ports.RemoteFileSystem, options *connectionoptions.Sto
 	}
 	stagingRoot := ""
 	if stateRoot != "" {
-		stagingRoot = filepath.Join(stateRoot, "uploads")
+		stagingRoot = filepath.Join(stateRoot, uploadStagingDirectory)
 	}
 	return &Service{
 		remote:      remote,
@@ -88,6 +89,7 @@ func NewWithRemote(remote ports.RemoteFileSystem, options *connectionoptions.Sto
 		transfers:   make(map[string]transferCapability),
 		uploadRepo:  uploadRepo,
 		stagingRoot: stagingRoot,
+		staging:     uploadStagingBudget{byteLimit: MaxUploadBytes, jobLimit: maxStagedUploadJobs},
 	}
 }
 
@@ -135,10 +137,12 @@ func (s *Service) Root(ctx context.Context, id string) (RootContext, error) {
 
 	pwd := connectionoptions.DefaultPwd
 	if s.options != nil {
-		if collection, loadErr := s.options.Load(map[string]bool{alias: true}); loadErr == nil {
-			if option, ok := collection.Options[alias]; ok && option.Pwd != "" {
-				pwd = option.Pwd
-			}
+		collection, err := s.options.Load(map[string]bool{alias: true})
+		if err != nil {
+			return RootContext{}, connectionoptions.ErrOptionsUnavailable
+		}
+		if option, ok := collection.Options[alias]; ok && option.Pwd != "" {
+			pwd = option.Pwd
 		}
 	}
 	configuredCtx, configuredCancel := context.WithTimeout(requestCtx, rootProbeTimeout)

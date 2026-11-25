@@ -7,8 +7,8 @@ see [deployment](../deployment.md).
 ## Requirements
 
 - Podman on a Linux host.
-- A published Roaminal runtime image tag. Runtime image versions are independent
-  of Helm Chart versions.
+- A published database-enabled Roaminal runtime image tag for the procedures
+  below. Runtime image versions are independent of Helm Chart versions.
 - A `linux/amd64` host for the current image build. The Containerfile compiles
   the backend for `linux/amd64`; it does not currently produce a native ARM64
   backend image.
@@ -63,6 +63,14 @@ podman run -d \
 Open `http://127.0.0.1:9846`. The first login requires TOTP enrollment. Check
 startup output with `podman logs -f roaminal`.
 
+SQLite is the default at `/home/roaminal/.roaminal/db/roaminal.sqlite3` on
+`roaminal-state`. Mount the whole directory so SQLite's sidecars stay with the
+DB. To opt into PostgreSQL, set `ROAMINAL_DB_DRIVER=postgres` and put the full
+`ROAMINAL_DB_POSTGRES_DSN` URI (`sslmode=verify-full`) in the private env file.
+Leave `ROAMINAL_DB_SQLITE_PATH` unset; if using a private CA, mount it read-only
+at the URI's `sslrootcert` path. PostgreSQL still needs the durable state mount
+for `database-binding.json`. See [database configuration](../configuration.md#database-and-local-state).
+
 The image runs as UID/GID 1000. Persistent volumes must be writable by that
 identity. If a new named volume has an ownership problem, Podman's `:U` mount
 option can set its ownership to the container user. It recursively changes
@@ -99,14 +107,38 @@ podman logs -f roaminal
 podman stop roaminal
 ```
 
-To upgrade, pull the new runtime image, stop and remove the old container, then
-run it again with the same environment file and volumes. Removing the container
-does not remove named volumes. Use a systemd service or Podman Quadlet when the
+For a routine upgrade, pull the new image, stop and remove the old container,
+then run it again with the same environment file and volumes. Removing the
+container does not remove named volumes. On the first upgrade from file-backed
+state, [complete the cutover](../deployment.md#cut-over-from-legacy-files) before
+starting the new image. Use a systemd service or Podman Quadlet when the
 container must start with the host.
 
-Stop Roaminal before backing up the `roaminal-state`, `roaminal-workspace`, and
-`roaminal-ssh` volumes. The preview cache is disposable. Preserve file ownership
-and permissions when restoring; see [backup and recovery](../backup-recovery.md).
+Stop Roaminal before backing up its persistent volumes and the matching DB;
+see [backup and recovery](../backup-recovery.md). The preview cache is disposable.
+
+## Offline maintenance
+
+Stop the serving container and prevent automatic restarts. Use the same state,
+workspace, and SSH mounts and the relevant DB environment. For a legacy import,
+set `LEGACY_COPY` to the absolute path of the private snapshot directory with
+`state/` (the old `.roaminal`) and `ssh/`. This example only inspects that copy:
+
+```sh
+podman run --rm --read-only --no-healthcheck \
+  --env-file "$HOME/.config/roaminal/roaminal.env" \
+  --volume roaminal-state:/home/roaminal/.roaminal \
+  --volume roaminal-workspace:/workspace \
+  --volume roaminal-ssh:/home/roaminal/.ssh \
+  --volume "$LEGACY_COPY:/mnt/legacy:ro" \
+  "$ROAMINAL_IMAGE" db import-files --source /mnt/legacy/state --dry-run
+```
+
+If you use a custom SQLite path, also mount its parent directory at the same
+path. With PostgreSQL, reuse the runtime network access and any read-only CA
+mount. For export/import, mount a private backup directory at `/mnt/backup`
+instead of `/mnt/legacy`. Replace the arguments after the image with the
+required maintenance command; do not start the server until it succeeds.
 
 ## Network and lifecycle
 

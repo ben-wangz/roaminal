@@ -1,75 +1,59 @@
 package auth
 
 import (
-	"crypto/hmac"
-	"strings"
 	"time"
+
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
-// IsSessionActive reports whether a login session can still be used
-// for an authenticated resource. It is used by durable resource cleanup and
-// does not mutate the session store.
-func (m *Manager) IsSessionActive(sessionID string) bool {
+// IsSessionActive distinguishes an unavailable check from confirmed inactivity
+// so delivery fails closed and cleanup does not prune on outage.
+func (m *Manager) IsSessionActive(sessionID string) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
-	entry, ok := m.refresh[sessionID]
-	return ok && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint && m.sessionBoundLocked(entry)
+	if err := m.reconcileLocked(); err != nil {
+		return false, err
+	}
+	return m.sessionUsableLocked(m.refresh[sessionID], m.clock.Now().UTC()), nil
 }
 
-func (m *Manager) SessionIDForRefresh(refreshToken string) (string, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.reconcileLocked()
-	hash := hashToken(strings.TrimSpace(refreshToken))
-	for sessionID, entry := range m.refresh {
-		if refreshToken != "" && hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) && entry.RefreshExpiresAt.After(m.clock.Now().UTC()) && entry.PasswordFingerprint == m.fingerprint && m.sessionBoundLocked(entry) {
-			return sessionID, true
-		}
-	}
-	return "", false
+// sessionUsableLocked only checks local state; it cannot authorize anything
+// without a successful reconciliation.
+func (m *Manager) sessionUsableLocked(entry domain.AuthSessionRecord, now time.Time) bool {
+	return entry.RefreshExpiresAt.After(now) && entry.PasswordFingerprint == m.fingerprint && m.sessionBoundLocked(entry)
 }
 
-func (m *Manager) Logout(refreshToken, accessToken string) error {
+// Logout returns the revoked session ID for resource cleanup. Revoking a
+// locally known credential does not require a live enrollment read.
+func (m *Manager) Logout(refreshToken, accessToken string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	var id string
-	hash := hashToken(strings.TrimSpace(refreshToken))
-	for sessionID, entry := range m.refresh {
-		if refreshToken != "" && hmac.Equal([]byte(entry.RefreshTokenHash), []byte(hash)) {
-			id = sessionID
-			break
-		}
-	}
+	id, _ := m.refreshByTokenLocked(refreshToken)
 	if id == "" && accessToken != "" {
-		if entry, ok := m.access[hashToken(accessToken)]; ok {
-			id = entry.SessionID
-		}
+		id = m.access[hashToken(accessToken)].SessionID
 	}
 	if id == "" {
-		return nil
+		return "", nil
 	}
-	delete(m.refresh, id)
-	for key, entry := range m.access {
-		if entry.SessionID == id {
-			delete(m.access, key)
-		}
+	m.removeSessionLocked(id)
+	return id, m.persistLocked()
+}
+
+func (m *Manager) checkSessionLocked(sessionID string) error {
+	reconcileErr := m.reconcileLocked()
+	if !m.sessionUsableLocked(m.refresh[sessionID], m.clock.Now().UTC()) {
+		return ErrUnauthorized
 	}
-	return m.persistLocked()
+	return reconcileErr
 }
 
 func (m *Manager) Current(sessionID string) (CurrentSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
-	entry, ok := m.refresh[sessionID]
-	if !ok || !entry.RefreshExpiresAt.After(m.clock.Now().UTC()) || !m.sessionBoundLocked(entry) {
-		if ok {
-			delete(m.refresh, sessionID)
-			_ = m.persistLocked()
-		}
-		return CurrentSession{}, ErrUnauthorized
+	if err := m.checkSessionLocked(sessionID); err != nil {
+		return CurrentSession{}, err
 	}
+	entry := m.refresh[sessionID]
 	var accessExpires time.Time
 	for _, value := range m.access {
 		if value.SessionID == sessionID && value.ExpiresAt.After(accessExpires) {
@@ -79,16 +63,18 @@ func (m *Manager) Current(sessionID string) (CurrentSession, error) {
 	return CurrentSession{Authenticated: true, SessionID: sessionID, AccessTokenExpiresAt: accessExpires, RefreshTokenExpiresAt: entry.RefreshExpiresAt}, nil
 }
 
-func (m *Manager) List(sessionID string) []SessionSummary {
+func (m *Manager) List(sessionID string) ([]SessionSummary, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.reconcileLocked()
+	if err := m.checkSessionLocked(sessionID); err != nil {
+		return nil, err
+	}
 	result := make([]SessionSummary, 0, len(m.refresh))
 	now := m.clock.Now().UTC()
 	changed := false
 	for id, entry := range m.refresh {
-		if !entry.RefreshExpiresAt.After(now) || !m.sessionBoundLocked(entry) {
-			delete(m.refresh, id)
+		if !m.sessionUsableLocked(entry, now) {
+			m.removeSessionLocked(id)
 			changed = true
 			continue
 		}
@@ -97,29 +83,32 @@ func (m *Manager) List(sessionID string) []SessionSummary {
 	if changed {
 		_ = m.persistLocked()
 	}
-	return result
+	return result, nil
 }
 
-func (m *Manager) Revoke(sessionID string) error {
+func (m *Manager) Revoke(currentID, sessionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.checkSessionLocked(currentID); err != nil {
+		return err
+	}
 	if _, ok := m.refresh[sessionID]; !ok {
 		return ErrNotFound
 	}
-	delete(m.refresh, sessionID)
-	for key, entry := range m.access {
-		if entry.SessionID == sessionID {
-			delete(m.access, key)
-		}
-	}
+	m.removeSessionLocked(sessionID)
 	return m.persistLocked()
 }
 
-func (m *Manager) LogoutOthers(sessionID string) error {
+func (m *Manager) LogoutOthers(sessionID string) ([]string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.checkSessionLocked(sessionID); err != nil {
+		return nil, err
+	}
+	var revoked []string
 	for id := range m.refresh {
 		if id != sessionID {
+			revoked = append(revoked, id)
 			delete(m.refresh, id)
 		}
 	}
@@ -128,7 +117,16 @@ func (m *Manager) LogoutOthers(sessionID string) error {
 			delete(m.access, key)
 		}
 	}
-	return m.persistLocked()
+	return revoked, m.persistLocked()
+}
+
+func (m *Manager) removeSessionLocked(sessionID string) {
+	delete(m.refresh, sessionID)
+	for key, entry := range m.access {
+		if entry.SessionID == sessionID {
+			delete(m.access, key)
+		}
+	}
 }
 
 func (m *Manager) Locked() bool { m.mu.Lock(); defer m.mu.Unlock(); return m.locked }

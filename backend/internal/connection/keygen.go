@@ -25,8 +25,8 @@ func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequ
 	cwd := m.InitialCwd()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: "local", Type: "local", Purpose: "ssh_key_generation", Lifecycle: "live", SourceState: "current", InitialCwd: cwd, Cwd: cwd, Cols: cols, Rows: rows, AutomaticTitle: "Generate " + request.FileName, GenerationStatus: "running"}
 	argv := m.keys.GenerationCommand(paths, request)
-	result, err := m.instances.CreateProcessWithExit(ctx, meta, argv, nil, func(status ports.TerminalExitStatus) {
-		m.finishKeyGeneration(id, paths, status)
+	result, err := m.instances.CreateProcessWithExit(ctx, meta, argv, nil, func(ctx context.Context, status ports.TerminalExitStatus) {
+		m.finishKeyGeneration(ctx, id, paths, status)
 	})
 	if err != nil {
 		_ = m.keys.DiscardGeneration(paths)
@@ -35,18 +35,18 @@ func (m *Manager) GenerateKey(ctx context.Context, request sshkey.GenerationRequ
 	return m.projectSummary(result), nil
 }
 
-func (m *Manager) finishKeyGeneration(id string, paths sshkey.GenerationPaths, status ports.TerminalExitStatus) {
-	if status.ExitCode == nil || *status.ExitCode != 0 {
+func (m *Manager) finishKeyGeneration(ctx context.Context, id string, paths sshkey.GenerationPaths, status ports.TerminalExitStatus) {
+	if ctx.Err() != nil || status.ExitCode == nil || *status.ExitCode != 0 {
 		_ = m.keys.DiscardGeneration(paths)
-		_ = m.instances.MarkGenerationResult(id, "failed", "ssh-keygen exited unsuccessfully")
+		_ = m.instances.MarkGenerationResult(ctx, id, "failed", "ssh-keygen exited unsuccessfully")
 		return
 	}
 	if err := m.keys.Promote(paths); err != nil {
 		_ = m.keys.DiscardGeneration(paths)
-		_ = m.instances.MarkGenerationResult(id, "promotion_failed", safeGenerationError(err))
+		_ = m.instances.MarkGenerationResult(ctx, id, "promotion_failed", safeGenerationError(err))
 		return
 	}
-	_ = m.instances.MarkGenerationResult(id, "succeeded", "")
+	_ = m.instances.MarkGenerationResult(ctx, id, "succeeded", "")
 }
 
 func safeGenerationError(err error) string {

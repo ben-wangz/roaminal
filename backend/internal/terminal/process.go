@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 // CreateProcess starts a managed PTY for a fixed argv. It is used by the SSH
@@ -17,22 +18,22 @@ func (m *Manager) CreateProcess(ctx context.Context, meta domain.ConnectionInsta
 
 // CreateProcessWithExit starts a fixed process and invokes onExit after its
 // PTY exits, outside the session lock. The callback receives no input/output.
-func (m *Manager) CreateProcessWithExit(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) CreateProcessWithExit(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onExit ports.TerminalExitHook) (Summary, error) {
 	return m.createProcess(ctx, meta, argv, extraEnv, false, "", nil, onExit)
 }
 
 // CreatePendingProcess starts a runtime-only launch. It is attachable over the
 // launch websocket, but is excluded from persistence, heartbeat summaries, and
 // audit until PromotePending is called.
-func (m *Manager) CreatePendingProcess(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) CreatePendingProcess(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, onMarker func(string), onExit ports.TerminalExitHook) (Summary, error) {
 	return m.CreatePendingProcessOwned(ctx, meta, argv, extraEnv, "", onMarker, onExit)
 }
 
-func (m *Manager) CreatePendingProcessOwned(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) CreatePendingProcessOwned(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ownerID string, onMarker func(string), onExit ports.TerminalExitHook) (Summary, error) {
 	return m.createProcess(ctx, meta, argv, extraEnv, true, ownerID, onMarker, onExit)
 }
 
-func (m *Manager) createProcess(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ephemeral bool, ownerID string, onMarker func(string), onExit func(ExitStatus)) (Summary, error) {
+func (m *Manager) createProcess(ctx context.Context, meta domain.ConnectionInstanceMeta, argv []string, extraEnv []string, ephemeral bool, ownerID string, onMarker func(string), onExit ports.TerminalExitHook) (Summary, error) {
 	if len(argv) == 0 {
 		return Summary{}, errors.New("empty process argv")
 	}
@@ -86,27 +87,19 @@ func (m *Manager) createProcess(ctx context.Context, meta domain.ConnectionInsta
 		meta.SourceState = "current"
 	}
 	meta.TerminalType = effectiveTerminalType(meta.TerminalType)
-	m.mu.Lock()
-	if len(m.sessions)+len(m.pending)+m.createReservations >= m.connectionLimit() {
-		m.mu.Unlock()
-		return Summary{}, ErrConnectionCapacity
+	ctx, finish, err := m.beginCreate(ctx)
+	if err != nil {
+		return Summary{}, err
 	}
-	m.createReservations++
-	m.mu.Unlock()
-	reserved := true
-	defer func() {
-		if reserved {
-			m.mu.Lock()
-			m.createReservations--
-			m.mu.Unlock()
-		}
-	}()
+	published := false
+	defer func() { finish(published) }()
 	if err := m.worker.Create(ctx, meta.ID, meta.Cols, meta.Rows, m.cfg.ScrollbackLines); err != nil {
+		m.closeUnpublishedWorker(meta.ID)
 		return Summary{}, err
 	}
 	session, err := m.startCommand(meta, cwd, argv, extraEnv)
 	if err != nil {
-		_ = m.worker.CloseSession(ctx, meta.ID)
+		m.closeUnpublishedWorker(meta.ID)
 		return Summary{}, err
 	}
 	session.onExit = onExit
@@ -118,23 +111,16 @@ func (m *Manager) createProcess(ctx context.Context, meta domain.ConnectionInsta
 		session.detachedAt = session.lastActivity
 	}
 	if m.hasPersistence() && !ephemeral {
-		if err := m.saveMeta(meta); err != nil {
-			m.abortSession(ctx, session, true)
+		if err := m.saveMetaContext(ctx, meta); err != nil {
+			m.abortSession(ctx, session)
 			return Summary{}, err
 		}
 	}
-	m.mu.Lock()
-	m.createReservations--
-	reserved = false
-	if ephemeral {
-		m.pending[meta.ID] = session
-	} else {
-		m.sessions[meta.ID] = session
+	result, err := m.publishSession(ctx, session)
+	if err != nil {
+		m.abortSession(ctx, session)
+		return Summary{}, err
 	}
-	m.mu.Unlock()
-	m.startLoops(session)
-	if ephemeral {
-		go m.watchPending(session)
-	}
-	return m.summary(session), nil
+	published = true
+	return result, nil
 }

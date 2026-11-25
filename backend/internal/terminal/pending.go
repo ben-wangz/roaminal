@@ -66,10 +66,11 @@ func (m *Manager) watchPending(session *Session) {
 		now := m.now()
 		lastActivity := session.lastActivity
 		detachedAt := session.detachedAt
+		id := session.meta.ID
 		noClients := len(session.clients) == 0
 		session.mu.Unlock()
 		if now.Sub(lastActivity) >= pendingIdleTimeout || (noClients && !detachedAt.IsZero() && now.Sub(detachedAt) >= pendingReconnectGrace) {
-			_ = m.AbortPending(context.Background(), session.meta.ID)
+			_ = m.AbortPending(m.createCtx, id)
 			return
 		}
 	}
@@ -83,9 +84,13 @@ func (m *Manager) PromotePending(id string, meta domain.ConnectionInstanceMeta) 
 	if session == nil {
 		return Summary{}, os.ErrNotExist
 	}
-	session.mu.Lock()
+	ctx, cancel := context.WithTimeout(m.createCtx, 5*time.Second)
+	defer cancel()
+	if err := session.mu.lock(ctx); err != nil {
+		return Summary{}, err
+	}
+	defer session.mu.Unlock()
 	if session.closed || !session.ephemeral {
-		session.mu.Unlock()
 		return Summary{}, errors.New("pending launch is no longer active")
 	}
 	meta.ID = id
@@ -116,31 +121,24 @@ func (m *Manager) PromotePending(id string, meta domain.ConnectionInstanceMeta) 
 	meta.TerminalType = effectiveTerminalType(meta.TerminalType)
 	meta.Lifecycle = "live"
 	meta.SourceState = "current"
+	if m.hasPersistence() {
+		if err := m.saveMetaContext(ctx, meta); err != nil {
+			return Summary{}, err
+		}
+	}
+	// Keep the session locked across the transition so shutdown or process exit
+	// cannot observe a persisted launch that's still treated as ephemeral.
 	session.meta = meta
 	session.ephemeral = false
 	session.published = true
 	session.onMarker = nil
-	if m.hasPersistence() {
-		if err := m.saveMeta(meta); err != nil {
-			session.ephemeral = true
-			session.meta.Lifecycle = "pending"
-			session.mu.Unlock()
-			return Summary{}, err
-		}
-	}
-	session.mu.Unlock()
 	m.mu.Lock()
-	if current := m.pending[id]; current != session {
-		m.mu.Unlock()
-		return Summary{}, os.ErrNotExist
-	}
 	delete(m.pending, id)
 	m.sessions[id] = session
 	m.mu.Unlock()
-	session.mu.Lock()
-	session.broadcastMessageLocked(launchPublishedStreamMessage(m.summaryLocked(session)))
-	session.mu.Unlock()
-	return m.summary(session), nil
+	result := m.summaryLocked(session)
+	session.broadcastMessageLocked(launchPublishedStreamMessage(result))
+	return result, nil
 }
 
 // AbortPending stops a launch without creating a session or audit artifact.
@@ -153,24 +151,18 @@ func (m *Manager) AbortPending(ctx context.Context, id string) error {
 }
 
 func (m *Manager) finishEphemeral(ctx context.Context, session *Session) {
-	session.mu.Lock()
-	if session.retired {
+	if session.awaitExitHook(ctx) != nil || session.mu.lock(ctx) != nil {
+		return
+	}
+	if session.retired.Load() {
 		session.mu.Unlock()
 		return
 	}
-	for client := range session.clients {
-		client.close()
-	}
-	session.clients = make(map[*Client]struct{})
-	session.controlOwner = nil
-	session.retired = true
+	session.closeClientsLocked()
+	session.retired.Store(true)
 	id := session.meta.ID
 	session.mu.Unlock()
-	m.mu.Lock()
-	if current := m.pending[id]; current == session {
-		delete(m.pending, id)
-	}
-	m.mu.Unlock()
+	m.removeRetired(session, id)
 	if m.worker != nil {
 		_ = m.worker.CloseSession(ctx, id)
 	}

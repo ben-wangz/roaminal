@@ -3,59 +3,41 @@ package connection
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
-	"github.com/ben-wangz/roaminal/backend/internal/sshconfig"
 )
 
 func (m *Manager) CreateRemote(ctx context.Context, definitionID string, cols, rows int, reuseFrom string) (Summary, error) {
-	result, err := m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, "")
+	result, err := m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, "", false)
 	return m.projectSummary(result), err
 }
 
-func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, cols, rows int, reuseFrom, ownerID string) (Summary, error) {
-	if reuseFrom != "" {
-		return m.createReuseOwned(ctx, definitionID, cols, rows, reuseFrom, ownerID)
-	}
-	if m.sshPath == "" || m.configRepo == nil || m.runtimeDir == "" {
+func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, cols, rows int, reuseFrom, ownerID string, requireTmux bool) (Summary, error) {
+	if m.sshPath == "" || m.definitions == nil || m.runtimeDir == "" {
 		return Summary{}, ErrTransportUnavailable
 	}
 	alias, err := aliasFromDefinitionID(definitionID)
 	if err != nil {
 		return Summary{}, err
 	}
-	collection, err := m.configRepo.Collection(keySet(m.keys))
+	resolved, err := m.definitions.ResolveSSH(alias, m.sourceRevision)
+	if err == os.ErrNotExist {
+		return Summary{}, errors.New("connection definition not found")
+	}
 	if err != nil {
 		return Summary{}, err
 	}
-	var definition *sshconfig.Definition
-	for index := range collection.Definitions {
-		if collection.Definitions[index].HostAlias == alias {
-			definition = &collection.Definitions[index]
-			break
-		}
+	if requireTmux && !resolved.Option.Enabled {
+		return Summary{}, ErrTmuxNotEnabled
 	}
-	if definition == nil {
-		return Summary{}, errors.New("connection definition not found")
+	if reuseFrom != "" {
+		return m.createReuseOwned(ctx, definitionID, alias, resolved, cols, rows, reuseFrom, ownerID)
 	}
-	sourceRevision, fingerprintErr := m.sourceRevision(alias)
-	if fingerprintErr != nil {
-		return Summary{}, fmt.Errorf("%w: %v", ErrTransportUnavailable, fingerprintErr)
-	}
-	aliases := make(map[string]bool)
-	for _, item := range collection.Definitions {
-		if item.Type == "ssh" {
-			aliases[item.HostAlias] = true
-		}
-	}
-	if options, optionsErr := m.tmuxOptions(aliases); optionsErr == nil {
-		if option, ok := options[alias]; ok && option.Enabled {
-			return m.createRemoteTmux(ctx, definitionID, alias, definition, sourceRevision, option, cols, rows, ownerID)
-		}
+	if resolved.Option.Enabled {
+		return m.createRemoteTmux(ctx, definitionID, alias, resolved, cols, rows, ownerID)
 	}
 	id, err := m.newID()
 	if err != nil {
@@ -68,7 +50,7 @@ func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, co
 		return Summary{}, err
 	}
 	controlPath := filepath.Join(transportDir, "ctl")
-	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: sourceRevision, SourceState: "current", OwnerID: id, Channels: 1}
+	transport := &Transport{Alias: alias, ControlPath: controlPath, SourceRevision: resolved.SourceRevision, SourceState: "current", OwnerID: id, Channels: 1}
 	aliasPtr := alias
 	now := m.clock.Now().UTC()
 	meta := domain.ConnectionInstanceMeta{ID: id, BackendRuntimeID: m.RuntimeID(), ConnectionDefinitionID: definitionID, Type: "ssh", Purpose: "interactive", SourceHostAlias: &aliasPtr, Lifecycle: "live", SourceState: "current", Cols: cols, Rows: rows, CreatedAt: now, UpdatedAt: now, AutomaticTitle: alias}
@@ -77,8 +59,8 @@ func (m *Manager) createRemoteOwned(ctx context.Context, definitionID string, co
 	m.transportPool.transports[id] = transport
 	m.transportPool.instances[id] = transport
 	m.transportPool.mu.Unlock()
-	result, err := m.CreateProcessWithExit(ctx, meta, argv, nil, func(_ ports.TerminalExitStatus) {
-		m.finishInstance(context.Background(), id, true)
+	result, err := m.CreateProcessWithExit(ctx, meta, argv, nil, func(ctx context.Context, _ ports.TerminalExitStatus) {
+		m.finishInstance(ctx, id, true)
 	})
 	if err != nil {
 		m.transportPool.mu.Lock()
@@ -96,14 +78,7 @@ func (m *Manager) CreateRemoteLaunch(ctx context.Context, definitionID string, c
 }
 
 func (m *Manager) CreateRemoteLaunchOwned(ctx context.Context, definitionID string, cols, rows int, reuseFrom, ownerID string) (Summary, error) {
-	alias, err := aliasFromDefinitionID(definitionID)
-	if err != nil {
-		return Summary{}, err
-	}
-	if option, ok := m.tmuxOptionForAlias(alias); !ok || !option.Enabled {
-		return Summary{}, ErrTmuxNotEnabled
-	}
-	result, err := m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, ownerID)
+	result, err := m.createRemoteOwned(ctx, definitionID, cols, rows, reuseFrom, ownerID, true)
 	return m.projectSummary(result), err
 }
 

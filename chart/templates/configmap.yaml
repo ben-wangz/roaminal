@@ -11,6 +11,8 @@ metadata:
     {{- $annotations | nindent 4 }}
   {{- end }}
 data:
+  databaseDriver: {{ .Values.database.driver | quote }}
+  databaseSQLitePath: {{ ternary "/home/roaminal/.roaminal/db/roaminal.sqlite3" "" (eq .Values.database.driver "sqlite") | quote }}
   host: {{ .Values.app.host | quote }}
   port: {{ .Values.app.port | quote }}
   websocketPingInterval: {{ .Values.app.websocketPingInterval | quote }}

@@ -3,7 +3,6 @@ package agent
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
@@ -11,75 +10,97 @@ import (
 
 var errStaleSnapshot = errors.New("agent state snapshot is older than the cached projection")
 
-func (s *Service) acceptSnapshot(endpointKey string, target Target, view ports.ConnectionInstanceView, _ EndpointRecord, snapshot remoteAgentState) error {
-	lock := s.endpointMutex(endpointKey)
+func (s *Service) acceptSnapshot(target Target, view ports.ConnectionInstanceView, views []ports.ConnectionInstanceView, snapshot remoteAgentState) error {
+	lock := s.endpointMutex(target.EndpointKey)
 	lock.Lock()
 	defer lock.Unlock()
-	current, exists := s.store.Get(endpointKey)
-	if !exists {
-		current = EndpointRecord{Targets: map[string]TargetState{}}
-	}
-	previous := current.Targets[target.SessionName]
-	sameRuntime := previous.RuntimeID != "" && previous.RuntimeID == snapshot.RuntimeID
-	if previous.RuntimeID != "" && !sameRuntime && olderRuntime(previous, snapshot) {
-		_ = s.recordSyncFailureForTarget(endpointKey, target, syncStatusStale, errStaleSnapshot)
-		return errStaleSnapshot
-	}
-	if sameRuntime && snapshot.LatestIndex < previous.StateIndex {
-		_ = s.recordSyncFailureForTarget(endpointKey, target, syncStatusStale, errStaleSnapshot)
-		return errStaleSnapshot
-	}
-	if sameRuntime && snapshot.LatestIndex == previous.StateIndex {
-		if previous.State != "" {
-			if previous.State != snapshot.State {
-				_ = s.recordSyncFailureForTarget(endpointKey, target, syncStatusStale, errStaleSnapshot)
-				return errStaleSnapshot
-			}
-			return s.updateSyncMetadata(endpointKey, target, snapshot)
-		}
-	}
 
-	transition := sameRuntime && previous.State != "" && previous.State != snapshot.State
-	transitionKey := ""
-	if transition {
-		transitionKey = snapshot.RuntimeID + "\x00" + fmt.Sprint(snapshot.LatestIndex)
-		if previous.LastTransitionKey != transitionKey {
-			if err := s.appendTransitionMessage(view, endpointKey, target, current, previous.State, snapshot); err != nil {
-				return err
-			}
-		}
+	var stale bool
+	err := s.commitProjection(target.EndpointKey, func(record *EndpointRecord) (*domain.MessageDraft, error) {
+		var draft *domain.MessageDraft
+		draft, stale = s.projectSnapshot(record, target, view, views, snapshot)
+		return draft, nil
+	})
+	if err != nil {
+		return err
 	}
-	return s.store.Update(endpointKey, func(record *EndpointRecord) error {
-		value := record.Targets[target.SessionName]
-		value.SessionName = target.SessionName
-		value.Provider = snapshot.Provider
-		value.SessionID = snapshot.Tmux.SessionID
-		value.SessionCreated = snapshot.Tmux.SessionCreated
-		value.SocketFingerprint = snapshot.Tmux.SocketFingerprint
-		value.RuntimeID = snapshot.RuntimeID
-		value.State = snapshot.State
-		value.StateIndex = snapshot.LatestIndex
-		value.StateUpdatedAt = snapshot.UpdatedAt.UTC()
-		value.SyncStatus = syncStatusAvailable
-		value.LastSyncedAt = s.now().UTC()
-		value.SyncError = ""
-		value.Component = "ready"
-		value.ComponentVersion = snapshot.ComponentVersion
-		value.Activity = activityForState(snapshot.State)
-		value.LastEventAt = snapshot.Records[len(snapshot.Records)-1].Timestamp.UTC()
-		value.LastEventName = snapshot.Records[len(snapshot.Records)-1].EventName
-		if transitionKey != "" {
-			value.LastTransitionKey = transitionKey
+	if stale {
+		return errStaleSnapshot
+	}
+	return nil
+}
+
+func (s *Service) commitProjection(key string, update ports.AgentProjectionUpdate) error {
+	if recorder, ok := s.messages.(ports.AgentProjectionRecorder); ok {
+		return recorder.CommitAgentProjection(s.store, key, update)
+	}
+	if _, ok := s.store.(ports.AgentProjectionRepository); ok && s.messages != nil {
+		return errors.New("Agent message recorder does not support atomic projection commits")
+	}
+	// Simple test appenders only work with non-transactional endpoint stores.
+	return s.store.Update(key, func(record *EndpointRecord) error {
+		draft, err := update(record)
+		if err != nil || draft == nil {
+			return err
 		}
-		value.ErrorCode, value.ErrorMessage = "", ""
-		record.Targets[target.SessionName] = value
-		record.ComponentVersion = snapshot.ComponentVersion
-		if record.InstallationState == "" || record.InstallationState == "initializing" {
-			record.InstallationState = "ready"
+		if _, _, err := s.messages.AppendMessage(*draft); err != nil {
+			return fmt.Errorf("append Agent state transition: %w", err)
 		}
-		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 		return nil
 	})
+}
+
+// projectSnapshot compares against the checkpoint under the repository's
+// write lock, not the projection that was visible before reading remote state.
+func (s *Service) projectSnapshot(record *EndpointRecord, target Target, view ports.ConnectionInstanceView, views []ports.ConnectionInstanceView, snapshot remoteAgentState) (*domain.MessageDraft, bool) {
+	previous := record.Targets[target.SessionName]
+	sameRuntime := previous.RuntimeID != "" && previous.RuntimeID == snapshot.RuntimeID
+	if staleSnapshot(previous, snapshot, sameRuntime) {
+		s.setSyncMetadata(record, target.SessionName, syncStatusStale, errStaleSnapshot)
+		return nil, true
+	}
+	s.setSyncMetadata(record, target.SessionName, syncStatusAvailable, nil)
+	if sameRuntime && snapshot.LatestIndex == previous.StateIndex && previous.State != "" {
+		return nil, false
+	}
+
+	var draft *domain.MessageDraft
+	value := record.Targets[target.SessionName]
+	if sameRuntime && previous.State != "" && previous.State != snapshot.State {
+		key := snapshot.RuntimeID + "\x00" + fmt.Sprint(snapshot.LatestIndex)
+		if s.messages != nil && previous.LastTransitionKey != key {
+			draft = s.transitionDraft(view, views, target, *record, previous.State, snapshot, key)
+		}
+		value.LastTransitionKey = key
+	}
+	value.Provider = snapshot.Provider
+	value.SessionID = snapshot.Tmux.SessionID
+	value.SessionCreated = snapshot.Tmux.SessionCreated
+	value.SocketFingerprint = snapshot.Tmux.SocketFingerprint
+	value.RuntimeID = snapshot.RuntimeID
+	value.State = snapshot.State
+	value.StateIndex = snapshot.LatestIndex
+	value.StateUpdatedAt = snapshot.UpdatedAt.UTC()
+	value.Component = "ready"
+	value.ComponentVersion = snapshot.ComponentVersion
+	value.Activity = activityForState(snapshot.State)
+	value.LastEventAt = snapshot.Records[len(snapshot.Records)-1].Timestamp.UTC()
+	value.LastEventName = snapshot.Records[len(snapshot.Records)-1].EventName
+	value.ErrorCode, value.ErrorMessage = "", ""
+	record.Targets[target.SessionName] = value
+	record.ComponentVersion = snapshot.ComponentVersion
+	if record.InstallationState == "" || record.InstallationState == "initializing" {
+		record.InstallationState = "ready"
+	}
+	return draft, false
+}
+
+func staleSnapshot(previous TargetState, snapshot remoteAgentState, sameRuntime bool) bool {
+	if sameRuntime {
+		return snapshot.LatestIndex < previous.StateIndex ||
+			(snapshot.LatestIndex == previous.StateIndex && previous.State != "" && previous.State != snapshot.State)
+	}
+	return previous.RuntimeID != "" && olderRuntime(previous, snapshot)
 }
 
 func olderRuntime(previous TargetState, snapshot remoteAgentState) bool {
@@ -93,83 +114,6 @@ func olderRuntime(previous TargetState, snapshot remoteAgentState) bool {
 	// same second, keep the already accepted runtime rather than allowing an
 	// ambiguous delayed read to roll the projection back.
 	return snapshot.Tmux.SocketFingerprint != previous.SocketFingerprint
-}
-
-func (s *Service) updateSyncMetadata(endpointKey string, target Target, snapshot remoteAgentState) error {
-	return s.store.Update(endpointKey, func(record *EndpointRecord) error {
-		value := record.Targets[target.SessionName]
-		value.SyncStatus = syncStatusAvailable
-		value.LastSyncedAt = s.now().UTC()
-		value.SyncError = ""
-		record.Targets[target.SessionName] = value
-		record.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
-		return nil
-	})
-}
-
-func (s *Service) appendTransitionMessage(view ports.ConnectionInstanceView, endpointKey string, target Target, record EndpointRecord, from string, snapshot remoteAgentState) error {
-	if s.messages == nil {
-		return nil
-	}
-	matching := s.matchingConnectionInstances(endpointKey, target.SessionName, record)
-	if len(matching) == 0 && view.ConnectionInstanceID != "" {
-		matching = []string{view.ConnectionInstanceID}
-	}
-	severity := "info"
-	if snapshot.State == "error" {
-		severity = "error"
-	} else if snapshot.State == "relax" {
-		severity = "success"
-	}
-	last := snapshot.Records[len(snapshot.Records)-1]
-	definitionIDs := s.matchingConnectionDefinitions(matching, view)
-	draft := domain.MessageDraft{
-		Kind: "agent_state_transition", Severity: severity, AgentType: snapshot.Provider,
-		PresentationKey: "agent_state_transition", OccurredAt: last.Timestamp.UTC(), ReceivedAt: s.now().UTC(),
-		EndpointKey: endpointKey, FallbackLabel: messageFallbackLabel(record, target.SessionName),
-		ConnectionLabel: s.notificationConnectionLabel(matching, record), TmuxSessionName: target.SessionName,
-		TmuxSessionID: snapshot.Tmux.SessionID, TmuxSessionCreated: snapshot.Tmux.SessionCreated,
-		ConnectionInstanceIDs: matching, AgentStateFrom: from, AgentStateTo: snapshot.State,
-		ConnectionDefinitionIDs: definitionIDs,
-		AgentRuntimeID:          snapshot.RuntimeID, AgentStateIndex: snapshot.LatestIndex,
-		IdempotencyKey: snapshot.RuntimeID + "\x00" + fmt.Sprint(snapshot.LatestIndex),
-	}
-	if _, _, err := s.messages.AppendMessage(draft); err != nil {
-		return fmt.Errorf("append Agent state transition: %w", err)
-	}
-	return nil
-}
-
-func (s *Service) matchingConnectionDefinitions(instanceIDs []string, fallback ports.ConnectionInstanceView) []string {
-	seen := make(map[string]struct{}, len(instanceIDs)+1)
-	result := make([]string, 0, len(instanceIDs)+1)
-	for _, candidate := range s.terms.ConnectionInstanceViews() {
-		matched := false
-		for _, id := range instanceIDs {
-			if id == candidate.ID || id == candidate.ConnectionInstanceID {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			continue
-		}
-		definitionID := candidate.ConnectionDefinitionID
-		if definitionID == "" {
-			continue
-		}
-		if _, exists := seen[definitionID]; exists {
-			continue
-		}
-		seen[definitionID] = struct{}{}
-		result = append(result, definitionID)
-	}
-	if fallback.ConnectionDefinitionID != "" {
-		if _, exists := seen[fallback.ConnectionDefinitionID]; !exists {
-			result = append(result, fallback.ConnectionDefinitionID)
-		}
-	}
-	return result
 }
 
 func activityForState(state string) string {

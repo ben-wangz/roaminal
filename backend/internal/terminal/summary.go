@@ -1,11 +1,13 @@
 package terminal
 
 import (
-	"github.com/ben-wangz/roaminal/backend/internal/domain"
-	"github.com/ben-wangz/roaminal/backend/internal/ports"
+	"context"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/ben-wangz/roaminal/backend/internal/domain"
+	"github.com/ben-wangz/roaminal/backend/internal/ports"
 )
 
 type Summary = ports.TerminalInstanceSummary
@@ -20,7 +22,7 @@ func (m *Manager) Summaries() []Summary {
 	result := make([]Summary, 0, len(sessions))
 	for _, session := range sessions {
 		session.mu.Lock()
-		if session.closed || session.retiring || session.retired {
+		if session.closed || session.retiring.Load() || session.retired.Load() {
 			session.mu.Unlock()
 			continue
 		}
@@ -87,6 +89,9 @@ func (m *Manager) MarkSourceState(id, state string) error {
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	if session.retiring.Load() || session.retired.Load() {
+		return os.ErrNotExist
+	}
 	if state == "deleted" || (state == "changed" && session.meta.SourceState == "current") {
 		session.meta.SourceState = state
 	}
@@ -99,25 +104,29 @@ func (m *Manager) MarkSourceState(id, state string) error {
 	return nil
 }
 
-func (m *Manager) MarkGenerationResult(id, state, detail string) error {
+func (m *Manager) MarkGenerationResult(ctx context.Context, id, state, detail string) error {
 	m.mu.RLock()
 	session := m.sessions[id]
 	m.mu.RUnlock()
 	if session == nil {
 		return os.ErrNotExist
 	}
-	session.mu.Lock()
+	if err := session.mu.lock(ctx); err != nil {
+		return err
+	}
+	defer session.mu.Unlock()
+	if session.retiring.Load() || session.retired.Load() {
+		return os.ErrNotExist
+	}
 	session.meta.GenerationStatus = state
 	session.meta.GenerationError = detail
 	session.meta.UpdatedAt = m.now().UTC()
 	if m.hasPersistence() {
-		if err := m.saveMeta(session.meta); err != nil {
-			session.mu.Unlock()
+		if err := m.saveMetaContext(ctx, session.meta); err != nil {
 			return err
 		}
 	}
 	session.broadcastMetaLocked()
-	session.mu.Unlock()
 	return nil
 }
 func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
@@ -136,6 +145,10 @@ func (m *Manager) SetTitle(id string, title *string) (Summary, error) {
 		override = &value
 	}
 	session.mu.Lock()
+	if session.retiring.Load() || session.retired.Load() {
+		session.mu.Unlock()
+		return Summary{}, os.ErrNotExist
+	}
 	oldOverride, oldUpdated := session.meta.TitleOverride, session.meta.UpdatedAt
 	session.meta.TitleOverride = override
 	session.meta.SyncEffectiveTitle()

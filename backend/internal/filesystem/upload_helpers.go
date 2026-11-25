@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
@@ -38,13 +37,6 @@ func (j *uploadJob) fail(err error) {
 		}
 		status.Failures = append(status.Failures, UploadFailure{Code: code, Error: err.Error()})
 	})
-}
-
-func (j *uploadJob) cleanup() {
-	_ = os.RemoveAll(j.staging)
-	if j.persist != nil {
-		j.persist()
-	}
 }
 
 func pathErrOrInvalid(err error) error {

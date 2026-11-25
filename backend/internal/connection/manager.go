@@ -6,7 +6,7 @@ import (
 
 	"github.com/ben-wangz/roaminal/backend/internal/clock"
 	"github.com/ben-wangz/roaminal/backend/internal/config"
-	"github.com/ben-wangz/roaminal/backend/internal/connectionoptions"
+	"github.com/ben-wangz/roaminal/backend/internal/definition"
 	"github.com/ben-wangz/roaminal/backend/internal/monitor"
 	"github.com/ben-wangz/roaminal/backend/internal/ports"
 	"github.com/ben-wangz/roaminal/backend/internal/random"
@@ -16,9 +16,8 @@ import (
 
 type Manager struct {
 	instances     *InstanceService
-	configRepo    *sshconfig.Repository
+	definitions   SSHDefinitions
 	keys          *sshkey.Inventory
-	options       *connectionoptions.Store
 	sshPath       string
 	runtimeDir    string
 	transportPool *TransportPool
@@ -54,15 +53,19 @@ func (m *Manager) ConnectionInstanceViews() []ports.ConnectionInstanceView {
 	return views
 }
 
+type SSHDefinitions interface {
+	ResolveSSH(alias string, fingerprint func(string) (string, error)) (definition.RuntimeSSH, error)
+	NativeCollection() (sshconfig.Collection, error)
+}
+
 type Dependencies struct {
-	Config     config.Config
-	Runtime    ports.TerminalRuntime
-	ConfigRepo *sshconfig.Repository
-	Keys       *sshkey.Inventory
-	Options    *connectionoptions.Store
-	Clock      ports.Clock
-	IDs        ports.IDGenerator
-	Random     ports.RandomSource
+	Config      config.Config
+	Runtime     ports.TerminalRuntime
+	Definitions SSHDefinitions
+	Keys        *sshkey.Inventory
+	Clock       ports.Clock
+	IDs         ports.IDGenerator
+	Random      ports.RandomSource
 }
 
 func (m *Manager) RemoteTransferInfo(id string) (RemoteTransferInfo, error) {
@@ -130,7 +133,7 @@ func NewManager(deps Dependencies) *Manager {
 		randomSource = random.CryptoSource{}
 	}
 	idGenerator := deps.IDs
-	manager := &Manager{instances: NewInstanceService(deps.Runtime), configRepo: deps.ConfigRepo, keys: deps.Keys, options: deps.Options, sshPath: discover("ssh"), transportPool: newTransportPool(), clock: runtimeClock, ids: idGenerator, random: randomSource, endpointCache: make(map[string]endpointCacheEntry)}
+	manager := &Manager{instances: NewInstanceService(deps.Runtime), definitions: deps.Definitions, keys: deps.Keys, sshPath: discover("ssh"), transportPool: newTransportPool(), clock: runtimeClock, ids: idGenerator, random: randomSource, endpointCache: make(map[string]endpointCacheEntry)}
 	manager.remoteMonitor = monitor.NewRemoteMonitorService(manager, monitor.Dependencies{Clock: runtimeClock, Random: randomSource})
 	runtimeID := ""
 	if deps.Runtime != nil {
@@ -146,17 +149,6 @@ func NewManager(deps Dependencies) *Manager {
 	return manager
 }
 
-func (m *Manager) tmuxOptions(aliases map[string]bool) (map[string]connectionoptions.Tmux, error) {
-	if m.options == nil {
-		return map[string]connectionoptions.Tmux{}, nil
-	}
-	collection, err := m.options.Load(aliases)
-	if err != nil {
-		return nil, err
-	}
-	return collection.Options, nil
-}
-
 func (m *Manager) Start(ctx context.Context) error {
 	if m.keys != nil {
 		m.keys.CleanupStaging()
@@ -164,34 +156,12 @@ func (m *Manager) Start(ctx context.Context) error {
 	if err := m.instances.Start(ctx); err != nil {
 		return err
 	}
-	if m.configRepo != nil {
+	if m.definitions != nil {
 		watchCtx, cancel := context.WithCancel(context.Background())
 		m.watchCancel = cancel
 		go m.watchSources(watchCtx)
 	}
 	return nil
-}
-
-func (m *Manager) Shutdown(ctx context.Context) {
-	if m.watchCancel != nil {
-		m.watchCancel()
-		m.watchCancel = nil
-	}
-	m.transportPool.mu.Lock()
-	transports := make([]*Transport, 0, len(m.transportPool.transports))
-	for _, transport := range m.transportPool.transports {
-		transports = append(transports, transport)
-	}
-	m.transportPool.transports = make(map[string]*Transport)
-	m.transportPool.instances = make(map[string]*Transport)
-	m.transportPool.mu.Unlock()
-	if m.remoteMonitor != nil {
-		m.remoteMonitor.Close()
-	}
-	for _, transport := range transports {
-		m.stopTransport(ctx, transport)
-	}
-	m.instances.Shutdown(ctx)
 }
 
 func (m *Manager) Delete(ctx context.Context, id string) error {

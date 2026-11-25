@@ -66,11 +66,11 @@ func contextError(ctx context.Context) error {
 	}
 }
 
-func (s *Service) persistUpload(job *uploadJob) error {
+func (s *Service) persistUpload(ctx context.Context, job *uploadJob) error {
 	if s.uploadRepo == nil {
 		return nil
 	}
-	return s.uploadRepo.SaveUpload(context.Background(), uploadRecord(job))
+	return s.uploadRepo.SaveUpload(ctx, uploadRecord(job))
 }
 
 func uploadRecord(job *uploadJob) domain.UploadJobRecord {

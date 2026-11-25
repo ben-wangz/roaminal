@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ben-wangz/roaminal/backend/internal/agent"
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 	"github.com/ben-wangz/roaminal/backend/internal/persistence"
 )
@@ -96,6 +97,38 @@ func TestServiceReturnsSafeMessageMutationResults(t *testing.T) {
 	}
 }
 
+func TestFileAgentProjectionNotifiesAfterCheckpoint(t *testing.T) {
+	root := t.TempDir()
+	store, err := persistence.New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := agent.OpenStore(root)
+	const key = "endpoint"
+	notifier := &testNotifier{onNotify: func() {
+		if record, ok := endpoint.Get(key); !ok || record.Targets["work"].StateIndex != 2 {
+			t.Errorf("notification ran before checkpoint: %+v", record)
+		}
+	}}
+	service := NewWithNotifier(persistence.NewRepositories(store).Messages, &testIDs{}, notifier)
+	for range 2 {
+		if err := service.CommitAgentProjection(endpoint, key, func(record *domain.AgentEndpointRecord) (*domain.MessageDraft, error) {
+			record.Targets["work"] = domain.AgentTargetState{SessionName: "work", StateIndex: 2, State: "relax"}
+			now := time.Now().UTC()
+			return &domain.MessageDraft{
+				Kind: "agent_state_transition", Severity: "success", AgentType: "codex", PresentationKey: "agent_state_transition",
+				OccurredAt: now, ReceivedAt: now, EndpointKey: key, FallbackLabel: "tmux:work", TmuxSessionName: "work", TmuxSessionID: "$0",
+				AgentStateFrom: "running", AgentStateTo: "relax", AgentRuntimeID: "runtime", AgentStateIndex: 2, IdempotencyKey: "runtime\x002",
+			}, nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(notifier.records) != 1 || notifier.records[0].Sequence != 1 {
+		t.Fatalf("notifications = %+v, want one new message", notifier.records)
+	}
+}
+
 type testIDs struct{ next int }
 
 func (g *testIDs) NewID() (string, error) {
@@ -103,6 +136,14 @@ func (g *testIDs) NewID() (string, error) {
 	return "message-" + string(rune('0'+g.next)), nil
 }
 
-type testNotifier struct{ records []domain.MessageRecord }
+type testNotifier struct {
+	records  []domain.MessageRecord
+	onNotify func()
+}
 
-func (n *testNotifier) Notify(record domain.MessageRecord) { n.records = append(n.records, record) }
+func (n *testNotifier) Notify(record domain.MessageRecord) {
+	n.records = append(n.records, record)
+	if n.onNotify != nil {
+		n.onNotify()
+	}
+}

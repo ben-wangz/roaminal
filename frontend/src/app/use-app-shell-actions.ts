@@ -71,7 +71,6 @@ export function useAppShellActions({
 }: Params) {
   const pauseHeartbeat = useHeartbeat({
     auth,
-    setAuth,
     activeLaunchId,
     page,
     setPage,

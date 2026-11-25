@@ -60,11 +60,15 @@ func (s *syncConnectionService) ResolveEndpoint(_ context.Context, id string) (p
 type syncMessageAppender struct {
 	mu      sync.Mutex
 	records []domain.MessageRecord
+	err     error
 }
 
 func (a *syncMessageAppender) AppendMessage(draft domain.MessageDraft) (domain.MessageRecord, bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.err != nil {
+		return domain.MessageRecord{}, false, a.err
+	}
 	for _, record := range a.records {
 		if record.IdempotencyKey == draft.IdempotencyKey {
 			return record, true, nil
@@ -104,7 +108,7 @@ func encodeSyncSnapshot(t *testing.T, snapshot remoteAgentState) []byte {
 	return data
 }
 
-func newSyncService(t *testing.T, terms *syncConnectionService, messages *syncMessageAppender) *Service {
+func newSyncService(t *testing.T, terms *syncConnectionService, messages ports.MessageAppender) *Service {
 	t.Helper()
 	return NewWithRepository(config.Config{}, OpenStore(t.TempDir()), terms, Dependencies{Messages: messages, SyncInterval: time.Hour})
 }
@@ -169,8 +173,15 @@ func TestAcceptSnapshotCreatesOnlyActualTransitionsAndDeduplicatesIndex(t *testi
 	info := func(state string, index uint64) remoteAgentState {
 		return syncSnapshot("team", "$1", 10, "0123456789abcdef", state, index)
 	}
-	for _, snapshot := range []remoteAgentState{info("relax", 1), info("running", 2), info("relax", 3), info("relax", 3)} {
-		if err := service.acceptSnapshot(endpoint.Key, target, view, EndpointRecord{}, snapshot); err != nil {
+	for i, snapshot := range []remoteAgentState{info("relax", 1), info("running", 2), info("relax", 3), info("relax", 3)} {
+		if i == 1 {
+			messages.err = errors.New("message append failed")
+			if err := service.acceptSnapshot(target, view, terms.views, snapshot); !errors.Is(err, messages.err) {
+				t.Fatalf("message failure = %v", err)
+			}
+			messages.err = nil
+		}
+		if err := service.acceptSnapshot(target, view, terms.views, snapshot); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -195,13 +206,13 @@ func TestAcceptSnapshotRejectsOlderIndexAndOlderRuntime(t *testing.T) {
 	}
 	target := Target{EndpointKey: endpoint.Key, SessionName: "team"}
 	newer := syncSnapshot("team", "$2", 20, "0123456789abcdef", "running", 4)
-	if err := service.acceptSnapshot(endpoint.Key, target, view, EndpointRecord{}, newer); err != nil {
+	if err := service.acceptSnapshot(target, view, terms.views, newer); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.acceptSnapshot(endpoint.Key, target, view, EndpointRecord{}, syncSnapshot("team", "$2", 20, "0123456789abcdef", "relax", 3)); !errors.Is(err, errStaleSnapshot) {
+	if err := service.acceptSnapshot(target, view, terms.views, syncSnapshot("team", "$2", 20, "0123456789abcdef", "relax", 3)); !errors.Is(err, errStaleSnapshot) {
 		t.Fatalf("older index error = %v, want stale snapshot", err)
 	}
-	if err := service.acceptSnapshot(endpoint.Key, target, view, EndpointRecord{}, syncSnapshot("team", "$1", 10, "0123456789abcdef", "relax", 99)); !errors.Is(err, errStaleSnapshot) {
+	if err := service.acceptSnapshot(target, view, terms.views, syncSnapshot("team", "$1", 10, "0123456789abcdef", "relax", 99)); !errors.Is(err, errStaleSnapshot) {
 		t.Fatalf("older runtime error = %v, want stale snapshot", err)
 	}
 	record, ok := service.store.Get(endpoint.Key)
@@ -220,11 +231,11 @@ func TestAcceptSnapshotRejectsConflictingStateAtSameIndex(t *testing.T) {
 	}
 	target := Target{EndpointKey: endpoint.Key, SessionName: "team"}
 	initial := syncSnapshot("team", "$1", 10, "0123456789abcdef", "running", 2)
-	if err := service.acceptSnapshot(endpoint.Key, target, view, EndpointRecord{}, initial); err != nil {
+	if err := service.acceptSnapshot(target, view, terms.views, initial); err != nil {
 		t.Fatal(err)
 	}
 	conflicting := syncSnapshot("team", "$1", 10, "0123456789abcdef", "relax", 2)
-	if err := service.acceptSnapshot(endpoint.Key, target, view, EndpointRecord{}, conflicting); !errors.Is(err, errStaleSnapshot) {
+	if err := service.acceptSnapshot(target, view, terms.views, conflicting); !errors.Is(err, errStaleSnapshot) {
 		t.Fatalf("same-index conflicting state error = %v, want stale snapshot", err)
 	}
 	record, ok := service.store.Get(endpoint.Key)

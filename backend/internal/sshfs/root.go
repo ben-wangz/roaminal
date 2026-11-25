@@ -127,6 +127,18 @@ func (r *Root) Open(name string) (*os.File, error) {
 	return r.root.Open(name)
 }
 
+// OpenNoFollow opens a file without following its final path component. It
+// does not block if a special file replaces the target during inspection.
+func (r *Root) OpenNoFollow(name string) (*os.File, error) {
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+	if !r.Available() {
+		return nil, ErrUnavailable
+	}
+	return r.root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+}
+
 func (r *Root) Chmod(name string, mode os.FileMode) error {
 	if err := validateName(name); err != nil {
 		return err

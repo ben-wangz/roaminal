@@ -12,7 +12,8 @@ import (
 	"github.com/ben-wangz/roaminal/backend/internal/domain"
 )
 
-const maxNotificationPreferences = 4096
+// MaxNotificationPreferences bounds the number of stored preference records.
+const MaxNotificationPreferences = 4096
 
 var notificationTmuxSessionPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
 
@@ -75,12 +76,12 @@ func validateNotificationPreferenceFile(file notificationPreferenceFile) error {
 	if file.FormatVersion != StorageSchemaVersion {
 		return fmt.Errorf("unsupported notification preference schema version %d", file.FormatVersion)
 	}
-	if len(file.Preferences) > maxNotificationPreferences {
+	if len(file.Preferences) > MaxNotificationPreferences {
 		return errors.New("notification preference retention limit exceeded")
 	}
 	seen := make(map[string]struct{}, len(file.Preferences))
 	for _, preference := range file.Preferences {
-		if err := validateNotificationPreference(preference); err != nil {
+		if err := ValidateNotificationPreference(preference); err != nil {
 			return err
 		}
 		key := preference.UserKey + "\x00" + preference.ConnectionDefinitionID + "\x00" + preference.TmuxSessionName
@@ -92,7 +93,8 @@ func validateNotificationPreferenceFile(file notificationPreferenceFile) error {
 	return nil
 }
 
-func validateNotificationPreference(preference domain.NotificationPreference) error {
+// ValidateNotificationPreference checks a durable user preference record.
+func ValidateNotificationPreference(preference domain.NotificationPreference) error {
 	if !hex64Pattern.MatchString(preference.UserKey) {
 		return errors.New("notification preference user key is invalid")
 	}
